@@ -1,7 +1,7 @@
 {
   "name": "zap-ia-studio",
-  "version": "5.0.1",
-  "description": "ZAP-IA Studio v5.0 Institutional Edition — Portable Windows, Linux & Android Termux Motor, Universal Customer Media/File Player & Downloader, Vercel + Supabase RLS",
+  "version": "5.1.0",
+  "description": "ZAP-IA Studio v5.1 Institutional Edition — Sincronização Completa de Conversas/Histórico WhatsApp, CRDT Anti-Perda Multi-Dispositivo, Portable Windows/Linux/Termux, Vercel + Supabase RLS",
   "type": "module",
   "main": "src/server.js",
   "scripts": {

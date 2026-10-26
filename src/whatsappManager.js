@@ -8,10 +8,11 @@ import {
   downloadMediaMessage,
   fetchLatestBaileysVersion,
   Browsers,
-  MEDIA_PATH_MAP
+  MEDIA_PATH_MAP,
+  proto
 } from '@whiskeysockets/baileys';
 import { useCompactWaAuthState } from './waCompactAuth.js';
-import { AUTH_DIR, UPLOADS_DIR, storage, normalizePhoneDigits, uid } from './storage.js';
+import { AUTH_DIR, UPLOADS_DIR, storage, normalizePhoneDigits, extractPhoneFromJidIfPn, isLikelyRealPhone, uid } from './storage.js';
 import { generateSmartReply, buildExecutiveHandoffDossier } from './aiEngine.js';
 import { formatPixMessageWithQr } from './pix.js';
 import { convertToCanonicalWhatsAppVoice, WHATSAPP_VOICE_MIMETYPE, isNativeOggOpus } from './audioProcessor.js';
@@ -40,7 +41,74 @@ function unwrapMessageContent(message) {
   if (message.viewOnceMessageV2?.message) return unwrapMessageContent(message.viewOnceMessageV2.message);
   if (message.viewOnceMessageV2Extension?.message) return unwrapMessageContent(message.viewOnceMessageV2Extension.message);
   if (message.documentWithCaptionMessage?.message) return unwrapMessageContent(message.documentWithCaptionMessage.message);
+  if (message.editedMessage?.message?.protocolMessage?.editedMessage) {
+    return unwrapMessageContent(message.editedMessage.message.protocolMessage.editedMessage);
+  }
   return message;
+}
+
+function toEpochMs(rawTs) {
+  if (!rawTs) return 0;
+  let n = 0;
+  if (typeof rawTs === 'number') {
+    n = rawTs;
+  } else if (typeof rawTs === 'bigint') {
+    n = Number(rawTs);
+  } else if (typeof rawTs === 'string') {
+    const parsed = Number(rawTs);
+    if (!Number.isNaN(parsed)) {
+      n = parsed;
+    } else {
+      const dt = new Date(rawTs).getTime();
+      return Number.isNaN(dt) ? 0 : dt;
+    }
+  } else if (typeof rawTs === 'object') {
+    if (typeof rawTs.toNumber === 'function') {
+      n = rawTs.toNumber();
+    } else if (typeof rawTs.low === 'number') {
+      n = rawTs.low >>> 0;
+    }
+  }
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return n < 1e11 ? n * 1000 : n;
+}
+
+function extractReadableTextFromUnwrapped(unwrapped) {
+  if (!unwrapped) return '';
+  const direct = (
+    unwrapped.conversation ||
+    unwrapped.extendedTextMessage?.text ||
+    unwrapped.imageMessage?.caption ||
+    unwrapped.videoMessage?.caption ||
+    unwrapped.documentMessage?.caption ||
+    unwrapped.buttonsResponseMessage?.selectedDisplayText ||
+    unwrapped.listResponseMessage?.title ||
+    unwrapped.templateButtonReplyMessage?.selectedDisplayText ||
+    ''
+  ).trim();
+  if (direct) return direct;
+
+  if (unwrapped.interactiveResponseMessage?.nativeFlowResponseMessage?.paramsJson) {
+    try {
+      const p = JSON.parse(unwrapped.interactiveResponseMessage.nativeFlowResponseMessage.paramsJson);
+      if (p?.id || p?.screen_0_TextInput_0) return String(p.id || p.screen_0_TextInput_0).trim();
+    } catch {}
+  }
+  if (unwrapped.contactMessage?.displayName) {
+    return `📇 [Contato compartilhado: ${unwrapped.contactMessage.displayName}]`;
+  }
+  if (unwrapped.contactsArrayMessage?.contacts?.length) {
+    return `📇 [${unwrapped.contactsArrayMessage.contacts.length} contatos compartilhados]`;
+  }
+  if (unwrapped.locationMessage || unwrapped.liveLocationMessage) {
+    const loc = unwrapped.locationMessage || unwrapped.liveLocationMessage;
+    return `📍 [Localização${loc?.name ? `: ${loc.name}` : ' enviada'}]`;
+  }
+  if (unwrapped.pollCreationMessage?.name || unwrapped.pollCreationMessageV3?.name) {
+    const pollName = unwrapped.pollCreationMessage?.name || unwrapped.pollCreationMessageV3?.name;
+    return `📊 [Enquete: ${pollName}]`;
+  }
+  return '';
 }
 
 function isWithinBusinessSchedule(schedule = {}) {
@@ -99,6 +167,7 @@ class WhatsAppManager {
 
     this.sentByBotIds = new Set();
     this.lidToPhoneMap = new Map(); // LID JID -> Phone digits (3-layer fallback pattern)
+    this.contactDirectory = new Map(); // JID or Phone digits -> Nome real salvo na agenda / perfil do cliente
     this.debounceQueues = new Map(); // chatId -> { timer, texts, media, keys, pushName, phone }
     this.chatProcessingLocks = new Map(); // chatId -> Promise (evita respostas concorrentes na mesma conversa)
     this.rateTracker = new Map(); // chatId -> timestamps[]
@@ -111,6 +180,8 @@ class WhatsAppManager {
     this.lastConnectedLogAt = 0;
     this.lastConnectedLogPhone = '';
     this.connectionWaiters = new Set();
+    this.historySyncWaiters = new Set();
+    this.syncInProgress = false;
 
     // Fila Segura Anti-Ban de Abordagem Ativa (M01–M13) — persistida em disco contra reinícios
     this.proactiveQueue = Array.isArray(storage.data.proactiveQueue) ? [...storage.data.proactiveQueue] : [];
@@ -216,7 +287,346 @@ class WhatsAppManager {
       return this.lidToPhoneMap.get(remoteJid);
     }
 
-    return normalizePhoneDigits(remoteJid);
+    return extractPhoneFromJidIfPn(remoteJid);
+  }
+
+  resolvePhoneFromJid(jid = '') {
+    const clean = String(jid || '').trim();
+    if (!clean) return '';
+    if (clean.endsWith('@s.whatsapp.net')) return normalizePhoneDigits(clean);
+    if (this.lidToPhoneMap.has(clean)) return this.lidToPhoneMap.get(clean);
+    const bareLid = `${normalizePhoneDigits(clean)}@lid`;
+    if (clean.endsWith('@lid') && this.lidToPhoneMap.has(bareLid)) {
+      return this.lidToPhoneMap.get(bareLid);
+    }
+    return extractPhoneFromJidIfPn(clean);
+  }
+
+  getOwnerSelfName() {
+    return String(this.connectedUser?.name || this.sock?.authState?.creds?.me?.name || '').trim();
+  }
+
+  isSelfJid(jid = '') {
+    const s = String(jid || '').trim();
+    if (!s) return true;
+    const myPhone = normalizePhoneDigits(this.connectedUser?.phone || this.sock?.authState?.creds?.me?.id || '');
+    const myLid = normalizePhoneDigits(this.sock?.authState?.creds?.me?.lid || '');
+    const resolvedPhone = this.resolvePhoneFromJid(s);
+    if (myPhone && resolvedPhone && resolvedPhone === myPhone) return true;
+    if (myLid && s.endsWith('@lid') && normalizePhoneDigits(s) === myLid) return true;
+    return false;
+  }
+
+  isValid1to1ChatJid(jid = '') {
+    const s = String(jid || '').trim();
+    if (!s) return false;
+    if (
+      s === 'status@broadcast' ||
+      s === '0@s.whatsapp.net' ||
+      s.endsWith('@g.us') ||
+      s.endsWith('@broadcast') ||
+      s.endsWith('@newsletter')
+    ) {
+      return false;
+    }
+    if (!s.endsWith('@s.whatsapp.net') && !s.endsWith('@lid')) return false;
+    if (this.isSelfJid(s)) return false;
+    return true;
+  }
+
+  lookupBestContactName(jid = '', phone = '') {
+    const cleanJid = String(jid || '').trim();
+    const cleanPhone = normalizePhoneDigits(phone || this.resolvePhoneFromJid(cleanJid));
+    if (cleanJid && this.contactDirectory.has(cleanJid)) return this.contactDirectory.get(cleanJid);
+    if (cleanPhone && this.contactDirectory.has(cleanPhone)) return this.contactDirectory.get(cleanPhone);
+    return '';
+  }
+
+  getHistorySyncMetaFile() {
+    return path.join(this.authDir || AUTH_DIR, 'zapia_history_sync.json');
+  }
+
+  hasCompletedHistoryBootstrap() {
+    try {
+      const fp = this.getHistorySyncMetaFile();
+      if (!fs.existsSync(fp)) return false;
+      const parsed = JSON.parse(fs.readFileSync(fp, 'utf-8'));
+      return Boolean(parsed?.completedAt) && Object.keys(storage.data.contacts || {}).length >= 3;
+    } catch {
+      return false;
+    }
+  }
+
+  markHistoryBootstrapCompleted(extra = {}) {
+    try {
+      const fp = this.getHistorySyncMetaFile();
+      fs.mkdirSync(path.dirname(fp), { recursive: true });
+      fs.writeFileSync(
+        fp,
+        JSON.stringify({ completedAt: new Date().toISOString(), ...extra }, null, 2),
+        'utf-8'
+      );
+    } catch {}
+  }
+
+  notifyHistoryWaiters(info = {}) {
+    for (const resolve of [...this.historySyncWaiters]) {
+      try { resolve(info); } catch {}
+    }
+  }
+
+  ingestContactRecords(contacts = [], { deferSave = false } = {}) {
+    const ownerSelfName = this.getOwnerSelfName();
+    let mutatedExisting = false;
+
+    for (const c of contacts || []) {
+      if (!c) continue;
+      const rawId = String(c.id || '').trim();
+      const lid = String(c.lid || (rawId.endsWith('@lid') ? rawId : '')).trim();
+      const pnRaw = String(c.phoneNumber || c.pnJid || (rawId.endsWith('@s.whatsapp.net') ? rawId : '')).trim();
+      const phone = pnRaw ? normalizePhoneDigits(pnRaw) : (lid ? this.resolvePhoneFromJid(lid) : '');
+
+      if (lid && isLikelyRealPhone(phone)) {
+        const cleanLid = lid.endsWith('@lid') ? `${normalizePhoneDigits(lid)}@lid` : `${lid}@lid`;
+        this.lidToPhoneMap.set(cleanLid, phone);
+      }
+
+      if (this.isSelfJid(rawId) || (lid && this.isSelfJid(lid))) continue;
+
+      const candidateName = String(c.name || c.verifiedName || c.notify || c.displayName || '').trim();
+      if (candidateName && !storage.isGenericContactName(candidateName, ownerSelfName)) {
+        if (rawId) this.contactDirectory.set(rawId, candidateName);
+        if (lid) this.contactDirectory.set(lid, candidateName);
+        if (isLikelyRealPhone(phone)) this.contactDirectory.set(phone, candidateName);
+      }
+
+      // Enriquecer conversas que JÁ existem no CRM (nunca cria fantasmas vazios da agenda telefônica!)
+      const existingKey =
+        (lid && storage.data.contacts[lid] ? lid : null) ||
+        (rawId && storage.data.contacts[rawId] ? rawId : null) ||
+        (isLikelyRealPhone(phone) ? storage.findSiblingContactKey(lid || rawId, phone) : null);
+
+      if (existingKey && storage.data.contacts[existingKey]) {
+        const bestName = candidateName || this.lookupBestContactName(existingKey, phone);
+        storage.upsertContact(
+          lid || existingKey,
+          {
+            ...(isLikelyRealPhone(phone) ? { phone } : {}),
+            ...(bestName ? { name: bestName } : {})
+          },
+          { deferSave: true, ownerSelfName, preferAddressBookName: Boolean(c.name) }
+        );
+        mutatedExisting = true;
+      }
+    }
+
+    if (mutatedExisting && !deferSave) {
+      storage.saveSoon();
+      this.broadcastFn('crm_updated', {});
+    }
+    return mutatedExisting;
+  }
+
+  ingestChatRecords(chats = [], { deferSave = false, fromAppStateUpdate = false } = {}) {
+    const ownerSelfName = this.getOwnerSelfName();
+    let count = 0;
+
+    for (const ch of chats || []) {
+      const chatId = String(ch?.id || '').trim();
+      if (!this.isValid1to1ChatJid(chatId)) continue;
+
+      if (ch.lidJid && ch.pnJid) {
+        this.lidToPhoneMap.set(`${normalizePhoneDigits(ch.lidJid)}@lid`, normalizePhoneDigits(ch.pnJid));
+      } else if (chatId.endsWith('@lid') && ch.pnJid) {
+        this.lidToPhoneMap.set(`${normalizePhoneDigits(chatId)}@lid`, normalizePhoneDigits(ch.pnJid));
+      } else if (chatId.endsWith('@s.whatsapp.net') && ch.lidJid) {
+        this.lidToPhoneMap.set(`${normalizePhoneDigits(ch.lidJid)}@lid`, normalizePhoneDigits(chatId));
+      }
+
+      const phone = this.resolvePhoneFromJid(chatId);
+      const chatName =
+        String(ch.name || ch.displayName || '').trim() ||
+        this.lookupBestContactName(chatId, phone);
+
+      const rawTsMs =
+        toEpochMs(ch.conversationTimestamp) ||
+        toEpochMs(ch.lastMessageRecvTimestamp) ||
+        toEpochMs(ch.pinned);
+
+      // Em updates parciais do App-State (ex: mute/archive antigo sem timestamp), ignora se não tiver telefone resolvido nem nome nem conversa prévia
+      const alreadyExists = Boolean(storage.findSiblingContactKey(chatId, phone));
+      if (fromAppStateUpdate && !alreadyExists && !isLikelyRealPhone(phone) && !chatName) {
+        continue;
+      }
+
+      const defaultHistoricalIso = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+      const patch = {
+        ...(isLikelyRealPhone(phone) ? { phone } : {}),
+        ...(chatName ? { name: chatName } : {}),
+        ...(rawTsMs > 0
+          ? { lastMessageAt: new Date(rawTsMs).toISOString() }
+          : (!alreadyExists ? { lastMessageAt: defaultHistoricalIso } : {}))
+      };
+
+      if (typeof ch.archived === 'boolean') {
+        patch.archived = ch.archived;
+      }
+      if (ch.pinned !== undefined && ch.pinned !== null) {
+        patch.pinned = Boolean(Number(ch.pinned) > 0 || ch.pinned === true);
+      }
+      if (typeof ch.unreadCount === 'number' && ch.unreadCount >= 0) {
+        patch.unreadCount = ch.unreadCount;
+      }
+
+      const upserted = storage.upsertContact(chatId, patch, {
+        deferSave: true,
+        ownerSelfName
+      });
+
+      // Conversas pré-existentes vindas do WhatsApp entram em "em_atendimento" caso já tivessem atividade
+      if (!alreadyExists && upserted.stage === 'novo' && rawTsMs > 0) {
+        upserted.stage = 'em_atendimento';
+      }
+      count += 1;
+    }
+
+    if (count > 0 && !deferSave) {
+      storage.saveSoon();
+      this.broadcastFn('crm_updated', {});
+    }
+    return count;
+  }
+
+  ingestHistorySyncPayload(payload = {}) {
+    const { chats = [], contacts = [], messages = [], lidPnMappings = [] } = payload;
+    const ownerSelfName = this.getOwnerSelfName();
+
+    // 1. Mapeamentos @lid <-> @s.whatsapp.net
+    for (const m of lidPnMappings || []) {
+      if (m?.lid && m?.pn) {
+        const cleanLid = `${normalizePhoneDigits(m.lid)}@lid`;
+        const cleanPn = normalizePhoneDigits(m.pn);
+        if (isLikelyRealPhone(cleanPn)) {
+          this.lidToPhoneMap.set(cleanLid, cleanPn);
+        }
+      }
+    }
+
+    // 2. Diretório de contatos (nomes reais salvos na agenda)
+    if (contacts?.length) {
+      this.ingestContactRecords(contacts, { deferSave: true });
+    }
+
+    // 3. Threads de conversas 1:1
+    const chatsAdded = chats?.length ? this.ingestChatRecords(chats, { deferSave: true }) : 0;
+
+    // 4. Mensagens históricas em ordem cronológica (NUNCA dispara resposta automática da IA!)
+    const sortedMsgs = [...(messages || [])].sort(
+      (a, b) => toEpochMs(a?.messageTimestamp) - toEpochMs(b?.messageTimestamp)
+    );
+
+    const touchedChatKeys = new Set();
+    let msgsImported = 0;
+
+    for (const msg of sortedMsgs) {
+      const remoteJid = msg?.key?.remoteJid;
+      if (!this.isValid1to1ChatJid(remoteJid)) continue;
+
+      const unwrapped = unwrapMessageContent(msg.message);
+      if (!unwrapped || unwrapped.protocolMessage || unwrapped.reactionMessage) continue;
+
+      const textContent = extractReadableTextFromUnwrapped(unwrapped);
+      const hasAudio = Boolean(unwrapped.audioMessage);
+      const hasImage = Boolean(unwrapped.imageMessage || unwrapped.stickerMessage);
+      const hasVideo = Boolean(unwrapped.videoMessage);
+      const hasAnyDoc = Boolean(unwrapped.documentMessage);
+      if (!textContent && !hasAudio && !hasImage && !hasVideo && !hasAnyDoc) continue;
+
+      const bestPhone = this.resolvePhoneFromMessage(msg);
+      const fromMe = Boolean(msg.key?.fromMe);
+      const rawDocName = hasAnyDoc
+        ? String(unwrapped.documentMessage?.fileName || unwrapped.documentMessage?.title || 'arquivo').slice(0, 100)
+        : '';
+
+      const displayLabel = hasAudio
+        ? (fromMe ? `🎤 [Áudio enviado] ${textContent}`.trim() : `[Áudio do cliente] ${textContent}`.trim())
+        : hasImage
+          ? (fromMe ? `[Imagem enviada] ${textContent}`.trim() : `[Imagem do cliente] ${textContent}`.trim())
+          : hasVideo
+            ? (fromMe ? `[Vídeo enviado] ${textContent}`.trim() : `[Vídeo do cliente] ${textContent}`.trim())
+            : hasAnyDoc
+              ? `[Arquivo: ${rawDocName}] ${textContent}`.trim()
+              : textContent;
+
+      const tsMs = toEpochMs(msg.messageTimestamp) || Date.now();
+      const contactName =
+        this.lookupBestContactName(remoteJid, bestPhone) ||
+        (!fromMe && msg.pushName && !storage.isGenericContactName(msg.pushName, ownerSelfName) ? msg.pushName : '');
+
+      const updatedContact = storage.appendContactMessage(
+        remoteJid,
+        {
+          role: fromMe ? 'owner' : 'user',
+          text: displayLabel,
+          waMsgId: msg.key?.id || undefined,
+          waFromMe: fromMe,
+          waTimestampMs: tsMs,
+          timestamp: new Date(tsMs).toISOString(),
+          phone: bestPhone || undefined,
+          contactName: contactName || undefined,
+          historical: true,
+          skipUnread: true
+        },
+        { deferSave: true, historical: true, ownerSelfName }
+      );
+
+      if (updatedContact?.chatId) {
+        touchedChatKeys.add(updatedContact.chatId);
+      }
+      msgsImported += 1;
+    }
+
+    // 5. Proteção de Atendimento Humano Pré-Existente:
+    // Se a conversa já estava em andamento manual antes de conectar (última mensagem enviada pelo dono nas últimas 24h),
+    // preserva em "em_atendimento" e respeita a trava humana para a IA não atravessar uma negociação manual!
+    const pauseOnOwner = Boolean(storage.data.settings.humanHandoff?.pauseOnOwnerReply);
+    const activeBiz = storage.getBusiness();
+    const pauseMinsCfg = Number(storage.data.settings.humanHandoff?.pauseDurationMinutes) || 60;
+
+    for (const cKey of touchedChatKeys) {
+      const c = storage.data.contacts[cKey];
+      if (!c) continue;
+      if (c.stage === 'novo' && (c.messages?.length || 0) > 0) {
+        c.stage = 'em_atendimento';
+      }
+      const realMsgs = (c.messages || []).filter((m) => m.role !== 'internal_note');
+      const lastMsg = realMsgs[realMsgs.length - 1];
+      if (pauseOnOwner && lastMsg?.role === 'owner' && !c.pausedUntil) {
+        const lastMs = new Date(lastMsg.timestamp || 0).getTime();
+        const ageHours = (Date.now() - lastMs) / 3_600_000;
+        if (ageHours >= 0 && ageHours <= 24) {
+          if (activeBiz?.lockUntilManualResume) {
+            c.pausedUntil = 'forever';
+            c.pauseReason = 'Conversa já assumida por você antes de conectar';
+          } else {
+            const expMs = lastMs + pauseMinsCfg * 60_000;
+            if (expMs > Date.now()) {
+              c.pausedUntil = new Date(expMs).toISOString();
+              c.pauseReason = 'Você respondeu manualmente nesta conversa';
+            }
+          }
+        }
+      }
+    }
+
+    if (chatsAdded > 0 || msgsImported > 0 || contacts?.length > 0) {
+      storage.saveSoon();
+      if (chatsAdded > 0 || msgsImported > 0) {
+        this.markHistoryBootstrapCompleted({ chatsAdded, msgsImported });
+      }
+      this.broadcastFn('crm_updated', {});
+      this.notifyHistoryWaiters({ chatsAdded, msgsImported });
+    }
   }
 
   setBroadcaster(fn) {
@@ -317,8 +727,8 @@ class WhatsAppManager {
       this.reconnectTimer = null;
     }
 
-    // Se já havia um socket conectando sem novo pedido de código, reutiliza sem duplicar sockets!
-    if (this.sock && this.status === 'connecting' && !pairingPhone) {
+    // Se já havia um socket conectado ou conectando sem novo pedido de código, reutiliza sem derrubar!
+    if (this.sock && (this.status === 'connecting' || this.status === 'connected') && !pairingPhone) {
       return this.getPublicState();
     }
 
@@ -396,8 +806,16 @@ class WhatsAppManager {
         logger,
         auth: state,
         browser: Browsers.ubuntu('Chrome'),
-        syncFullHistory: false,
-        markOnlineOnConnect: false
+        syncFullHistory: true,
+        shouldSyncHistoryMessage: () => true,
+        emitOwnEvents: false,
+        markOnlineOnConnect: false,
+        getMessage: async (key) => {
+          const cid = key?.remoteJid || '';
+          const c = storage.data.contacts[cid] || storage.data.contacts[storage.findSiblingContactKey(cid) || ''];
+          const found = c?.messages?.find((m) => m.waMsgId && m.waMsgId === key?.id);
+          return found?.text ? { conversation: found.text } : undefined;
+        }
       });
 
       this.sock = sock;
@@ -408,19 +826,54 @@ class WhatsAppManager {
         saveCreds().catch(() => {});
       });
 
-      const ingestContactMappings = (contacts = []) => {
-        if (mySeq !== this.socketSeq) return;
-        for (const c of contacts) {
-          const lid = c?.lid || (c?.id?.endsWith('@lid') ? c.id : '');
-          const pn = c?.phoneNumber || (c?.id?.endsWith('@s.whatsapp.net') ? c.id : '');
-          if (lid && pn) {
-            this.lidToPhoneMap.set(lid, normalizePhoneDigits(pn));
+      sock.ev.on('lid-mapping.update', (mapping) => {
+        if (mySeq !== this.socketSeq || this.sock !== sock) return;
+        const items = Array.isArray(mapping) ? mapping : [mapping];
+        let changed = false;
+        for (const item of items) {
+          if (item?.lid && item?.pn) {
+            const cleanLid = `${normalizePhoneDigits(item.lid)}@lid`;
+            const cleanPn = normalizePhoneDigits(item.pn);
+            if (isLikelyRealPhone(cleanPn)) {
+              this.lidToPhoneMap.set(cleanLid, cleanPn);
+              if (storage.data.contacts[cleanLid] || storage.findSiblingContactKey(cleanLid, cleanPn)) {
+                storage.upsertContact(cleanLid, { phone: cleanPn }, { ownerSelfName: this.getOwnerSelfName() });
+                changed = true;
+              }
+            }
           }
         }
-      };
+        if (changed) this.broadcastFn('crm_updated', {});
+      });
 
-      sock.ev.on('contacts.upsert', ingestContactMappings);
-      sock.ev.on('contacts.update', ingestContactMappings);
+      sock.ev.on('contacts.upsert', (contacts = []) => {
+        if (mySeq !== this.socketSeq || this.sock !== sock) return;
+        this.ingestContactRecords(contacts);
+      });
+
+      sock.ev.on('contacts.update', (contacts = []) => {
+        if (mySeq !== this.socketSeq || this.sock !== sock) return;
+        this.ingestContactRecords(contacts);
+      });
+
+      sock.ev.on('chats.upsert', (chats = []) => {
+        if (mySeq !== this.socketSeq || this.sock !== sock) return;
+        this.ingestChatRecords(chats, { fromAppStateUpdate: false });
+      });
+
+      sock.ev.on('chats.update', (chats = []) => {
+        if (mySeq !== this.socketSeq || this.sock !== sock) return;
+        this.ingestChatRecords(chats, { fromAppStateUpdate: true });
+      });
+
+      sock.ev.on('messaging-history.set', (payload = {}) => {
+        if (mySeq !== this.socketSeq || this.sock !== sock) return;
+        try {
+          this.ingestHistorySyncPayload(payload);
+        } catch (err) {
+          console.error('[WA] Erro ao importar histórico de conversas:', err.message);
+        }
+      });
 
       sock.ev.on('connection.update', async update => {
         if (mySeq !== this.socketSeq || this.sock !== sock) return;
@@ -481,6 +934,22 @@ class WhatsAppManager {
           }
           this.resolveConnectionWaiters(true);
           this.emitState();
+
+          // Limpa eventual auto-contato do próprio número caso tenha entrado em versões antigas
+          for (const k of Object.keys(storage.data.contacts || {})) {
+            if (this.isSelfJid(k)) {
+              storage.deleteContact(k);
+            }
+          }
+
+          // Se esta conta ainda não recuperou as conversas pré-existentes do celular, sincroniza automaticamente em background!
+          if (!this.hasCompletedHistoryBootstrap()) {
+            setTimeout(() => {
+              if (mySeq === this.socketSeq && this.status === 'connected') {
+                this.syncAllConversationsFromPhone({ force: false }).catch(() => {});
+              }
+            }, 2600);
+          }
         }
 
         if (connection === 'close') {
@@ -552,9 +1021,10 @@ class WhatsAppManager {
 
       sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (mySeq !== this.socketSeq || this.sock !== sock) return;
-        if (type !== 'notify') return;
-        for (const msg of messages) {
-          this.handleIncomingRawMessage(msg).catch(err => {
+        if (type !== 'notify' && type !== 'append') return;
+        const isHistoryAppend = type === 'append';
+        for (const msg of messages || []) {
+          this.handleIncomingRawMessage(msg, { isHistoryAppend }).catch(err => {
             console.error('[WA] Erro ao processar mensagem:', err);
             storage.addLog('error', `Erro ao processar mensagem: ${err.message}`);
           });
@@ -623,19 +1093,218 @@ class WhatsAppManager {
     return this.getPublicState();
   }
 
-  async handleIncomingRawMessage(msg) {
-    const remoteJid = msg?.key?.remoteJid;
-    if (!remoteJid) return;
-
-    // 1. Ignorar Grupos, Status, Broadcasts e Canais
-    if (
-      remoteJid === 'status@broadcast' ||
-      remoteJid.endsWith('@g.us') ||
-      remoteJid.endsWith('@broadcast') ||
-      remoteJid.endsWith('@newsletter')
-    ) {
-      return;
+  /**
+   * Recupera todas as conversas 1:1 e histórico recente diretamente do celular conectado
+   * MESMO QUANDO A SESSÃO JÁ ESTAVA PAREADA ANTES (sem precisar desconectar nem ler QR Code de novo!).
+   */
+  async syncAllConversationsFromPhone({ force = false, waitMs = 6500 } = {}) {
+    const ready = await this.waitUntilConnected(7000);
+    if (!ready || !this.sock) {
+      throw new Error('O WhatsApp precisa estar conectado para sincronizar as conversas do aparelho.');
     }
+    if (this.syncInProgress && !force) {
+      return {
+        ok: true,
+        alreadyRunning: true,
+        totalConversations: Object.keys(storage.data.contacts || {}).length
+      };
+    }
+
+    this.syncInProgress = true;
+    const beforeCount = Object.keys(storage.data.contacts || {}).length;
+
+    const chunkArrivalPromise = new Promise((resolve) => {
+      let timer = null;
+      const done = (info) => {
+        if (timer) clearTimeout(timer);
+        this.historySyncWaiters.delete(done);
+        resolve(info || {});
+      };
+      this.historySyncWaiters.add(done);
+      timer = setTimeout(() => done({ timedOut: true }), waitMs);
+    });
+
+    try {
+      // Passo 1: Resync completo de Snapshots do App-State (traz agenda de contatos, pins, arquivadas e mapeamentos LID!)
+      if (this.sock.authState?.keys?.set && typeof this.sock.resyncAppState === 'function') {
+        try {
+          await this.sock.authState.keys.set({
+            'app-state-sync-version': {
+              regular_high: null,
+              regular_low: null,
+              critical_unblock_low: null,
+              regular: null
+            }
+          });
+          await this.sock.resyncAppState(
+            ['regular_high', 'regular_low', 'critical_unblock_low', 'regular'],
+            true
+          );
+        } catch (err) {
+          console.warn('[WA Sync] Aviso no resyncAppState:', err?.message || err);
+        }
+      }
+
+      // Passo 2: Solicita ao aparelho principal (via PeerDataOperation) o pacote completo de conversas e mensagens recentes!
+      if (typeof this.sock.sendPeerDataOperationMessage === 'function') {
+        try {
+          await this.sock.sendPeerDataOperationMessage({
+            peerDataOperationRequestType: proto.Message.PeerDataOperationRequestType.FULL_HISTORY_SYNC_ON_DEMAND,
+            fullHistorySyncOnDemandRequest: {
+              requestMetadata: { requestId: `zapia_${Date.now()}` },
+              historySyncConfig: {
+                storageQuotaMb: 10240,
+                inlineInitialPayloadInE2EeMsg: true,
+                recentSyncDaysLimit: 90,
+                supportBotUserAgentChatHistory: true,
+                supportBizHostedMsg: true,
+                supportRecentSyncChunkMessageCountTuning: true,
+                supportMessageAssociation: true
+              }
+            }
+          });
+        } catch (err) {
+          console.warn('[WA Sync] Aviso em FULL_HISTORY_SYNC_ON_DEMAND:', err?.message || err);
+        }
+
+        // Passo 3: Se o celular já havia enviado pacotes INITIAL_BOOTSTRAP / RECENT antes desta versão, pede regeneração imediata dos chunks!
+        const prevChunks = this.sock.authState?.creds?.processedHistoryMessages || [];
+        if (prevChunks.length > 0) {
+          const retryTargets = [
+            { syncType: proto.HistorySync.HistorySyncType.INITIAL_BOOTSTRAP, chunkOrder: 0, id: prevChunks[0]?.key?.id },
+            { syncType: proto.HistorySync.HistorySyncType.RECENT, chunkOrder: 0, id: prevChunks[1]?.key?.id || prevChunks[0]?.key?.id },
+            { syncType: proto.HistorySync.HistorySyncType.RECENT, chunkOrder: 1, id: prevChunks[2]?.key?.id }
+          ].filter((t) => Boolean(t.id));
+
+          for (const t of retryTargets) {
+            try {
+              await this.sock.sendPeerDataOperationMessage({
+                peerDataOperationRequestType: proto.Message.PeerDataOperationRequestType.HISTORY_SYNC_CHUNK_RETRY,
+                historySyncChunkRetryRequest: {
+                  syncType: t.syncType,
+                  chunkOrder: t.chunkOrder,
+                  chunkNotificationId: t.id,
+                  regenerateChunk: true
+                }
+              });
+            } catch {}
+          }
+        }
+      }
+
+      await chunkArrivalPromise;
+      this.loadLidMappingsFromDisk();
+
+      // Reconcilia telefones e nomes recém-descobertos em todos os contatos existentes
+      const ownerSelfName = this.getOwnerSelfName();
+      for (const [jid, card] of Object.entries({ ...(storage.data.contacts || {}) })) {
+        if (this.isSelfJid(jid)) {
+          storage.deleteContact(jid);
+          continue;
+        }
+        const resolvedPhone = this.resolvePhoneFromJid(jid) || card.phone;
+        const bestName = this.lookupBestContactName(jid, resolvedPhone);
+        if (
+          (isLikelyRealPhone(resolvedPhone) && resolvedPhone !== card.phone) ||
+          (bestName && storage.isGenericContactName(card.name, ownerSelfName))
+        ) {
+          storage.upsertContact(
+            jid,
+            {
+              ...(isLikelyRealPhone(resolvedPhone) ? { phone: resolvedPhone } : {}),
+              ...(bestName ? { name: bestName } : {})
+            },
+            { deferSave: true, ownerSelfName, preferAddressBookName: true }
+          );
+        }
+      }
+
+      storage.saveSoon();
+      this.broadcastFn('crm_updated', {});
+
+      const afterCount = Object.keys(storage.data.contacts || {}).length;
+      const syncedNew = Math.max(0, afterCount - beforeCount);
+      if (afterCount > 0) {
+        this.markHistoryBootstrapCompleted({ totalConversations: afterCount });
+      }
+      storage.addLog(
+        'whatsapp',
+        `Sincronização de conversas concluída: ${afterCount} conversa(s) ativa(s) no CRM${syncedNew > 0 ? ` (+${syncedNew} importadas do aparelho)` : ''}.`
+      );
+      return {
+        ok: true,
+        totalConversations: afterCount,
+        syncedNew
+      };
+    } finally {
+      this.syncInProgress = false;
+    }
+  }
+
+  /**
+   * Carrega sob demanda até `count` mensagens anteriores de uma conversa específica direto do celular conectado!
+   */
+  async fetchOlderMessagesForChat(chatId, count = 50) {
+    const ready = await this.waitUntilConnected(7000);
+    if (!ready || !this.sock) {
+      throw new Error('O WhatsApp precisa estar conectado para puxar mensagens anteriores.');
+    }
+
+    const key = storage.findSiblingContactKey(chatId) || chatId;
+    const contact = storage.data.contacts[key];
+    if (!contact) {
+      throw new Error('Conversa não encontrada no CRM.');
+    }
+
+    const beforeMsgCount = (contact.messages || []).length;
+    const anchorMsg = (contact.messages || []).find((m) => Boolean(m?.waMsgId));
+
+    if (!anchorMsg || typeof this.sock.fetchMessageHistory !== 'function') {
+      // Se esta conversa ainda não tinha âncora de mensagem local, dispara sincronização geral do histórico!
+      await this.syncAllConversationsFromPhone({ force: true, waitMs: 5500 });
+      const updated = storage.data.contacts[storage.findSiblingContactKey(chatId) || key];
+      return {
+        ok: true,
+        addedCount: Math.max(0, (updated?.messages?.length || 0) - beforeMsgCount),
+        contact: updated || contact
+      };
+    }
+
+    const waitChunk = new Promise((resolve) => {
+      let timer = null;
+      const done = (info) => {
+        if (timer) clearTimeout(timer);
+        this.historySyncWaiters.delete(done);
+        resolve(info || {});
+      };
+      this.historySyncWaiters.add(done);
+      timer = setTimeout(() => done({ timedOut: true }), 5000);
+    });
+
+    const anchorTsMs = anchorMsg.waTimestampMs || new Date(anchorMsg.timestamp || Date.now()).getTime();
+    await this.sock.fetchMessageHistory(
+      Math.min(50, Math.max(10, Number(count) || 50)),
+      {
+        remoteJid: contact.chatId,
+        fromMe: Boolean(anchorMsg.waFromMe ?? (anchorMsg.role !== 'user')),
+        id: anchorMsg.waMsgId
+      },
+      anchorTsMs
+    );
+
+    await waitChunk;
+    const updatedKey = storage.findSiblingContactKey(chatId) || key;
+    const updated = storage.data.contacts[updatedKey] || contact;
+    return {
+      ok: true,
+      addedCount: Math.max(0, (updated?.messages?.length || 0) - beforeMsgCount),
+      contact: updated
+    };
+  }
+
+  async handleIncomingRawMessage(msg, { isHistoryAppend = false } = {}) {
+    const remoteJid = msg?.key?.remoteJid;
+    if (!this.isValid1to1ChatJid(remoteJid)) return;
 
     const unwrapped = unwrapMessageContent(msg.message);
     if (!unwrapped) return;
@@ -644,16 +1313,14 @@ class WhatsAppManager {
     if (unwrapped.protocolMessage || unwrapped.reactionMessage) return;
 
     const bestPhone = this.resolvePhoneFromMessage(msg);
-    const pushName = msg.pushName || '';
+    const ownerSelfName = this.getOwnerSelfName();
+    const rawPushName = String(msg.pushName || '').trim();
+    const msgTsMs = toEpochMs(msg.messageTimestamp) || Date.now();
+    const msgIso = new Date(msgTsMs).toISOString();
+    const msgAgeMs = Math.max(0, Date.now() - msgTsMs);
+    const isOldHistoricalMsg = isHistoryAppend && msgAgeMs > 90_000;
 
-    const textContent = (
-      unwrapped.conversation ||
-      unwrapped.extendedTextMessage?.text ||
-      unwrapped.imageMessage?.caption ||
-      unwrapped.videoMessage?.caption ||
-      unwrapped.documentMessage?.caption ||
-      ''
-    ).trim();
+    const textContent = extractReadableTextFromUnwrapped(unwrapped);
 
     const hasAudio = Boolean(unwrapped.audioMessage);
     const hasImage = Boolean(unwrapped.imageMessage || unwrapped.stickerMessage);
@@ -666,18 +1333,87 @@ class WhatsAppManager {
 
     if (!textContent && !hasAudio && !hasImage && !hasVideo && !hasAnyDoc) return;
 
-    // 2. Verificar se a mensagem foi enviada pelo PRÓPRIO DONO no celular (fromMe)
+    // 2. Verificar se a mensagem foi enviada pelo PRÓPRIO DONO no celular/WhatsApp Web (fromMe)
     if (msg.key.fromMe) {
       if (this.sentByBotIds.has(msg.key.id)) {
-        return; // Foi enviada pelo próprio robô, ignora!
+        return; // Foi enviada pelo próprio robô/painel, ignora!
       }
-      // Foi enviada manualmente pelo dono no celular/WhatsApp Web!
-      storage.appendContactMessage(remoteJid, {
-        role: 'owner',
-        text: textContent || '[Mídia enviada manualmente por você]'
-      });
 
-      if (storage.data.settings.humanHandoff?.pauseOnOwnerReply) {
+      const rawOwnerDoc = hasAnyDoc
+        ? String(unwrapped.documentMessage?.fileName || unwrapped.documentMessage?.title || 'arquivo').replace(/[^\w.\- ()áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]/g, '_').slice(0, 120)
+        : '';
+
+      // Se a mensagem manual do dono no celular for recente (< 10 min) e tiver áudio/imagem/arquivo, baixa para tocar/ver também no painel!
+      let ownerMediaUrl = null;
+      let ownerMediaName = null;
+      let ownerMediaMime = null;
+      let ownerMediaSize = 0;
+
+      if (!isOldHistoricalMsg && msgAgeMs <= 10 * 60_000 && (hasAudio || hasImage || hasVideo || hasAnyDoc)) {
+        try {
+          const buf = await downloadMediaMessage(
+            msg,
+            'buffer',
+            {},
+            { logger, reuploadRequest: this.sock?.updateMediaMessage }
+          );
+          if (buf && buf.length <= 20 * 1024 * 1024) {
+            const mime = hasAudio
+              ? (unwrapped.audioMessage?.mimetype || 'audio/ogg')
+              : hasImage
+                ? (unwrapped.imageMessage?.mimetype || unwrapped.stickerMessage?.mimetype || 'image/jpeg')
+                : hasVideo
+                  ? (unwrapped.videoMessage?.mimetype || 'video/mp4')
+                  : (unwrapped.documentMessage?.mimetype || 'application/octet-stream');
+            const ext = hasAudio
+              ? (mime.includes('mp3') || mime.includes('mpeg') ? '.mp3' : mime.includes('mp4') ? '.m4a' : '.ogg')
+              : hasImage
+                ? (mime.includes('png') ? '.png' : mime.includes('webp') ? '.webp' : '.jpg')
+                : hasVideo
+                  ? '.mp4'
+                  : (path.extname(rawOwnerDoc).toLowerCase() || (hasPdfDoc ? '.pdf' : '.bin'));
+            const fn = `own_${Date.now()}_${Math.random().toString(36).slice(2, 7)}${ext}`;
+            fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+            fs.writeFileSync(path.join(UPLOADS_DIR, fn), buf);
+            ownerMediaUrl = `/uploads/${fn}`;
+            ownerMediaName = rawOwnerDoc || `Midia_Enviada${ext}`;
+            ownerMediaMime = mime;
+            ownerMediaSize = buf.length;
+          }
+        } catch {}
+      }
+
+      const ownerDisplayLabel = hasAudio
+        ? `🎤 [Áudio enviado por você] ${textContent}`.trim()
+        : hasImage
+          ? `[Imagem enviada por você] ${textContent}`.trim()
+          : hasVideo
+            ? `[Vídeo enviado por você] ${textContent}`.trim()
+            : hasAnyDoc
+              ? `[Arquivo enviado: ${rawOwnerDoc}] ${textContent}`.trim()
+              : (textContent || '[Mídia enviada manualmente por você]');
+
+      const knownClientName = this.lookupBestContactName(remoteJid, bestPhone);
+      storage.appendContactMessage(
+        remoteJid,
+        {
+          role: 'owner',
+          text: ownerDisplayLabel,
+          waMsgId: msg.key?.id || undefined,
+          waFromMe: true,
+          waTimestampMs: msgTsMs,
+          timestamp: msgIso,
+          phone: bestPhone || undefined,
+          ...(knownClientName ? { contactName: knownClientName } : {}),
+          ...(ownerMediaUrl ? { mediaUrl: ownerMediaUrl, mediaName: ownerMediaName, mediaMime: ownerMediaMime, mediaSize: ownerMediaSize } : {}),
+          historical: isOldHistoricalMsg,
+          skipUnread: isOldHistoricalMsg
+        },
+        { historical: isOldHistoricalMsg, ownerSelfName }
+      );
+
+      // Só trava/loga pausa automática se a resposta manual no celular foi recente (não em mensagens antigas de semanas atrás!)
+      if (!isOldHistoricalMsg && storage.data.settings.humanHandoff?.pauseOnOwnerReply) {
         const activeBiz = storage.getBusiness();
         const mins = activeBiz?.lockUntilManualResume
           ? 'forever'
@@ -690,16 +1426,18 @@ class WhatsAppManager {
         storage.addLog(
           'info',
           mins === 'forever'
-            ? `IA travada permanentemente para ${bestPhone} (você assumiu a conversa — "ok" não reabre sozinho).`
-            : `IA pausada por ${mins} min para ${bestPhone} (você assumiu a conversa).`
+            ? `IA travada permanentemente para ${bestPhone || remoteJid} (você assumiu a conversa — "ok" não reabre sozinho).`
+            : `IA pausada por ${mins} min para ${bestPhone || remoteJid} (você assumiu a conversa).`
         );
       }
       this.broadcastFn('crm_updated', { chatId: remoteJid });
       return;
     }
 
-    // 3. Registrar mensagem recebida do cliente no CRM (já salvando áudio, imagem, vídeo e QUALQUER arquivo enviado p/ ouvir, ver e baixar no CRM!)
-    storage.data.stats.totalIncoming += 1;
+    // 3. Registrar mensagem recebida do cliente no CRM
+    if (!isOldHistoricalMsg) {
+      storage.data.stats.totalIncoming += 1;
+    }
     const rawDocName = hasAnyDoc
       ? String(unwrapped.documentMessage?.fileName || unwrapped.documentMessage?.title || 'arquivo').replace(/[^\w.\- ()áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]/g, '_').slice(0, 120)
       : '';
@@ -713,10 +1451,20 @@ class WhatsAppManager {
             ? `[Arquivo: ${rawDocName}] ${textContent}`.trim()
             : textContent;
 
-    const contact = storage.upsertContact(remoteJid, {
-      phone: bestPhone,
-      name: pushName || storage.data.contacts[remoteJid]?.name || `Cliente ${bestPhone.slice(-4)}`
-    });
+    const cleanClientName =
+      this.lookupBestContactName(remoteJid, bestPhone) ||
+      (!storage.isGenericContactName(rawPushName, ownerSelfName) ? rawPushName : '') ||
+      storage.data.contacts[remoteJid]?.name ||
+      (bestPhone ? `+${bestPhone}` : 'Cliente');
+
+    const contact = storage.upsertContact(
+      remoteJid,
+      {
+        ...(bestPhone ? { phone: bestPhone } : {}),
+        name: cleanClientName
+      },
+      { ownerSelfName }
+    );
 
     let downloadedMedia = null;
     let inboundMediaUrl = null;
@@ -724,7 +1472,8 @@ class WhatsAppManager {
     let inboundMediaMime = null;
     let inboundMediaSize = 0;
 
-    if ((hasAudio || hasImage || hasVideo || hasAnyDoc) && !storage.isContactIgnored(bestPhone) && !storage.isContactIgnored(remoteJid)) {
+    // Só baixa binário pesado de mídia se NÃO for mensagem antiga de histórico (evita baixar centenas de vídeos antigos de meses atrás!)
+    if (!isOldHistoricalMsg && (hasAudio || hasImage || hasVideo || hasAnyDoc) && !storage.isContactIgnored(bestPhone) && !storage.isContactIgnored(remoteJid)) {
       try {
         const buffer = await downloadMediaMessage(
           msg,
@@ -801,15 +1550,41 @@ class WhatsAppManager {
       }
     }
 
-    storage.appendContactMessage(remoteJid, {
-      role: 'user',
-      text: displayLabel,
-      ...(inboundMediaUrl ? { mediaUrl: inboundMediaUrl } : {}),
-      ...(inboundMediaName ? { mediaName: inboundMediaName } : {}),
-      ...(inboundMediaMime ? { mediaMime: inboundMediaMime } : {}),
-      ...(inboundMediaSize ? { mediaSize: inboundMediaSize } : {})
-    });
+    storage.appendContactMessage(
+      remoteJid,
+      {
+        role: 'user',
+        text: displayLabel,
+        waMsgId: msg.key?.id || undefined,
+        waFromMe: false,
+        waTimestampMs: msgTsMs,
+        timestamp: msgIso,
+        phone: bestPhone || undefined,
+        contactName: cleanClientName || undefined,
+        historical: isOldHistoricalMsg,
+        skipUnread: isOldHistoricalMsg,
+        ...(inboundMediaUrl ? { mediaUrl: inboundMediaUrl } : {}),
+        ...(inboundMediaName ? { mediaName: inboundMediaName } : {}),
+        ...(inboundMediaMime ? { mediaMime: inboundMediaMime } : {}),
+        ...(inboundMediaSize ? { mediaSize: inboundMediaSize } : {})
+      },
+      { historical: isOldHistoricalMsg, ownerSelfName }
+    );
     this.broadcastFn('crm_updated', { chatId: remoteJid });
+
+    // Mensagens históricas/antigas sincronizadas nunca acionam resposta automática retroativa da IA!
+    if (isOldHistoricalMsg) {
+      return;
+    }
+
+    // Se já houver uma resposta posterior mais recente na conversa (ex: o dono já respondeu no celular durante offline), não responde por cima!
+    const currentCard = storage.data.contacts[storage.findSiblingContactKey(remoteJid, bestPhone) || remoteJid];
+    if (currentCard?.messages?.length) {
+      const latestReal = [...currentCard.messages].reverse().find((m) => m.role !== 'internal_note');
+      if (latestReal && latestReal.role !== 'user' && new Date(latestReal.timestamp || 0).getTime() > msgTsMs + 1000) {
+        return;
+      }
+    }
 
     // 4. Checar chave geral do Robô
     if (!storage.data.settings.botEnabled) {
@@ -1358,20 +2133,25 @@ class WhatsAppManager {
         throw new Error('O WhatsApp não está conectado no momento.');
       }
     }
-    const sent = await this.sock.sendMessage(chatId, { text });
+    const targetJid = String(chatId || '').includes('@')
+      ? String(chatId)
+      : `${normalizePhoneDigits(chatId)}@s.whatsapp.net`;
+    const sent = await this.sock.sendMessage(targetJid, { text });
     this.rememberBotMessage(sent);
-    storage.appendContactMessage(chatId, {
+    storage.appendContactMessage(targetJid, {
       role: 'owner',
-      text
+      text,
+      ...(sent?.key?.id ? { waMsgId: sent.key.id } : {})
     });
     if (pauseAi) {
       const activeBiz = storage.getBusiness();
       const mins = activeBiz?.lockUntilManualResume
         ? 'forever'
         : (Number(storage.data.settings.humanHandoff?.pauseDurationMinutes) || 60);
-      storage.pauseContact(chatId, mins, 'Mensagem manual enviada pelo painel');
+      storage.pauseContact(targetJid, mins, 'Mensagem manual enviada pelo painel');
     }
-    this.broadcastFn('crm_updated', { chatId });
+    storage.markContactRead(targetJid);
+    this.broadcastFn('crm_updated', { chatId: targetJid });
     return true;
   }
 
@@ -1385,6 +2165,9 @@ class WhatsAppManager {
         throw new Error('O WhatsApp não está conectado no momento.');
       }
     }
+    const targetJid = String(chatId || '').includes('@')
+      ? String(chatId)
+      : `${normalizePhoneDigits(chatId)}@s.whatsapp.net`;
     const isImage = /^image\//i.test(mimeType) && !/svg/i.test(mimeType);
     const isVideo = /^video\//i.test(mimeType);
     const payload = isImage
@@ -1405,12 +2188,13 @@ class WhatsAppManager {
             ...(caption ? { caption } : {})
           };
 
-    const sent = await this.sock.sendMessage(chatId, payload);
+    const sent = await this.sock.sendMessage(targetJid, payload);
     this.rememberBotMessage(sent);
     storage.data.stats.totalMediaSent += 1;
-    storage.appendContactMessage(chatId, {
+    storage.appendContactMessage(targetJid, {
       role: 'owner',
       text: caption || (isImage ? '[Imagem enviada]' : isVideo ? `[Vídeo enviado: ${fileName}]` : `[Arquivo enviado: ${fileName}]`),
+      ...(sent?.key?.id ? { waMsgId: sent.key.id } : {}),
       ...(mediaUrl ? { mediaUrl } : {}),
       mediaName: fileName || (isImage ? 'imagem.jpg' : 'arquivo'),
       mediaMime: mimeType,
@@ -1421,9 +2205,10 @@ class WhatsAppManager {
       const mins = activeBiz?.lockUntilManualResume
         ? 'forever'
         : (Number(storage.data.settings.humanHandoff?.pauseDurationMinutes) || 60);
-      storage.pauseContact(chatId, mins, 'Anexo enviado manualmente pelo painel');
+      storage.pauseContact(targetJid, mins, 'Anexo enviado manualmente pelo painel');
     }
-    this.broadcastFn('crm_updated', { chatId });
+    storage.markContactRead(targetJid);
+    this.broadcastFn('crm_updated', { chatId: targetJid });
     return true;
   }
 

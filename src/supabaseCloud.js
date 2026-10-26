@@ -20,7 +20,8 @@ import {
   Storage,
   UPLOADS_DIR,
   createCleanDatabaseForNewTenant,
-  localStorageInstance
+  localStorageInstance,
+  mergeContactMessagesUnion
 } from './storage.js';
 
 const CLOUD_SESSION_FILE = path.join(DATA_DIR, 'cloud_session.json');
@@ -379,7 +380,7 @@ export async function loadTenantContextFromCloud(client, authUser, profile) {
 
   const [wsRes, contactsRes, rtRes] = await Promise.all([
     client.from('zapia_workspaces').select('*').eq('user_id', uid).maybeSingle(),
-    client.from('zapia_contacts').select('chat_id, data').eq('user_id', uid),
+    client.from('zapia_contacts').select('chat_id, data').eq('user_id', uid).order('last_message_at', { ascending: false }).limit(2000),
     client.from('zapia_wa_runtime').select('*').eq('user_id', uid).maybeSingle()
   ]);
 
@@ -472,20 +473,53 @@ export async function flushTenantStoreToCloud(client, userId, tenantStore) {
   if (tenantStore.deletedContactIds.size > 0) {
     const delIds = Array.from(tenantStore.deletedContactIds);
     tenantStore.deletedContactIds.clear();
-    tasks.push(
-      client
-        .from('zapia_contacts')
-        .delete()
-        .eq('user_id', userId)
-        .in('chat_id', delIds)
-    );
+    for (let i = 0; i < delIds.length; i += 80) {
+      const slice = delIds.slice(i, i + 80);
+      tasks.push(
+        client
+          .from('zapia_contacts')
+          .delete()
+          .eq('user_id', userId)
+          .in('chat_id', slice)
+      );
+    }
   }
 
   if (tenantStore.dirtyContactIds.size > 0) {
+    const dirtyIds = Array.from(tenantStore.dirtyContactIds);
+    tenantStore.dirtyContactIds.clear();
+
+    // Proteção Anti-Sobrescrita Multi-Dispositivo (Vercel <-> Termux):
+    // Ao salvar poucos contatos (ex.: marcar como lido, pausar IA, etapa Kanban ou nota interna na Vercel),
+    // faz união (CRDT) das mensagens já salvas no Supabase para NUNCA apagar mensagens recém-enviadas pelo motor!
+    let remoteMap = new Map();
+    if (dirtyIds.length <= 15) {
+      try {
+        const { data: remoteRows } = await client
+          .from('zapia_contacts')
+          .select('chat_id, data')
+          .eq('user_id', userId)
+          .in('chat_id', dirtyIds);
+        if (Array.isArray(remoteRows)) {
+          remoteMap = new Map(remoteRows.map((r) => [r.chat_id, r.data]));
+        }
+      } catch {
+        // Segue normalmente caso falhe leitura auxiliar
+      }
+    }
+
     const rows = [];
-    for (const cid of tenantStore.dirtyContactIds) {
+    for (const cid of dirtyIds) {
       const c = tenantStore.data.contacts[cid];
       if (!c) continue;
+      const remoteData = remoteMap.get(cid);
+      if (remoteData?.messages?.length) {
+        c.messages = mergeContactMessagesUnion(c.messages, remoteData.messages);
+        const lastReal = [...(c.messages || [])].reverse().find((m) => m.role !== 'internal_note');
+        if (lastReal?.timestamp && (!c.lastMessageAt || lastReal.timestamp > c.lastMessageAt)) {
+          c.lastMessageAt = lastReal.timestamp;
+        }
+      }
       rows.push({
         user_id: userId,
         chat_id: cid,
@@ -494,10 +528,10 @@ export async function flushTenantStoreToCloud(client, userId, tenantStore) {
         updated_at: new Date().toISOString()
       });
     }
-    tenantStore.dirtyContactIds.clear();
-    if (rows.length > 0) {
+    for (let i = 0; i < rows.length; i += 60) {
+      const batch = rows.slice(i, i + 60);
       tasks.push(
-        client.from('zapia_contacts').upsert(rows, { onConflict: 'user_id,chat_id' })
+        client.from('zapia_contacts').upsert(batch, { onConflict: 'user_id,chat_id' })
       );
     }
   }
@@ -1262,7 +1296,12 @@ class CloudWorkerBridge {
     const uid = this.user.id;
 
     const contactsQuery = initial || !this.lastSyncedContactsIso
-      ? this.client.from('zapia_contacts').select('chat_id, data, updated_at').eq('user_id', uid)
+      ? this.client
+          .from('zapia_contacts')
+          .select('chat_id, data, updated_at')
+          .eq('user_id', uid)
+          .order('last_message_at', { ascending: false })
+          .limit(2000)
       : this.client
           .from('zapia_contacts')
           .select('chat_id, data, updated_at')
@@ -1275,7 +1314,9 @@ class CloudWorkerBridge {
     ]);
 
     let contactsChanged = false;
+    const healedIds = [];
     if (Array.isArray(contactsRes?.data) && contactsRes.data.length > 0) {
+      const prevLocalContacts = { ...(localStorageInstance.data.contacts || {}) };
       const prevMutate = localStorageInstance.onMutate;
       localStorageInstance.onMutate = null;
       try {
@@ -1290,7 +1331,21 @@ class CloudWorkerBridge {
           if (!row?.chat_id || !row?.data) continue;
           // Não sobrescreve contato que possui mutação local pendente de upload
           if (!initial && localStorageInstance.dirtyContactIds.has(row.chat_id)) continue;
-          localStorageInstance.data.contacts[row.chat_id] = row.data;
+
+          const prevLocal = prevLocalContacts[row.chat_id];
+          const cloudContact = { ...row.data };
+          if (prevLocal?.messages?.length) {
+            const beforeCount = Array.isArray(cloudContact.messages) ? cloudContact.messages.length : 0;
+            cloudContact.messages = mergeContactMessagesUnion(cloudContact.messages, prevLocal.messages);
+            if (cloudContact.messages.length > beforeCount) {
+              healedIds.push(row.chat_id);
+              const lastReal = [...cloudContact.messages].reverse().find((m) => m.role !== 'internal_note');
+              if (lastReal?.timestamp && (!cloudContact.lastMessageAt || lastReal.timestamp > cloudContact.lastMessageAt)) {
+                cloudContact.lastMessageAt = lastReal.timestamp;
+              }
+            }
+          }
+          localStorageInstance.data.contacts[row.chat_id] = cloudContact;
           contactsChanged = true;
         }
         if (maxIso) this.lastSyncedContactsIso = maxIso;
@@ -1304,6 +1359,10 @@ class CloudWorkerBridge {
         }
       } finally {
         localStorageInstance.onMutate = prevMutate;
+      }
+      if (healedIds.length > 0) {
+        for (const cid of healedIds) localStorageInstance.dirtyContactIds.add(cid);
+        this.scheduleLocalToCloudSync();
       }
     } else if (initial && !this.lastSyncedContactsIso) {
       this.lastSyncedContactsIso = new Date().toISOString();
@@ -1367,97 +1426,102 @@ class CloudWorkerBridge {
     if (!this.client || !this.user?.id) return;
     if (this.syncInFlight) {
       this.pendingFlush = true;
+      if (this.currentFlushPromise) {
+        await this.currentFlushPromise.catch(() => {});
+      }
       return;
     }
+
     this.syncInFlight = true;
-    try {
-      let rewroteLocalMediaUrl = false;
+    this.currentFlushPromise = (async () => {
+      try {
+        do {
+          this.pendingFlush = false;
+          let rewroteLocalMediaUrl = false;
 
-      // Sobe eventuais áudios/imagens locais recém-salvos ainda sem URL https:// da nuvem
-      for (const v of localStorageInstance.getVoiceLibrary()) {
-        if (v?.filename && (!v.url || v.url.startsWith('/uploads/'))) {
-          const fp = path.join(UPLOADS_DIR, v.filename);
-          if (fs.existsSync(fp)) {
-            const pubUrl = await uploadMediaBufferToCloud(
-              this.client,
-              this.user.id,
-              v.filename,
-              fs.readFileSync(fp),
-              'audio/ogg'
-            );
-            if (pubUrl) {
-              v.url = pubUrl;
-              rewroteLocalMediaUrl = true;
-            }
-          }
-        }
-      }
-
-      // Sobe mídias e arquivos recebidos dos clientes (áudio, foto, vídeo, PDF, planilha, doc, zip...) p/ ouvir/ver/baixar na Vercel!
-      for (const cid of localStorageInstance.dirtyContactIds) {
-        const contact = localStorageInstance.data.contacts[cid];
-        if (!contact?.messages?.length) continue;
-        const recent = contact.messages.slice(-15);
-        for (const m of recent) {
-          if (m?.mediaUrl && m.mediaUrl.startsWith('/uploads/')) {
-            const fn = path.basename(m.mediaUrl);
-            const fp = path.join(UPLOADS_DIR, fn);
-            if (fs.existsSync(fp)) {
-              const ext = path.extname(fn).toLowerCase();
-              const mime =
-                m.mediaMime ||
-                (ext === '.ogg' || ext === '.opus' ? 'audio/ogg' :
-                ext === '.mp3' ? 'audio/mpeg' :
-                ext === '.m4a' ? 'audio/mp4' :
-                ext === '.wav' ? 'audio/wav' :
-                ext === '.webm' ? 'audio/webm' :
-                ext === '.mp4' ? 'video/mp4' :
-                ext === '.png' ? 'image/png' :
-                ext === '.webp' ? 'image/webp' :
-                ext === '.gif' ? 'image/gif' :
-                ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' :
-                ext === '.pdf' ? 'application/pdf' :
-                ext === '.csv' ? 'text/csv' :
-                ext === '.txt' ? 'text/plain' :
-                ext === '.json' ? 'application/json' :
-                ext === '.xml' ? 'application/xml' :
-                ext === '.zip' ? 'application/zip' :
-                ext === '.doc' ? 'application/msword' :
-                ext === '.docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' :
-                ext === '.xls' ? 'application/vnd.ms-excel' :
-                ext === '.xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' :
-                'application/octet-stream');
-              const pubUrl = await uploadMediaBufferToCloud(this.client, this.user.id, fn, fs.readFileSync(fp), mime);
-              if (pubUrl) {
-                m.mediaUrl = pubUrl;
-                rewroteLocalMediaUrl = true;
+          // Sobe eventuais áudios/imagens locais recém-salvos ainda sem URL https:// da nuvem
+          for (const v of localStorageInstance.getVoiceLibrary()) {
+            if (v?.filename && (!v.url || v.url.startsWith('/uploads/'))) {
+              const fp = path.join(UPLOADS_DIR, v.filename);
+              if (fs.existsSync(fp)) {
+                const pubUrl = await uploadMediaBufferToCloud(
+                  this.client,
+                  this.user.id,
+                  v.filename,
+                  fs.readFileSync(fp),
+                  'audio/ogg'
+                );
+                if (pubUrl) {
+                  v.url = pubUrl;
+                  rewroteLocalMediaUrl = true;
+                }
               }
             }
           }
-        }
-      }
 
-      if (rewroteLocalMediaUrl) {
-        const prevMutate = localStorageInstance.onMutate;
-        localStorageInstance.onMutate = null;
-        try {
-          localStorageInstance.writeNow();
-        } finally {
-          localStorageInstance.onMutate = prevMutate;
-        }
-      }
+          // Sobe mídias e arquivos recebidos dos clientes (áudio, foto, vídeo, PDF, planilha, doc, zip...) p/ ouvir/ver/baixar na Vercel!
+          for (const cid of localStorageInstance.dirtyContactIds) {
+            const contact = localStorageInstance.data.contacts[cid];
+            if (!contact?.messages?.length) continue;
+            const recent = contact.messages.slice(-15);
+            for (const m of recent) {
+              if (m?.mediaUrl && m.mediaUrl.startsWith('/uploads/')) {
+                const fn = path.basename(m.mediaUrl);
+                const fp = path.join(UPLOADS_DIR, fn);
+                if (fs.existsSync(fp)) {
+                  const ext = path.extname(fn).toLowerCase();
+                  const mime =
+                    m.mediaMime ||
+                    (ext === '.ogg' || ext === '.opus' ? 'audio/ogg' :
+                    ext === '.mp3' ? 'audio/mpeg' :
+                    ext === '.m4a' ? 'audio/mp4' :
+                    ext === '.wav' ? 'audio/wav' :
+                    ext === '.webm' ? 'audio/webm' :
+                    ext === '.mp4' ? 'video/mp4' :
+                    ext === '.png' ? 'image/png' :
+                    ext === '.webp' ? 'image/webp' :
+                    ext === '.gif' ? 'image/gif' :
+                    ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' :
+                    ext === '.pdf' ? 'application/pdf' :
+                    ext === '.csv' ? 'text/csv' :
+                    ext === '.txt' ? 'text/plain' :
+                    ext === '.json' ? 'application/json' :
+                    ext === '.xml' ? 'application/xml' :
+                    ext === '.zip' ? 'application/zip' :
+                    ext === '.doc' ? 'application/msword' :
+                    ext === '.docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' :
+                    ext === '.xls' ? 'application/vnd.ms-excel' :
+                    ext === '.xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' :
+                    'application/octet-stream');
+                  const pubUrl = await uploadMediaBufferToCloud(this.client, this.user.id, fn, fs.readFileSync(fp), mime);
+                  if (pubUrl) {
+                    m.mediaUrl = pubUrl;
+                    rewroteLocalMediaUrl = true;
+                  }
+                }
+              }
+            }
+          }
 
-      await flushTenantStoreToCloud(this.client, this.user.id, localStorageInstance);
-      const nowIso = new Date().toISOString();
-      this.lastSyncedWorkspaceIso = nowIso;
-      this.lastSyncedContactsIso = nowIso;
-    } finally {
-      this.syncInFlight = false;
-      if (this.pendingFlush) {
-        this.pendingFlush = false;
-        this.scheduleLocalToCloudSync();
+          if (rewroteLocalMediaUrl) {
+            const prevMutate = localStorageInstance.onMutate;
+            localStorageInstance.onMutate = null;
+            try {
+              localStorageInstance.writeNow();
+            } finally {
+              localStorageInstance.onMutate = prevMutate;
+            }
+          }
+
+          await flushTenantStoreToCloud(this.client, this.user.id, localStorageInstance);
+        } while (this.pendingFlush);
+      } finally {
+        this.syncInFlight = false;
+        this.currentFlushPromise = null;
       }
-    }
+    })();
+
+    await this.currentFlushPromise;
   }
 
   async pushRuntimeHeartbeat() {
@@ -1617,6 +1681,24 @@ class CloudWorkerBridge {
           result = { ok: true, waState: st };
           break;
         }
+        case 'wa_sync_history': {
+          const out = await this.whatsappManager.syncAllConversationsFromPhone({
+            force: true,
+            waitMs: Number(p.waitMs) || 6500
+          });
+          await this.flushLocalToCloud();
+          result = { ok: true, ...out };
+          break;
+        }
+        case 'fetch_chat_history': {
+          const out = await this.whatsappManager.fetchOlderMessagesForChat(
+            p.chatId,
+            Number(p.count) || 50
+          );
+          await this.flushLocalToCloud();
+          result = { ok: true, ...out };
+          break;
+        }
         case 'wa_test_owner_alert': {
           const out = await this.whatsappManager.sendTestAlertToOwner(p.phone);
           await this.flushLocalToCloud();
@@ -1624,10 +1706,12 @@ class CloudWorkerBridge {
           break;
         }
         case 'send_crm_reply': {
+          await this.pullCloudIntoLocal(false);
           const cleanJid = String(p.chatId || '').replace(/^demo_/, '');
           await this.whatsappManager.sendManualOwnerMessage(cleanJid, p.text, true);
+          localStorageInstance.markContactRead(cleanJid);
           await this.flushLocalToCloud();
-          const key = localStorageInstance.findSiblingContactKey(p.chatId) || p.chatId;
+          const key = localStorageInstance.findSiblingContactKey(cleanJid) || cleanJid;
           result = { ok: true, sentRealWhatsApp: true, contact: localStorageInstance.data.contacts[key] };
           break;
         }
@@ -1646,6 +1730,7 @@ class CloudWorkerBridge {
             await this.whatsappManager.sendManualOwnerMessage(p.chatId, txt, true);
           }
           localStorageInstance.pauseContact(p.chatId, biz.lockUntilManualResume ? 'forever' : 60, 'Item enviado manualmente no CRM');
+          localStorageInstance.markContactRead(p.chatId);
           await this.flushLocalToCloud();
           const key = localStorageInstance.findSiblingContactKey(p.chatId) || p.chatId;
           result = { ok: true, sentRealWhatsApp: true, contact: localStorageInstance.data.contacts[key] };
@@ -1656,6 +1741,7 @@ class CloudWorkerBridge {
           const biz = localStorageInstance.getBusiness();
           await this.whatsappManager.sendPixPayloadToChat(p.chatId, biz, p.amount ?? null, 'owner', p.chatId);
           localStorageInstance.pauseContact(p.chatId, biz.lockUntilManualResume ? 'forever' : 60, 'PIX enviado manualmente no CRM');
+          localStorageInstance.markContactRead(p.chatId);
           await this.flushLocalToCloud();
           const key = localStorageInstance.findSiblingContactKey(p.chatId) || p.chatId;
           result = { ok: true, sentRealWhatsApp: true, contact: localStorageInstance.data.contacts[key] };
@@ -1672,16 +1758,18 @@ class CloudWorkerBridge {
             senderRole: 'owner',
             pauseAi: true
           });
+          localStorageInstance.markContactRead(p.chatId);
           await this.flushLocalToCloud();
           const key = localStorageInstance.findSiblingContactKey(p.chatId) || p.chatId;
           result = { ok: true, sentRealWhatsApp: true, contact: localStorageInstance.data.contacts[key] };
           break;
         }
         case 'send_crm_recorded_voice': {
+          await this.pullCloudIntoLocal(false);
           const localAudio = await ensureLocalMediaCached(p.filename, p.mediaUrl);
           if (!localAudio) throw new Error('Arquivo de áudio gravado não encontrado para envio.');
           const oggBuffer = fs.readFileSync(localAudio);
-          await this.whatsappManager.sendCanonicalVoiceNote({
+          const sentVoice = await this.whatsappManager.sendCanonicalVoiceNote({
             chatId: p.chatId,
             oggBuffer,
             durationSec: p.durationSec || 2,
@@ -1692,17 +1780,20 @@ class CloudWorkerBridge {
           localStorageInstance.appendContactMessage(p.chatId, {
             role: 'owner',
             text: `🎤 [Nota de voz gravada/enviada (${p.durationSec || 1}s)]`,
+            ...(sentVoice?.key?.id ? { waMsgId: sentVoice.key.id } : {}),
             mediaUrl: p.mediaUrl,
             durationSec: p.durationSec || 1,
             waveform: p.waveform
           });
           localStorageInstance.pauseContact(p.chatId, biz.lockUntilManualResume ? 'forever' : 60, 'Nota de voz enviada manualmente pelo painel');
+          localStorageInstance.markContactRead(p.chatId);
           await this.flushLocalToCloud();
           const key = localStorageInstance.findSiblingContactKey(p.chatId) || p.chatId;
           result = { ok: true, sentRealWhatsApp: true, contact: localStorageInstance.data.contacts[key] };
           break;
         }
         case 'send_crm_attachment': {
+          await this.pullCloudIntoLocal(false);
           const localFile = await ensureLocalMediaCached(p.filename, p.mediaUrl);
           if (!localFile) throw new Error('Arquivo anexo não encontrado para envio.');
           const fileBuffer = fs.readFileSync(localFile);
@@ -1715,6 +1806,7 @@ class CloudWorkerBridge {
             mediaUrl: p.mediaUrl || `/uploads/${p.filename}`,
             pauseAi: true
           });
+          localStorageInstance.markContactRead(p.chatId);
           await this.flushLocalToCloud();
           const key = localStorageInstance.findSiblingContactKey(p.chatId) || p.chatId;
           result = { ok: true, sentRealWhatsApp: true, contact: localStorageInstance.data.contacts[key] };

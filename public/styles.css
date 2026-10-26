@@ -3379,3 +3379,49 @@ textarea {
   }
 }
 
+.btn-fetch-older-history {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  margin: 2px auto 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-card-subtle);
+  border: 1px dashed var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.16s ease, border-color 0.16s ease, background-color 0.16s ease;
+}
+.btn-fetch-older-history:hover:not(:disabled) {
+  color: var(--accent-bright);
+  border-color: var(--accent);
+  background: rgba(16, 185, 129, 0.08);
+}
+.btn-fetch-older-history:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.inbox-load-more-btn {
+  width: calc(100% - 16px);
+  margin: 8px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px dashed var(--border);
+  background: var(--bg-card-subtle);
+  color: var(--accent-bright);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (max-width: 480px) {
+  #btnSyncWaConversations span {
+    display: none;
+  }
+}
+
+

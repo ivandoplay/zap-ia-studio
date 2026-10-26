@@ -34,11 +34,20 @@ export function normalizePhoneDigits(raw = '') {
   return String(raw).replace(/@.*$/, '').replace(/:\d+$/, '').replace(/\D/g, '');
 }
 
+export function extractPhoneFromJidIfPn(jid = '') {
+  const s = String(jid || '');
+  if (!s || s.endsWith('@lid') || s.endsWith('@g.us') || s.endsWith('@newsletter') || s.endsWith('@broadcast')) {
+    return '';
+  }
+  return normalizePhoneDigits(s);
+}
+
 /**
  * Compara dois números de telefone brasileiros tolerando presença/ausência do DDI 55 e 9º dígito móvel.
- * Ignora identificadores puros de @lid (>= 14 dígitos que não começam com 55+DDD válido).
+ * Ignora identificadores puros de @lid.
  */
 export function isLikelyRealPhone(digits = '') {
+  if (String(digits || '').endsWith('@lid')) return false;
   const d = normalizePhoneDigits(digits);
   if (d.length >= 10 && d.length <= 13) return true;
   return false;
@@ -245,12 +254,17 @@ function deduplicateContactsMap(rawContacts = {}) {
     const preferItemJid = item.chatId.endsWith('@lid') && !prev.chatId.endsWith('@lid');
     const canonicalJid = preferItemJid ? item.chatId : prev.chatId;
 
-    // Mescla mensagens ordenadas por horário sem duplicar texto+role próximos
+    // Mescla mensagens ordenadas por horário sem duplicar waMsgId ou texto+role próximos
     const combinedMsgs = [...(prev.messages || []), ...(item.messages || [])]
       .sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime());
     const dedupedMsgs = [];
+    const seenWaIds = new Set();
     for (const m of combinedMsgs) {
-      const dup = dedupedMsgs.some(
+      if (m?.waMsgId) {
+        if (seenWaIds.has(m.waMsgId)) continue;
+        seenWaIds.add(m.waMsgId);
+      }
+      const dup = !m?.waMsgId && dedupedMsgs.some(
         dm => dm.role === m.role && dm.text === m.text &&
           Math.abs(new Date(dm.timestamp || 0).getTime() - new Date(m.timestamp || 0).getTime()) < 5000
       );
@@ -265,9 +279,17 @@ function deduplicateContactsMap(rawContacts = {}) {
       ? 'forever'
       : (item.pausedUntil || prev.pausedUntil || null);
 
-    // Prefere nome real recebido via pushName ao invés de rótulo genérico de teste
-    const pickName = (n) => n && !/^Cliente\b/i.test(n) && !/Teste Lojista/i.test(n);
-    const bestName = pickName(item.name) ? item.name : (pickName(prev.name) ? prev.name : (item.name || prev.name));
+    // Prefere nome real salvo na agenda / pushName ao invés de número cru (+55...) ou rótulo genérico
+    const pickName = (n) => {
+      const s = String(n || '').trim();
+      if (!s) return false;
+      if (/^(Cliente|Contato|Contato WhatsApp|WhatsApp)\b/i.test(s)) return false;
+      if (/Teste Lojista/i.test(s)) return false;
+      if (/^\+?\d{7,}$/.test(s.replace(/[\s()-]/g, ''))) return false;
+      if (s.includes('@lid') || s.includes('@s.whatsapp.net')) return false;
+      return true;
+    };
+    const bestName = pickName(prev.name) ? prev.name : (pickName(item.name) ? item.name : (prev.name || item.name));
 
     mergedByKey[existingIdx] = {
       ...prev,
@@ -284,7 +306,7 @@ function deduplicateContactsMap(rawContacts = {}) {
       summary: item.summary || prev.summary || '',
       notes: [prev.notes, item.notes].filter(Boolean).join('\n').trim(),
       unreadAlert: Boolean(prev.unreadAlert || item.unreadAlert),
-      messages: dedupedMsgs.slice(-80),
+      messages: dedupedMsgs.slice(-120),
       lastMessageAt:
         new Date(item.lastMessageAt || 0).getTime() >= new Date(prev.lastMessageAt || 0).getTime()
           ? item.lastMessageAt
@@ -773,40 +795,85 @@ export class Storage {
 
   findSiblingContactKey(chatId, phone = '') {
     if (this.data.contacts[chatId]) return chatId;
-    const checkPhone = phone || normalizePhoneDigits(chatId);
+    const checkPhone = phone || extractPhoneFromJidIfPn(chatId);
     if (!isLikelyRealPhone(checkPhone)) return null;
     for (const [existingJid, c] of Object.entries(this.data.contacts)) {
-      if (phonesMatch(c.phone, checkPhone)) {
-        return existingJid;
+      if (!String(existingJid).endsWith('@lid') || isLikelyRealPhone(c.phone)) {
+        if (phonesMatch(c.phone, checkPhone)) {
+          return existingJid;
+        }
       }
     }
     return null;
   }
 
-  upsertContact(chatId, patch = {}) {
-    const candidatePhone = patch.phone || this.data.contacts[chatId]?.phone || normalizePhoneDigits(chatId);
+  isGenericContactName(name = '', ownerName = '') {
+    const clean = String(name || '').trim();
+    if (!clean) return true;
+    if (clean === 'Cliente' || /^Cliente\s+\d+$/i.test(clean) || /^Contato\s+\+?\d+$/i.test(clean) || /^\+?\d{8,}$/.test(clean)) {
+      return true;
+    }
+    if (ownerName && clean.toLowerCase() === String(ownerName).trim().toLowerCase()) {
+      return true;
+    }
+    return false;
+  }
+
+  upsertContact(chatId, patch = {}, opts = {}) {
+    const jidPhone = extractPhoneFromJidIfPn(chatId);
+    const existingDirect = this.data.contacts[chatId];
+    const existingValidPhone = existingDirect && isLikelyRealPhone(existingDirect.phone) && !String(existingDirect.phone).endsWith('@lid')
+      ? existingDirect.phone
+      : '';
+    const candidatePhone = isLikelyRealPhone(patch.phone)
+      ? normalizePhoneDigits(patch.phone)
+      : (existingValidPhone || jidPhone);
+
     let targetKey = chatId;
 
-    // Se já existia um card do mesmo telefone em outro formato (@s.whatsapp.net <-> @lid), unifica em 1 único card!
-    const siblingKey = this.findSiblingContactKey(chatId, candidatePhone);
-    if (siblingKey && siblingKey !== chatId) {
-      const sibling = this.data.contacts[siblingKey];
-      // Se o novo evento veio por @lid, migra a chave canônica para o @lid (onde o WhatsApp responde)
-      if (chatId.endsWith('@lid') && !siblingKey.endsWith('@lid')) {
-        delete this.data.contacts[siblingKey];
-        this.deletedContactIds.add(siblingKey);
-        this.dirtyContactIds.delete(siblingKey);
-        this.data.contacts[chatId] = { ...sibling, chatId };
-        targetKey = chatId;
-      } else {
-        targetKey = siblingKey;
+    // Unifica automaticamente qualquer card duplicado do mesmo telefone (@s.whatsapp.net <-> @lid) mesmo que ambos já existissem!
+    if (isLikelyRealPhone(candidatePhone)) {
+      for (const [otherKey, otherCard] of Object.entries(this.data.contacts)) {
+        if (otherKey === chatId) continue;
+        if (!phonesMatch(otherCard.phone, candidatePhone)) continue;
+
+        const preferNew = String(chatId).endsWith('@lid') && !String(otherKey).endsWith('@lid');
+        const winnerKey = preferNew ? chatId : otherKey;
+        const loserKey = preferNew ? otherKey : chatId;
+        const winnerBase = this.data.contacts[winnerKey] || otherCard;
+        const loserBase = this.data.contacts[loserKey];
+
+        if (loserBase) {
+          const mergedMap = deduplicateContactsMap({
+            [winnerKey]: { ...winnerBase, chatId: winnerKey, phone: candidatePhone },
+            [loserKey]: { ...loserBase, chatId: loserKey, phone: candidatePhone }
+          });
+          const mergedCard = Object.values(mergedMap)[0];
+          delete this.data.contacts[loserKey];
+          this.deletedContactIds.add(loserKey);
+          this.dirtyContactIds.delete(loserKey);
+          if (mergedCard) {
+            targetKey = mergedCard.chatId;
+            this.data.contacts[targetKey] = mergedCard;
+          }
+        } else if (!this.data.contacts[winnerKey] && preferNew) {
+          delete this.data.contacts[otherKey];
+          this.deletedContactIds.add(otherKey);
+          this.dirtyContactIds.delete(otherKey);
+          this.data.contacts[chatId] = { ...otherCard, chatId, phone: candidatePhone };
+          targetKey = chatId;
+        } else {
+          targetKey = winnerKey;
+        }
+        break;
       }
     }
 
+    const fallbackPhoneLabel = candidatePhone ? `+${candidatePhone}` : 'Contato WhatsApp';
     const existing = this.data.contacts[targetKey] || {
       chatId: targetKey,
-      phone: isLikelyRealPhone(candidatePhone) ? candidatePhone : normalizePhoneDigits(targetKey),
-      name: patch.name || 'Cliente',
+      phone: candidatePhone || '',
+      name: patch.name || fallbackPhoneLabel,
       stage: 'novo',
       pausedUntil: null,
       pauseReason: '',
@@ -821,17 +888,42 @@ export class Storage {
       unreadCount: 0,
       archived: false,
       pinned: false,
-      createdAt: new Date().toISOString(),
-      lastMessageAt: new Date().toISOString(),
+      createdAt: patch.createdAt || new Date().toISOString(),
+      lastMessageAt: patch.lastMessageAt || new Date().toISOString(),
       messages: []
     };
 
     const nextFollowUpAt = patch.followUpAt !== undefined ? (patch.followUpAt || null) : (existing.followUpAt || null);
     const followUpChanged = patch.followUpAt !== undefined && nextFollowUpAt !== (existing.followUpAt || null);
+    const ownerSelfName = opts.ownerSelfName || '';
+
+    // Escolha inteligente do nome: preserva nome real salvo na agenda / perfil e substitui rótulos genéricos ou nome acidental do próprio dono
+    let chosenName = existing.name;
+    if (patch.forceName && String(patch.name || '').trim()) {
+      chosenName = String(patch.name).trim();
+    } else if (patch.name && !this.isGenericContactName(patch.name, ownerSelfName)) {
+      if (this.isGenericContactName(existing.name, ownerSelfName) || opts.preferAddressBookName) {
+        chosenName = String(patch.name).trim();
+      }
+    } else if (this.isGenericContactName(existing.name, ownerSelfName) && candidatePhone) {
+      chosenName = `+${candidatePhone}`;
+    }
+
+    // Protege lastMessageAt para nunca regredir caso chegue um evento antigo de histórico
+    let chosenLastMessageAt = existing.lastMessageAt;
+    if (patch.lastMessageAt) {
+      const prevTs = new Date(existing.lastMessageAt || 0).getTime() || 0;
+      const nextTs = new Date(patch.lastMessageAt).getTime() || 0;
+      if (patch.forceLastMessageAt || (existing.messages?.length || 0) === 0 || nextTs >= prevTs) {
+        chosenLastMessageAt = patch.lastMessageAt;
+      }
+    }
+
+    const { forceName: _fn, forceLastMessageAt: _fl, ...cleanPatch } = patch;
 
     const updated = {
       ...existing,
-      ...patch,
+      ...cleanPatch,
       chatId: targetKey,
       tags: Array.isArray(patch.tags) ? patch.tags : (existing.tags || []),
       sentVoiceIds: Array.isArray(patch.sentVoiceIds) ? patch.sentVoiceIds : (existing.sentVoiceIds || []),
@@ -847,14 +939,17 @@ export class Storage {
       followUpNotifiedAt: followUpChanged
         ? null
         : (patch.followUpNotifiedAt !== undefined ? patch.followUpNotifiedAt : (existing.followUpNotifiedAt || null)),
-      name: patch.name && patch.name !== 'Cliente' && !/^Cliente \d+$/i.test(patch.name) ? patch.name : existing.name,
-      phone: isLikelyRealPhone(patch.phone) ? patch.phone : (existing.phone || normalizePhoneDigits(targetKey))
+      name: chosenName,
+      phone: candidatePhone || existing.phone || '',
+      lastMessageAt: chosenLastMessageAt
     };
 
     this.data.contacts[targetKey] = updated;
     this.deletedContactIds.delete(targetKey);
     this.dirtyContactIds.add(targetKey);
-    this.saveSoon();
+    if (!opts.deferSave) {
+      this.saveSoon();
+    }
     return updated;
   }
 
@@ -870,7 +965,11 @@ export class Storage {
 
   markContactRead(chatId) {
     const key = this.findSiblingContactKey(chatId) || chatId;
-    if (!this.data.contacts[key]) return null;
+    const existing = this.data.contacts[key];
+    if (!existing) return null;
+    if ((Number(existing.unreadCount) || 0) === 0 && !existing.unreadAlert) {
+      return existing;
+    }
     return this.upsertContact(key, {
       unreadCount: 0,
       unreadAlert: false
@@ -899,8 +998,8 @@ export class Storage {
       text: cleanText,
       timestamp: createdAt
     });
-    if (existing.messages.length > 100) {
-      existing.messages = existing.messages.slice(-100);
+    if (existing.messages.length > 120) {
+      existing.messages = existing.messages.slice(-120);
     }
     this.dirtyContactIds.add(existing.chatId);
     this.saveSoon();
@@ -918,15 +1017,50 @@ export class Storage {
     return existing;
   }
 
-  appendContactMessage(chatId, msgObj) {
-    const prevKey = this.findSiblingContactKey(chatId) || chatId;
+  appendContactMessage(chatId, msgObj, opts = {}) {
+    const candidatePhone = msgObj?.phone || extractPhoneFromJidIfPn(chatId);
+    const prevKey = this.findSiblingContactKey(chatId, candidatePhone) || chatId;
     const prev = this.data.contacts[prevKey];
-    const isIncomingUser = msgObj?.role === 'user' && !msgObj?.skipUnread;
-    const isManualOwner = msgObj?.role === 'owner';
+    const isHistorical = Boolean(opts.historical || msgObj?.historical);
+    const isIncomingUser = msgObj?.role === 'user' && !msgObj?.skipUnread && !isHistorical;
+    const isManualOwner = msgObj?.role === 'owner' && !isHistorical;
+
+    const msgIso = msgObj?.timestamp && !Number.isNaN(new Date(msgObj.timestamp).getTime())
+      ? new Date(msgObj.timestamp).toISOString()
+      : new Date().toISOString();
+
+    // Checa duplicidade ANTES de incrementar contador de não-lidas!
+    if (prev && Array.isArray(prev.messages) && prev.messages.length > 0) {
+      if (msgObj?.waMsgId) {
+        const dupById = prev.messages.find((m) => m.waMsgId && m.waMsgId === msgObj.waMsgId);
+        if (dupById) {
+          if (msgObj.mediaUrl && !dupById.mediaUrl) {
+            dupById.mediaUrl = msgObj.mediaUrl;
+            dupById.mediaName = msgObj.mediaName || dupById.mediaName;
+            dupById.mediaMime = msgObj.mediaMime || dupById.mediaMime;
+            dupById.mediaSize = msgObj.mediaSize || dupById.mediaSize;
+            this.dirtyContactIds.add(prev.chatId);
+            if (!opts.deferSave) this.saveSoon();
+          }
+          return prev;
+        }
+      } else {
+        const msgMs = new Date(msgIso).getTime();
+        const dupFuzzy = prev.messages.some(
+          (m) =>
+            m.role === msgObj?.role &&
+            m.text === msgObj?.text &&
+            Math.abs(new Date(m.timestamp || 0).getTime() - msgMs) < 3500
+        );
+        if (dupFuzzy) return prev;
+      }
+    }
 
     const nextPatch = {
-      lastMessageAt: new Date().toISOString()
+      lastMessageAt: msgIso
     };
+    if (candidatePhone) nextPatch.phone = candidatePhone;
+    if (msgObj?.contactName) nextPatch.name = msgObj.contactName;
     if (isIncomingUser) {
       nextPatch.unreadCount = Math.max(0, Number(prev?.unreadCount) || 0) + 1;
       nextPatch.archived = false;
@@ -934,18 +1068,45 @@ export class Storage {
       nextPatch.unreadCount = 0;
     }
 
-    const contact = this.upsertContact(chatId, nextPatch);
-    const { skipUnread: _ignored, ...cleanMsg } = msgObj || {};
+    const contact = this.upsertContact(chatId, nextPatch, {
+      deferSave: true,
+      ownerSelfName: opts.ownerSelfName || ''
+    });
+
+    const { skipUnread: _su, historical: _hi, phone: _ph, contactName: _cn, ...cleanMsg } = msgObj || {};
     contact.messages.push({
       id: uid('msg'),
-      timestamp: new Date().toISOString(),
-      ...cleanMsg
+      ...cleanMsg,
+      timestamp: msgIso
     });
-    if (contact.messages.length > 100) {
-      contact.messages = contact.messages.slice(-100);
+
+    // Mantém ordem estritamente cronológica caso mensagens de histórico entrem fora de ordem
+    if (contact.messages.length > 1) {
+      const n = contact.messages.length;
+      const prevTs = new Date(contact.messages[n - 2]?.timestamp || 0).getTime();
+      const curTs = new Date(msgIso).getTime();
+      if (curTs < prevTs) {
+        contact.messages.sort((a, b) => new Date(a.timestamp || 0).getTime() - new Date(b.timestamp || 0).getTime());
+      }
     }
+
+    if (contact.messages.length > 120) {
+      contact.messages = contact.messages.slice(-120);
+    }
+
+    // Recalcula lastMessageAt com base na mensagem real mais recente da conversa
+    const realMsgs = contact.messages.filter((m) => m.role !== 'internal_note');
+    if (realMsgs.length > 0) {
+      const latestMsgIso = realMsgs[realMsgs.length - 1].timestamp;
+      if (latestMsgIso && new Date(latestMsgIso).getTime() > new Date(contact.lastMessageAt || 0).getTime()) {
+        contact.lastMessageAt = latestMsgIso;
+      }
+    }
+
     this.dirtyContactIds.add(contact.chatId);
-    this.saveSoon();
+    if (!opts.deferSave) {
+      this.saveSoon();
+    }
     return contact;
   }
 
@@ -1079,6 +1240,64 @@ export class Storage {
       businessName: this.data.business.name
     };
   }
+}
+
+export function mergeContactMessagesUnion(authoritativeMsgs = [], rescueMsgs = []) {
+  const authArr = Array.isArray(authoritativeMsgs) ? authoritativeMsgs.filter(Boolean) : [];
+  const rescArr = Array.isArray(rescueMsgs) ? rescueMsgs.filter(Boolean) : [];
+  if (rescArr.length === 0) return authArr.slice(-120);
+
+  const merged = authArr.map((m) => ({ ...m }));
+  const byWaId = new Map();
+  const byId = new Map();
+  const bySig = new Map();
+
+  const buildSig = (m) => {
+    const tsSec = Math.round((new Date(m.timestamp || 0).getTime() || 0) / 2500);
+    return `${m.role || ''}|${String(m.text || '').trim()}|${tsSec}`;
+  };
+
+  for (const m of merged) {
+    if (m.waMsgId) byWaId.set(m.waMsgId, m);
+    if (m.id) byId.set(m.id, m);
+    bySig.set(buildSig(m), m);
+  }
+
+  let added = 0;
+  for (const r of rescArr) {
+    // Notas internas respeitam exclusões feitas pelo painel; todas as mensagens reais (user/assistant/owner) nunca são perdidas!
+    if (r.role === 'internal_note') continue;
+
+    const existing =
+      (r.waMsgId && byWaId.get(r.waMsgId)) ||
+      (r.id && byId.get(r.id)) ||
+      bySig.get(buildSig(r));
+
+    if (existing) {
+      if (r.waMsgId && !existing.waMsgId) existing.waMsgId = r.waMsgId;
+      if (r.mediaUrl && /^https?:\/\//i.test(r.mediaUrl) && (!existing.mediaUrl || existing.mediaUrl.startsWith('/uploads/'))) {
+        existing.mediaUrl = r.mediaUrl;
+      }
+      continue;
+    }
+
+    const clone = { ...r };
+    merged.push(clone);
+    if (clone.waMsgId) byWaId.set(clone.waMsgId, clone);
+    if (clone.id) byId.set(clone.id, clone);
+    bySig.set(buildSig(clone), clone);
+    added += 1;
+  }
+
+  if (added > 0) {
+    merged.sort((a, b) => {
+      const ta = new Date(a.timestamp || 0).getTime() || 0;
+      const tb = new Date(b.timestamp || 0).getTime() || 0;
+      return ta - tb;
+    });
+  }
+
+  return merged.slice(-120);
 }
 
 export const localStorageInstance = new Storage();

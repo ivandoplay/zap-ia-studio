@@ -678,6 +678,111 @@ function checkClientSideDueFollowUps(seedOnly = false) {
 }
 
 let liveRefreshInFlight = null;
+const recentClientContactGuards = new Map();
+
+function unionMergeClientMessages(polledMsgs = [], guardMsgs = []) {
+  const base = Array.isArray(polledMsgs) ? polledMsgs.filter(Boolean) : [];
+  const extra = Array.isArray(guardMsgs) ? guardMsgs.filter(Boolean) : [];
+  if (!extra.length) return base;
+  const out = base.map((m) => ({ ...m }));
+  const sigOf = (m) => `${m.role || ''}|${String(m.text || '').trim()}|${Math.round((new Date(m.timestamp || 0).getTime() || 0) / 3000)}`;
+  const seenIds = new Set(out.map((m) => m.id).filter(Boolean));
+  const seenWa = new Set(out.map((m) => m.waMsgId).filter(Boolean));
+  const seenSig = new Set(out.map(sigOf));
+  let added = 0;
+  for (const g of extra) {
+    if ((g.id && seenIds.has(g.id)) || (g.waMsgId && seenWa.has(g.waMsgId)) || seenSig.has(sigOf(g))) continue;
+    out.push({ ...g });
+    if (g.id) seenIds.add(g.id);
+    if (g.waMsgId) seenWa.add(g.waMsgId);
+    seenSig.add(sigOf(g));
+    added += 1;
+  }
+  if (added > 0) {
+    out.sort((a, b) => (new Date(a.timestamp || 0).getTime() || 0) - (new Date(b.timestamp || 0).getTime() || 0));
+  }
+  return out;
+}
+
+function mergePolledContactsWithClientGuards(polledContacts) {
+  if (!Array.isArray(polledContacts)) return state.contacts || [];
+  const now = Date.now();
+  for (const [k, v] of recentClientContactGuards.entries()) {
+    if (!v || v.untilMs <= now) recentClientContactGuards.delete(k);
+  }
+  if (recentClientContactGuards.size === 0) return polledContacts;
+
+  const out = polledContacts.map((c) => {
+    const g = recentClientContactGuards.get(c.chatId);
+    if (!g) return c;
+    const mergedMsgs = unionMergeClientMessages(c.messages, g.contact?.messages);
+    if (mergedMsgs.length === (c.messages || []).length) return c;
+    const lastReal = [...mergedMsgs].reverse().find((m) => m.role !== 'internal_note');
+    return {
+      ...c,
+      messages: mergedMsgs,
+      lastMessageAt:
+        lastReal?.timestamp && (!c.lastMessageAt || lastReal.timestamp > c.lastMessageAt)
+          ? lastReal.timestamp
+          : c.lastMessageAt
+    };
+  });
+
+  for (const [cid, g] of recentClientContactGuards.entries()) {
+    if (g?.contact && !out.some((x) => x.chatId === cid)) {
+      out.unshift(g.contact);
+    }
+  }
+  return out;
+}
+
+function applyReturnedContactToState(contact, fallbackChatId = '') {
+  if (!contact || !contact.chatId) return;
+  recentClientContactGuards.set(contact.chatId, {
+    contact,
+    untilMs: Date.now() + 14000
+  });
+  if (!Array.isArray(state.contacts)) state.contacts = [];
+  const idx = state.contacts.findIndex(
+    (x) => x.chatId === contact.chatId || (fallbackChatId && x.chatId === fallbackChatId)
+  );
+  if (idx >= 0) {
+    state.contacts[idx] = contact;
+  } else {
+    state.contacts.unshift(contact);
+  }
+  if (fallbackChatId && state.selectedInboxChatId === fallbackChatId) {
+    state.selectedInboxChatId = contact.chatId;
+  }
+  if (fallbackChatId && state.selectedLeadChatId === fallbackChatId) {
+    state.selectedLeadChatId = contact.chatId;
+  }
+  state.contacts.sort((a, b) => {
+    const pinDiff = (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0);
+    if (pinDiff !== 0) return pinDiff;
+    return new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime();
+  });
+  const msgBox = document.getElementById('crmInboxMessages');
+  if (msgBox && msgBox.dataset.renderedChatId === contact.chatId) {
+    msgBox.dataset.renderedFp = '';
+  }
+  updateInboxFilterCounters();
+  renderCrmBoard();
+}
+
+function formatContactSubtitle(c) {
+  const rawPhone = String(c?.phone || '').trim();
+  if (rawPhone && !rawPhone.includes('@')) {
+    return `+${rawPhone.replace(/^\+/, '')}`;
+  }
+  const cid = String(c?.chatId || '');
+  if (cid.endsWith('@s.whatsapp.net')) {
+    const digits = cid.split('@')[0].split(':')[0].replace(/\D/g, '');
+    if (digits) return `+${digits}`;
+  }
+  if (cid.startsWith('demo_')) return 'Conversa de Exemplo';
+  return 'WhatsApp Conectado';
+}
 
 async function refreshLiveStateOnly() {
   if (liveRefreshInFlight) return liveRefreshInFlight;
@@ -691,7 +796,7 @@ async function refreshLiveStateOnly() {
       if (snap.appVersion) state.appVersion = snap.appVersion;
       state.waState = snap.waState || state.waState;
       state.proactiveQueueState = snap.proactiveQueueState || state.proactiveQueueState;
-      state.contacts = snap.contacts || state.contacts;
+      state.contacts = mergePolledContactsWithClientGuards(snap.contacts || state.contacts);
       state.stats = snap.stats || state.stats;
       state.logs = snap.logs || state.logs;
 
@@ -2290,51 +2395,65 @@ function renderCrmInbox(filteredList) {
       concluido: 'Concluído',
       perdido: 'Perdido'
     };
-    listEl.innerHTML = list
-      .map((c) => {
-        const isSelected = c.chatId === state.selectedInboxChatId;
-        const realMsgs = (c.messages || []).filter((m) => m.role !== 'internal_note');
-        const lastObj = realMsgs[realMsgs.length - 1];
-        const prefix = lastObj ? (lastObj.role === 'user' ? '' : 'Você: ') : '';
-        const preview = lastObj?.text ? `${prefix}${lastObj.text}` : (c.summary || 'Sem mensagens registradas');
-        const timeStr = c.lastMessageAt
-          ? new Date(c.lastMessageAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-          : '';
-        const initials = getSafeInitials(c.name || c.phone || 'C', 'C');
-        const avatarTint = getAvatarTintStyle(c.chatId || c.phone || c.name);
-        const paused = isContactCurrentlyPaused(c) || c.stage === 'aguardando_humano';
-        const unread = Math.max(0, Number(c.unreadCount) || 0);
-        const encId = encodeURIComponent(c.chatId);
-        const prettyStage = stageLabels[c.stage] || String(c.stage || 'Novo').replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+    const limit = Math.max(100, Number(state.inboxRenderLimit) || 100);
+    const visibleItems = list.slice(0, limit);
+    const remaining = list.length - visibleItems.length;
 
-        return `
-          <button type="button" class="crm-inbox-item ${isSelected ? 'active' : ''} ${unread > 0 ? 'unread' : ''}" onclick="selectInboxChat('${encId}')">
-            <div class="crm-inbox-avatar" style="${avatarTint}">${escapeHtml(initials)}</div>
-            <div class="crm-inbox-item-body">
-              <div class="crm-inbox-item-top">
-                <span class="crm-inbox-item-name">${c.pinned ? '<span style="color:var(--accent-bright);margin-right:4px;" title="Fixada">★</span>' : ''}${escapeHtml(c.name || 'Contato')}</span>
-                <div style="display:flex; align-items:center; gap:5px; flex-shrink:0;">
-                  <span class="crm-inbox-item-time">${escapeHtml(timeStr)}</span>
-                  ${unread > 0 ? `<span class="inbox-unread-pill">${unread > 99 ? '99+' : unread}</span>` : ''}
+    listEl.innerHTML =
+      visibleItems
+        .map((c) => {
+          const isSelected = c.chatId === state.selectedInboxChatId;
+          const realMsgs = (c.messages || []).filter((m) => m.role !== 'internal_note');
+          const lastObj = realMsgs[realMsgs.length - 1];
+          const prefix = lastObj ? (lastObj.role === 'user' ? '' : 'Você: ') : '';
+          const preview = lastObj?.text ? `${prefix}${lastObj.text}` : (c.summary || 'Clique para ver ou puxar mensagens anteriores');
+          const timeStr = c.lastMessageAt
+            ? new Date(c.lastMessageAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+            : '';
+          const initials = getSafeInitials(c.name || c.phone || 'C', 'C');
+          const avatarTint = getAvatarTintStyle(c.chatId || c.phone || c.name);
+          const paused = isContactCurrentlyPaused(c) || c.stage === 'aguardando_humano';
+          const unread = Math.max(0, Number(c.unreadCount) || 0);
+          const encId = encodeURIComponent(c.chatId);
+          const prettyStage = stageLabels[c.stage] || String(c.stage || 'Novo').replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+          const subPhone = formatContactSubtitle(c);
+
+          return `
+            <button type="button" class="crm-inbox-item ${isSelected ? 'active' : ''} ${unread > 0 ? 'unread' : ''}" onclick="selectInboxChat('${encId}')">
+              <div class="crm-inbox-avatar" style="${avatarTint}">${escapeHtml(initials)}</div>
+              <div class="crm-inbox-item-body">
+                <div class="crm-inbox-item-top">
+                  <span class="crm-inbox-item-name">${c.pinned ? '<span style="color:var(--accent-bright);margin-right:4px;" title="Fixada">★</span>' : ''}${escapeHtml(c.name || 'Contato')}</span>
+                  <div style="display:flex; align-items:center; gap:5px; flex-shrink:0;">
+                    <span class="crm-inbox-item-time">${escapeHtml(timeStr)}</span>
+                    ${unread > 0 ? `<span class="inbox-unread-pill">${unread > 99 ? '99+' : unread}</span>` : ''}
+                  </div>
+                </div>
+                <div style="font-size:11px; color:var(--text-muted); font-variant-numeric:tabular-nums;">${escapeHtml(subPhone)}</div>
+                <div class="crm-inbox-item-preview">${escapeHtml(preview)}</div>
+                <div class="crm-inbox-item-badges">
+                  <span class="tag ${c.stage === 'aguardando_humano' ? 'paused' : ''}" style="font-size:10.5px; padding:1px 6px;">${escapeHtml(prettyStage)}</span>
+                  ${paused ? '<span class="tag paused" style="font-size:10.5px; padding:1px 6px;">Humano</span>' : '<span class="tag" style="font-size:10.5px; padding:1px 6px;">IA Ativa</span>'}
+                  ${c.archived ? '<span class="tag" style="font-size:10.5px; padding:1px 6px;">Arquivada</span>' : ''}
+                  ${renderSentimentPillHtml(c.sentiment)}
                 </div>
               </div>
-              <div style="font-size:11px; color:var(--text-muted); font-variant-numeric:tabular-nums;">+${escapeHtml(c.phone || '')}</div>
-              <div class="crm-inbox-item-preview">${escapeHtml(preview)}</div>
-              <div class="crm-inbox-item-badges">
-                <span class="tag ${c.stage === 'aguardando_humano' ? 'paused' : ''}" style="font-size:10.5px; padding:1px 6px;">${escapeHtml(prettyStage)}</span>
-                ${paused ? '<span class="tag paused" style="font-size:10.5px; padding:1px 6px;">Humano</span>' : '<span class="tag" style="font-size:10.5px; padding:1px 6px;">IA Ativa</span>'}
-                ${c.archived ? '<span class="tag" style="font-size:10.5px; padding:1px 6px;">Arquivada</span>' : ''}
-                ${renderSentimentPillHtml(c.sentiment)}
-              </div>
-            </div>
-          </button>
-        `;
-      })
-      .join('');
+            </button>
+          `;
+        })
+        .join('') +
+      (remaining > 0
+        ? `<button type="button" class="inbox-load-more-btn" onclick="loadMoreInboxItems()">Mostrar mais conversas (+${Math.min(100, remaining)} de ${remaining})</button>`
+        : '');
   }
 
   renderActiveInboxConversation();
 }
+
+window.loadMoreInboxItems = function loadMoreInboxItems() {
+  state.inboxRenderLimit = (Number(state.inboxRenderLimit) || 100) + 100;
+  renderCrmInbox();
+};
 
 window.selectInboxChat = async function selectInboxChat(encodedChatId) {
   const chatId = decodeURIComponent(encodedChatId);
@@ -2369,7 +2488,7 @@ function renderActiveInboxConversation() {
   paneEl.style.display = 'flex';
 
   document.getElementById('inboxContactName').textContent = c.name || 'Cliente';
-  document.getElementById('inboxContactPhone').textContent = `+${c.phone || c.chatId}`;
+  document.getElementById('inboxContactPhone').textContent = formatContactSubtitle(c);
   const stageSel = document.getElementById('inboxStageQuickSelect');
   if (stageSel) {
     stageSel.value = c.stage || 'em_atendimento';
@@ -2485,11 +2604,23 @@ function renderActiveInboxConversation() {
     msgBox.dataset.renderedChatId = c.chatId;
     msgBox.dataset.renderedFp = msgFp;
 
+    const canFetchOlder = !String(c.chatId || '').startsWith('demo_');
+    const fetchOlderBtnHtml = canFetchOlder
+      ? `<button type="button" class="btn-fetch-older-history" onclick="fetchOlderChatMessages('${encChatId}', this)">📥 Carregar mensagens anteriores do WhatsApp</button>`
+      : '';
+
     if (!msgs.length) {
-      msgBox.innerHTML = `<div class="empty-state" style="margin:auto;">Nenhuma mensagem trocada ainda nesta conversa.</div>`;
+      msgBox.innerHTML = `
+        <div class="empty-state" style="margin:auto; display:flex; flex-direction:column; align-items:center; gap:10px;">
+          <span>Nenhuma mensagem carregada ainda no painel para esta conversa.</span>
+          ${fetchOlderBtnHtml}
+        </div>
+      `;
     } else {
-      msgBox.innerHTML = msgs
-        .map((m) => {
+      msgBox.innerHTML =
+        fetchOlderBtnHtml +
+        msgs
+          .map((m) => {
           const time = m.timestamp
             ? new Date(m.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
             : '';
@@ -4362,6 +4493,7 @@ function bindEvents() {
           try {
             showToast('Convertendo e enviando Nota de Voz OGG/Opus...');
             const res = await api(`/api/crm/${encodeURIComponent(chatId)}/send-audio`, { method: 'POST', body: fd });
+            if (res.contact) applyReturnedContactToState(res.contact, chatId);
             await refreshLiveStateOnly();
             showToast(res.sentRealWhatsApp ? '🎤 Nota de Voz enviada no WhatsApp!' : '🎤 Nota de Voz registrada na conversa.');
           } catch (err) {
@@ -4387,6 +4519,7 @@ function bindEvents() {
         method: 'POST',
         body: JSON.stringify({})
       });
+      if (res.contact) applyReturnedContactToState(res.contact, chatId);
       await refreshLiveStateOnly();
       showToast(res.sentRealWhatsApp ? '💠 QR Code PIX + Copia e Cola enviados!' : '💠 PIX registrado na conversa.');
     } catch (err) {
@@ -4409,6 +4542,7 @@ function bindEvents() {
         body: JSON.stringify({ itemId })
       });
       if (sel) sel.value = '';
+      if (res.contact) applyReturnedContactToState(res.contact, chatId);
       await refreshLiveStateOnly();
       showToast(res.sentRealWhatsApp ? '🛍️ Item e mídias enviados no WhatsApp!' : '🛍️ Item registrado na conversa.');
     } catch (err) {
@@ -4430,11 +4564,12 @@ function bindEvents() {
     btn.disabled = true;
     try {
       if (state.inboxComposerMode === 'note') {
-        await api(`/api/crm/${encodeURIComponent(chatId)}/internal-note`, {
+        const res = await api(`/api/crm/${encodeURIComponent(chatId)}/internal-note`, {
           method: 'POST',
           body: JSON.stringify({ text })
         });
         input.value = '';
+        if (res.contact) applyReturnedContactToState(res.contact, chatId);
         await refreshLiveStateOnly();
         showToast('🔒 Nota interna privada registrada!');
       } else {
@@ -4443,6 +4578,7 @@ function bindEvents() {
           body: JSON.stringify({ text })
         });
         input.value = '';
+        if (res.contact) applyReturnedContactToState(res.contact, chatId);
         await refreshLiveStateOnly();
         showToast(res.sentRealWhatsApp ? 'Mensagem enviada no WhatsApp!' : 'Mensagem registrada na conversa.');
       }
@@ -4462,10 +4598,11 @@ function bindEvents() {
     btn.disabled = true;
     btn.textContent = 'Gravando...';
     try {
-      await api(`/api/crm/${encodeURIComponent(chatId)}/send-library-voice`, {
+      const res = await api(`/api/crm/${encodeURIComponent(chatId)}/send-library-voice`, {
         method: 'POST',
         body: JSON.stringify({ voiceId })
       });
+      if (res.contact) applyReturnedContactToState(res.contact, chatId);
       await refreshLiveStateOnly();
       showToast('Nota de voz enviada no WhatsApp!');
     } catch (err) {
@@ -4687,8 +4824,9 @@ function bindEvents() {
         method: 'POST',
         body: JSON.stringify({ voiceId })
       });
-      await loadBootstrap();
-      openLeadModal(encodeURIComponent(chatId));
+      if (res.contact) applyReturnedContactToState(res.contact, chatId);
+      await refreshLiveStateOnly();
+      openLeadModal(encodeURIComponent(res.contact?.chatId || chatId));
       showToast(res.sentRealWhatsApp ? '🎤 Nota de Voz enviada com ondas sonoras reais!' : '🎤 Nota de Voz registrada na ficha.');
     } catch (err) {
       showToast(err.message, true);
@@ -4705,8 +4843,9 @@ function bindEvents() {
         method: 'POST',
         body: JSON.stringify({ itemId })
       });
-      await loadBootstrap();
-      openLeadModal(encodeURIComponent(chatId));
+      if (res.contact) applyReturnedContactToState(res.contact, chatId);
+      await refreshLiveStateOnly();
+      openLeadModal(encodeURIComponent(res.contact?.chatId || chatId));
       showToast(res.sentRealWhatsApp ? 'Item e fotos enviados no WhatsApp!' : 'Item registrado no histórico da ficha.');
     } catch (err) {
       showToast(err.message, true);
@@ -4721,8 +4860,9 @@ function bindEvents() {
         method: 'POST',
         body: JSON.stringify({})
       });
-      await loadBootstrap();
-      openLeadModal(encodeURIComponent(chatId));
+      if (res.contact) applyReturnedContactToState(res.contact, chatId);
+      await refreshLiveStateOnly();
+      openLeadModal(encodeURIComponent(res.contact?.chatId || chatId));
       showToast(res.sentRealWhatsApp ? 'QR Code PIX + Copia e Cola enviados!' : 'PIX registrado na ficha.');
     } catch (err) {
       showToast(err.message, true);
@@ -4741,8 +4881,9 @@ function bindEvents() {
         method: 'POST',
         body: fd
       });
-      await loadBootstrap();
-      openLeadModal(encodeURIComponent(chatId));
+      if (res.contact) applyReturnedContactToState(res.contact, chatId);
+      await refreshLiveStateOnly();
+      openLeadModal(encodeURIComponent(res.contact?.chatId || chatId));
       showToast(res.sentRealWhatsApp ? '🎤 Nota de Voz enviada com sucesso!' : '🎤 Nota de Voz registrada na ficha.');
     } catch (err) {
       showToast(err.message, true);
@@ -4846,8 +4987,9 @@ function bindEvents() {
         body: JSON.stringify({ text })
       });
       input.value = '';
-      await loadBootstrap();
-      openLeadModal(encodeURIComponent(chatId));
+      if (res.contact) applyReturnedContactToState(res.contact, chatId);
+      await refreshLiveStateOnly();
+      openLeadModal(encodeURIComponent(res.contact?.chatId || chatId));
       showToast(res.sentRealWhatsApp ? 'Mensagem enviada no WhatsApp!' : 'Mensagem registrada no painel.');
     } catch (err) {
       showToast(err.message, true);
@@ -5695,11 +5837,9 @@ function bindCloudAuthAndAdminEvents() {
       }
       if (replyInp && caption) replyInp.value = '';
       if (out.contact) {
-        const idx = (state.contacts || []).findIndex((x) => x.chatId === out.contact.chatId || x.chatId === chatId);
-        if (idx >= 0) state.contacts[idx] = out.contact;
-        renderCrmInbox();
+        applyReturnedContactToState(out.contact, chatId);
       } else {
-        await loadBootstrap();
+        await refreshLiveStateOnly();
       }
       showToast(out.sentRealWhatsApp ? 'Anexo enviado no WhatsApp!' : 'Anexo registrado na conversa!');
     } catch (err) {
@@ -5708,6 +5848,10 @@ function bindCloudAuthAndAdminEvents() {
       if (btn) btn.disabled = false;
       e.target.value = '';
     }
+  });
+
+  document.getElementById('btnSyncWaConversations')?.addEventListener('click', () => {
+    window.triggerFullWhatsAppHistorySync();
   });
 
   document.getElementById('btnToggleLoginPass')?.addEventListener('click', () => {
@@ -5862,6 +6006,79 @@ function bindCloudAuthAndAdminEvents() {
     }
   });
 }
+
+window.triggerFullWhatsAppHistorySync = async function triggerFullWhatsAppHistorySync() {
+  const btn = document.getElementById('btnSyncWaConversations');
+  const prevHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span>Sincronizando...</span>';
+  }
+  showToast('🔄 Solicitando todas as conversas e históricos ao seu WhatsApp no celular...');
+  try {
+    const res = await api('/api/wa/sync-history', {
+      method: 'POST',
+      body: JSON.stringify({ waitMs: 6800 })
+    });
+    if (Array.isArray(res.contacts)) {
+      state.contacts = mergePolledContactsWithClientGuards(res.contacts);
+      updateInboxFilterCounters();
+      renderCrmBoard();
+    } else {
+      await refreshLiveStateOnly();
+    }
+    const added = Number(res.addedContacts) || 0;
+    const total = Number(res.afterCount) || (state.contacts || []).length;
+    showToast(
+      added > 0
+        ? `✅ ${added} nova(s) conversa(s) importada(s)! Total no CRM: ${total}.`
+        : `✅ Conversas sincronizadas (${total} no CRM). Novos blocos do celular continuarão chegando em segundo plano!`
+    );
+    // O celular pode enviar blocos extras de histórico nos segundos seguintes; atualiza automaticamente!
+    setTimeout(() => { refreshLiveStateOnly().catch(() => {}); }, 3800);
+    setTimeout(() => { refreshLiveStateOnly().catch(() => {}); }, 8500);
+  } catch (err) {
+    showToast(err.message || 'Falha ao sincronizar conversas do WhatsApp.', true);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = prevHtml;
+    }
+  }
+};
+
+window.fetchOlderChatMessages = async function fetchOlderChatMessages(encodedChatId, btnEl) {
+  const chatId = decodeURIComponent(encodedChatId);
+  if (!chatId || chatId.startsWith('demo_')) return;
+  const prevText = btnEl ? btnEl.textContent : '';
+  if (btnEl) {
+    btnEl.disabled = true;
+    btnEl.textContent = '⏳ Buscando mensagens anteriores no aparelho...';
+  }
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}/fetch-history`, {
+      method: 'POST',
+      body: JSON.stringify({ count: 50 })
+    });
+    if (res.contact) {
+      applyReturnedContactToState(res.contact, chatId);
+    }
+    await refreshLiveStateOnly();
+    const added = Number(res.countAdded) || 0;
+    showToast(
+      added > 0
+        ? `📥 ${added} mensagem(ns) anterior(es) carregada(s) do WhatsApp!`
+        : '📥 Solicitação enviada ao celular! Se houver mensagens mais antigas arquivadas no aparelho, elas aparecerão em instantes.'
+    );
+    setTimeout(() => { refreshLiveStateOnly().catch(() => {}); }, 3500);
+  } catch (err) {
+    showToast(err.message || 'Não foi possível buscar mensagens anteriores.', true);
+    if (btnEl) {
+      btnEl.disabled = false;
+      btnEl.textContent = prevText || '📥 Carregar mensagens anteriores do WhatsApp';
+    }
+  }
+};
 
 // Inicialização
 initTheme();

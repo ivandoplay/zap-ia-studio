@@ -790,12 +790,47 @@ app.post('/api/wa/disconnect', async (req, res) => {
         'wa_disconnect',
         { clearSession }
       );
+      storage.workspaceDirty = false;
+      storage.dirtyContactIds.clear();
       return res.json({ ok: true, waState: out.waState || getEffectiveWaState(req) });
     }
     const state = await whatsappManager.disconnect(clearSession);
     res.json({ ok: true, waState: state });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, workerOffline: Boolean(err.workerOffline), error: err.message });
+  }
+});
+
+app.post('/api/wa/sync-history', async (req, res) => {
+  try {
+    if (usesCloudBridge(req)) {
+      const out = await dispatchCommandToWorker(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        'wa_sync_history',
+        { waitMs: Number(req.body?.waitMs) || 6800 },
+        11800
+      );
+      storage.workspaceDirty = false;
+      storage.dirtyContactIds.clear();
+      const freshCtx = await loadTenantContextFromCloud(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser,
+        req.cloudAuth.profile
+      ).catch(() => null);
+      return res.json({
+        ok: true,
+        ...out,
+        contacts: freshCtx ? freshCtx.listContacts() : undefined
+      });
+    }
+    const result = await whatsappManager.syncAllConversationsFromPhone({
+      force: true,
+      waitMs: Number(req.body?.waitMs) || 6500
+    });
+    res.json({ ok: true, ...result, contacts: storage.listContacts() });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ ok: false, workerOffline: Boolean(err.workerOffline), error: err.message });
   }
 });
 
@@ -1614,7 +1649,9 @@ app.post(['/api/crm/:chatId/send', '/api/crm/:chatId/reply'], async (req, res) =
         'send_crm_reply',
         { chatId, text }
       );
-      storage.markContactRead(chatId);
+      // CRÍTICO: NUNCA sujar o snapshot pré-comando da Vercel após o Motor já ter salvo a mensagem nova no Supabase!
+      storage.workspaceDirty = false;
+      storage.dirtyContactIds.clear();
       return res.json({
         ok: true,
         contact: out.contact || storage.data.contacts[chatId],
@@ -1654,6 +1691,32 @@ app.post(['/api/crm/:chatId/send', '/api/crm/:chatId/reply'], async (req, res) =
   }
 });
 
+app.post('/api/crm/:chatId/fetch-history', async (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const count = Math.min(100, Math.max(15, Number(req.body?.count) || 50));
+  if (chatId.startsWith('demo_')) {
+    return res.json({ ok: true, countAdded: 0, contact: storage.data.contacts[chatId] || null });
+  }
+  try {
+    if (usesCloudBridge(req)) {
+      const out = await dispatchCommandToWorker(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        'fetch_chat_history',
+        { chatId, count },
+        9800
+      );
+      storage.workspaceDirty = false;
+      storage.dirtyContactIds.clear();
+      return res.json({ ok: true, ...out });
+    }
+    const out = await whatsappManager.fetchOlderMessagesForChat(chatId, count);
+    res.json({ ok: true, ...out });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ ok: false, workerOffline: Boolean(err.workerOffline), error: err.message });
+  }
+});
+
 app.post('/api/crm/:chatId/send-item', async (req, res) => {
   const chatId = decodeURIComponent(req.params.chatId);
   const { itemId } = req.body || {};
@@ -1669,6 +1732,8 @@ app.post('/api/crm/:chatId/send-item', async (req, res) => {
         'send_crm_catalog',
         { chatId, itemId }
       );
+      storage.workspaceDirty = false;
+      storage.dirtyContactIds.clear();
       return res.json({ ok: true, contact: out.contact || storage.data.contacts[chatId], sentRealWhatsApp: true });
     }
 
@@ -1713,6 +1778,8 @@ app.post('/api/crm/:chatId/send-pix', async (req, res) => {
         'send_crm_pix',
         { chatId, amount: req.body?.amount || null }
       );
+      storage.workspaceDirty = false;
+      storage.dirtyContactIds.clear();
       return res.json({ ok: true, contact: out.contact || storage.data.contacts[chatId], sentRealWhatsApp: true });
     }
 
@@ -1848,7 +1915,9 @@ app.post('/api/crm/:chatId/send-attachment', memUpload.single('file'), async (re
             caption
           }
         );
-        storage.markContactRead(chatId);
+        // CRÍTICO: NUNCA sujar o snapshot pré-comando da Vercel após o Motor já ter salvo o anexo novo no Supabase!
+        storage.workspaceDirty = false;
+        storage.dirtyContactIds.clear();
         return res.json({
           ok: true,
           contact: out.contact || storage.data.contacts[chatId],
@@ -2090,6 +2159,8 @@ app.post('/api/crm/:chatId/send-library-voice', async (req, res) => {
         'send_crm_library_voice',
         { chatId, voiceId }
       );
+      storage.workspaceDirty = false;
+      storage.dirtyContactIds.clear();
       return res.json({
         ok: true,
         contact: out.contact || storage.data.contacts[chatId],
@@ -2170,6 +2241,8 @@ app.post('/api/crm/:chatId/send-audio', memUpload.single('audio'), async (req, r
           waveform: canonical.waveform
         }
       );
+      storage.workspaceDirty = false;
+      storage.dirtyContactIds.clear();
       return res.json({
         ok: true,
         contact: out.contact || storage.data.contacts[chatId],

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'zapia-studio-shell-v22';
+const CACHE_NAME = 'zapia-studio-shell-v23';
 const SHELL_ASSETS = ['/', '/styles.css', '/app.js', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
@@ -32,7 +32,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    fetch(req)
+    fetch(req, { cache: 'no-cache' })
       .then((res) => {
         if (res && res.ok && res.status === 200 && res.type === 'basic') {
           const copy = res.clone();

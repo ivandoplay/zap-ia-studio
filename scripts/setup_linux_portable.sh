@@ -224,10 +224,41 @@ if [ "$MODE" = "install" ]; then
   exit 0
 fi
 
+# Auto-Update Universal na Abertura (garante sempre a ultima versao oficial ao abrir no Linux!)
+JUST_UPDATED=0
+if [ -f "$ROOT_DIR/scripts/auto_update_boot.mjs" ]; then
+  set +e
+  (cd "$ROOT_DIR" && node --dns-result-order=ipv4first scripts/auto_update_boot.mjs --signal-updated-exit-20)
+  AU_CODE=$?
+  set -e
+  if [ "$AU_CODE" -eq 20 ]; then
+    JUST_UPDATED=1
+  fi
+fi
+
 # Verifica se a porta 3000 ja esta ativa
 PORT_BUSY=0
 if node -e "const n=require('net');const s=n.connect(3000,'127.0.0.1');s.on('connect',()=>{s.destroy();process.exit(0)});s.on('error',()=>process.exit(1));setTimeout(()=>process.exit(1),250);" 2>/dev/null; then
   PORT_BUSY=1
+fi
+
+if [ "$JUST_UPDATED" -eq 1 ] && [ "$PORT_BUSY" -eq 1 ]; then
+  echo "[Auto-Update] Reiniciando motor local para ativar a nova versao..."
+  node -e '
+  const fs = require("fs");
+  for (const d of (fs.existsSync("/proc") ? fs.readdirSync("/proc") : [])) {
+    const pid = Number(d);
+    if (!pid || pid === process.pid || pid === process.ppid) continue;
+    try {
+      const cmd = fs.readFileSync("/proc/" + pid + "/cmdline", "utf8").replace(/\0/g, " ");
+      if ((cmd.startsWith("node ") || cmd.includes("/node ")) && cmd.includes("src/server.js")) {
+        process.kill(pid, "SIGKILL");
+      }
+    } catch {}
+  }
+  ' 2>/dev/null || true
+  sleep 1
+  PORT_BUSY=0
 fi
 
 open_linux_browser() {
@@ -276,7 +307,14 @@ fi
 
 cd "$ROOT_DIR"
 while true; do
-  node src/server.js
-  echo "[AVISO] Motor encerrado. Reiniciando em 4 segundos (Ctrl+C para parar)..."
-  sleep 4
+  set +e
+  node --dns-result-order=ipv4first scripts/auto_update_boot.mjs
+  node --dns-result-order=ipv4first src/server.js
+  EXIT_CODE=$?
+  set -e
+  if [ "$EXIT_CODE" -eq 0 ] || [ "$EXIT_CODE" -eq 130 ]; then
+    break
+  fi
+  echo "[AUTO-RECUPERACAO] Motor reiniciando em 3 segundos (codigo $EXIT_CODE | Ctrl+C para parar)..."
+  sleep 3
 done

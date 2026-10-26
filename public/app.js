@@ -569,7 +569,8 @@ async function loadBootstrap() {
     document.getElementById('pinLockScreen')?.classList.remove('open');
 
     state.runtimeMode = data.runtimeMode || state.runtimeMode || 'local_worker';
-    state.appVersion = data.appVersion || state.appVersion || '4.9.0';
+    state.appVersion = data.appVersion || state.appVersion || '5.4.0';
+    if (!state.bootstrappedAppVersion) state.bootstrappedAppVersion = state.appVersion;
     state.currentUser = data.currentUser || authStatus?.currentUser || state.cloudSession?.user || null;
     state.waState = data.waState;
     state.proactiveQueueState = data.proactiveQueueState || state.proactiveQueueState;
@@ -793,7 +794,19 @@ async function refreshLiveStateOnly() {
         (state.contacts || []).filter((c) => c.stage === 'aguardando_humano' && c.unreadAlert).map((c) => c.chatId)
       );
       const snap = await api('/api/cloud/poll');
-      if (snap.appVersion) state.appVersion = snap.appVersion;
+      if (snap.appVersion) {
+        if (state.bootstrappedAppVersion && snap.appVersion !== state.bootstrappedAppVersion) {
+          const activeTag = document.activeElement?.tagName || '';
+          const isTyping = activeTag === 'INPUT' || activeTag === 'TEXTAREA' || document.querySelector('.modal-backdrop.open');
+          if (!isTyping && !window.__zapiaAutoReloading) {
+            window.__zapiaAutoReloading = true;
+            showToast(`🔄 Atualizando painel para v${snap.appVersion}...`);
+            setTimeout(() => window.location.reload(), 600);
+            return;
+          }
+        }
+        state.appVersion = snap.appVersion;
+      }
       state.waState = snap.waState || state.waState;
       state.proactiveQueueState = snap.proactiveQueueState || state.proactiveQueueState;
       state.contacts = mergePolledContactsWithClientGuards(snap.contacts || state.contacts);
@@ -1256,15 +1269,38 @@ function renderMotorDownloadStatus() {
 
   if (workerOnline && workerVer === ver) {
     statusEl.className = 'motor-status-banner up-to-date';
-    statusEl.innerHTML = `<strong>Motor atualizado (v${escapeHtml(ver)})</strong> ativo em <strong>${escapeHtml(workerPlat || 'seu dispositivo')}</strong> — áudios e arquivos de clientes com player e download habilitados.`;
+    statusEl.innerHTML = `<strong>Motor atualizado (v${escapeHtml(ver)})</strong> ativo em <strong>${escapeHtml(workerPlat || 'seu dispositivo')}</strong> — Auto-Update automático ativado a cada abertura!`;
   } else if (workerOnline && workerVer !== ver) {
     statusEl.className = 'motor-status-banner outdated';
-    statusEl.innerHTML = `<strong>Nova versão disponível (v${escapeHtml(ver)}):</strong> seu motor em execução (${escapeHtml(workerPlat || 'versão anterior')}) está desatualizado. Baixe o <code>.ZIP</code> abaixo e substitua a pasta para habilitar player e download de todos os arquivos enviados pelos clientes.`;
+    statusEl.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+        <span><strong>Nova versão disponível (v${escapeHtml(ver)}):</strong> seu motor em execução (${escapeHtml(workerPlat || 'versão anterior')}) pode ser atualizado agora em 1 clique!</span>
+        <button type="button" id="btnRemoteUpdateMotor" class="btn btn-primary btn-sm" onclick="triggerRemoteMotorUpdate()">🔄 Atualizar Motor Agora (1 Clique)</button>
+      </div>`;
   } else {
     statusEl.className = 'motor-status-banner';
-    statusEl.innerHTML = `Pacote Institucional <strong>v${escapeHtml(ver)}</strong> 100% portátil pronto para <strong>Windows PC</strong>, <strong>Linux (Desktop/VPS)</strong> e <strong>Android Termux</strong> — zero instalação externa.`;
+    statusEl.innerHTML = `Pacote Institucional <strong>v${escapeHtml(ver)}</strong> com <strong>Auto-Update Automático na Abertura</strong> para <strong>Windows PC</strong>, <strong>Linux</strong> e <strong>Android Termux</strong>.`;
   }
 }
+
+window.triggerRemoteMotorUpdate = async function triggerRemoteMotorUpdate() {
+  const btn = document.getElementById('btnRemoteUpdateMotor');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '🔄 Atualizando e reiniciando...';
+  }
+  try {
+    await api('/api/whatsapp/update-motor', { method: 'POST', body: JSON.stringify({}) });
+    showToast('✅ Motor atualizado remotamente! Reconectando em ~4 segundos...');
+    setTimeout(() => refreshLiveStateOnly(), 5000);
+  } catch (err) {
+    showToast(err.message, true);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '🔄 Atualizar Motor Agora (1 Clique)';
+    }
+  }
+};
 
 function renderReadinessAndFunnel() {
   const strip = document.getElementById('readinessStrip');

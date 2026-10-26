@@ -64,11 +64,14 @@ for (const d of (fs.existsSync("/proc") ? fs.readdirSync("/proc") : [])) {
 ' 2>/dev/null || true
 sleep 1
 
-# Loop de auto-recuperacao blindado 24/7
+# Loop de auto-recuperacao blindado 24/7 + Auto-Update automatico na abertura
 while true; do
   CUR_WPID=$(cat "data/.wrapper.pid" 2>/dev/null || echo "$$")
   if [ "$CUR_WPID" != "$$" ]; then
     break
+  fi
+  if [ -f "scripts/auto_update_boot.mjs" ]; then
+    node --dns-result-order=ipv4first scripts/auto_update_boot.mjs || true
   fi
   node --dns-result-order=ipv4first src/server.js
   EXIT_CODE=$?

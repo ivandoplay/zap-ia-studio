@@ -73,7 +73,20 @@ if [ ! -f ".env" ] && [ -f ".env.example" ]; then
   cp .env.example .env
 fi
 
-APP_VER=$(node -p "try{JSON.parse(require('fs').readFileSync('./package.json','utf8')).version}catch(e){'5.1'}" 2>/dev/null || echo "5.1")
+# Registra atalho pratico "zapia" no Termux para abrir já atualizando com 1 palavra!
+if [ -d "/data/data/com.termux/files/usr" ]; then
+  touch "$HOME/.bashrc"
+  if ! grep -q "alias zapia=" "$HOME/.bashrc" 2>/dev/null; then
+    echo "alias zapia='bash \"\$HOME/ZAP-IA-Studio/INICIAR_NO_TERMUX.sh\"'" >> "$HOME/.bashrc"
+  fi
+fi
+
+# Auto-Update antes de exibir versao (garante que toda abertura no Termux ja baixe a ultima versao!)
+if [ -f "scripts/auto_update_boot.mjs" ]; then
+  node --dns-result-order=ipv4first scripts/auto_update_boot.mjs || true
+fi
+
+APP_VER=$(node -p "try{JSON.parse(require('fs').readFileSync('./package.json','utf8')).version}catch(e){'5.4'}" 2>/dev/null || echo "5.4")
 echo "=============================================================="
 echo "  ZAP-IA STUDIO v${APP_VER} -- MOTOR 24H ATIVO NO ANDROID (TERMUX)"
 echo "=============================================================="
@@ -127,6 +140,9 @@ while true; do
   fi
 
   set +e
+  if [ -f "scripts/auto_update_boot.mjs" ]; then
+    node --dns-result-order=ipv4first scripts/auto_update_boot.mjs || true
+  fi
   node --dns-result-order=ipv4first src/server.js
   EXIT_CODE=$?
   set -e

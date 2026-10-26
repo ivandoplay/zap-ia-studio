@@ -113,8 +113,18 @@ app.use(
   },
   express.static(UPLOADS_DIR)
 );
-app.use(express.static(path.join(ROOT_DIR, 'public')));
+app.use(
+  express.static(path.join(ROOT_DIR, 'public'), {
+    etag: true,
+    setHeaders: (res, filePath) => {
+      if (/\.(html|js|css|json)$/i.test(filePath)) {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    }
+  })
+);
 app.get('/', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(ROOT_DIR, 'public', 'index.html'));
 });
 
@@ -383,7 +393,7 @@ function attachAtomicCloudFlush(res, tenantStore) {
 
 // Middleware Multi-Tenant Cloud + Modo Suporte 1-Clique (isola 100% dos dados por conta e sincroniza antes do término da Function)
 app.use('/api', async (req, res, next) => {
-  if (req.path === '/public/motor-update.zip') {
+  if (req.path === '/public/motor-update.zip' || req.path === '/public/version') {
     return next();
   }
   const actAsUserId = extractActAsUserId(req);
@@ -693,6 +703,44 @@ function collectCleanMotorZipEntries(includeMasterPack = false) {
 
   return entries;
 }
+
+app.get('/api/public/version', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  return res.json({
+    ok: true,
+    version: APP_VERSION,
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.post('/api/whatsapp/update-motor', async (req, res) => {
+  try {
+    if (usesCloudBridge(req)) {
+      const waState = getEffectiveWaState(req);
+      if (!waState.workerOnline) {
+        return res.status(400).json({
+          ok: false,
+          error: 'O Motor está offline no momento. Assim que você abri-lo no Termux, Windows ou Linux, ele já vai se atualizar sozinho na inicialização!'
+        });
+      }
+      const out = await dispatchCommandToWorker(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        'update_motor_now',
+        {}
+      );
+      return res.json({ ok: true, ...out });
+    }
+
+    // Execução local direta: dispara atualização e reinicia no loop supervisor (código 42)
+    res.json({ ok: true, restartingForUpdate: true });
+    setTimeout(() => {
+      process.exit(42);
+    }, 500);
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ ok: false, error: err.message });
+  }
+});
 
 app.get('/api/public/motor-update.zip', (_req, res) => {
   try {

@@ -1,6 +1,6 @@
 {
   "name": "zap-ia-studio",
-  "version": "5.3.2",
+  "version": "5.4.0",
   "description": "ZAP-IA Studio v5.1 Institutional Edition — Sincronização Completa de Conversas/Histórico WhatsApp, CRDT Anti-Perda Multi-Dispositivo, Portable Windows/Linux/Termux, Vercel + Supabase RLS",
   "type": "module",
   "main": "src/server.js",

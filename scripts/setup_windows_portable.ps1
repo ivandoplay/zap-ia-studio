@@ -282,6 +282,31 @@ function Test-LocalPortListening([int]$Port) {
 }
 
 if ($StartApp) {
+    # Auto-Update Universal na Abertura (garante sempre a ultima versao oficial ao abrir no Windows!)
+    $autoUpdateScript = Join-Path $RootDir 'scripts\auto_update_boot.mjs'
+    $justUpdated = $false
+    if (Test-Path -LiteralPath $autoUpdateScript) {
+        Push-Location -LiteralPath $RootDir
+        try {
+            & $nodeInfo.NodeExe '--dns-result-order=ipv4first' 'scripts/auto_update_boot.mjs' '--signal-updated-exit-20'
+            if ($LASTEXITCODE -eq 20) {
+                $justUpdated = $true
+            }
+        } catch {} finally {
+            Pop-Location
+        }
+    }
+
+    if ($justUpdated -and (Test-LocalPortListening 3000)) {
+        Write-Host '[Auto-Update] Reiniciando motor em segundo plano para ativar a nova versao...' -ForegroundColor Cyan
+        try {
+            Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction SilentlyContinue |
+                Where-Object { $_.CommandLine -like '*src/server.js*' -or $_.CommandLine -like '*src\server.js*' } |
+                ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            Start-Sleep -Seconds 1
+        } catch {}
+    }
+
     if (-not (Test-LocalPortListening 3000)) {
         Write-Host 'Iniciando Motor ZAP-IA Studio em segundo plano...' -ForegroundColor Cyan
         if (-not (Test-Path -LiteralPath $RuntimeDir)) {
@@ -296,7 +321,13 @@ if ($StartApp) {
                 'chcp 65001 >nul',
                 'title Motor ZAP-IA Studio (Nao feche enquanto usar o robo)',
                 'set "PATH=%CD%\.runtime\node;%PATH%"',
-                '".runtime\node\node.exe" src/server.js'
+                ':loop',
+                '".runtime\node\node.exe" --dns-result-order=ipv4first scripts/auto_update_boot.mjs',
+                '".runtime\node\node.exe" --dns-result-order=ipv4first src/server.js',
+                'if %ERRORLEVEL% EQU 0 exit /b 0',
+                'if %ERRORLEVEL% EQU 130 exit /b 0',
+                'timeout /t 3 /nobreak >nul',
+                'goto loop'
             )
         } else {
             $batLines = @(
@@ -304,7 +335,13 @@ if ($StartApp) {
                 'chcp 65001 >nul',
                 'title Motor ZAP-IA Studio (Nao feche enquanto usar o robo)',
                 "set `"PATH=$($nodeInfo.NodeDir);%PATH%`"",
-                "`"$($nodeInfo.NodeExe)`" src/server.js"
+                ':loop',
+                "`"$($nodeInfo.NodeExe)`" --dns-result-order=ipv4first scripts/auto_update_boot.mjs",
+                "`"$($nodeInfo.NodeExe)`" --dns-result-order=ipv4first src/server.js",
+                'if %ERRORLEVEL% EQU 0 exit /b 0',
+                'if %ERRORLEVEL% EQU 130 exit /b 0',
+                'timeout /t 3 /nobreak >nul',
+                'goto loop'
             )
         }
 

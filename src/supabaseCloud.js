@@ -1883,6 +1883,23 @@ class CloudWorkerBridge {
           result = { ok: true, contact };
           break;
         }
+        case 'update_motor_now': {
+          const { spawnSync } = await import('node:child_process');
+          const scriptPath = path.resolve(DATA_DIR, '..', 'scripts', 'auto_update_boot.mjs');
+          if (fs.existsSync(scriptPath)) {
+            spawnSync(process.execPath, ['--dns-result-order=ipv4first', scriptPath], {
+              cwd: path.resolve(DATA_DIR, '..'),
+              stdio: 'inherit'
+            });
+          }
+          await this.flushLocalToCloud();
+          result = { ok: true, restartingForUpdate: true };
+          setTimeout(() => {
+            console.log('🔄 [Auto-Update Remoto] Reiniciando motor na nova versão...');
+            process.exit(42);
+          }, 700);
+          break;
+        }
         case 'queue_start': {
           await this.pullCloudIntoLocal(false);
           const queue = this.whatsappManager.enqueueProactiveBatch(p.leads || [], p.text || '');

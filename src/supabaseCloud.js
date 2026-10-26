@@ -988,7 +988,7 @@ class CloudWorkerBridge {
     if (!fs.existsSync(userAuthDir)) {
       fs.mkdirSync(userAuthDir, { recursive: true });
     }
-    // Se for a conta Master em máquina que já tinha sessão conectada na raiz data/wa_auth/creds.json, migra sem perder conexão!
+    // Se for a conta Master em máquina que já tinha sessão conectada na raiz data/wa_auth/creds.json, migra e limpa a raiz sem perder conexão!
     if (role === 'master') {
       const rootCreds = path.join(AUTH_DIR, 'creds.json');
       const targetCreds = path.join(userAuthDir, 'creds.json');
@@ -996,12 +996,30 @@ class CloudWorkerBridge {
         try {
           for (const entry of fs.readdirSync(AUTH_DIR, { withFileTypes: true })) {
             if (entry.isFile()) {
-              fs.copyFileSync(path.join(AUTH_DIR, entry.name), path.join(userAuthDir, entry.name));
+              const srcFile = path.join(AUTH_DIR, entry.name);
+              const dstFile = path.join(userAuthDir, entry.name);
+              fs.copyFileSync(srcFile, dstFile);
+              try {
+                fs.unlinkSync(srcFile);
+              } catch {
+                // Ignora caso bloqueado
+              }
             }
           }
           console.log('[CloudWorker] Sessão WhatsApp existente migrada para o cofre isolado da conta Master.');
         } catch (err) {
           console.warn('[CloudWorker] Aviso ao copiar sessão WhatsApp existente:', err.message);
+        }
+      } else if (fs.existsSync(rootCreds) && fs.existsSync(targetCreds)) {
+        // Se já migrado antes, remove micro-arquivos órfãos duplicados na raiz de data/wa_auth/
+        for (const entry of fs.readdirSync(AUTH_DIR, { withFileTypes: true })) {
+          if (entry.isFile() && entry.name.endsWith('.json')) {
+            try {
+              fs.unlinkSync(path.join(AUTH_DIR, entry.name));
+            } catch {
+              // Ignora erro
+            }
+          }
         }
       }
     }

@@ -4,13 +4,13 @@ import pino from 'pino';
 import QRCode from 'qrcode';
 import {
   makeWASocket,
-  useMultiFileAuthState,
   DisconnectReason,
   downloadMediaMessage,
   fetchLatestBaileysVersion,
   Browsers,
   MEDIA_PATH_MAP
 } from '@whiskeysockets/baileys';
+import { useCompactWaAuthState } from './waCompactAuth.js';
 import { AUTH_DIR, UPLOADS_DIR, storage, normalizePhoneDigits, uid } from './storage.js';
 import { generateSmartReply, buildExecutiveHandoffDossier } from './aiEngine.js';
 import { formatPixMessageWithQr } from './pix.js';
@@ -295,7 +295,7 @@ class WhatsAppManager {
       : null;
 
     try {
-      const { state, saveCreds } = await useMultiFileAuthState(this.authDir || AUTH_DIR);
+      const { state, saveCreds } = await useCompactWaAuthState(this.authDir || AUTH_DIR);
       let version = [2, 3000, 1023223821];
       try {
         const latest = await fetchLatestBaileysVersion();

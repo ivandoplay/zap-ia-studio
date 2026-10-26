@@ -24,24 +24,31 @@ if [ ! -f "$APP_DIR/package.json" ]; then
   exit 1
 fi
 
-# 2. Migracao automatica inteligente: se o usuario ja tinha uma versao anterior em ~/atendente-ia-whatsapp,
-#    preserva automaticamente a sessao de login e o pareamento do WhatsApp!
-OLD_DATA="$HOME/atendente-ia-whatsapp/data"
+# 2. Migracao automatica inteligente: se o usuario ja tinha uma versao anterior em ~/atendente-ia-whatsapp ou ~/zap-ia-studio,
+#    preserva automaticamente a sessao de login, treinamentos, midias e o pareamento do WhatsApp!
 NEW_DATA="$APP_DIR/data"
 mkdir -p "$NEW_DATA"
-if [ -d "$OLD_DATA" ]; then
-  if [ -f "$OLD_DATA/cloud_session.json" ] && [ ! -f "$NEW_DATA/cloud_session.json" ]; then
-    cp -f "$OLD_DATA/cloud_session.json" "$NEW_DATA/cloud_session.json"
-    echo "[OK] Sessao da sua conta migrada automaticamente da versao anterior!"
+for OLD_DATA in "$HOME/atendente-ia-whatsapp/data" "$HOME/zap-ia-studio/data"; do
+  if [ -d "$OLD_DATA" ]; then
+    if [ -f "$OLD_DATA/cloud_session.json" ] && [ ! -f "$NEW_DATA/cloud_session.json" ]; then
+      cp -f "$OLD_DATA/cloud_session.json" "$NEW_DATA/cloud_session.json"
+      echo "[OK] Sessao da sua conta migrada automaticamente da versao anterior!"
+    fi
+    if [ -f "$OLD_DATA/database.json" ] && [ ! -f "$NEW_DATA/database.json" ]; then
+      cp -f "$OLD_DATA/database.json" "$NEW_DATA/database.json"
+    fi
+    if [ -d "$OLD_DATA/wa_auth" ] && [ ! -d "$NEW_DATA/wa_auth" ]; then
+      cp -rf "$OLD_DATA/wa_auth" "$NEW_DATA/wa_auth"
+      echo "[OK] Conexao do WhatsApp (wa_auth) preservada automaticamente!"
+    fi
+    if [ -d "$OLD_DATA/uploads" ] && [ ! -d "$NEW_DATA/uploads" ]; then
+      cp -rf "$OLD_DATA/uploads" "$NEW_DATA/uploads"
+    fi
+    if [ -d "$OLD_DATA/training_packs" ] && [ ! -d "$NEW_DATA/training_packs" ]; then
+      cp -rf "$OLD_DATA/training_packs" "$NEW_DATA/training_packs"
+    fi
   fi
-  if [ -f "$OLD_DATA/database.json" ] && [ ! -f "$NEW_DATA/database.json" ]; then
-    cp -f "$OLD_DATA/database.json" "$NEW_DATA/database.json"
-  fi
-  if [ -d "$OLD_DATA/wa_auth" ] && [ ! -d "$NEW_DATA/wa_auth" ]; then
-    cp -rf "$OLD_DATA/wa_auth" "$NEW_DATA/wa_auth"
-    echo "[OK] Conexao do WhatsApp (wa_auth) preservada automaticamente!"
-  fi
-fi
+done
 
 # 3. Na 1a vez no Termux (caso falte node ou ffmpeg), instala tudo sozinho!
 if ! command -v node >/dev/null 2>&1 || ! command -v ffmpeg >/dev/null 2>&1; then
@@ -66,8 +73,9 @@ if [ ! -f ".env" ] && [ -f ".env.example" ]; then
   cp .env.example .env
 fi
 
+APP_VER=$(node -p "try{JSON.parse(require('fs').readFileSync('./package.json','utf8')).version}catch(e){'5.1'}" 2>/dev/null || echo "5.1")
 echo "=============================================================="
-echo "  ZAP-IA STUDIO v5.0.1 -- MOTOR 24H ATIVO NO ANDROID (TERMUX)"
+echo "  ZAP-IA STUDIO v${APP_VER} -- MOTOR 24H ATIVO NO ANDROID (TERMUX)"
 echo "=============================================================="
 
 # Garante que nenhuma outra aba antiga do Termux fique disputando a conexao do WhatsApp (erro 440)

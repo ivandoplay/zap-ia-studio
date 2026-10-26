@@ -347,6 +347,9 @@ function attachAtomicCloudFlush(res, tenantStore) {
 
 // Middleware Multi-Tenant Cloud + Modo Suporte 1-Clique (isola 100% dos dados por conta e sincroniza antes do término da Function)
 app.use('/api', async (req, res, next) => {
+  if (req.path === '/public/motor-update.zip') {
+    return next();
+  }
   const actAsUserId = extractActAsUserId(req);
 
   if (IS_VERCEL) {
@@ -654,6 +657,25 @@ function collectCleanMotorZipEntries(includeMasterPack = false) {
 
   return entries;
 }
+
+app.get('/api/public/motor-update.zip', (_req, res) => {
+  try {
+    // Pacote público limpo (sem pacotes privados nem dados de contas) para atualização em 1 comando no Termux/Linux
+    const entries = collectCleanMotorZipEntries(false);
+    if (entries.length < 10) {
+      return res.status(500).json({ ok: false, error: 'Pacote do motor indisponível neste ambiente.' });
+    }
+    const zipBuffer = createZipBuffer(entries);
+    const filename = `ZAP-IA-Studio-v${APP_VERSION}.zip`;
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', String(zipBuffer.length));
+    res.setHeader('Cache-Control', 'no-store');
+    return res.end(zipBuffer);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: `Falha ao gerar pacote público do motor: ${err.message}` });
+  }
+});
 
 app.get('/api/system/download-motor', (req, res) => {
   try {

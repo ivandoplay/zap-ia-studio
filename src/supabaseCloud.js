@@ -25,6 +25,14 @@ import {
 
 const CLOUD_SESSION_FILE = path.join(DATA_DIR, 'cloud_session.json');
 const WORKER_HEARTBEAT_TTL_MS = 40_000;
+const APP_VERSION = (() => {
+  try {
+    const pkgPath = path.resolve(DATA_DIR, '..', 'package.json');
+    return JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version || '4.9.0';
+  } catch {
+    return '4.9.0';
+  }
+})();
 
 export function createAnonClient(accessToken = null) {
   const headers = {};
@@ -67,6 +75,8 @@ export function isWorkerHeartbeatFresh(heartbeatAt) {
 
 export function mapCloudRuntimeToWaState(rt = null, botEnabled = true) {
   const online = Boolean(rt?.worker_online) && isWorkerHeartbeatFresh(rt?.worker_heartbeat_at);
+  const platformStr = String(rt?.worker_platform || '');
+  const verMatch = platformStr.match(/v(\d+\.\d+\.\d+)/i);
   return {
     status: online ? (rt?.status || 'disconnected') : 'disconnected',
     rawStatus: rt?.status || 'disconnected',
@@ -88,7 +98,8 @@ export function mapCloudRuntimeToWaState(rt = null, botEnabled = true) {
     },
     workerOnline: online,
     workerHeartbeatAt: rt?.worker_heartbeat_at || null,
-    workerPlatform: rt?.worker_platform || null
+    workerPlatform: rt?.worker_platform || null,
+    workerVersion: verMatch ? verMatch[1] : null
   };
 }
 
@@ -868,9 +879,9 @@ export async function deleteManagedUser(targetUserId) {
 
 function detectWorkerPlatformLabel() {
   const isAndroid = Boolean(process.env.PREFIX?.includes('com.termux')) || os.platform() === 'android';
-  if (isAndroid) return 'Android · Termux';
-  if (os.platform() === 'win32') return `Windows PC (${os.hostname()})`;
-  return `${os.platform()} (${os.hostname()})`;
+  if (isAndroid) return `Android · Termux · v${APP_VERSION}`;
+  if (os.platform() === 'win32') return `Windows PC (${os.hostname()}) · v${APP_VERSION}`;
+  return `${os.platform()} (${os.hostname()}) · v${APP_VERSION}`;
 }
 
 class FileSessionStorage {
@@ -930,6 +941,7 @@ class CloudWorkerBridge {
     this.processingCommands = new Set();
     this.lastSyncedWorkspaceIso = '';
     this.syncInFlight = false;
+    this.pendingFlush = false;
   }
 
   bindRuntime({ whatsappManager, broadcast }) {
@@ -1261,9 +1273,15 @@ class CloudWorkerBridge {
   }
 
   async flushLocalToCloud() {
-    if (!this.client || !this.user?.id || this.syncInFlight) return;
+    if (!this.client || !this.user?.id) return;
+    if (this.syncInFlight) {
+      this.pendingFlush = true;
+      return;
+    }
     this.syncInFlight = true;
     try {
+      let rewroteLocalMediaUrl = false;
+
       // Sobe eventuais áudios/imagens locais recém-salvos ainda sem URL https:// da nuvem
       for (const v of localStorageInstance.getVoiceLibrary()) {
         if (v?.filename && (!v.url || v.url.startsWith('/uploads/'))) {
@@ -1276,16 +1294,19 @@ class CloudWorkerBridge {
               fs.readFileSync(fp),
               'audio/ogg'
             );
-            if (pubUrl) v.url = pubUrl;
+            if (pubUrl) {
+              v.url = pubUrl;
+              rewroteLocalMediaUrl = true;
+            }
           }
         }
       }
 
-      // Sobe mídias recentes de contatos (ex: áudio que o cliente mandou no WhatsApp!) para tocar no navegador da Vercel!
+      // Sobe mídias e arquivos recebidos dos clientes (áudio, foto, vídeo, PDF, planilha, doc, zip...) p/ ouvir/ver/baixar na Vercel!
       for (const cid of localStorageInstance.dirtyContactIds) {
         const contact = localStorageInstance.data.contacts[cid];
         if (!contact?.messages?.length) continue;
-        const recent = contact.messages.slice(-8);
+        const recent = contact.messages.slice(-15);
         for (const m of recent) {
           if (m?.mediaUrl && m.mediaUrl.startsWith('/uploads/')) {
             const fn = path.basename(m.mediaUrl);
@@ -1293,19 +1314,45 @@ class CloudWorkerBridge {
             if (fs.existsSync(fp)) {
               const ext = path.extname(fn).toLowerCase();
               const mime =
-                ext === '.ogg' || ext === '.opus' ? 'audio/ogg' :
+                m.mediaMime ||
+                (ext === '.ogg' || ext === '.opus' ? 'audio/ogg' :
                 ext === '.mp3' ? 'audio/mpeg' :
                 ext === '.m4a' ? 'audio/mp4' :
                 ext === '.wav' ? 'audio/wav' :
                 ext === '.webm' ? 'audio/webm' :
+                ext === '.mp4' ? 'video/mp4' :
                 ext === '.png' ? 'image/png' :
                 ext === '.webp' ? 'image/webp' :
                 ext === '.gif' ? 'image/gif' :
-                ext === '.pdf' ? 'application/pdf' : 'image/jpeg';
+                ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg' :
+                ext === '.pdf' ? 'application/pdf' :
+                ext === '.csv' ? 'text/csv' :
+                ext === '.txt' ? 'text/plain' :
+                ext === '.json' ? 'application/json' :
+                ext === '.xml' ? 'application/xml' :
+                ext === '.zip' ? 'application/zip' :
+                ext === '.doc' ? 'application/msword' :
+                ext === '.docx' ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' :
+                ext === '.xls' ? 'application/vnd.ms-excel' :
+                ext === '.xlsx' ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' :
+                'application/octet-stream');
               const pubUrl = await uploadMediaBufferToCloud(this.client, this.user.id, fn, fs.readFileSync(fp), mime);
-              if (pubUrl) m.mediaUrl = pubUrl;
+              if (pubUrl) {
+                m.mediaUrl = pubUrl;
+                rewroteLocalMediaUrl = true;
+              }
             }
           }
+        }
+      }
+
+      if (rewroteLocalMediaUrl) {
+        const prevMutate = localStorageInstance.onMutate;
+        localStorageInstance.onMutate = null;
+        try {
+          localStorageInstance.writeNow();
+        } finally {
+          localStorageInstance.onMutate = prevMutate;
         }
       }
 
@@ -1313,6 +1360,10 @@ class CloudWorkerBridge {
       this.lastSyncedWorkspaceIso = new Date().toISOString();
     } finally {
       this.syncInFlight = false;
+      if (this.pendingFlush) {
+        this.pendingFlush = false;
+        this.scheduleLocalToCloudSync();
+      }
     }
   }
 

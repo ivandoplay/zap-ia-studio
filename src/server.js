@@ -13,7 +13,8 @@ import { NICHE_TEMPLATES } from './templates.js';
 import { buildSystemPrompt, generateSmartReply, parseGeminiKeyPool, transcribeVoiceBufferWithAi, analyzeCrmFunnelCoach } from './aiEngine.js';
 import { formatPixMessageWithQr } from './pix.js';
 import { convertToCanonicalWhatsAppVoice, resolveFfmpegPath } from './audioProcessor.js';
-import { IS_VERCEL, isCloudConfigured } from './cloudConfig.js';
+import { createZipBuffer } from './zipReader.js';
+import { IS_VERCEL, MEDIA_BUCKET, SUPABASE_URL, isCloudConfigured } from './cloudConfig.js';
 const { whatsappManager } = IS_VERCEL
   ? { whatsappManager: null }
   : await import('./whatsappManager.js');
@@ -47,6 +48,13 @@ import {
 } from './trainingPackEngine.js';
 
 export const app = express();
+const APP_VERSION = (() => {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'package.json'), 'utf8')).version || '4.9.0';
+  } catch {
+    return '4.9.0';
+  }
+})();
 const server = IS_VERCEL ? null : http.createServer(app);
 const wss = IS_VERCEL ? null : new WebSocketServer({ server, path: '/ws' });
 
@@ -509,7 +517,8 @@ function getEffectiveWaState(req) {
   return {
     ...st,
     workerOnline: true,
-    workerPlatform: workerSt.platform
+    workerPlatform: workerSt.platform,
+    workerVersion: APP_VERSION
   };
 }
 
@@ -542,6 +551,7 @@ app.get('/api/bootstrap', async (req, res) => {
   const ffmpegBin = usesCloudBridge(req) ? 'cloud' : await resolveFfmpegPath();
   const waState = getEffectiveWaState(req);
   res.json({
+    appVersion: APP_VERSION,
     runtimeMode: usesCloudBridge(req) ? 'vercel_cloud' : 'local_worker',
     currentUser: getEffectiveCurrentUser(req),
     waState,
@@ -563,6 +573,7 @@ app.get('/api/cloud/poll', (req, res) => {
   const waState = getEffectiveWaState(req);
   res.json({
     ok: true,
+    appVersion: APP_VERSION,
     runtimeMode: usesCloudBridge(req) ? 'vercel_cloud' : 'local_worker',
     currentUser: getEffectiveCurrentUser(req),
     waState,
@@ -571,6 +582,183 @@ app.get('/api/cloud/poll', (req, res) => {
     stats: storage.data.stats,
     logs: (storage.data.logs || []).slice(0, 60)
   });
+});
+
+// ======================== DOWNLOAD DO MOTOR ATUALIZADO (.ZIP) & DOWNLOAD SEGURO DE MÍDIA/ARQUIVOS ========================
+
+const MOTOR_ALLOWED_ROOT_FILES = new Set([
+  '.env.example',
+  '.gitignore',
+  '.npmrc',
+  '1_Instalar_No_Windows.bat',
+  '2_Iniciar_Atendente_IA.bat',
+  '3_Criar_Atalho_Area_de_Trabalho.bat',
+  '4_Instalar_No_Termux.sh',
+  '5_Iniciar_No_Termux.sh',
+  'LEIA-ME_COMO_USAR.md',
+  'package.json',
+  'package-lock.json',
+  'vercel.json'
+]);
+
+const MOTOR_EXCLUDED_SEGMENTS = new Set([
+  'node_modules',
+  '.git',
+  '.agents',
+  '.vercel',
+  'uploads',
+  'wa_auth',
+  'tenants',
+  'database.json',
+  'cloud_session.json',
+  '.env',
+  '.DS_Store'
+]);
+
+function collectCleanMotorZipEntries(includeMasterPack = false) {
+  const entries = [];
+  const walkDir = (absDir, relDir) => {
+    if (!fs.existsSync(absDir)) return;
+    for (const dirent of fs.readdirSync(absDir, { withFileTypes: true })) {
+      if (MOTOR_EXCLUDED_SEGMENTS.has(dirent.name) || dirent.name.endsWith('.log') || dirent.name.endsWith('.bak')) {
+        continue;
+      }
+      const nextAbs = path.join(absDir, dirent.name);
+      const nextRel = `${relDir}/${dirent.name}`;
+      if (dirent.isDirectory()) {
+        walkDir(nextAbs, nextRel);
+      } else if (dirent.isFile()) {
+        entries.push({
+          path: `atendente-ia-whatsapp/${nextRel}`,
+          content: fs.readFileSync(nextAbs)
+        });
+      }
+    }
+  };
+
+  for (const rootFile of MOTOR_ALLOWED_ROOT_FILES) {
+    const abs = path.join(ROOT_DIR, rootFile);
+    if (fs.existsSync(abs) && fs.statSync(abs).isFile()) {
+      entries.push({
+        path: `atendente-ia-whatsapp/${rootFile}`,
+        content: fs.readFileSync(abs)
+      });
+    }
+  }
+
+  for (const subDir of ['src', 'api', 'public']) {
+    walkDir(path.join(ROOT_DIR, subDir), subDir);
+  }
+
+  // Pacote privado Lizandro vai exclusivamente para o Admin Master; clientes recebem motor 100% limpo
+  if (includeMasterPack) {
+    walkDir(path.join(ROOT_DIR, 'data', 'training_packs'), 'data/training_packs');
+  }
+
+  return entries;
+}
+
+app.get('/api/system/download-motor', (req, res) => {
+  try {
+    const isMasterCaller = IS_VERCEL
+      ? req.realMasterProfile?.role === 'master' && !req.cloudAuth?.isRemoteImpersonation
+      : (cloudWorker.getStatus().user?.role === 'master' || !cloudWorker.getStatus().configured);
+
+    const entries = collectCleanMotorZipEntries(Boolean(isMasterCaller));
+    if (entries.length < 10) {
+      return res.status(500).json({ ok: false, error: 'Pacote do motor indisponível neste ambiente.' });
+    }
+    const zipBuffer = createZipBuffer(entries);
+    const filename = `ZAP-IA-Studio-v${APP_VERSION}.zip`;
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', String(zipBuffer.length));
+    res.setHeader('Cache-Control', 'no-store');
+    return res.end(zipBuffer);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: `Falha ao gerar pacote do motor: ${err.message}` });
+  }
+});
+
+app.get('/api/media/download', async (req, res) => {
+  try {
+    const rawUrl = String(req.query?.url || '').trim();
+    const requestedName = String(req.query?.name || '').trim();
+    if (!rawUrl) {
+      return res.status(400).json({ ok: false, error: 'URL do arquivo não informada.' });
+    }
+
+    const sanitizeDownloadName = (fallbackName) => {
+      const base = (requestedName || fallbackName || 'arquivo')
+        .replace(/[\r\n"\\/<>|:*?]/g, '_')
+        .slice(0, 120) || 'arquivo';
+      const asciiFallback = base.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\x20-\x7E]/g, '_') || 'arquivo';
+      return { base, asciiFallback };
+    };
+
+    // Caso 1: Arquivo local em /uploads/<filename> (ambiente Local/Termux/Windows)
+    if (rawUrl.startsWith('/uploads/')) {
+      const baseFile = path.basename(rawUrl);
+      if (!baseFile || baseFile !== rawUrl.slice('/uploads/'.length) || baseFile.includes('..')) {
+        return res.status(400).json({ ok: false, error: 'Caminho de arquivo inválido.' });
+      }
+      const absFile = path.resolve(UPLOADS_DIR, baseFile);
+      if (!absFile.startsWith(path.resolve(UPLOADS_DIR)) || !fs.existsSync(absFile)) {
+        return res.status(404).json({ ok: false, error: 'Arquivo não encontrado no armazenamento local.' });
+      }
+      const { base, asciiFallback } = sanitizeDownloadName(baseFile);
+      const buf = fs.readFileSync(absFile);
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(base)}`
+      );
+      res.setHeader('Content-Length', String(buf.length));
+      return res.end(buf);
+    }
+
+    // Caso 2: Arquivo em nuvem no bucket oficial Supabase zapia-media/<tenant_uid>/<file> (bloqueio total anti-SSRF e anti-cross-tenant)
+    let parsed;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return res.status(400).json({ ok: false, error: 'URL de mídia inválida.' });
+    }
+
+    const allowedPrefix = `${SUPABASE_URL.replace(/\/+$/, '')}/storage/v1/object/public/${MEDIA_BUCKET}/`;
+    if (!rawUrl.startsWith(allowedPrefix)) {
+      return res.status(403).json({ ok: false, error: 'Origem de arquivo bloqueada por política de segurança.' });
+    }
+
+    const relObjectPath = decodeURIComponent(rawUrl.slice(allowedPrefix.length));
+    const [folderTenantUid, objectFileName] = relObjectPath.split('/');
+    if (!folderTenantUid || !objectFileName || relObjectPath.includes('..')) {
+      return res.status(400).json({ ok: false, error: 'Caminho de objeto inválido.' });
+    }
+
+    const activeTenantUid = req.cloudAuth?.authUser?.id || cloudWorker.getStatus().user?.id || '';
+    const isMasterReal = req.realMasterProfile?.role === 'master' || cloudWorker.getStatus().user?.role === 'master';
+    if (activeTenantUid && folderTenantUid !== activeTenantUid && !isMasterReal) {
+      return res.status(403).json({ ok: false, error: 'Acesso negado a arquivo de outra conta.' });
+    }
+
+    const upstream = await fetch(parsed.toString());
+    if (!upstream.ok) {
+      return res.status(404).json({ ok: false, error: 'Arquivo não encontrado na nuvem.' });
+    }
+    const arrayBuf = await upstream.arrayBuffer();
+    const buf = Buffer.from(arrayBuf);
+    const { base, asciiFallback } = sanitizeDownloadName(objectFileName);
+    res.setHeader('Content-Type', upstream.headers.get('content-type') || 'application/octet-stream');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(base)}`
+    );
+    res.setHeader('Content-Length', String(buf.length));
+    return res.end(buf);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: `Erro ao baixar arquivo: ${err.message}` });
+  }
 });
 
 // ======================== WHATSAPP CONNECTION & PROACTIVE ========================
@@ -1525,12 +1713,35 @@ app.post('/api/crm/:chatId/send-pix', async (req, res) => {
   }
 });
 
-// Anexo livre de Foto / Imagem / PDF direto no compositor do Inbox 360º
-const ALLOWED_CHAT_ATTACH_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf']);
+// Anexo livre de Imagem, Vídeo ou Documento/Arquivo direto no compositor do Inbox 360º
+const ALLOWED_CHAT_ATTACH_EXTS = new Set([
+  '.jpg', '.jpeg', '.png', '.webp', '.gif', '.mp4',
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.csv', '.txt', '.ppt', '.pptx', '.zip', '.xml', '.json'
+]);
+const ATTACH_MIME_BY_EXT = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.mp4': 'video/mp4',
+  '.pdf': 'application/pdf',
+  '.doc': 'application/msword',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xls': 'application/vnd.ms-excel',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.csv': 'text/csv',
+  '.txt': 'text/plain',
+  '.ppt': 'application/vnd.ms-powerpoint',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.zip': 'application/zip',
+  '.xml': 'application/xml',
+  '.json': 'application/json'
+};
 app.post('/api/crm/:chatId/send-attachment', memUpload.single('file'), async (req, res) => {
   const chatId = decodeURIComponent(req.params.chatId);
   if (!req.file || !req.file.buffer) {
-    return res.status(400).json({ ok: false, error: 'Selecione uma imagem (JPG, PNG, WEBP, GIF) ou documento PDF.' });
+    return res.status(400).json({ ok: false, error: 'Selecione uma imagem, vídeo MP4 ou documento (PDF, Word, Excel, CSV, TXT, ZIP).' });
   }
 
   const origName = String(req.file.originalname || 'anexo').replace(/[^\w.\- ()áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]/g, '_').slice(0, 100);
@@ -1548,25 +1759,30 @@ app.post('/api/crm/:chatId/send-attachment', memUpload.single('file'), async (re
             ? '.gif'
             : mime.startsWith('image/')
               ? '.jpg'
-              : '';
+              : mime.startsWith('video/')
+                ? '.mp4'
+                : mime.includes('spreadsheet') || mime.includes('excel')
+                  ? '.xlsx'
+                  : mime.includes('word')
+                    ? '.docx'
+                    : mime.includes('csv')
+                      ? '.csv'
+                      : mime.includes('zip')
+                        ? '.zip'
+                        : mime.startsWith('text/')
+                          ? '.txt'
+                          : '';
 
   if (!safeExt) {
-    return res.status(400).json({ ok: false, error: 'Formato não permitido. Envie imagens (JPG, PNG, WEBP, GIF) ou arquivos PDF.' });
+    return res.status(400).json({ ok: false, error: 'Formato não permitido. Envie imagens, vídeo MP4, PDF, Planilhas, Word, TXT ou ZIP.' });
   }
 
-  const isPdf = safeExt === '.pdf';
-  const resolvedMime = isPdf
-    ? 'application/pdf'
-    : safeExt === '.png'
-      ? 'image/png'
-      : safeExt === '.webp'
-        ? 'image/webp'
-        : safeExt === '.gif'
-          ? 'image/gif'
-          : 'image/jpeg';
+  const isImage = ['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(safeExt);
+  const isVideo = safeExt === '.mp4';
+  const resolvedMime = ATTACH_MIME_BY_EXT[safeExt] || 'application/octet-stream';
   const caption = String(req.body?.caption || '').trim();
   const savedFilename = `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}${safeExt}`;
-  const displayFileName = isPdf && !origName.toLowerCase().endsWith('.pdf') ? `${origName}.pdf` : origName;
+  const displayFileName = origName.toLowerCase().endsWith(safeExt) ? origName : `${origName}${safeExt}`;
 
   try {
     let mediaUrl = `/uploads/${savedFilename}`;
@@ -1635,9 +1851,11 @@ app.post('/api/crm/:chatId/send-attachment', memUpload.single('file'), async (re
     } else {
       storage.appendContactMessage(chatId, {
         role: 'owner',
-        text: caption || (isPdf ? `📄 [PDF enviado: ${displayFileName}]` : '🖼️ [Imagem enviada]'),
+        text: caption || (isImage ? '[Imagem enviada]' : isVideo ? `[Vídeo enviado: ${displayFileName}]` : `[Arquivo enviado: ${displayFileName}]`),
         mediaUrl,
-        ...(isPdf ? { mediaName: displayFileName } : {})
+        mediaName: displayFileName,
+        mediaMime: resolvedMime,
+        mediaSize: req.file.buffer.length
       });
       storage.pauseContact(chatId, 60, 'Anexo registrado no painel');
     }

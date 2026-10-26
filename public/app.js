@@ -76,6 +76,7 @@ function saveActAs(targetObj) {
 }
 
 const state = {
+  appVersion: '4.9.0',
   runtimeMode: 'local_worker',
   currentUser: null,
   cloudSession: loadSavedCloudSession(),
@@ -249,6 +250,89 @@ async function api(url, options = {}, _retried = false) {
     throw new Error(data.error || `Erro HTTP ${res.status}`);
   }
   return data;
+}
+
+async function apiBlobDownload(url, fallbackFilename = 'download.bin', _retried = false) {
+  if (
+    state.cloudSession?.expiresAt &&
+    state.cloudSession.expiresAt * 1000 - Date.now() < 180_000 &&
+    !_retried
+  ) {
+    await tryRefreshCloudToken();
+  }
+
+  const headers = {};
+  if (state.sessionPin) headers['x-panel-pin'] = state.sessionPin;
+  if (state.cloudSession?.accessToken) headers.Authorization = `Bearer ${state.cloudSession.accessToken}`;
+  if (state.actAsUser?.userId && !String(url).startsWith('/api/admin/')) {
+    headers['x-zapia-act-as'] = state.actAsUser.userId;
+  }
+
+  const res = await fetch(url, { method: 'GET', headers });
+  if (res.status === 401 && !_retried && (await tryRefreshCloudToken())) {
+    return apiBlobDownload(url, fallbackFilename, true);
+  }
+  if (!res.ok) {
+    const errJson = await res.json().catch(() => ({}));
+    throw new Error(errJson.error || `Falha ao baixar arquivo (HTTP ${res.status}).`);
+  }
+
+  const disp = res.headers.get('content-disposition') || '';
+  let resolvedName = fallbackFilename;
+  const utf8Match = disp.match(/filename\*=UTF-8''([^;]+)/i);
+  const asciiMatch = disp.match(/filename="([^"]+)"/i);
+  if (utf8Match?.[1]) {
+    try { resolvedName = decodeURIComponent(utf8Match[1]); } catch {}
+  } else if (asciiMatch?.[1]) {
+    resolvedName = asciiMatch[1];
+  }
+
+  const blob = await res.blob();
+  const objUrl = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = objUrl;
+  a.download = resolvedName || fallbackFilename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(objUrl), 15_000);
+  return resolvedName;
+}
+
+window.downloadLatestMotorZip = async function downloadLatestMotorZip() {
+  const btn = document.getElementById('btnDashDownloadMotor');
+  if (btn) btn.disabled = true;
+  const ver = state.appVersion || '4.9.0';
+  showToast(`Preparando pacote ZAP-IA Studio v${ver} (.ZIP)...`);
+  try {
+    const savedAs = await apiBlobDownload('/api/system/download-motor', `ZAP-IA-Studio-v${ver}.zip`);
+    showToast(`Download concluído: ${savedAs}`);
+  } catch (err) {
+    showToast(err.message, true);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+};
+
+window.downloadChatMedia = async function downloadChatMedia(mediaUrl, preferredName = 'arquivo') {
+  if (!mediaUrl) return;
+  try {
+    const qs = new URLSearchParams({
+      url: String(mediaUrl),
+      name: String(preferredName || 'arquivo')
+    }).toString();
+    await apiBlobDownload(`/api/media/download?${qs}`, preferredName || 'arquivo');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+function formatMediaBytes(bytes) {
+  const n = Number(bytes) || 0;
+  if (n <= 0) return '';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${Math.max(1, Math.round(n / 1024))} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 window.openInboxProDirect = function openInboxProDirect() {
@@ -485,6 +569,7 @@ async function loadBootstrap() {
     document.getElementById('pinLockScreen')?.classList.remove('open');
 
     state.runtimeMode = data.runtimeMode || state.runtimeMode || 'local_worker';
+    state.appVersion = data.appVersion || state.appVersion || '4.9.0';
     state.currentUser = data.currentUser || authStatus?.currentUser || state.cloudSession?.user || null;
     state.waState = data.waState;
     state.proactiveQueueState = data.proactiveQueueState || state.proactiveQueueState;
@@ -602,6 +687,7 @@ function startCloudPoller() {
           (state.contacts || []).filter((c) => c.stage === 'aguardando_humano' && c.unreadAlert).map((c) => c.chatId)
         );
         const snap = await api('/api/cloud/poll');
+        if (snap.appVersion) state.appVersion = snap.appVersion;
         state.waState = snap.waState || state.waState;
         state.proactiveQueueState = snap.proactiveQueueState || state.proactiveQueueState;
         state.contacts = snap.contacts || state.contacts;
@@ -1017,6 +1103,9 @@ function renderWaState() {
           Para conectar ou usar o WhatsApp ao vivo, inicie o <strong>Motor ZAP-IA</strong> no seu celular (Termux) ou computador (Windows) logado em <strong>@${escapeHtml(state.currentUser?.username || 'sua-conta')}</strong>.
         </div>
         ${lastKnownPhone ? `<div style="font-size:11.5px; color:var(--text-muted);">Último aparelho vinculado nesta conta: <strong>+${escapeHtml(lastKnownPhone)}</strong></div>` : ''}
+        <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="downloadLatestMotorZip()">
+          Baixar Motor ZAP-IA v${escapeHtml(state.appVersion || '4.9.0')} (.ZIP)
+        </button>
       `;
     } else {
       stage.innerHTML = `
@@ -1027,6 +1116,36 @@ function renderWaState() {
         ${state.waState.lastError ? `<div style="color:var(--warning-bright); font-size:12px;">${escapeHtml(state.waState.lastError)}</div>` : ''}
       `;
     }
+  }
+
+  renderMotorDownloadStatus();
+}
+
+function renderMotorDownloadStatus() {
+  const ver = state.appVersion || '4.9.0';
+  const badge = document.getElementById('dashMotorVersionBadge');
+  const sheetHint = document.getElementById('sheetMotorVersionHint');
+  const btnLbl = document.getElementById('btnDashDownloadMotorLabel');
+  const statusEl = document.getElementById('dashMotorVersionStatus');
+
+  if (badge) badge.textContent = `v${ver}`;
+  if (sheetHint) sheetHint.textContent = `v${ver}`;
+  if (btnLbl) btnLbl.textContent = `Baixar Última Versão (v${ver} .ZIP)`;
+  if (!statusEl) return;
+
+  const workerOnline = Boolean(state.waState?.workerOnline);
+  const workerVer = state.waState?.workerVersion || null;
+  const workerPlat = state.waState?.workerPlatform || '';
+
+  if (workerOnline && workerVer === ver) {
+    statusEl.className = 'motor-status-banner up-to-date';
+    statusEl.innerHTML = `<strong>Motor atualizado (v${escapeHtml(ver)})</strong> ativo em <strong>${escapeHtml(workerPlat || 'seu dispositivo')}</strong> — áudios e arquivos de clientes com player e download habilitados.`;
+  } else if (workerOnline && workerVer !== ver) {
+    statusEl.className = 'motor-status-banner outdated';
+    statusEl.innerHTML = `<strong>Nova versão disponível (v${escapeHtml(ver)}):</strong> seu motor em execução (${escapeHtml(workerPlat || 'versão anterior')}) está desatualizado. Baixe o <code>.ZIP</code> abaixo e substitua a pasta para habilitar player e download de todos os arquivos enviados pelos clientes.`;
+  } else {
+    statusEl.className = 'motor-status-banner';
+    statusEl.innerHTML = `Pacote oficial <strong>v${escapeHtml(ver)}</strong> pronto para <strong>Windows PC</strong> e <strong>Android Termux</strong> (inclui conexão por código de 8 dígitos e captura completa de áudios, fotos, vídeos e documentos).`;
   }
 }
 
@@ -2373,26 +2492,94 @@ function renderActiveInboxConversation() {
 }
 
 function renderBubbleMediaHtml(m) {
-  if (!m?.mediaUrl) return '';
+  if (!m?.mediaUrl) {
+    if (
+      m?.role === 'user' &&
+      /^(\uD83C\uDFA4|\uD83D\uDDBC\uFE0F|\uD83D\uDCC4)?\s*\[(Áudio|Imagem|PDF|Vídeo|Arquivo)/i.test(String(m.text || '').trim())
+    ) {
+      return `<div class="wa-legacy-media-hint">Registro anterior à atualização de armazenamento de arquivos no motor</div>`;
+    }
+    return '';
+  }
+
   const safeUrl = escapeHtml(m.mediaUrl);
   const cleanPath = String(m.mediaUrl).split('?')[0].split('#')[0];
-  if (/\.(jpg|jpeg|png|webp|gif)$/i.test(cleanPath)) {
-    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" title="Abrir imagem em tamanho original" style="display:block; margin-bottom:6px;"><img src="${safeUrl}" loading="lazy" style="max-width:100%; max-height:260px; object-fit:cover; border-radius:6px; display:block;" alt="Imagem anexada" /></a>`;
-  }
-  if (/\.(ogg|opus|mp3|m4a|wav|webm)$/i.test(cleanPath)) {
+  const fallbackFileName = (() => {
+    try { return decodeURIComponent(cleanPath.split('/').pop() || 'arquivo'); } catch { return 'arquivo'; }
+  })();
+  const displayLabel = m.mediaName || fallbackFileName;
+  const jsUrl = escapeJsArg(m.mediaUrl);
+  const jsName = escapeJsArg(displayLabel);
+  const sizeText = formatMediaBytes(m.mediaSize);
+  const sizeSuffix = sizeText ? ` (${escapeHtml(sizeText)})` : '';
+  const mime = String(m.mediaMime || '').toLowerCase();
+
+  // 1. Áudio / Nota de Voz (Cliente, IA ou Dono) — Player Nativo + Botão Baixar
+  if (/\.(ogg|opus|mp3|m4a|wav|webm)$/i.test(cleanPath) || mime.startsWith('audio/')) {
     return `<div class="wa-voice-note">
       ${Array.isArray(m.waveform) ? renderWaveformBarsHtml(m.waveform, 18) : ''}
-      <audio controls preload="metadata" src="${safeUrl}" style="width:100%; height:32px; margin-top:4px;"></audio>
+      <audio controls preload="metadata" src="${safeUrl}" style="width:100%; height:34px; margin-top:4px;"></audio>
+      <div class="wa-media-actions">
+        <button type="button" class="wa-media-dl-btn" onclick="downloadChatMedia('${jsUrl}', '${jsName}')">
+          <svg class="icon-svg" style="width:13px; height:13px;" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          <span>Baixar áudio${sizeSuffix}</span>
+        </button>
+      </div>
     </div>`;
   }
-  if (/\.pdf$/i.test(cleanPath)) {
-    const label = m.mediaName || decodeURIComponent(cleanPath.split('/').pop() || 'Documento.pdf');
-    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display:flex; align-items:center; gap:8px; padding:8px 10px; margin-bottom:6px; border-radius:7px; background:rgba(15,23,42,0.14); border:1px solid var(--border); color:inherit; text-decoration:none; font-size:12px; font-weight:600;">
-      <svg class="icon-svg" style="width:16px; height:16px; flex-shrink:0;" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-      <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(label)}</span>
-    </a>`;
+
+  // 2. Imagem / Foto / Figurinha — Miniatura clicável + Abrir + Baixar
+  if (/\.(jpg|jpeg|png|webp|gif)$/i.test(cleanPath) || (mime.startsWith('image/') && !mime.includes('svg'))) {
+    return `<div style="margin-bottom:6px;">
+      <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" title="Abrir imagem em tamanho original" style="display:block;">
+        <img src="${safeUrl}" loading="lazy" style="max-width:100%; max-height:260px; object-fit:cover; border-radius:7px; display:block;" alt="${escapeHtml(displayLabel)}" />
+      </a>
+      <div class="wa-media-actions">
+        <a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="wa-media-dl-btn">Abrir</a>
+        <button type="button" class="wa-media-dl-btn" onclick="downloadChatMedia('${jsUrl}', '${jsName}')">
+          <svg class="icon-svg" style="width:13px; height:13px;" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          <span>Baixar imagem${sizeSuffix}</span>
+        </button>
+      </div>
+    </div>`;
   }
-  return '';
+
+  // 3. Vídeo MP4 — Player inline + Botão Baixar
+  if (/\.mp4$/i.test(cleanPath) || mime.startsWith('video/')) {
+    return `<div style="margin-bottom:6px;">
+      <video controls preload="metadata" playsinline src="${safeUrl}" style="width:100%; max-height:260px; border-radius:7px; background:#000; display:block;"></video>
+      <div class="wa-media-actions">
+        <button type="button" class="wa-media-dl-btn" onclick="downloadChatMedia('${jsUrl}', '${jsName}')">
+          <svg class="icon-svg" style="width:13px; height:13px;" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          <span>Baixar vídeo${sizeSuffix}</span>
+        </button>
+      </div>
+    </div>`;
+  }
+
+  // 4. Qualquer Documento / Planilha / Arquivo (PDF, XLSX, DOCX, CSV, TXT, ZIP, XML, etc.)
+  const extRaw = (displayLabel.includes('.') ? displayLabel.split('.').pop() : cleanPath.split('.').pop() || 'ARQ')
+    .replace(/[^a-z0-9]/gi, '')
+    .toUpperCase()
+    .slice(0, 5) || 'ARQ';
+  const canOpenInline = /\.(pdf|txt|csv|json|xml)$/i.test(cleanPath) || /\.(pdf|txt|csv|json|xml)$/i.test(displayLabel);
+
+  return `<div class="wa-file-card">
+    <div class="wa-file-card-left">
+      <span class="wa-file-ext-badge">${escapeHtml(extRaw)}</span>
+      <div class="wa-file-meta">
+        <span class="wa-file-name" title="${escapeHtml(displayLabel)}">${escapeHtml(displayLabel)}</span>
+        <span class="wa-file-size">${escapeHtml(sizeText || 'Arquivo anexado')}</span>
+      </div>
+    </div>
+    <div style="display:flex; gap:6px; flex-shrink:0;">
+      ${canOpenInline ? `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="wa-media-dl-btn">Abrir</a>` : ''}
+      <button type="button" class="wa-media-dl-btn" onclick="downloadChatMedia('${jsUrl}', '${jsName}')">
+        <svg class="icon-svg" style="width:13px; height:13px;" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        <span>Baixar</span>
+      </button>
+    </div>
+  </div>`;
 }
 
 function renderInboxInspector360(c) {
@@ -5247,10 +5434,11 @@ function buildWelcomeKitMessage(username, displayName, knownPassword = '') {
     `👤 *Usuário:* ${username}`,
     passLine,
     ``,
-    `*3 Passos Rápidos no seu Primeiro Acesso:*`,
+    `*4 Passos Rápidos no seu Primeiro Acesso:*`,
     `1️⃣ Vá na aba *Motor de IA* e cole sua chave gratuita do Google AI Studio (Gemini).`,
     `2️⃣ Vá em *Cérebro Único* para ajustar os dados do seu negócio, produtos e PIX.`,
-    `3️⃣ Pareie seu WhatsApp pelo QR Code / Código de 8 dígitos e teste no *Simulador*!`
+    `3️⃣ Clique em *Baixar Motor (.ZIP)* no topo do painel para rodar seu WhatsApp no PC (Windows) ou celular Android (Termux).`,
+    `4️⃣ Pareie seu WhatsApp pelo QR Code / Código de 8 dígitos e teste no *Simulador*!`
   ].join('\n');
 }
 

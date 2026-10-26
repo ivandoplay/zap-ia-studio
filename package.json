@@ -1,7 +1,7 @@
 {
   "name": "zap-ia-studio",
-  "version": "4.8.0",
-  "description": "ZAP-IA Studio v4.5 Commercial SaaS & Native Mobile Edition — 5-Hub IA, Full-Screen WhatsApp Inbox, Vercel + Supabase RLS",
+  "version": "4.9.0",
+  "description": "ZAP-IA Studio v4.9 Commercial SaaS & Native Mobile Edition — In-App Motor Updater, Universal Customer Media/File Player & Downloader, Vercel + Supabase RLS",
   "type": "module",
   "main": "src/server.js",
   "scripts": {

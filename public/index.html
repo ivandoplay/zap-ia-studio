@@ -287,6 +287,10 @@
             <p>Conecte seu WhatsApp, dispare abordagens ativas aprovadas e acompanhe todo o funil em tempo real.</p>
           </div>
           <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-secondary" onclick="downloadLatestMotorZip()" title="Baixar última versão do Motor ZAP-IA (.ZIP para Windows PC e Android Termux)">
+              <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              <span>Baixar Motor (.ZIP)</span>
+            </button>
             <button type="button" class="btn btn-secondary" onclick="switchTab('simulador')">Testar no Simulador</button>
             <button type="button" class="btn btn-primary" onclick="switchTab('treinamento')">Editar Treinamento</button>
           </div>
@@ -350,6 +354,36 @@
                 </div>
                 <div class="form-hint">Digite apenas números com código do país (55) e DDD.</div>
               </div>
+            </div>
+
+            <!-- DOWNLOAD DA ÚLTIMA VERSÃO DO MOTOR (WINDOWS PC & ANDROID TERMUX) -->
+            <div class="panel" id="motorDownloadPanel">
+              <div class="panel-header">
+                <div>
+                  <h2 class="panel-title">Motor WhatsApp (Windows PC &amp; Android Termux)</h2>
+                  <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">Baixe sempre a última versão oficial do motor direto pelo painel.</p>
+                </div>
+                <span class="tag" id="dashMotorVersionBadge" style="font-variant-numeric:tabular-nums;">v4.9.0</span>
+              </div>
+
+              <div id="dashMotorVersionStatus" class="motor-status-banner">
+                Baixe o pacote abaixo para instalar ou atualizar seu Motor WhatsApp no Windows PC ou Android Termux.
+              </div>
+
+              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                <button type="button" id="btnDashDownloadMotor" class="btn btn-primary" style="flex:1; min-width:210px;" onclick="downloadLatestMotorZip()">
+                  <svg class="icon-svg" style="width:16px; height:16px;" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  <span id="btnDashDownloadMotorLabel">Baixar Última Versão (.ZIP)</span>
+                </button>
+              </div>
+
+              <details style="margin-top:10px; font-size:12px; color:var(--text-secondary);">
+                <summary style="cursor:pointer; font-weight:600; color:var(--text-main);">Como instalar ou atualizar sem perder sua sessão WhatsApp</summary>
+                <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px; line-height:1.5;">
+                  <div><strong>No Windows PC:</strong> extraia o <code>.ZIP</code> na mesma pasta (substituindo os arquivos antigos; suas pastas <code>data/wa_auth</code> e <code>database.json</code> permanecem intactas) e abra <code>2_Iniciar_Atendente_IA.bat</code>.</div>
+                  <div><strong>No Android Termux:</strong> após baixar o <code>.ZIP</code> no celular, rode:<br/><code style="display:block; margin-top:4px; padding:6px 8px; background:var(--bg-input); border:1px solid var(--border); border-radius:6px; user-select:all; word-break:break-all;">unzip -o ~/storage/downloads/ZAP-IA-Studio-v*.zip -d ~ && cd ~/atendente-ia-whatsapp && bash 5_Iniciar_No_Termux.sh</code></div>
+                </div>
+              </details>
             </div>
 
             <!-- NOVO: Disparar Abordagem Ativa (M01–M13) direto pela tela -->
@@ -1274,8 +1308,8 @@
                   </div>
 
                   <form id="crmInboxReplyForm" style="display:flex; gap:8px; align-items:center;">
-                    <input type="file" id="inboxAttachmentFileInput" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" style="display:none;" />
-                    <button type="button" id="btnInboxAttachFile" class="btn btn-secondary btn-sm" style="padding:0 11px; min-width:40px; min-height:40px; flex-shrink:0;" aria-label="Anexar foto, imagem ou documento PDF" title="Anexar foto, print ou documento PDF">
+                    <input type="file" id="inboxAttachmentFileInput" accept="image/*,video/mp4,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.ppt,.pptx,.zip,.xml,.json" style="display:none;" />
+                    <button type="button" id="btnInboxAttachFile" class="btn btn-secondary btn-sm" style="padding:0 11px; min-width:40px; min-height:40px; flex-shrink:0;" aria-label="Anexar foto, vídeo, PDF, planilha ou documento" title="Anexar foto, vídeo MP4, PDF, planilha ou documento">
                       <svg class="icon-svg" style="width:16px; height:16px;" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
                     </button>
                     <input type="text" id="crmInboxReplyInput" placeholder="Mensagem, legenda do anexo ou / para atalhos..." autocomplete="off" style="flex:1;" aria-label="Escrever resposta ou nota interna no chat" />
@@ -1569,6 +1603,14 @@
           <span>Alterar Minha Senha</span>
         </span>
         <span style="font-size:11px; color:var(--text-muted);">Segurança</span>
+      </button>
+
+      <button type="button" id="btnSheetDownloadMotor" class="sheet-item-btn" onclick="closeModal('accountSheet'); downloadLatestMotorZip();">
+        <span style="display:inline-flex; align-items:center; gap:9px;">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          <span>Baixar Motor Atualizado (.ZIP)</span>
+        </span>
+        <span id="sheetMotorVersionHint" style="font-size:11px; color:var(--accent-bright); font-weight:600; font-variant-numeric:tabular-nums;">v4.9.0</span>
       </button>
 
       <button type="button" id="btnInstallPwa" class="sheet-item-btn" style="display:none;">

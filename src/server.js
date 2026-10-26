@@ -1,0 +1,1819 @@
+import 'dotenv/config';
+import http from 'http';
+import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
+import express from 'express';
+import cors from 'cors';
+import multer from 'multer';
+import { WebSocketServer } from 'ws';
+
+import { ROOT_DIR, UPLOADS_DIR, storage, tenantStorageContext, uid, normalizePhoneDigits, normalizeCatalogItem } from './storage.js';
+import { NICHE_TEMPLATES } from './templates.js';
+import { buildSystemPrompt, generateSmartReply, parseGeminiKeyPool, transcribeVoiceBufferWithAi, analyzeCrmFunnelCoach } from './aiEngine.js';
+import { formatPixMessageWithQr } from './pix.js';
+import { convertToCanonicalWhatsAppVoice, resolveFfmpegPath } from './audioProcessor.js';
+import { IS_VERCEL, isCloudConfigured } from './cloudConfig.js';
+const { whatsappManager } = IS_VERCEL
+  ? { whatsappManager: null }
+  : await import('./whatsappManager.js');
+import {
+  cloudWorker,
+  createManagedUser,
+  deleteManagedUser,
+  dispatchCommandToWorker,
+  ensureLocalMediaCached,
+  listManagedUsers,
+  loadTenantContextFromCloud,
+  refreshCloudSession,
+  signInWithUsernamePassword,
+  updateManagedUser,
+  uploadMediaBufferToCloud,
+  verifyCloudAccessToken
+} from './supabaseCloud.js';
+import {
+  importTrainingZipBuffer,
+  listTrainingPacks,
+  getTrainingPack,
+  summarizePack,
+  getFullTrainingPackDetails,
+  saveApprovedMessage,
+  deleteApprovedMessage,
+  savePackSkill,
+  deletePackSkill,
+  exportProfileBundleZip
+} from './trainingPackEngine.js';
+
+export const app = express();
+const server = IS_VERCEL ? null : http.createServer(app);
+const wss = IS_VERCEL ? null : new WebSocketServer({ server, path: '/ws' });
+
+app.use(cors());
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  next();
+});
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
+
+// Servir arquivos estáticos (incluindo manifest.json e sw.js livres de auth p/ Chrome PWA)
+app.use('/uploads', express.static(UPLOADS_DIR));
+app.use(express.static(path.join(ROOT_DIR, 'public')));
+
+// Upload em disco para Catálogo (até 5 Fotos/PDFs por item)
+const diskUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname || '').toLowerCase() || '.bin';
+      const safeExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf', '.ogg', '.opus', '.mp3', '.m4a', '.wav', '.webm'].includes(ext) ? ext : ext;
+      cb(null, `${Date.now()}_${Math.random().toString(36).slice(2, 8)}${safeExt}`);
+    }
+  }),
+  limits: { fileSize: 20 * 1024 * 1024 }
+});
+
+// Upload em memória para Documentos, Pacotes .ZIP e Microfone/Mídia no Simulador
+const memUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 35 * 1024 * 1024 }
+});
+
+function broadcast(event, payload) {
+  if (!wss) return;
+  const msg = JSON.stringify({ event, payload, ts: Date.now() });
+  for (const client of wss.clients) {
+    if (client.readyState === 1) {
+      client.send(msg);
+    }
+  }
+}
+
+if (whatsappManager) {
+  whatsappManager.setBroadcaster(broadcast);
+}
+if (!IS_VERCEL) {
+  cloudWorker.bindRuntime({ whatsappManager, broadcast });
+}
+
+if (wss) {
+  wss.on('connection', (ws, req) => {
+    const configuredPin = String(storage.data.settings.securityPin || '').trim();
+    if (configuredPin) {
+      const urlObj = new URL(req.url || '/ws', 'http://localhost');
+      const qsPin = urlObj.searchParams.get('pin') || '';
+      if (qsPin !== configuredPin) {
+        ws.close(4001, 'PIN required');
+        return;
+      }
+    }
+    ws.send(JSON.stringify({
+      event: 'wa_state',
+      payload: whatsappManager.getPublicState(),
+      ts: Date.now()
+    }));
+    ws.send(JSON.stringify({
+      event: 'proactive_queue_state',
+      payload: whatsappManager.getProactiveQueueState(),
+      ts: Date.now()
+    }));
+  });
+}
+
+// ======================== AUTENTICAÇÃO NUVEM (SUPABASE RLS) + PIN LOCAL ========================
+
+const pinRateTracker = new Map(); // ip -> { fails, blockedUntil }
+
+function safeComparePin(expected = '', given = '') {
+  const a = Buffer.from(String(expected || ''), 'utf8');
+  const b = Buffer.from(String(given || ''), 'utf8');
+  if (a.length === 0) return true;
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
+function extractBearerToken(req) {
+  const authHeader = String(req.headers.authorization || '').trim();
+  if (authHeader.toLowerCase().startsWith('bearer ')) {
+    return authHeader.slice(7).trim();
+  }
+  if (req.query?.token) {
+    return String(req.query.token).trim();
+  }
+  return '';
+}
+
+app.get('/api/auth/status', async (req, res) => {
+  const token = extractBearerToken(req);
+  if (IS_VERCEL) {
+    if (token) {
+      try {
+        const verified = await verifyCloudAccessToken(token);
+        if (verified) {
+          return res.json({
+            ok: true,
+            mode: 'vercel_cloud',
+            cloudLoginRequired: false,
+            pinRequired: false,
+            currentUser: {
+              id: verified.authUser.id,
+              username: verified.profile.username,
+              displayName: verified.profile.display_name || verified.profile.username,
+              role: verified.profile.role || 'user'
+            },
+            branding: { appName: 'ZAP-IA Studio', appSubtitle: 'Atendente Universal Cloud' }
+          });
+        }
+      } catch (err) {
+        return res.json({
+          ok: true,
+          mode: 'vercel_cloud',
+          cloudLoginRequired: true,
+          blockedError: err.code === 'ACCOUNT_BLOCKED' ? err.message : null,
+          pinRequired: false,
+          branding: { appName: 'ZAP-IA Studio', appSubtitle: 'Atendente Universal Cloud' }
+        });
+      }
+    }
+    return res.json({
+      ok: true,
+      mode: 'vercel_cloud',
+      cloudLoginRequired: true,
+      pinRequired: false,
+      branding: { appName: 'ZAP-IA Studio', appSubtitle: 'Atendente Universal Cloud' }
+    });
+  }
+
+  // Modo Motor Local (Termux / Windows PC)
+  const workerSt = cloudWorker.getStatus();
+  const pinEnabled = Boolean(String(storage.data.settings.securityPin || '').trim());
+  if (workerSt.configured && !workerSt.loggedIn) {
+    return res.json({
+      ok: true,
+      mode: 'local_worker',
+      cloudLoginRequired: true,
+      workerStatus: workerSt,
+      pinRequired: false,
+      branding: storage.data.settings.branding || { appName: 'ZAP-IA Studio', appSubtitle: 'Motor WhatsApp Local' }
+    });
+  }
+
+  res.json({
+    ok: true,
+    mode: 'local_worker',
+    cloudLoginRequired: false,
+    currentUser: workerSt.user || null,
+    workerStatus: workerSt,
+    pinRequired: pinEnabled,
+    branding: storage.data.settings.branding || { appName: 'ZAP-IA Studio', appSubtitle: 'Atendente Universal' }
+  });
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const ip = req.ip || req.socket?.remoteAddress || 'local';
+  const entry = pinRateTracker.get(`login_${ip}`) || { fails: 0, blockedUntil: 0 };
+  if (entry.blockedUntil > Date.now()) {
+    const secs = Math.ceil((entry.blockedUntil - Date.now()) / 1000);
+    return res.status(429).json({ ok: false, error: `Muitas tentativas. Aguarde ${secs}s para tentar novamente.` });
+  }
+
+  try {
+    const { username, password } = req.body || {};
+    const authRes = await signInWithUsernamePassword(username, password);
+    pinRateTracker.delete(`login_${ip}`);
+
+    // Se estiver rodando localmente no Termux/PC, já conecta também o Motor WhatsApp em segundo plano a esta conta!
+    if (!IS_VERCEL && isCloudConfigured()) {
+      await cloudWorker.loginWorkerWithCredentials(username, password);
+    }
+
+    return res.json({
+      ok: true,
+      mode: IS_VERCEL ? 'vercel_cloud' : 'local_worker',
+      session: authRes.session,
+      user: authRes.user
+    });
+  } catch (err) {
+    entry.fails += 1;
+    if (entry.fails >= 6) {
+      entry.blockedUntil = Date.now() + 60_000;
+      entry.fails = 0;
+    }
+    pinRateTracker.set(`login_${ip}`, entry);
+    return res.status(401).json({ ok: false, error: err.message || 'Usuário ou senha inválidos.' });
+  }
+});
+
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const out = await refreshCloudSession(req.body?.refreshToken);
+    return res.json({ ok: true, ...out });
+  } catch (err) {
+    return res.status(401).json({ ok: false, authRequired: true, error: err.message });
+  }
+});
+
+app.post('/api/auth/logout', async (req, res) => {
+  try {
+    if (!IS_VERCEL && req.body?.logoutWorker !== false) {
+      await cloudWorker.logoutWorker();
+    }
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/auth/verify-pin', (req, res) => {
+  const ip = req.ip || req.socket?.remoteAddress || 'local';
+  const entry = pinRateTracker.get(ip) || { fails: 0, blockedUntil: 0 };
+  if (entry.blockedUntil > Date.now()) {
+    const secs = Math.ceil((entry.blockedUntil - Date.now()) / 1000);
+    return res.status(429).json({ ok: false, error: `Muitas tentativas incorretas. Aguarde ${secs}s para tentar novamente.` });
+  }
+
+  const configuredPin = String(storage.data.settings.securityPin || '').trim();
+  const given = String(req.body?.pin || '').trim();
+  if (!configuredPin || safeComparePin(configuredPin, given)) {
+    pinRateTracker.delete(ip);
+    return res.json({ ok: true });
+  }
+
+  entry.fails += 1;
+  if (entry.fails >= 5) {
+    entry.blockedUntil = Date.now() + 60_000;
+    entry.fails = 0;
+  }
+  pinRateTracker.set(ip, entry);
+  return res.status(401).json({ ok: false, error: 'PIN incorreto.' });
+});
+
+// Middleware Multi-Tenant Cloud (isola 100% dos dados por conta na Vercel e sincroniza antes do término da Function)
+app.use('/api', async (req, res, next) => {
+  if (IS_VERCEL) {
+    const token = extractBearerToken(req);
+    if (!token) {
+      return res.status(401).json({ ok: false, authRequired: true, error: 'Faça login com seu usuário e senha.' });
+    }
+    try {
+      const verified = await verifyCloudAccessToken(token);
+      if (!verified) {
+        return res.status(401).json({ ok: false, authRequired: true, error: 'Sessão expirada. Faça login novamente.' });
+      }
+      const tenantStore = await loadTenantContextFromCloud(verified.client, verified.authUser, verified.profile);
+      req.cloudAuth = {
+        client: verified.client,
+        authUser: verified.authUser,
+        profile: verified.profile,
+        tenantStore
+      };
+
+      // Flush atômico ANTES de responder para evitar perda de dados quando a Vercel congela a Function Serverless
+      let flushed = false;
+      const ensureFlushed = async () => {
+        if (flushed) return;
+        flushed = true;
+        await tenantStore.flushCloud();
+      };
+
+      const origJson = res.json.bind(res);
+      const origSend = res.send.bind(res);
+
+      res.json = (body) => {
+        ensureFlushed()
+          .catch((e) => console.error('[CloudFlush] Erro ao salvar estado:', e.message))
+          .finally(() => origJson(body));
+        return res;
+      };
+
+      res.send = (body) => {
+        if (flushed) return origSend(body);
+        ensureFlushed()
+          .catch((e) => console.error('[CloudFlush] Erro ao salvar estado:', e.message))
+          .finally(() => origSend(body));
+        return res;
+      };
+
+      return tenantStorageContext.run(tenantStore, () => next());
+    } catch (err) {
+      return res.status(401).json({ ok: false, authRequired: true, error: err.message || 'Acesso negado.' });
+    }
+  }
+
+  // Modo Local (Termux / Windows PC): exige login da conta se o modo nuvem estiver ativo
+  const workerSt = cloudWorker.getStatus();
+  if (workerSt.configured && !workerSt.loggedIn) {
+    return res.status(401).json({ ok: false, authRequired: true, error: 'Conecte sua conta ZAP-IA Studio para continuar.' });
+  }
+
+  const configuredPin = String(storage.data.settings.securityPin || '').trim();
+  if (!configuredPin) return next();
+  const headerPin = String(req.headers['x-panel-pin'] || req.query?.pin || '').trim();
+  if (safeComparePin(configuredPin, headerPin)) return next();
+  return res.status(401).json({ ok: false, pinRequired: true, error: 'Painel protegido por PIN.' });
+});
+
+// ======================== GERENCIAMENTO DE CONTAS (EXCLUSIVO ADMIN MASTER) ========================
+
+function requireMasterAccount(req, res, next) {
+  const role = IS_VERCEL
+    ? req.cloudAuth?.profile?.role
+    : cloudWorker.getStatus().user?.role;
+  if (role !== 'master') {
+    return res.status(403).json({ ok: false, error: 'Acesso restrito exclusivamente à conta Admin Master.' });
+  }
+  return next();
+}
+
+app.get('/api/admin/users', requireMasterAccount, async (_req, res) => {
+  try {
+    const users = await listManagedUsers();
+    res.json({ ok: true, users });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/admin/users', requireMasterAccount, async (req, res) => {
+  try {
+    const created = await createManagedUser(req.body || {});
+    storage.addLog('info', `Nova conta isolada criada pelo Admin Master: @${created.username} (${created.displayName}).`);
+    res.json({ ok: true, user: created });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.patch('/api/admin/users/:userId', requireMasterAccount, async (req, res) => {
+  try {
+    await updateManagedUser(req.params.userId, req.body || {});
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.delete('/api/admin/users/:userId', requireMasterAccount, async (req, res) => {
+  try {
+    await deleteManagedUser(req.params.userId);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// ======================== ROTAS DE BOOTSTRAP & POLLING CLOUD ========================
+
+function getEffectiveWaState(req) {
+  if (IS_VERCEL && req.cloudAuth?.tenantStore?.waRuntime) {
+    return req.cloudAuth.tenantStore.waRuntime;
+  }
+  const st = whatsappManager.getPublicState();
+  const workerSt = cloudWorker.getStatus();
+  return {
+    ...st,
+    workerOnline: true,
+    workerPlatform: workerSt.platform
+  };
+}
+
+function getEffectiveCurrentUser(req) {
+  if (IS_VERCEL && req.cloudAuth?.profile) {
+    return {
+      id: req.cloudAuth.authUser.id,
+      username: req.cloudAuth.profile.username,
+      displayName: req.cloudAuth.profile.display_name || req.cloudAuth.profile.username,
+      role: req.cloudAuth.profile.role || 'user'
+    };
+  }
+  return cloudWorker.getStatus().user || null;
+}
+
+app.get('/api/bootstrap', async (req, res) => {
+  storage.ensureDailyRollover();
+  const ffmpegBin = IS_VERCEL ? 'cloud' : await resolveFfmpegPath();
+  const waState = getEffectiveWaState(req);
+  res.json({
+    runtimeMode: IS_VERCEL ? 'vercel_cloud' : 'local_worker',
+    currentUser: getEffectiveCurrentUser(req),
+    waState,
+    proactiveQueueState: IS_VERCEL ? waState.proactive : whatsappManager.getProactiveQueueState(),
+    audioEngineReady: Boolean(ffmpegBin),
+    settings: storage.data.settings,
+    geminiPoolCount: parseGeminiKeyPool(storage.data.settings.ai).length,
+    business: storage.getBusiness(),
+    templates: NICHE_TEMPLATES,
+    trainingPacks: listTrainingPacks(),
+    contacts: Object.values(storage.data.contacts).sort(
+      (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+    ),
+    stats: storage.data.stats,
+    logs: storage.data.logs,
+    simulatorHistory: storage.data.simulatorHistory || []
+  });
+});
+
+app.get('/api/cloud/poll', (req, res) => {
+  const waState = getEffectiveWaState(req);
+  res.json({
+    ok: true,
+    runtimeMode: IS_VERCEL ? 'vercel_cloud' : 'local_worker',
+    currentUser: getEffectiveCurrentUser(req),
+    waState,
+    proactiveQueueState: IS_VERCEL ? waState.proactive : whatsappManager.getProactiveQueueState(),
+    contacts: Object.values(storage.data.contacts).sort(
+      (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+    ),
+    stats: storage.data.stats,
+    logs: (storage.data.logs || []).slice(0, 60)
+  });
+});
+
+// ======================== WHATSAPP CONNECTION & PROACTIVE ========================
+
+app.post('/api/wa/connect', async (req, res) => {
+  try {
+    const { pairingPhone } = req.body || {};
+    if (IS_VERCEL) {
+      const out = await dispatchCommandToWorker(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        'wa_connect',
+        { pairingPhone: pairingPhone || null },
+        9500
+      );
+      return res.json({ ok: true, ...out, waState: out.waState || getEffectiveWaState(req) });
+    }
+    const state = await whatsappManager.connect(pairingPhone || null);
+    res.json({ ok: true, waState: state });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, workerOffline: Boolean(err.workerOffline), error: err.message });
+  }
+});
+
+app.post('/api/wa/disconnect', async (req, res) => {
+  try {
+    const clearSession = req.body?.clearSession !== false;
+    if (IS_VERCEL) {
+      const out = await dispatchCommandToWorker(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        'wa_disconnect',
+        { clearSession }
+      );
+      return res.json({ ok: true, waState: out.waState || getEffectiveWaState(req) });
+    }
+    const state = await whatsappManager.disconnect(clearSession);
+    res.json({ ok: true, waState: state });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, workerOffline: Boolean(err.workerOffline), error: err.message });
+  }
+});
+
+app.post('/api/wa/toggle-bot', (req, res) => {
+  const enabled = Boolean(req.body?.enabled);
+  storage.data.settings.botEnabled = enabled;
+  storage.writeNow();
+  storage.addLog('info', enabled ? 'Atendimento automático ATIVADO.' : 'Atendimento automático PAUSADO globalmente.');
+  if (!IS_VERCEL) whatsappManager.emitState();
+  res.json({ ok: true, botEnabled: enabled });
+});
+
+app.post('/api/wa/test-owner-alert', async (req, res) => {
+  try {
+    if (IS_VERCEL) {
+      const out = await dispatchCommandToWorker(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        'wa_test_owner_alert',
+        { phone: req.body?.phone }
+      );
+      return res.json({ ok: true, ...out });
+    }
+    const result = await whatsappManager.sendTestAlertToOwner(req.body?.phone);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ ok: false, workerOffline: Boolean(err.workerOffline), error: err.message });
+  }
+});
+
+app.post('/api/wa/proactive-send', async (req, res) => {
+  try {
+    const { phone, text, name, voiceId } = req.body || {};
+    if (!phone || (!String(text || '').trim() && !voiceId)) {
+      return res.status(400).json({ ok: false, error: 'Informe o telefone com DDD e uma mensagem de texto ou áudio estratégico.' });
+    }
+    const cleanName = (name || 'Contato Abordado').trim();
+    const personalizedText = String(text || '')
+      .replace(/\{\{\s*nome\s*\}\}/gi, cleanName !== 'Contato Abordado' ? cleanName.split(' ')[0] : '')
+      .replace(/\{\s*nome\s*\}/gi, cleanName !== 'Contato Abordado' ? cleanName.split(' ')[0] : '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+    if (IS_VERCEL) {
+      const out = await dispatchCommandToWorker(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        'send_proactive',
+        { phone, text: personalizedText, name: cleanName, voiceId: voiceId || '' }
+      );
+      return res.json({ ok: true, ...out });
+    }
+    const result = await whatsappManager.sendProactiveAiOpening(phone, personalizedText, cleanName, voiceId || '');
+    res.json({ ok: true, ...result, stats: storage.data.stats });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ ok: false, workerOffline: Boolean(err.workerOffline), error: err.message });
+  }
+});
+
+app.get('/api/wa/proactive-queue', (req, res) => {
+  const waState = getEffectiveWaState(req);
+  res.json({ ok: true, queue: IS_VERCEL ? waState.proactive : whatsappManager.getProactiveQueueState() });
+});
+
+app.post('/api/wa/proactive-queue/start', async (req, res) => {
+  try {
+    const { leads, text } = req.body || {};
+    if (IS_VERCEL) {
+      const out = await dispatchCommandToWorker(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        'queue_start',
+        { leads: Array.isArray(leads) ? leads : [], text: text || '' }
+      );
+      return res.json({ ok: true, queue: out.queue });
+    }
+    const state = whatsappManager.enqueueProactiveBatch(Array.isArray(leads) ? leads : [], text || '');
+    res.json({ ok: true, queue: state });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ ok: false, workerOffline: Boolean(err.workerOffline), error: err.message });
+  }
+});
+
+app.post('/api/wa/proactive-queue/pause', async (req, res) => {
+  try {
+    const paused = req.body?.paused !== false;
+    if (IS_VERCEL) {
+      const out = await dispatchCommandToWorker(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        'queue_pause',
+        { paused }
+      );
+      return res.json({ ok: true, queue: out.queue });
+    }
+    const state = whatsappManager.pauseProactiveQueue(paused);
+    res.json({ ok: true, queue: state });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/wa/proactive-queue/clear', async (req, res) => {
+  try {
+    if (IS_VERCEL) {
+      const out = await dispatchCommandToWorker(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        'queue_clear',
+        {}
+      );
+      return res.json({ ok: true, queue: out.queue });
+    }
+    const state = whatsappManager.clearProactiveQueue();
+    res.json({ ok: true, queue: state });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ ok: false, error: err.message });
+  }
+});
+
+// ======================== CONFIGURAÇÕES & TESTE IA ========================
+
+app.put('/api/settings', (req, res) => {
+  const incoming = req.body || {};
+  storage.data.settings = {
+    ...storage.data.settings,
+    ...incoming,
+    branding: { ...storage.data.settings.branding, ...(incoming.branding || {}) },
+    ai: { ...storage.data.settings.ai, ...(incoming.ai || {}) },
+    antiBan: { ...storage.data.settings.antiBan, ...(incoming.antiBan || {}) },
+    humanHandoff: { ...storage.data.settings.humanHandoff, ...(incoming.humanHandoff || {}) },
+    schedule: { ...storage.data.settings.schedule, ...(incoming.schedule || {}) }
+  };
+  delete storage.data.settings.activeProfileId;
+  storage.writeNow();
+  storage.addLog('info', 'Configurações do sistema atualizadas.');
+  if (!IS_VERCEL) whatsappManager.emitState();
+  res.json({
+    ok: true,
+    settings: storage.data.settings,
+    geminiPoolCount: parseGeminiKeyPool(storage.data.settings.ai).length
+  });
+});
+
+app.post('/api/ai/test', async (req, res) => {
+  const start = Date.now();
+  try {
+    const tempSettings = {
+      ...storage.data.settings,
+      ai: { ...storage.data.settings.ai, ...(req.body?.ai || {}) }
+    };
+    const business = storage.getBusiness();
+    const reply = await generateSmartReply({
+      profile: business,
+      settings: tempSettings,
+      history: [],
+      userText: 'Olá! Responda em uma frase curta confirmando que está online e pronto para atender.',
+      contactName: 'Teste do Painel',
+      allowDemoFallback: false
+    });
+    const latencyMs = Date.now() - start;
+    res.json({
+      ok: true,
+      latencyMs,
+      provider: reply.providerUsed,
+      model: reply.modelUsed,
+      keyPoolSize: reply.keyPoolSize || 1,
+      usedFallback: Boolean(reply.usedFallback),
+      sampleReply: reply.cleanText,
+      stats: storage.data.stats
+    });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+// ======================== CÉREBRO ÚNICO DE NEGÓCIO & TREINAMENTO ========================
+
+app.get('/api/business', (_req, res) => {
+  res.json({ ok: true, business: storage.getBusiness() });
+});
+
+app.put('/api/business', (req, res) => {
+  const current = storage.getBusiness();
+  const patch = req.body || {};
+
+  storage.data.business = {
+    ...current,
+    ...patch,
+    id: 'business_unico',
+    pix: { ...current.pix, ...(patch.pix || {}) },
+    catalog: Array.isArray(patch.catalog) ? patch.catalog.map(normalizeCatalogItem) : current.catalog,
+    faqs: Array.isArray(patch.faqs) ? patch.faqs : current.faqs,
+    knowledgeDocs: Array.isArray(patch.knowledgeDocs) ? patch.knowledgeDocs : current.knowledgeDocs,
+    updatedAt: new Date().toISOString()
+  };
+
+  storage.writeNow();
+  storage.addLog('info', `Treinamento principal ("${storage.data.business.name}") salvo.`);
+  res.json({ ok: true, business: storage.data.business });
+});
+
+app.post('/api/business/apply-template', (req, res) => {
+  const { templateId, keepCatalogAndPix = true } = req.body || {};
+  const updated = storage.applyTemplateToBusiness(templateId, keepCatalogAndPix);
+  storage.addLog('info', `Modelo base aplicado ao treinamento: "${updated.name}" (${updated.niche}).`);
+  res.json({ ok: true, business: updated });
+});
+
+app.get('/api/business/export.zip', (_req, res) => {
+  const biz = storage.getBusiness();
+  try {
+    const { filename, buffer } = exportProfileBundleZip(biz);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(buffer);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get('/api/business/system-prompt', (req, res) => {
+  const biz = storage.getBusiness();
+  const sampleQuery = req.query?.q || 'É só tráfego pago ou vocês fazem conteúdo também?';
+  const prompt = buildSystemPrompt(biz, storage.data.settings, 'Lojista Exemplo', {
+    userText: String(sampleQuery),
+    history: []
+  });
+  res.json({ ok: true, prompt });
+});
+
+// ======================== PACOTES DE TREINAMENTO TURBO (.ZIP) + EDITOR VISUAL ========================
+
+app.get('/api/training-packs/:packId', (req, res) => {
+  const pack = getTrainingPack(req.params.packId);
+  if (!pack) return res.status(404).json({ ok: false, error: 'Pacote de treinamento não encontrado.' });
+  res.json({ ok: true, pack: summarizePack(pack) });
+});
+
+app.get('/api/training-packs/:packId/full', (req, res) => {
+  const details = getFullTrainingPackDetails(req.params.packId);
+  if (!details) return res.status(404).json({ ok: false, error: 'Pacote de treinamento não encontrado.' });
+  res.json({ ok: true, pack: details });
+});
+
+app.post('/api/training-packs/:packId/messages', (req, res) => {
+  try {
+    const details = saveApprovedMessage(req.params.packId, req.body || {});
+    storage.addLog('info', `Mensagem aprovada (${req.body?.id || 'nova'}) salva no pacote ${req.params.packId}.`);
+    res.json({ ok: true, pack: details, trainingPacks: listTrainingPacks() });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.delete('/api/training-packs/:packId/messages/:msgId', (req, res) => {
+  try {
+    const details = deleteApprovedMessage(req.params.packId, req.params.msgId);
+    res.json({ ok: true, pack: details, trainingPacks: listTrainingPacks() });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/training-packs/:packId/skills', (req, res) => {
+  try {
+    const details = savePackSkill(req.params.packId, req.body || {});
+    storage.addLog('info', `Skill (${req.body?.name || req.body?.id || 'nova'}) salva no pacote ${req.params.packId}.`);
+    res.json({ ok: true, pack: details, trainingPacks: listTrainingPacks() });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.delete('/api/training-packs/:packId/skills/:skillId', (req, res) => {
+  try {
+    const type = req.query?.type === 'humanization' ? 'humanization' : 'operational';
+    const details = deletePackSkill(req.params.packId, req.params.skillId, type);
+    res.json({ ok: true, pack: details, trainingPacks: listTrainingPacks() });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/training-packs/import-zip', memUpload.single('file'), (req, res) => {
+  try {
+    if (!req.file || !req.file.buffer) {
+      return res.status(400).json({ ok: false, error: 'Selecione um arquivo .ZIP de treinamento válido.' });
+    }
+    const { packSummary, suggestedProfile } = importTrainingZipBuffer(req.file.buffer, req.file.originalname);
+
+    const current = storage.getBusiness();
+    storage.data.business = {
+      ...current,
+      ...suggestedProfile,
+      id: 'business_unico',
+      trainingPackId: packSummary.id,
+      lockUntilManualResume: suggestedProfile.lockUntilManualResume !== false,
+      promptShieldEnabled: suggestedProfile.promptShieldEnabled !== false,
+      // Preserva catálogo e chave PIX atuais caso o pacote importado não traga seus próprios
+      catalog:
+        Array.isArray(suggestedProfile.catalog) && suggestedProfile.catalog.length > 0
+          ? suggestedProfile.catalog.map(normalizeCatalogItem)
+          : current.catalog,
+      pix: suggestedProfile.pix?.key ? { ...current.pix, ...suggestedProfile.pix } : current.pix,
+      voiceLibrary: Array.isArray(current.voiceLibrary) ? current.voiceLibrary : [],
+      knowledgeDocs:
+        Array.isArray(suggestedProfile.knowledgeDocs) && suggestedProfile.knowledgeDocs.length > 0
+          ? suggestedProfile.knowledgeDocs
+          : current.knowledgeDocs,
+      updatedAt: new Date().toISOString()
+    };
+
+    storage.writeNow();
+    storage.addLog(
+      'info',
+      `Pacote Turbo "${packSummary.name}" ativado no Cérebro Único (${packSummary.stats.operationalSkillsCount + packSummary.stats.humanizationSkillsCount} skills).`
+    );
+
+    res.json({
+      ok: true,
+      packSummary,
+      business: storage.data.business,
+      trainingPacks: listTrainingPacks()
+    });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: `Falha ao importar pacote .ZIP: ${err.message}` });
+  }
+});
+
+app.post('/api/business/knowledge-upload', memUpload.single('file'), (req, res) => {
+  const biz = storage.getBusiness();
+  let title = req.body?.title || '';
+  let content = req.body?.content || '';
+
+  if (req.file) {
+    title = title || req.file.originalname;
+    content = req.file.buffer.toString('utf-8').slice(0, 30000);
+  }
+
+  if (!content.trim()) {
+    return res.status(400).json({ ok: false, error: 'O documento enviado está vazio.' });
+  }
+
+  const doc = {
+    id: uid('doc'),
+    title: title || 'Documento de Treinamento',
+    content: content.trim(),
+    createdAt: new Date().toISOString()
+  };
+
+  biz.knowledgeDocs = biz.knowledgeDocs || [];
+  biz.knowledgeDocs.push(doc);
+  storage.writeNow();
+  res.json({ ok: true, doc, business: biz });
+});
+
+app.delete('/api/business/knowledge/:docId', (req, res) => {
+  const biz = storage.getBusiness();
+  biz.knowledgeDocs = (biz.knowledgeDocs || []).filter(d => d.id !== req.params.docId);
+  storage.writeNow();
+  res.json({ ok: true, business: biz });
+});
+
+// ======================== CATÁLOGO MULTI-FOTOS/PDFs & PREVIEW PIX QR ========================
+
+app.post('/api/pix/preview', async (req, res) => {
+  try {
+    const pixCfg = { enabled: true, sendQrImage: true, ...(req.body?.pix || {}) };
+    if (!pixCfg.key) return res.status(400).json({ ok: false, error: 'Informe uma chave PIX para gerar a prévia.' });
+    const out = await formatPixMessageWithQr(pixCfg, req.body?.amount || null);
+    res.json({
+      ok: true,
+      summaryText: out?.summaryText || '',
+      brcode: out?.brcode || '',
+      qrDataUrl: out?.qrDataUrl || null
+    });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+function getActiveCloudClientAndUser(req) {
+  if (IS_VERCEL && req.cloudAuth?.client && req.cloudAuth?.authUser?.id) {
+    return { client: req.cloudAuth.client, userId: req.cloudAuth.authUser.id };
+  }
+  if (!IS_VERCEL && cloudWorker.client && cloudWorker.user?.id) {
+    return { client: cloudWorker.client, userId: cloudWorker.user.id };
+  }
+  return { client: null, userId: null };
+}
+
+app.post('/api/business/catalog', diskUpload.array('media', 5), async (req, res) => {
+  const biz = storage.getBusiness();
+  const { client, userId } = getActiveCloudClientAndUser(req);
+
+  const uploadedFiles = [];
+  for (const f of req.files || []) {
+    let mediaUrl = `/uploads/${f.filename}`;
+    if (client && userId && f.path && fs.existsSync(f.path)) {
+      const pubUrl = await uploadMediaBufferToCloud(client, userId, f.filename, fs.readFileSync(f.path), f.mimetype);
+      if (pubUrl) mediaUrl = pubUrl;
+    }
+    uploadedFiles.push({
+      filename: f.filename,
+      originalName: f.originalname,
+      mimeType: f.mimetype,
+      url: mediaUrl
+    });
+  }
+
+  const newItem = normalizeCatalogItem({
+    id: uid('item'),
+    name: (req.body?.name || 'Novo Item').trim(),
+    category: (req.body?.category || 'Produto').trim(),
+    price: (req.body?.price || '').trim(),
+    description: (req.body?.description || '').trim(),
+    paymentLink: (req.body?.paymentLink || '').trim(),
+    mediaFiles: uploadedFiles,
+    active: true
+  });
+
+  biz.catalog = biz.catalog || [];
+  biz.catalog.push(newItem);
+  storage.writeNow();
+  storage.addLog('info', `Item "${newItem.name}" (${uploadedFiles.length} mídia(s)) adicionado ao catálogo.`);
+  res.json({ ok: true, item: newItem, business: biz });
+});
+
+app.put('/api/business/catalog/:itemId', diskUpload.array('media', 5), async (req, res) => {
+  const biz = storage.getBusiness();
+  const idx = (biz.catalog || []).findIndex(it => it.id === req.params.itemId);
+  if (idx === -1) return res.status(404).json({ ok: false, error: 'Item não encontrado.' });
+
+  const { client, userId } = getActiveCloudClientAndUser(req);
+  const item = normalizeCatalogItem(biz.catalog[idx]);
+
+  if (req.body?.name !== undefined) item.name = req.body.name.trim();
+  if (req.body?.category !== undefined) item.category = req.body.category.trim();
+  if (req.body?.price !== undefined) item.price = req.body.price.trim();
+  if (req.body?.description !== undefined) item.description = req.body.description.trim();
+  if (req.body?.paymentLink !== undefined) item.paymentLink = req.body.paymentLink.trim();
+  if (req.body?.active !== undefined) item.active = req.body.active === 'true' || req.body.active === true;
+
+  if (req.body?.removeFilename) {
+    const fname = path.basename(String(req.body.removeFilename));
+    const owned = (item.mediaFiles || []).some(mf => mf.filename === fname);
+    item.mediaFiles = (item.mediaFiles || []).filter(mf => mf.filename !== fname);
+    if (owned && fname) {
+      const oldPath = path.join(UPLOADS_DIR, fname);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+  }
+
+  if (req.body?.removeAllMedia === 'true') {
+    for (const mf of item.mediaFiles || []) {
+      const oldPath = path.join(UPLOADS_DIR, mf.filename);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+    item.mediaFiles = [];
+  }
+
+  if (req.files && req.files.length > 0) {
+    const replaceMode = req.body?.replaceMedia === 'true';
+    if (replaceMode) {
+      for (const mf of item.mediaFiles || []) {
+        const oldPath = path.join(UPLOADS_DIR, mf.filename);
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+      item.mediaFiles = [];
+    }
+    for (const f of req.files) {
+      if (item.mediaFiles.length >= 5) break;
+      let mediaUrl = `/uploads/${f.filename}`;
+      if (client && userId && f.path && fs.existsSync(f.path)) {
+        const pubUrl = await uploadMediaBufferToCloud(client, userId, f.filename, fs.readFileSync(f.path), f.mimetype);
+        if (pubUrl) mediaUrl = pubUrl;
+      }
+      item.mediaFiles.push({
+        filename: f.filename,
+        originalName: f.originalname,
+        mimeType: f.mimetype,
+        url: mediaUrl
+      });
+    }
+  }
+
+  item.mediaFile = item.mediaFiles[0] || null;
+  biz.catalog[idx] = item;
+  storage.writeNow();
+  res.json({ ok: true, item, business: biz });
+});
+
+app.patch('/api/business/catalog/:itemId/toggle', (req, res) => {
+  const biz = storage.getBusiness();
+  const item = (biz.catalog || []).find(it => it.id === req.params.itemId);
+  if (!item) return res.status(404).json({ ok: false, error: 'Item não encontrado.' });
+  item.active = req.body?.active !== undefined ? Boolean(req.body.active) : !item.active;
+  storage.writeNow();
+  res.json({ ok: true, item, business: biz });
+});
+
+app.delete('/api/business/catalog/:itemId', (req, res) => {
+  const biz = storage.getBusiness();
+  const idx = (biz.catalog || []).findIndex(it => it.id === req.params.itemId);
+  if (idx !== -1) {
+    const [removed] = biz.catalog.splice(idx, 1);
+    const files = removed?.mediaFiles?.length ? removed.mediaFiles : (removed?.mediaFile ? [removed.mediaFile] : []);
+    for (const mf of files) {
+      if (mf?.filename) {
+        const fpath = path.join(UPLOADS_DIR, mf.filename);
+        if (fs.existsSync(fpath)) fs.unlinkSync(fpath);
+      }
+    }
+  }
+  storage.writeNow();
+  res.json({ ok: true, business: biz });
+});
+
+// ======================== CONTATOS IGNORADOS (FAMÍLIA / PESSOAL) ========================
+
+app.post('/api/ignored-contacts', (req, res) => {
+  const phone = normalizePhoneDigits(req.body?.phone || '');
+  const name = (req.body?.name || 'Contato Pessoal').trim();
+  const note = (req.body?.note || '').trim();
+
+  if (phone.length < 8) {
+    return res.status(400).json({ ok: false, error: 'Informe um número de telefone válido com DDD.' });
+  }
+
+  storage.data.settings.ignoredContacts = storage.data.settings.ignoredContacts || [];
+  const exists = storage.data.settings.ignoredContacts.find(c => normalizePhoneDigits(c.phone) === phone);
+  if (!exists) {
+    storage.data.settings.ignoredContacts.push({
+      id: uid('ign'),
+      phone,
+      name,
+      note,
+      createdAt: new Date().toISOString()
+    });
+    storage.writeNow();
+  }
+  res.json({ ok: true, ignoredContacts: storage.data.settings.ignoredContacts });
+});
+
+app.delete('/api/ignored-contacts/:id', (req, res) => {
+  storage.data.settings.ignoredContacts = (storage.data.settings.ignoredContacts || []).filter(
+    c => c.id !== req.params.id
+  );
+  storage.writeNow();
+  res.json({ ok: true, ignoredContacts: storage.data.settings.ignoredContacts });
+});
+
+// ======================== CRM & ATENDIMENTO HUMANO RICO ========================
+
+app.post('/api/crm/demo-seed', (_req, res) => {
+  const samples = [
+    {
+      chatId: 'demo_5586999112233@s.whatsapp.net',
+      phone: '5586999112233',
+      name: 'Marcos — AutoShopping Leste',
+      stage: 'aguardando_humano',
+      unreadAlert: true,
+      tags: ['Quente', 'Pediu Valor'],
+      followUpAt: null,
+      summary: 'Tem 28 veículos no pátio e pediu valores/condições da assessoria completa.',
+      pausedUntil: 'forever',
+      pauseReason: 'Passagem humana comercial (valores)',
+      messages: [
+        { id: uid('m'), role: 'assistant', text: 'Oi! Tudo bem? Sou o Lizandro Celestino, da Alavancagem de Vendas. Posso te explicar rapidinho como ajudamos lojas de veículos?', timestamp: new Date(Date.now() - 600000).toISOString() },
+        { id: uid('m'), role: 'user', text: 'Pode sim! Como funciona e qual o investimento mensal?', timestamp: new Date(Date.now() - 300000).toISOString() },
+        { id: uid('m'), role: 'assistant', text: 'A gente cuida das redes sociais, conteúdo, campanhas por veículo e apoio comercial. Sobre valores e formato comercial, o Lizandro responde pessoalmente — já deixei organizado para ele continuar com você!', timestamp: new Date(Date.now() - 290000).toISOString() }
+      ]
+    },
+    {
+      chatId: 'demo_5586988445566@s.whatsapp.net',
+      phone: '5586988445566',
+      name: 'Renato — Seminovos Premium',
+      stage: 'em_atendimento',
+      unreadAlert: false,
+      tags: ['Lojista', 'Retorno Autorizado'],
+      followUpAt: new Date(Date.now() + 86400000).toISOString().slice(0, 16),
+      summary: 'Pediu para retomar conversa amanhã às 10h.',
+      pausedUntil: null,
+      pauseReason: '',
+      messages: [
+        { id: uid('m'), role: 'user', text: '[Áudio do cliente] Vocês fazem os vídeos e campanhas para cada carro separado?', timestamp: new Date(Date.now() - 180000).toISOString() },
+        { id: uid('m'), role: 'assistant', text: 'Fazemos sim a produção e publicação de conteúdo conectada às campanhas pensadas para cada veículo! Hoje quantos carros vocês costumam girar no estoque?', timestamp: new Date(Date.now() - 170000).toISOString() }
+      ]
+    }
+  ];
+
+  for (const s of samples) {
+    storage.data.contacts[s.chatId] = {
+      ...s,
+      notes: '',
+      createdAt: new Date().toISOString(),
+      lastMessageAt: s.messages[s.messages.length - 1].timestamp
+    };
+  }
+  storage.writeNow();
+  res.json({
+    ok: true,
+    contacts: Object.values(storage.data.contacts)
+  });
+});
+
+app.get('/api/crm/export.csv', (_req, res) => {
+  const contacts = Object.values(storage.data.contacts);
+  const stageLabels = {
+    novo: 'Novo',
+    em_atendimento: 'Em Atendimento IA',
+    aguardando_humano: 'Aguardando Humano',
+    concluido: 'Pedido / Concluido'
+  };
+
+  // Blindagem CWE-1236 contra CSV Formula Injection no Excel/LibreOffice (=, +, -, @)
+  const escapeCsv = val => {
+    let clean = String(val ?? '').replace(/"/g, '""').replace(/\r?\n/g, ' ');
+    if (/^[=+\-@\t\r]/.test(clean)) clean = `'${clean}`;
+    return `"${clean}"`;
+  };
+  const header = ['Nome', 'Telefone', 'Etapa CRM', 'Status IA', 'Etiquetas', 'Retorno Agendado', 'Resumo / Interesse', 'Observacoes', 'Ultima Mensagem'];
+  const rows = contacts.map(c => {
+    const paused = storage.isContactPaused(c.chatId, c.phone) ? 'Pausada (Humano)' : 'IA Ativa';
+    const lastDate = c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleString('pt-BR') : '';
+    const followStr = c.followUpAt ? new Date(c.followUpAt).toLocaleString('pt-BR') : '';
+    return [
+      escapeCsv(c.name),
+      escapeCsv(c.phone),
+      escapeCsv(stageLabels[c.stage] || c.stage),
+      escapeCsv(paused),
+      escapeCsv((c.tags || []).join(', ')),
+      escapeCsv(followStr),
+      escapeCsv(c.summary || ''),
+      escapeCsv(c.notes || ''),
+      escapeCsv(lastDate)
+    ].join(';');
+  });
+
+  const csvContent = '\uFEFF' + [header.join(';'), ...rows].join('\r\n');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="clientes_crm_whatsapp.csv"');
+  res.send(csvContent);
+});
+
+app.put('/api/crm/:chatId', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  if (!storage.data.contacts[chatId]) {
+    return res.status(404).json({ ok: false, error: 'Contato não encontrado.' });
+  }
+  const updated = storage.upsertContact(chatId, req.body || {});
+  res.json({ ok: true, contact: updated });
+});
+
+app.post('/api/crm/:chatId/pause', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const minutes = req.body?.minutes || 60;
+  const contact = storage.pauseContact(chatId, minutes, 'Pausado pelo painel');
+  res.json({ ok: true, contact });
+});
+
+app.post('/api/crm/:chatId/resume', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const contact = storage.resumeContact(chatId);
+  res.json({ ok: true, contact });
+});
+
+app.post('/api/crm/:chatId/send', async (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const text = (req.body?.text || '').trim();
+  if (!text) return res.status(400).json({ ok: false, error: 'Digite uma mensagem.' });
+
+  try {
+    if (IS_VERCEL && !chatId.startsWith('demo_')) {
+      const waState = getEffectiveWaState(req);
+      if (waState.workerOnline && waState.status === 'connected') {
+        const out = await dispatchCommandToWorker(
+          req.cloudAuth.client,
+          req.cloudAuth.authUser.id,
+          'send_crm_reply',
+          { chatId, text }
+        );
+        return res.json({
+          ok: true,
+          contact: out.contact || storage.data.contacts[chatId],
+          sentRealWhatsApp: true
+        });
+      }
+      return res.status(503).json({
+        ok: false,
+        workerOffline: !waState.workerOnline,
+        error: !waState.workerOnline
+          ? 'Seu Motor WhatsApp (Termux / PC) está offline. Ligue o motor no seu aparelho para enviar mensagens reais no WhatsApp.'
+          : 'O WhatsApp da sua conta não está conectado no momento. Conecte na aba WhatsApp.'
+      });
+    }
+
+    const cleanTargetJid = chatId.replace(/^demo_/, '');
+    if (!IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
+      await whatsappManager.sendManualOwnerMessage(cleanTargetJid, text, true);
+    } else {
+      storage.appendContactMessage(chatId, { role: 'owner', text });
+      storage.pauseContact(chatId, 60, 'Mensagem registrada localmente no painel');
+    }
+    res.json({
+      ok: true,
+      contact: storage.data.contacts[chatId],
+      sentRealWhatsApp: !IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/crm/:chatId/send-item', async (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const { itemId } = req.body || {};
+  const biz = storage.getBusiness();
+  const item = (biz.catalog || []).find(it => it.id === itemId);
+  if (!item) return res.status(404).json({ ok: false, error: 'Item do catálogo não encontrado.' });
+
+  try {
+    if (IS_VERCEL && !chatId.startsWith('demo_')) {
+      const out = await dispatchCommandToWorker(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        'send_crm_catalog',
+        { chatId, itemId }
+      );
+      return res.json({ ok: true, contact: out.contact || storage.data.contacts[chatId], sentRealWhatsApp: true });
+    }
+
+    if (!IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
+      if ((item.mediaFiles && item.mediaFiles.length > 0) || item.mediaFile?.filename) {
+        await whatsappManager.sendCatalogMediaFile(chatId, item, 'owner');
+      } else {
+        const txt = `*${item.name}*${item.price ? ` — R$ ${item.price}` : ''}\n${item.description || ''}${item.paymentLink ? `\n${item.paymentLink}` : ''}`.trim();
+        await whatsappManager.sendManualOwnerMessage(chatId, txt, true);
+      }
+      storage.pauseContact(chatId, biz.lockUntilManualResume ? 'forever' : 60, 'Item enviado manualmente no CRM');
+    } else {
+      storage.appendContactMessage(chatId, { role: 'owner', text: `[Item enviado no painel: ${item.name}]` });
+    }
+    res.json({ ok: true, contact: storage.data.contacts[chatId], sentRealWhatsApp: !IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_') });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/crm/:chatId/send-pix', async (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const biz = storage.getBusiness();
+  if (!biz.pix?.enabled || !biz.pix?.key) {
+    return res.status(400).json({ ok: false, error: 'Ative e configure sua chave PIX na aba Catálogo & PIX primeiro.' });
+  }
+  try {
+    if (IS_VERCEL && !chatId.startsWith('demo_')) {
+      const out = await dispatchCommandToWorker(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        'send_crm_pix',
+        { chatId, amount: req.body?.amount || null }
+      );
+      return res.json({ ok: true, contact: out.contact || storage.data.contacts[chatId], sentRealWhatsApp: true });
+    }
+
+    if (!IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
+      await whatsappManager.sendPixPayloadToChat(chatId, biz, req.body?.amount || null, 'owner', chatId);
+      storage.pauseContact(chatId, biz.lockUntilManualResume ? 'forever' : 60, 'PIX enviado manualmente no CRM');
+    } else {
+      const preview = await formatPixMessageWithQr(biz.pix, req.body?.amount || null);
+      storage.appendContactMessage(chatId, { role: 'owner', text: preview?.summaryText || '[PIX]' });
+    }
+    res.json({ ok: true, contact: storage.data.contacts[chatId], sentRealWhatsApp: !IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_') });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+// ======================== BIBLIOTECA DE ÁUDIOS ESTRATÉGICOS (OGG/OPUS + WAVEFORM 64B) ========================
+
+app.post('/api/voice-library/transcribe', memUpload.single('audio'), async (req, res) => {
+  try {
+    let audioBuf = req.file?.buffer || null;
+    let origName = req.file?.originalname || 'audio.ogg';
+
+    if (!audioBuf && req.body?.existingId) {
+      const existing = storage.getVoiceLibrary().find((v) => v.id === req.body.existingId);
+      if (existing?.filename) {
+        let fp = path.join(UPLOADS_DIR, existing.filename);
+        if (!fs.existsSync(fp) && existing.url && /^https?:\/\//i.test(existing.url)) {
+          const cached = await ensureLocalMediaCached(existing.filename, existing.url);
+          if (cached) fp = cached;
+        }
+        if (fs.existsSync(fp)) {
+          audioBuf = fs.readFileSync(fp);
+          origName = existing.filename;
+        }
+      }
+    }
+
+    if (!audioBuf) {
+      return res.status(400).json({ ok: false, error: 'Grave ou selecione um áudio primeiro para transcrever.' });
+    }
+
+    const canonical = await convertToCanonicalWhatsAppVoice(audioBuf, origName);
+    const transcription = await transcribeVoiceBufferWithAi(
+      canonical.buffer,
+      'audio/ogg',
+      storage.data.settings.ai
+    );
+
+    res.json({
+      ok: true,
+      transcription,
+      durationSec: canonical.durationSec,
+      waveform: canonical.waveform
+    });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/voice-library', memUpload.single('audio'), async (req, res) => {
+  try {
+    const id = String(req.body?.id || '').trim() || uid('aud');
+    const name = String(req.body?.name || '').trim();
+    const transcription = String(req.body?.transcription || '').trim();
+    const whenToUse = String(req.body?.whenToUse || '').trim();
+    const linkedMessageCode = String(req.body?.linkedMessageCode || '').trim();
+    const aiEnabled = String(req.body?.aiEnabled ?? 'true') !== 'false';
+
+    if (!name) {
+      return res.status(400).json({ ok: false, error: 'Informe um nome claro para identificar o áudio.' });
+    }
+    if (!transcription) {
+      return res.status(400).json({ ok: false, error: 'Informe a transcrição do áudio (ou clique em "Transcrever com IA").' });
+    }
+
+    const existing = storage.getVoiceLibrary().find((v) => v.id === id);
+    if (!existing && (!req.file || !req.file.buffer)) {
+      return res.status(400).json({ ok: false, error: 'Grave pelo microfone ou envie um arquivo de áudio.' });
+    }
+
+    let fileFields = {};
+    if (req.file && req.file.buffer) {
+      const canonical = await convertToCanonicalWhatsAppVoice(req.file.buffer, req.file.originalname || 'voz.ogg');
+      const newFilename = `${Date.now()}_${id.replace(/[^a-zA-Z0-9_-]/g, '')}.ogg`;
+      fs.writeFileSync(path.join(UPLOADS_DIR, newFilename), canonical.buffer);
+
+      let publicUrl = `/uploads/${newFilename}`;
+      const { client, userId } = getActiveCloudClientAndUser(req);
+      if (client && userId) {
+        const cloudUrl = await uploadMediaBufferToCloud(client, userId, newFilename, canonical.buffer, 'audio/ogg');
+        if (cloudUrl) publicUrl = cloudUrl;
+      }
+
+      // Remove arquivo antigo se estiver substituindo o áudio
+      if (existing?.filename && existing.filename !== newFilename) {
+        const oldPath = path.join(UPLOADS_DIR, existing.filename);
+        if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      }
+
+      fileFields = {
+        filename: newFilename,
+        url: publicUrl,
+        mimeType: canonical.mimeType,
+        durationSec: canonical.durationSec,
+        waveform: canonical.waveform,
+        sizeBytes: canonical.sizeBytes
+      };
+    }
+
+    const saved = storage.saveVoiceLibraryItem({
+      id,
+      name,
+      whenToUse,
+      linkedMessageCode,
+      transcription,
+      aiEnabled,
+      ...fileFields
+    });
+
+    storage.addLog('info', `Áudio estratégico "${saved.name}" (${saved.durationSec}s • OGG/Opus Nativo) salvo na biblioteca.`);
+    res.json({ ok: true, item: saved, business: storage.getBusiness() });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.patch('/api/voice-library/:id/toggle', (req, res) => {
+  const existing = storage.getVoiceLibrary().find((v) => v.id === req.params.id);
+  if (!existing) return res.status(404).json({ ok: false, error: 'Áudio não encontrado.' });
+  const nextEnabled = req.body?.aiEnabled !== undefined ? Boolean(req.body.aiEnabled) : !existing.aiEnabled;
+  const saved = storage.saveVoiceLibraryItem({ ...existing, aiEnabled: nextEnabled });
+  res.json({ ok: true, item: saved, business: storage.getBusiness() });
+});
+
+app.delete('/api/voice-library/:id', (req, res) => {
+  const removed = storage.deleteVoiceLibraryItem(req.params.id);
+  if (!removed) return res.status(404).json({ ok: false, error: 'Áudio não encontrado.' });
+  if (removed.filename) {
+    const fp = path.join(UPLOADS_DIR, removed.filename);
+    if (fs.existsSync(fp)) {
+      try { fs.unlinkSync(fp); } catch {}
+    }
+  }
+  storage.addLog('info', `Áudio estratégico "${removed.name}" removido da biblioteca.`);
+  res.json({ ok: true, business: storage.getBusiness() });
+});
+
+app.post('/api/crm/:chatId/send-library-voice', async (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const voiceId = String(req.body?.voiceId || '').trim();
+  const vItem = storage.getVoiceLibrary().find((v) => v.id === voiceId);
+  if (!vItem) return res.status(404).json({ ok: false, error: 'Áudio estratégico não encontrado.' });
+
+  const biz = storage.getBusiness();
+  try {
+    if (IS_VERCEL && !chatId.startsWith('demo_')) {
+      const out = await dispatchCommandToWorker(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        'send_crm_library_voice',
+        { chatId, voiceId }
+      );
+      return res.json({
+        ok: true,
+        contact: out.contact || storage.data.contacts[chatId],
+        business: storage.getBusiness(),
+        sentRealWhatsApp: true
+      });
+    }
+
+    if (!IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
+      await whatsappManager.sendLibraryVoiceToChat(chatId, voiceId, {
+        senderRole: 'owner',
+        pauseAi: true
+      });
+    } else {
+      storage.recordVoiceSentToContact(chatId, voiceId);
+      storage.appendContactMessage(chatId, {
+        role: 'owner',
+        text: `🎤 [Nota de voz: ${vItem.name} (${vItem.durationSec}s)]`,
+        mediaUrl: vItem.url,
+        durationSec: vItem.durationSec,
+        waveform: vItem.waveform
+      });
+      storage.pauseContact(chatId, biz.lockUntilManualResume ? 'forever' : 60, `Áudio "${vItem.name}" enviado no CRM`);
+    }
+    const key = storage.findSiblingContactKey(chatId) || chatId;
+    res.json({
+      ok: true,
+      contact: storage.data.contacts[key],
+      business: storage.getBusiness(),
+      sentRealWhatsApp: !IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/crm/:chatId/send-audio', memUpload.single('audio'), async (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  if (!req.file || !req.file.buffer) {
+    return res.status(400).json({ ok: false, error: 'Grave ou selecione um arquivo de áudio válido.' });
+  }
+  const biz = storage.getBusiness();
+  try {
+    if (IS_VERCEL && !chatId.startsWith('demo_')) {
+      const canonical = await convertToCanonicalWhatsAppVoice(req.file.buffer, req.file.originalname || 'nota-voz.ogg');
+      const savedFn = `${Date.now()}_${uid('crmvoz')}.ogg`;
+      const cloudUrl = await uploadMediaBufferToCloud(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        savedFn,
+        canonical.buffer,
+        'audio/ogg'
+      );
+      if (!cloudUrl) throw new Error('Falha ao enviar nota de voz para o armazenamento em nuvem.');
+      const out = await dispatchCommandToWorker(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        'send_crm_recorded_voice',
+        {
+          chatId,
+          filename: savedFn,
+          mediaUrl: cloudUrl,
+          durationSec: canonical.durationSec,
+          waveform: canonical.waveform
+        }
+      );
+      return res.json({
+        ok: true,
+        contact: out.contact || storage.data.contacts[chatId],
+        sentRealWhatsApp: true
+      });
+    }
+
+    if (!IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
+      await whatsappManager.sendVoiceNoteToChat(chatId, req.file.buffer, req.file.originalname || 'nota-voz.ogg', 'owner', true);
+    } else {
+      const canonical = await convertToCanonicalWhatsAppVoice(req.file.buffer, req.file.originalname || 'nota-voz.ogg');
+      const savedFn = `${Date.now()}_${uid('crmvoz')}.ogg`;
+      fs.writeFileSync(path.join(UPLOADS_DIR, savedFn), canonical.buffer);
+      let mediaUrl = `/uploads/${savedFn}`;
+      const { client, userId } = getActiveCloudClientAndUser(req);
+      if (client && userId) {
+        const pub = await uploadMediaBufferToCloud(client, userId, savedFn, canonical.buffer, 'audio/ogg');
+        if (pub) mediaUrl = pub;
+      }
+      storage.appendContactMessage(chatId, {
+        role: 'owner',
+        text: `🎤 [Nota de voz gravada/enviada (${canonical.durationSec}s)]`,
+        mediaUrl,
+        durationSec: canonical.durationSec,
+        waveform: canonical.waveform
+      });
+      storage.pauseContact(chatId, biz.lockUntilManualResume ? 'forever' : 60, 'Nota de voz registrada no CRM');
+    }
+    const key = storage.findSiblingContactKey(chatId) || chatId;
+    res.json({
+      ok: true,
+      contact: storage.data.contacts[key],
+      sentRealWhatsApp: !IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/crm/check-followups', async (req, res) => {
+  try {
+    if (IS_VERCEL) {
+      return res.json({ ok: true, triggeredCount: 0, triggered: [] });
+    }
+    const due = await whatsappManager.checkDueFollowUpsNow({
+      notifyOwnerWhatsapp: req.body?.notifyOwner !== false
+    });
+    res.json({ ok: true, triggeredCount: due.length, triggered: due.map(c => ({ chatId: c.chatId, name: c.name })) });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// ======================== BACKUP & RESTAURAÇÃO GERAL DO SISTEMA (.JSON) ========================
+
+app.get('/api/system/backup.json', (_req, res) => {
+  const snap = storage.exportFullSystemSnapshot();
+  const dateTag = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="zapia-backup-geral-${dateTag}.json"`);
+  res.send(JSON.stringify(snap, null, 2));
+});
+
+app.post('/api/system/restore', memUpload.single('file'), (req, res) => {
+  try {
+    let parsed = req.body?.snapshot || null;
+    if (!parsed && req.file?.buffer) {
+      parsed = JSON.parse(req.file.buffer.toString('utf-8'));
+    }
+    const summary = storage.importFullSystemSnapshot(parsed);
+    storage.addLog('info', `Backup geral restaurado com sucesso (${summary.contactsCount} clientes no CRM).`);
+    broadcast('crm_updated', {});
+    broadcast('logs_updated', {});
+    res.json({ ok: true, ...summary });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: `Falha ao restaurar backup: ${err.message}` });
+  }
+});
+
+// Skill #10: Raio-X do Funil & Coaching de Conversas com IA (RevOps & Win-Loss Coach)
+app.post('/api/crm/funnel-coach', async (_req, res) => {
+  try {
+    const sortedContacts = Object.values(storage.data.contacts || {}).sort(
+      (a, b) => new Date(b.lastMessageAt || 0) - new Date(a.lastMessageAt || 0)
+    );
+    const out = await analyzeCrmFunnelCoach({
+      contacts: sortedContacts,
+      profile: storage.getBusiness(),
+      settings: storage.data.settings
+    });
+    res.json(out);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.delete('/api/crm/:chatId', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const siblingKey = storage.findSiblingContactKey(chatId);
+  for (const key of new Set([chatId, siblingKey].filter(Boolean))) {
+    const contact = storage.data.contacts[key];
+    // Limpa áudios avulsos gravados manualmente na ficha para não acumular disco
+    for (const m of contact?.messages || []) {
+      if (m.mediaUrl && m.mediaUrl.includes('_crmvoz_') && m.mediaUrl.startsWith('/uploads/')) {
+        const safeFn = path.basename(m.mediaUrl);
+        const fp = path.join(UPLOADS_DIR, safeFn);
+        if (fs.existsSync(fp)) {
+          try { fs.unlinkSync(fp); } catch {}
+        }
+      }
+    }
+    storage.deleteContact(key);
+  }
+  storage.writeNow();
+  res.json({ ok: true });
+});
+
+// ======================== SIMULADOR INTERATIVO + ENSINAR EM 1 CLIQUE ========================
+
+app.post('/api/simulator/send', memUpload.single('media'), async (req, res) => {
+  try {
+    const business = storage.getBusiness();
+    const userText = (req.body?.text || '').trim();
+    const media = req.file
+      ? {
+          buffer: req.file.buffer,
+          mimeType: req.file.mimetype,
+          originalName: req.file.originalname
+        }
+      : null;
+
+    if (!userText && !media) {
+      return res.status(400).json({ ok: false, error: 'Envie uma mensagem, grave um áudio ou anexe um arquivo para testar.' });
+    }
+
+    storage.data.simulatorHistory = storage.data.simulatorHistory || [];
+    const priorHistory = [...storage.data.simulatorHistory];
+    const simSentVoiceIds = priorHistory
+      .filter((m) => m.role === 'assistant' && m.sentVoice?.id)
+      .map((m) => m.sentVoice.id);
+
+    const userDisplay = media
+      ? `${media.mimeType.startsWith('audio/') ? '[Áudio gravado/enviado]' : '[Arquivo enviado: ' + media.originalName + ']'} ${userText}`.trim()
+      : userText;
+
+    storage.data.simulatorHistory.push({
+      id: uid('sim'),
+      role: 'user',
+      rawQuestion: userText || (media?.mimeType?.startsWith('audio/') ? 'Pergunta enviada por áudio' : 'Arquivo enviado'),
+      text: userDisplay,
+      timestamp: new Date().toISOString()
+    });
+
+    const aiResult = await generateSmartReply({
+      profile: business,
+      settings: storage.data.settings,
+      history: priorHistory,
+      userText,
+      media,
+      contactName: 'Cliente Teste',
+      sentVoiceIds: simSentVoiceIds,
+      allowDemoFallback: true
+    });
+
+    let sentVoice = null;
+    if (aiResult.actions.voiceIds?.length > 0) {
+      const vItem = storage.getVoiceLibrary().find((v) => v.id === aiResult.actions.voiceIds[0]);
+      if (vItem) {
+        sentVoice = {
+          id: vItem.id,
+          name: vItem.name,
+          url: vItem.url,
+          durationSec: vItem.durationSec,
+          waveform: vItem.waveform,
+          transcription: vItem.transcription
+        };
+      }
+    }
+
+    const attachments = [];
+    for (const itemId of aiResult.actions.itemIds || []) {
+      const item = (business.catalog || []).find(it => it.id === itemId);
+      if (item) {
+        const files = item.mediaFiles?.length ? item.mediaFiles : (item.mediaFile ? [item.mediaFile] : []);
+        attachments.push({
+          type: 'catalog_item',
+          name: item.name,
+          price: item.price,
+          description: item.description,
+          mediaFiles: files,
+          mediaUrl: files[0]?.url || null,
+          mimeType: files[0]?.mimeType || null
+        });
+      }
+    }
+
+    let pixCard = null;
+    if (aiResult.actions.sendPix && business.pix?.enabled && business.pix?.key) {
+      const fullPix = await formatPixMessageWithQr(business.pix, aiResult.actions.pixAmount);
+      if (fullPix) {
+        pixCard = {
+          summaryText: fullPix.summaryText,
+          brcode: fullPix.brcode,
+          qrDataUrl: fullPix.qrDataUrl
+        };
+      }
+    }
+
+    const botEntry = {
+      id: uid('sim'),
+      role: 'assistant',
+      triggerQuestion: userText || (media?.mimeType?.startsWith('audio/') ? 'Mensagem de áudio' : 'Anexo'),
+      text: aiResult.cleanText,
+      providerUsed: aiResult.providerUsed,
+      modelUsed: aiResult.modelUsed,
+      latencyMs: aiResult.latencyMs || 0,
+      usedFallback: Boolean(aiResult.usedFallback),
+      shieldTriggered: Boolean(aiResult.shieldTriggered),
+      activatedSkills: aiResult.activatedSkills || [],
+      diagnostics: aiResult.diagnostics || null,
+      sentVoice,
+      attachments,
+      pixCard,
+      handoffReason: aiResult.actions.handoffReason || null,
+      silentPauseReason: aiResult.actions.silentPauseReason || null,
+      closeContactReason: aiResult.actions.closeContactReason || null,
+      optOutReason: aiResult.actions.optOutReason || null,
+      courtesySilence: Boolean(aiResult.actions.courtesySilence),
+      timestamp: new Date().toISOString()
+    };
+
+    storage.data.simulatorHistory.push(botEntry);
+    if (storage.data.simulatorHistory.length > 40) {
+      storage.data.simulatorHistory = storage.data.simulatorHistory.slice(-40);
+    }
+    storage.saveSoon();
+
+    res.json({
+      ok: true,
+      reply: botEntry,
+      simulatorHistory: storage.data.simulatorHistory,
+      stats: storage.data.stats
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/simulator/teach', (req, res) => {
+  const { question, customerQuestion, idealAnswer, target = 'faq' } = req.body || {};
+  if (!String(idealAnswer || '').trim()) {
+    return res.status(400).json({ ok: false, error: 'Escreva como a IA deveria responder.' });
+  }
+  const biz = storage.getBusiness();
+  const qText = String(question || customerQuestion || 'Situação ensinada no Simulador').trim();
+  if (target === 'rule') {
+    biz.goldenRules = [biz.goldenRules || '', `- ${idealAnswer.trim()}`].filter(Boolean).join('\n');
+  } else {
+    biz.faqs = biz.faqs || [];
+    biz.faqs.unshift({
+      id: uid('faq'),
+      question: qText,
+      answer: String(idealAnswer).trim()
+    });
+  }
+  biz.updatedAt = new Date().toISOString();
+  storage.writeNow();
+  storage.addLog('info', `Correção rápida salva no Cérebro Único ("${biz.name}") via Simulador.`);
+  res.json({ ok: true, business: biz });
+});
+
+app.post('/api/simulator/reset', (_req, res) => {
+  storage.data.simulatorHistory = [];
+  storage.writeNow();
+  res.json({ ok: true });
+});
+
+// ======================== INICIALIZAÇÃO (LOCAL MOTOR vs VERCEL SERVERLESS) ========================
+
+if (!IS_VERCEL && server) {
+  const PORT = Number(process.env.PORT) || 3000;
+  server.listen(PORT, '0.0.0.0', async () => {
+    console.log(`\n======================================================`);
+    console.log(`🚀 ${storage.data.settings.branding?.appName || 'ZAP-IA Studio'} rodando na porta ${PORT}`);
+    console.log(`👉 Painel Local: http://localhost:${PORT}`);
+    console.log(`======================================================\n`);
+    storage.addLog('info', `Sistema iniciado na porta ${PORT}. Pronto para uso!`);
+
+    if (isCloudConfigured()) {
+      const restored = await cloudWorker.tryRestoreSavedLogin().catch(() => false);
+      if (!restored) {
+        await cloudWorker.promptTerminalLoginIfInteractive();
+      } else {
+        console.log(`☁️  [Nuvem ZAP-IA] Conectado automaticamente à conta @${cloudWorker.user?.username}!`);
+      }
+    } else {
+      whatsappManager.autoRestoreIfSessionExists().catch(() => {});
+    }
+  });
+
+  // Garante gravação atômica de dados pendentes ao fechar janela .BAT ou encerrar Termux (SIGINT / SIGTERM)
+  function gracefulFlushAndExit() {
+    try {
+      if (storage.saveTimer) {
+        clearTimeout(storage.saveTimer);
+        storage.saveTimer = null;
+        storage.writeNow();
+      }
+    } catch {}
+    process.exit(0);
+  }
+  process.on('SIGINT', () => gracefulFlushAndExit());
+  process.on('SIGTERM', () => gracefulFlushAndExit());
+}
+
+export default app;
+

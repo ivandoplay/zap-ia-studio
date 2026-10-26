@@ -1,0 +1,1693 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#059669" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>ZAP-IA Studio — Atendimento Universal no WhatsApp</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- TELA DE LOGIN DA CONTA (SUPABASE RLS MULTI-CONTAS ISOLADAS — SEM CADASTRO PÚBLICO) -->
+  <div id="cloudLoginScreen" class="pin-lock-overlay" role="dialog" aria-modal="true" aria-labelledby="cloudLoginTitle">
+    <div class="panel" style="width:100%; max-width:410px; margin:0; text-align:left; padding:26px;">
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px;">
+        <div class="brand-mark" aria-hidden="true">
+          <svg class="icon-svg" viewBox="0 0 24 24">
+            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+          </svg>
+        </div>
+        <div>
+          <h2 id="cloudLoginTitle" class="panel-title" style="margin:0; font-size:19px;">ZAP-IA Studio</h2>
+          <div style="font-size:12px; color:var(--text-muted);">Plataforma Cloud Multi-Contas • Acesso Restrito</div>
+        </div>
+      </div>
+
+      <p id="cloudLoginSubtitle" class="panel-desc" style="margin:0 0 16px; font-size:13px;">
+        Entre com seu usuário e senha para acessar seu painel, treinamento e WhatsApp isolado.
+      </p>
+
+      <div id="cloudLoginErrorBox" style="display:none; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.35); color:var(--danger); border-radius:8px; padding:10px 12px; font-size:12.5px; margin-bottom:12px;"></div>
+
+      <form id="cloudLoginForm" style="display:flex; flex-direction:column; gap:12px;">
+        <div class="form-group" style="margin:0;">
+          <label class="form-label" for="cloudLoginUser">Usuário</label>
+          <input type="text" id="cloudLoginUser" required autocomplete="username" placeholder="Ex: jeffersonivan" />
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label" for="cloudLoginPass">Senha</label>
+          <div style="display:flex; gap:8px;">
+            <input type="password" id="cloudLoginPass" required autocomplete="current-password" placeholder="Digite sua senha..." style="flex:1;" />
+            <button type="button" id="btnToggleLoginPass" class="btn btn-secondary btn-sm" title="Mostrar/ocultar senha" style="padding:0 12px;">👁️</button>
+          </div>
+        </div>
+        <button type="submit" id="btnCloudLoginSubmit" class="btn btn-primary" style="width:100%; justify-content:center; margin-top:4px; min-height:42px;">
+          Entrar na Minha Conta
+        </button>
+      </form>
+
+      <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border); font-size:11.5px; color:var(--text-muted); text-align:center;">
+        🔒 Plataforma fechada — novas contas são criadas exclusivamente pelo Administrador Master.
+      </div>
+    </div>
+  </div>
+
+  <!-- TELA OPCIONAL DE BLOQUEIO POR PIN (WI-FI / LAN) -->
+  <div id="pinLockScreen" class="pin-lock-overlay" role="dialog" aria-modal="true" aria-labelledby="pinLockTitle">
+    <div class="panel" style="width:100%; max-width:380px; margin:0; text-align:center;">
+      <div class="brand-mark" style="margin:0 auto 12px;" aria-hidden="true">
+        <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+      </div>
+      <h2 id="pinLockTitle" class="panel-title">Painel Protegido por PIN</h2>
+      <p class="panel-desc" style="margin:6px auto 16px;">Digite seu PIN de segurança para acessar o painel.</p>
+      <form id="pinUnlockForm" style="display:flex; flex-direction:column; gap:10px;">
+        <input type="password" id="pinUnlockInput" placeholder="Digite o PIN..." autocomplete="current-password" style="text-align:center; font-size:18px; letter-spacing:4px;" />
+        <button type="submit" class="btn btn-primary" style="width:100%;">Desbloquear Painel</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Navegação Lateral -->
+  <aside class="sidebar" aria-label="Menu principal">
+    <div class="brand">
+      <div style="display:flex; align-items:center; gap:12px; min-width:0;">
+        <div class="brand-mark" aria-hidden="true">
+          <svg class="icon-svg" viewBox="0 0 24 24">
+            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+          </svg>
+        </div>
+        <div style="min-width:0;">
+          <div id="brandTitleEl" class="brand-title">ZAP-IA Studio</div>
+          <div id="brandSubEl" class="brand-sub">Atendente Universal</div>
+        </div>
+      </div>
+      <button type="button" id="btnOpenBrandModal" class="btn btn-secondary btn-sm" title="Personalizar nome e marca do sistema" aria-label="Personalizar nome do sistema" style="padding:5px 8px;">
+        <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+      </button>
+    </div>
+
+    <nav class="nav-menu">
+      <button type="button" class="nav-btn active" data-tab="dashboard">
+        <span class="nav-btn-left">
+          <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>
+          <span>Conexão & Painel</span>
+        </span>
+      </button>
+
+      <button type="button" class="nav-btn" data-tab="simulador">
+        <span class="nav-btn-left">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2v5Z"></path><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"></path></svg>
+          <span>Simulador de Teste</span>
+        </span>
+      </button>
+
+      <button type="button" class="nav-btn" data-tab="treinamento">
+        <span class="nav-btn-left">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+          <span>Treinamento da IA</span>
+        </span>
+      </button>
+
+      <button type="button" class="nav-btn" data-tab="audios">
+        <span class="nav-btn-left">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+          <span>Áudios Estratégicos</span>
+        </span>
+        <span id="navVoiceBadge" class="badge-count" style="display:none; background:rgba(37, 211, 102, 0.16); color:var(--accent);">0</span>
+      </button>
+
+      <button type="button" class="nav-btn" data-tab="catalogo">
+        <span class="nav-btn-left">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+          <span>Catálogo, Fotos & PIX</span>
+        </span>
+      </button>
+
+      <button type="button" class="nav-btn" data-tab="ia">
+        <span class="nav-btn-left">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2v4"></path><path d="m16.2 7.8 2.9-2.9"></path><path d="M18 12h4"></path><path d="m16.2 16.2 2.9 2.9"></path><path d="M12 18v4"></path><path d="m4.9 19.1 2.9-2.9"></path><path d="M2 12h4"></path><path d="m4.9 4.9 2.9 2.9"></path><circle cx="12" cy="12" r="4"></circle></svg>
+          <span>Motor de IA (Gemini+)</span>
+        </span>
+      </button>
+
+      <button type="button" class="nav-btn" data-tab="seguranca">
+        <span class="nav-btn-left">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+          <span>Anti-Ban & Família</span>
+        </span>
+      </button>
+
+      <button type="button" class="nav-btn" data-tab="crm">
+        <span class="nav-btn-left">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          <span>CRM & Conversas</span>
+        </span>
+        <span id="navCrmBadge" class="badge-count" style="display:none;">0</span>
+      </button>
+
+      <button type="button" id="navMasterUsersBtn" class="nav-btn" data-tab="contas" style="display:none;">
+        <span class="nav-btn-left">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+          <span>👑 Contas & Usuários</span>
+        </span>
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="active-profile-box">
+        <div class="active-profile-label">Cérebro Único Ativo</div>
+        <div id="sidebarActiveProfileName" class="active-profile-name">Carregando...</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Área Principal -->
+  <div class="main-wrapper">
+    <header class="topbar">
+      <div class="topbar-left" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <div id="waStatusPill" class="status-pill">
+          <span class="status-dot"></span>
+          <span id="waStatusText">Desconectado</span>
+        </div>
+        <div id="workerStatusPill" class="status-pill" style="display:none; font-size:11.5px; padding:5px 10px;" title="Status do Motor WhatsApp (Termux / PC) desta conta">
+          <span id="workerStatusText">Motor Local</span>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+        <div id="cloudAccountBar" style="display:none; align-items:center; gap:6px;">
+          <span id="cloudUserBadge" class="tag" style="font-weight:700; padding:5px 10px; font-size:12px;">👤 Conta</span>
+          <button type="button" id="btnCloudLogout" class="btn btn-secondary btn-sm" title="Sair desta conta">Sair</button>
+        </div>
+
+        <button type="button" id="btnOpenCmdPalette" class="btn btn-secondary btn-sm" title="Busca Rápida Global (Ctrl+K)" aria-label="Abrir busca rápida global">
+          <svg class="icon-svg" style="width:16px; height:16px;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+          <span>Buscar</span>
+        </button>
+
+        <button type="button" id="btnInstallPwa" class="btn btn-secondary btn-sm" style="display:none;" title="Instalar aplicativo na tela inicial">
+          <svg class="icon-svg" style="width:16px; height:16px;" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          <span>Instalar App</span>
+        </button>
+
+        <div class="master-switch-wrap">
+          <span id="masterBotLabel">IA Automática: Ativa</span>
+          <label class="switch" aria-label="Ativar ou pausar respostas automáticas da IA">
+            <input type="checkbox" id="masterBotToggle" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <button type="button" id="btnSoundToggle" class="btn btn-secondary btn-sm" title="Som de alerta ao receber novo cliente p/ fechamento" aria-label="Alternar som de alerta">
+          <svg class="icon-svg" style="width:16px; height:16px;" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+          <span id="soundToggleLabel">Som: Ativo</span>
+        </button>
+
+        <button type="button" id="themeToggleBtn" class="btn btn-secondary btn-sm" aria-label="Alternar tema claro ou escuro">
+          <svg class="icon-svg" style="width:16px; height:16px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>
+          <span id="themeToggleLabel">Modo Claro</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="content-area">
+      <!-- ==================== ABA 1: DASHBOARD & CONEXÃO ==================== -->
+      <section id="tab-dashboard" class="tab-pane active">
+        <div class="page-header">
+          <div>
+            <h1>Central de Conexão & Monitoramento</h1>
+            <p>Conecte seu WhatsApp, dispare abordagens ativas aprovadas e acompanhe todo o funil em tempo real.</p>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-secondary" onclick="switchTab('simulador')">Testar no Simulador</button>
+            <button type="button" class="btn btn-primary" onclick="switchTab('treinamento')">Editar Treinamento</button>
+          </div>
+        </div>
+
+        <!-- Checklist Rápido de Prontidão -->
+        <div id="readinessStrip" class="readiness-strip"></div>
+
+        <!-- Métricas Principais -->
+        <div class="metrics-strip">
+          <div class="metric-box">
+            <div class="metric-head"><span>Mensagens recebidas</span></div>
+            <div id="statIncoming" class="metric-val">0</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-head"><span>Respostas da IA</span></div>
+            <div id="statReplies" class="metric-val">0</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-head"><span>Áudios & Imagens lidos</span></div>
+            <div id="statMultimodal" class="metric-val">0</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-head"><span>Fotos, PDFs e PIX enviados</span></div>
+            <div id="statMediaPix" class="metric-val">0</div>
+          </div>
+          <div class="metric-box attention" style="cursor:pointer;" onclick="switchTab('crm')">
+            <div class="metric-head"><span>Aguardando você (Humano)</span></div>
+            <div id="statHandoffsPending" class="metric-val">0</div>
+          </div>
+        </div>
+
+        <!-- Funil Visual de Conversão -->
+        <div id="funnelSummaryBar" class="funnel-bar"></div>
+
+        <div class="grid-2">
+          <!-- Coluna Esquerda: Conexão WhatsApp + Disparador de Abordagem Ativa M01–M13 -->
+          <div>
+            <div class="panel">
+              <div class="panel-header">
+                <h2 class="panel-title">Conexão do Aparelho WhatsApp</h2>
+                <div style="display:flex; gap:8px;">
+                  <button type="button" id="btnConnectQr" class="btn btn-primary btn-sm">Gerar QR Code</button>
+                  <button type="button" id="btnDisconnectWa" class="btn btn-danger btn-sm" style="display:none;">Desconectar</button>
+                </div>
+              </div>
+              <p class="panel-desc">No celular, abra o WhatsApp em <strong>Aparelhos conectados &gt; Conectar aparelho</strong>.</p>
+
+              <div id="qrStage" class="qr-stage">
+                <p>Clique em <strong>Gerar QR Code</strong> acima ou conecte por código numérico abaixo.</p>
+              </div>
+
+              <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+                <label class="form-label" for="pairingPhoneInput">Conectar sem câmera (Código de 8 dígitos)</label>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                  <input type="text" id="pairingPhoneInput" placeholder="Ex: 5586999998888 (com 55 + DDD)" style="flex:1; min-width:180px;" />
+                  <button type="button" id="btnConnectCode" class="btn btn-secondary">Gerar Código</button>
+                </div>
+                <div class="form-hint">Digite apenas números com código do país (55) e DDD.</div>
+              </div>
+            </div>
+
+            <!-- NOVO: Disparar Abordagem Ativa (M01–M13) direto pela tela -->
+            <div class="panel" style="border-left:3px solid var(--accent);">
+              <div class="panel-header">
+                <div>
+                  <h2 class="panel-title">Disparar Abordagem Ativa (M01–M13)</h2>
+                  <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">Envie a abertura aprovada para um número e deixe a IA escutando a resposta automaticamente.</p>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="switchTab('seguranca')">Fila em Lote</button>
+              </div>
+
+              <div style="margin-top:12px;">
+                <div class="grid-equal" style="gap:10px;">
+                  <div class="form-group" style="margin-bottom:10px;">
+                    <label class="form-label" for="dashProactivePhone">WhatsApp do Contato (DDD + Número)</label>
+                    <input type="text" id="dashProactivePhone" placeholder="Ex: 5586999998888" />
+                  </div>
+                  <div class="form-group" style="margin-bottom:10px;">
+                    <label class="form-label" for="dashProactiveName">Nome / Loja (opcional — usa em {{nome}})</label>
+                    <input type="text" id="dashProactiveName" placeholder="Ex: Auto Norte Veículos" />
+                  </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom:10px;">
+                  <label class="form-label" for="dashProactiveTemplateSelect">Escolher Mensagem Aprovada</label>
+                  <select id="dashProactiveTemplateSelect"></select>
+                </div>
+
+                <div class="form-group" style="margin-bottom:10px;">
+                  <label class="form-label" for="dashProactiveText">Texto que será enviado (opcional se enviar áudio abaixo)</label>
+                  <textarea id="dashProactiveText" rows="3" placeholder="Selecione uma mensagem aprovada acima ou escreva sua abertura..."></textarea>
+                </div>
+
+                <div class="form-group" style="margin-bottom:12px;">
+                  <label class="form-label" for="dashProactiveVoiceSelect">🎤 Nota de Voz Estratégica (opcional — enviar junto ou sozinha)</label>
+                  <select id="dashProactiveVoiceSelect">
+                    <option value="">Sem áudio anexado (apenas texto)</option>
+                  </select>
+                </div>
+
+                <button type="button" id="btnSendProactiveNow" class="btn btn-primary" style="width:100%;">
+                  Enviar Abordagem com IA Ativa
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Coluna Direita: Atividade ao vivo -->
+          <div class="panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Registro de Atividades ao Vivo</h2>
+              <span class="tag" id="activeEngineBadge">Gemini</span>
+            </div>
+            <p class="panel-desc">Tudo o que o atendente faz aparece aqui instantaneamente.</p>
+            <div id="logsContainer" class="log-list" style="max-height:560px;"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== ABA 2: SIMULADOR INTERATIVO ==================== -->
+      <section id="tab-simulador" class="tab-pane">
+        <div class="page-header">
+          <div>
+            <h1>Simulador de Atendimento com Áudio & Raio-X</h1>
+            <p>Grave áudio pelo microfone, envie comprovantes, abra o Raio-X de Skills de cada resposta e corrija qualquer fala em 1 clique.</p>
+          </div>
+          <button type="button" id="btnResetSimulator" class="btn btn-secondary">Limpar conversa de teste</button>
+        </div>
+
+        <div class="grid-2">
+          <div class="wa-frame">
+            <div class="wa-topbar">
+              <div>
+                <div style="font-weight:700; font-size:14.5px;" id="simProfileHeader">Atendente Virtual</div>
+                <div style="font-size:12px; opacity:0.88;" id="simProviderSub">Online • Testando perfil ativo</div>
+              </div>
+              <span class="tag" style="background:rgba(255,255,255,0.18); color:#fff;">Ambiente de Teste</span>
+            </div>
+
+            <div id="simMessages" class="wa-messages"></div>
+
+            <!-- Barra de gravação de microfone ao vivo -->
+            <div id="simRecordingBar" class="rec-bar" role="status" aria-live="polite">
+              <div><span class="rec-dot"></span>Gravando áudio no microfone: <strong id="simRecTimer">00:00</strong></div>
+              <div style="display:flex; gap:8px;">
+                <button type="button" id="btnCancelSimMic" class="btn btn-secondary btn-sm">Cancelar</button>
+                <button type="button" id="btnFinishSimMic" class="btn btn-primary btn-sm">Enviar Áudio</button>
+              </div>
+            </div>
+
+            <form id="simForm" class="wa-composer">
+              <label class="btn btn-secondary btn-sm" for="simMediaInput" title="Enviar foto, comprovante ou arquivo de áudio" style="cursor:pointer;">
+                <svg class="icon-svg" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                <span id="simFileLabel">Anexar</span>
+              </label>
+              <input type="file" id="simMediaInput" accept="image/*,audio/*,application/pdf" style="display:none;" />
+
+              <button type="button" id="btnSimRecordMic" class="btn btn-secondary btn-sm mic-btn" title="Gravar áudio de voz pelo microfone" aria-label="Gravar áudio pelo microfone">
+                <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+              </button>
+
+              <input type="text" id="simTextInput" placeholder="Digite ou clique no microfone para falar..." autocomplete="off" />
+              <button type="submit" id="simSendBtn" class="btn btn-primary">Enviar</button>
+            </form>
+          </div>
+
+          <div>
+            <div class="panel">
+              <h3 class="panel-title" style="margin-bottom:8px;">Atalhos rápidos para testar</h3>
+              <p class="panel-desc">Clique em qualquer situação abaixo para testar o comportamento exato do perfil ativo:</p>
+              <div id="simQuickPromptsBox" style="display:flex; flex-direction:column; gap:8px;"></div>
+            </div>
+
+            <div class="panel">
+              <h3 class="panel-title" style="margin-bottom:8px;">Como usar os 3 super-recursos do Simulador</h3>
+              <ul style="padding-left:18px; font-size:13px; color:var(--text-secondary); display:flex; flex-direction:column; gap:8px;">
+                <li><strong>Microfone ao Vivo:</strong> clique no ícone de microfone ao lado do campo de texto para falar como um cliente no WhatsApp e testar a escuta nativa do Gemini.</li>
+                <li><strong>Raio-X da Resposta:</strong> clique em <em>"Raio-X de Skills & Latência"</em> abaixo de qualquer resposta da IA para ver quais Skills (Sxx/Hxx), Objeções e Personas foram acionadas.</li>
+                <li><strong>Ensinar em 1 Clique:</strong> achou que uma resposta podia ser melhor? Clique em <em>"Corrigir resposta"</em> no próprio balão que ela já entra nas regras do perfil!</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== ABA 3: TREINAMENTO DA IA (CÉREBRO ÚNICO) ==================== -->
+      <section id="tab-treinamento" class="tab-pane">
+        <div class="page-header">
+          <div>
+            <h1>Treinamento da IA & Estúdio de Skills</h1>
+            <p>Configure o cérebro único do seu atendente, edite visualmente as mensagens M01–M13 / Skills ou exporte backups em .ZIP.</p>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button type="button" id="btnToggleTemplates" class="btn btn-secondary" title="Substituir treinamento por um modelo base do zero">Carregar modelo do zero...</button>
+            <button type="button" id="btnExportProfileZip" class="btn btn-secondary">Exportar Backup (.ZIP)</button>
+            <button type="button" id="btnPreviewPrompt" class="btn btn-secondary">Ver prompt gerado</button>
+            <button type="button" id="btnSaveProfile" class="btn btn-primary">Salvar treinamento</button>
+          </div>
+        </div>
+
+        <!-- Gaveta Discreta de Modelos p/ Começar do Zero (oculta por padrão) -->
+        <div id="templatesDrawer" class="panel" style="display:none; border-left:3px solid var(--amber);">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Começar do zero com um modelo pronto</h2>
+              <p class="panel-desc" style="margin-bottom:0; margin-top:4px;">
+                Escolha um modelo apenas se quiser substituir os textos atuais do seu treinamento único (seu PIX e Catálogo são preservados, e pediremos confirmação antes de aplicar).
+              </p>
+            </div>
+            <button type="button" id="btnCloseTemplatesDrawer" class="btn btn-secondary btn-sm">Fechar</button>
+          </div>
+          <div id="templatesGrid" class="templates-grid" style="margin-top:12px;"></div>
+        </div>
+
+        <!-- Motor de Pacote de Treinamento Turbo (.ZIP) -->
+        <div class="panel" style="border-left:3px solid var(--accent);">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Motor de Pacote de Treinamento Estruturado (.ZIP Turbo)</h2>
+              <p class="panel-desc" style="margin-bottom:0; margin-top:4px;">
+                Importe qualquer pacote/backup em <strong>.ZIP</strong> ou edite visualmente abaixo todas as Mensagens Aprovadas (M01–M13) e Skills sem mexer em código.
+              </p>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <label for="zipPackInput" class="btn btn-primary btn-sm" style="cursor:pointer;">Importar Pacote / Backup .ZIP</label>
+              <input type="file" id="zipPackInput" accept=".zip,application/zip" style="display:none;" />
+            </div>
+          </div>
+          <div id="activePackStatusBox" style="margin-top:12px;"></div>
+
+          <!-- Estúdio Visual de M01–M13 & Skills (Sxx/Hxx) direto na tela -->
+          <div id="packVisualStudioPanel" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
+            <div class="panel-header" style="margin-bottom:12px;">
+              <div class="studio-subtabs">
+                <button type="button" class="studio-subtab active" data-studiotab="messages">Mensagens Aprovadas (M01–M13)</button>
+                <button type="button" class="studio-subtab" data-studiotab="operational">Skills Operacionais (Sxx)</button>
+                <button type="button" class="studio-subtab" data-studiotab="humanization">Skills de Humanização (Hxx)</button>
+              </div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                <input type="text" id="studioSearchInput" placeholder="Filtrar mensagem ou skill..." style="width:210px; min-height:36px;" />
+                <button type="button" id="btnNewStudioItem" class="btn btn-primary btn-sm">+ Nova Mensagem / Skill</button>
+              </div>
+            </div>
+            <div id="studioItemsGrid" class="studio-grid"></div>
+          </div>
+        </div>
+
+        <!-- Formulário Guiado -->
+        <div class="grid-equal">
+          <div class="panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Identidade do Negócio & Assistente</h2>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="profName">Nome da Empresa / Negócio</label>
+              <input type="text" id="profName" placeholder="Ex: Alavancagem de Vendas — Lizandro Celestino" />
+            </div>
+            <div class="grid-equal" style="gap:12px;">
+              <div class="form-group">
+                <label class="form-label" for="profNiche">Nicho / Segmento</label>
+                <input type="text" id="profNiche" placeholder="Ex: Assessoria Comercial p/ Veículos" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="profAssistantName">Nome do(a) Atendente Virtual</label>
+                <input type="text" id="profAssistantName" placeholder="Ex: Assistente do Lizandro" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="profTone">Tom de Voz nas Conversas</label>
+              <select id="profTone">
+                <option value="consultivo">Consultivo e Vendedor (Simpático e focado em conversão)</option>
+                <option value="acolhedor">Acolhedor e Humanizado (Ideal p/ clínicas, saúde e estética)</option>
+                <option value="descontraido">Ágil e Descontraído (Ideal p/ delivery, lanchonetes e varejo jovem)</option>
+                <option value="profissional">Técnico e Objetivo (Ideal p/ assistência, oficinas e B2B)</option>
+                <option value="formal">Executivo e Formal (Ideal p/ advocacia, contabilidade e alto padrão)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="profSummary">Sobre a Empresa & Diferenciais</label>
+              <textarea id="profSummary" rows="3" placeholder="Descreva o que sua empresa vende ou faz, cidade/região e principais diferenciais..."></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="profDeliveryPayment">Pagamentos, Entrega, Endereço e Horários</label>
+              <textarea id="profDeliveryPayment" rows="3" placeholder="Condições comerciais, horários e políticas..."></textarea>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h2 class="panel-title" style="margin-bottom:12px;">Regras de Atendimento & Escudo IA</h2>
+            <div class="form-group">
+              <label class="form-label" for="profRules">Regras de Ouro (O que fazer e o que NUNCA inventar)</label>
+              <textarea id="profRules" rows="7" placeholder="- Nunca invente preços fora do catálogo..."></textarea>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="profExtra">Instruções Extras / Observações Finais</label>
+              <textarea id="profExtra" rows="3" placeholder="Instruções complementares de postura..."></textarea>
+            </div>
+            <div class="form-group" style="padding-top:10px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:10px; margin-bottom:0;">
+              <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:13px; line-height:1.45;">
+                <input type="checkbox" id="profLockForeverCheck" style="margin-top:3px;" />
+                <span><strong>Trava permanente na passagem humana e pausa silenciosa:</strong> um <code>"ok"</code> futuro do contato não reabre a automação sozinho (só volta quando você clicar em <em>Retomar IA</em>).</span>
+              </label>
+              <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; font-size:13px; line-height:1.45;">
+                <input type="checkbox" id="profPromptShieldCheck" checked style="margin-top:3px;" />
+                <span><strong>Escudo Anti-Prompt Injection (OWASP LLM01):</strong> bloqueia curiosos ou concorrentes tentando arrancar regras internas ou manipular o prompt da IA.</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- FAQ + Documentos -->
+        <div class="grid-equal">
+          <div class="panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Perguntas Frequentes (FAQ)</h2>
+              <button type="button" id="btnAddFaq" class="btn btn-secondary btn-sm">+ Adicionar pergunta</button>
+            </div>
+            <p class="panel-desc">Cadastre respostas exatas para as dúvidas que seus clientes fazem todo dia.</p>
+            <div id="faqListContainer"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Arquivos de Conhecimento (.TXT, .CSV, .MD)</h2>
+            </div>
+            <p class="panel-desc">Suba tabelas de preços, manuais ou políticas em texto para a IA consultar durante o atendimento.</p>
+            <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+              <input type="file" id="knowledgeFileInput" accept=".txt,.csv,.md,.json" style="flex:1;" />
+              <button type="button" id="btnUploadKnowledge" class="btn btn-secondary">Anexar arquivo</button>
+            </div>
+            <div id="knowledgeDocsList"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== ABA 3B: BIBLIOTECA DE ÁUDIOS ESTRATÉGICOS (VOZ REAL) ==================== -->
+      <section id="tab-audios" class="tab-pane">
+        <div class="page-header">
+          <div>
+            <h1>Biblioteca de Áudios Estratégicos (Voz Humana Real)</h1>
+            <p>Grave ou envie áudios na sua própria voz. O sistema converte automaticamente qualquer arquivo para <strong>OGG/Opus Mono VoIP + 64 barras reais de onda sonora</strong>, entregando no WhatsApp como <strong>Nota de Voz gravada na hora</strong> (sem etiqueta de encaminhado).</p>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <span id="voiceEngineBadge" class="tag" style="background:rgba(37, 211, 102, 0.14); color:var(--accent);">✓ Motor OGG/Opus + Waveform 64b Ativo</span>
+            <button type="button" id="btnOpenNewVoiceModal" class="btn btn-primary">+ Gravar / Subir Novo Áudio</button>
+          </div>
+        </div>
+
+        <div class="metrics-strip" style="grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); margin-bottom:18px;">
+          <div class="metric-box">
+            <div class="metric-head"><span>1. Formato Oficial WhatsApp</span></div>
+            <div style="font-size:12.5px; color:var(--text-secondary); line-height:1.45; margin-top:4px;">
+              Converte <code>.mp3</code>, <code>.m4a</code>, <code>.wav</code> ou microfone para <strong>OGG/Opus 16kHz VoIP</strong> no canal nativo <code>/mms/ptt</code> com ondas reais e tempo proporcional de <em>"gravando áudio..."</em>.
+            </div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-head"><span>2. Modo Puro ou Híbrido</span></div>
+            <div style="font-size:12.5px; color:var(--text-secondary); line-height:1.45; margin-top:4px;">
+              A IA lê a <strong>transcrição</strong>: se o áudio responde tudo, manda só a voz; se faltar um detalhe, escreve 1 frase curta complementar <strong>sem repetir o que sua voz já fala</strong>.
+            </div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-head"><span>3. Trava Anti-Repetição + S06</span></div>
+            <div style="font-size:12.5px; color:var(--text-secondary); line-height:1.45; margin-top:4px;">
+              Nunca repete o mesmo áudio para o mesmo cliente no CRM. E se o cliente avisar que não pode ouvir áudio, a IA responde em texto usando sua transcrição.
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Seus Áudios Estratégicos Cadastrados</h2>
+              <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">A IA escolhe automaticamente os áudios marcados como <strong>Uso pela IA: Ativo</strong> quando encaixam na conversa, e todos ficam disponíveis em 1 clique no CRM.</p>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <input type="text" id="voiceSearchInput" placeholder="Buscar áudio ou transcrição..." style="width:230px; min-height:36px;" />
+            </div>
+          </div>
+          <div id="voiceLibraryGrid" class="voice-grid" style="margin-top:14px;"></div>
+        </div>
+      </section>
+
+      <!-- ==================== ABA 4: CATÁLOGO, FOTOS/PDF & PIX ==================== -->
+      <section id="tab-catalogo" class="tab-pane">
+        <div class="page-header">
+          <div>
+            <h1>Catálogo Multi-Mídia, Apresentações PDF & PIX com QR Code</h1>
+            <p>Cadastre itens com até 5 fotos/PDFs cada e envie automaticamente a imagem do QR Code PIX junto com o Copia e Cola.</p>
+          </div>
+        </div>
+
+        <!-- Configuração PIX -->
+        <div class="panel">
+          <div class="panel-header">
+            <h2 class="panel-title">Envio Automático de Chave PIX + Imagem QR Code + Copia e Cola</h2>
+            <label class="switch" aria-label="Habilitar envio automático de PIX">
+              <input type="checkbox" id="pixEnabledToggle" />
+              <span class="slider"></span>
+            </label>
+          </div>
+          <p class="panel-desc">Quando ativado, sempre que o cliente pedir o PIX, a IA envia a imagem escaneável do QR Code + o código Copia e Cola oficial (padrão Banco Central).</p>
+
+          <div class="grid-equal">
+            <div>
+              <div class="grid-equal" style="gap:12px;">
+                <div class="form-group">
+                  <label class="form-label" for="pixKeyType">Tipo da Chave</label>
+                  <select id="pixKeyType">
+                    <option value="cnpj">CNPJ</option>
+                    <option value="cpf">CPF</option>
+                    <option value="celular">Celular</option>
+                    <option value="email">E-mail</option>
+                    <option value="aleatoria">Chave Aleatória</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="pixKey">Chave PIX</label>
+                  <input type="text" id="pixKey" placeholder="Digite sua chave PIX..." />
+                </div>
+              </div>
+              <div class="grid-equal" style="gap:12px;">
+                <div class="form-group">
+                  <label class="form-label" for="pixReceiver">Nome do Favorecido</label>
+                  <input type="text" id="pixReceiver" placeholder="Ex: Lizandro Celestino / Empresa LTDA" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="pixBank">Banco / Instituição</label>
+                  <input type="text" id="pixBank" placeholder="Ex: Nubank, Mercado Pago, Inter..." />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="form-group">
+                <label class="form-label" for="pixCity">Cidade (para código EMV do Banco Central)</label>
+                <input type="text" id="pixCity" placeholder="Ex: BATALHA" />
+              </div>
+              <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:14px;">
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px;">
+                  <input type="checkbox" id="pixSendQrCheck" checked />
+                  <span><strong>Enviar imagem visual do QR Code PIX</strong> junto com os dados</span>
+                </label>
+                <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px;">
+                  <input type="checkbox" id="pixCopyPasteCheck" checked />
+                  <span>Incluir código PIX Copia e Cola separado (fácil de copiar no celular)</span>
+                </label>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="pixInstructions">Mensagem após enviar o PIX</label>
+                <input type="text" id="pixInstructions" placeholder="Ex: Envie o comprovante por aqui para confirmarmos na hora!" />
+              </div>
+              <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                <button type="button" id="btnPreviewPixQr" class="btn btn-secondary">Testar QR Code PIX na Tela</button>
+                <button type="button" id="btnSavePix" class="btn btn-primary">Salvar configuração PIX</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="pixPreviewBox" style="display:none; margin-top:16px; padding-top:16px; border-top:1px solid var(--border);"></div>
+        </div>
+
+        <!-- Catálogo de Produtos / PDF -->
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Itens do Catálogo (Até 5 Fotos ou PDFs por Item)</h2>
+              <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">Ideal para portfólio de assessoria, veículos com várias fotos, cardápios ou tabelas em PDF.</p>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              <input type="text" id="catalogSearchInput" placeholder="Buscar item..." style="width:190px; min-height:36px;" />
+              <select id="catalogCatFilter" style="width:auto; min-width:140px; min-height:36px;">
+                <option value="">Todas as categorias</option>
+              </select>
+              <button type="button" id="btnOpenNewItemModal" class="btn btn-primary btn-sm">+ Adicionar item / Galeria</button>
+            </div>
+          </div>
+          <div id="catalogGrid" class="catalog-grid" style="margin-top:14px;"></div>
+        </div>
+      </section>
+
+      <!-- ==================== ABA 5: MOTOR MULTI-IA ==================== -->
+      <section id="tab-ia" class="tab-pane">
+        <div class="page-header">
+          <div>
+            <h1>Motor de IA, Pool de Chaves Grátis & Auto-Fallback</h1>
+            <p>Multiplique sua cota gratuita com rotação de chaves Gemini e configure um provedor reserva automático para nunca ficar offline.</p>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button type="button" id="btnTestAi" class="btn btn-secondary">Testar conexão da IA</button>
+            <button type="button" id="btnSaveAi" class="btn btn-primary">Salvar configurações de IA</button>
+          </div>
+        </div>
+
+        <!-- Telemetria e Uso do Dia -->
+        <div class="metrics-strip">
+          <div class="metric-box">
+            <div class="metric-head"><span>Chamadas IA hoje</span></div>
+            <div id="statDailyAiCalls" class="metric-val">0</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-head"><span>Latência média</span></div>
+            <div id="statAvgLatency" class="metric-val">0 ms</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-head"><span>Chaves Gemini no Pool</span></div>
+            <div id="statKeyPoolCount" class="metric-val">1</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-head"><span>Trocas p/ Reserva</span></div>
+            <div id="statAutoFallbacks" class="metric-val">0</div>
+          </div>
+          <div class="metric-box">
+            <div class="metric-head"><span>Ataques Bloqueados</span></div>
+            <div id="statBlockedInjections" class="metric-val">0</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2 class="panel-title" style="margin-bottom:12px;">Escolha o Provedor Principal</h2>
+          <div class="provider-grid" id="providerGrid">
+            <button type="button" class="provider-option selected" data-provider="gemini">
+              <h4>Google Gemini (Recomendado)</h4>
+              <p>Chave grátis no Google AI Studio. Escuta áudios e analisa fotos/comprovantes nativamente.</p>
+            </button>
+            <button type="button" class="provider-option" data-provider="groq">
+              <h4>Groq (Ultra Rápido & Grátis)</h4>
+              <p>Respostas em menos de 1s com Llama 3.3 + escuta de áudio via Whisper Turbo. Excelente reserva!</p>
+            </button>
+            <button type="button" class="provider-option" data-provider="openai">
+              <h4>OpenAI (ChatGPT)</h4>
+              <p>GPT-4o / GPT-4o-mini com leitura de imagens e transcrição de áudio via Whisper.</p>
+            </button>
+            <button type="button" class="provider-option" data-provider="openrouter">
+              <h4>OpenRouter (Universal)</h4>
+              <p>Conecte DeepSeek, Claude, Qwen, Mistral ou qualquer modelo com uma única chave.</p>
+            </button>
+          </div>
+
+          <!-- Campos Gemini -->
+          <div id="providerBox-gemini" class="provider-config-box">
+            <div class="grid-equal">
+              <div class="form-group">
+                <label class="form-label" for="geminiApiKey">Chave Principal do Google Gemini (GEMINI_API_KEY)</label>
+                <input type="password" id="geminiApiKey" placeholder="AIzaSy..." autocomplete="off" />
+                <div class="form-hint">Obtenha gratuitamente em: <strong>aistudio.google.com/apikey</strong></div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="geminiModel">Modelo do Gemini</label>
+                <select id="geminiModel">
+                  <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Recomendado Chave Grátis — Ultra rápido + Áudio/Visão)</option>
+                  <option value="gemini-flash-lite-latest">gemini-flash-lite-latest (Alias automático gratuito Google AI Studio)</option>
+                  <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Estável e liberado no Free Tier)</option>
+                  <option value="gemini-3.8-flash">gemini-3.8-flash (Plano Pago / Billing ativo — Auto-fallback p/ Lite se sem cota)</option>
+                  <option value="gemini-4-argon">gemini-4-argon (Plano Pago — Raciocínio complexo)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="geminiKeyPool">Pool de Chaves Gemini Extras (Opcional — 1 por linha para multiplicar cota grátis!)</label>
+              <textarea id="geminiKeyPool" rows="3" placeholder="Cole chaves AIzaSy... extras de outras contas Google (1 por linha). O sistema alterna sozinho entre elas!"></textarea>
+              <div class="form-hint">Se uma chave atingir o limite gratuito do minuto/dia, o sistema pula instantaneamente para a próxima chave do pool sem atrasar o cliente.</div>
+            </div>
+          </div>
+
+          <!-- Campos OpenAI -->
+          <div id="providerBox-openai" class="provider-config-box" style="display:none;">
+            <div class="grid-equal">
+              <div class="form-group">
+                <label class="form-label" for="openaiApiKey">Chave da API OpenAI (OPENAI_API_KEY)</label>
+                <input type="password" id="openaiApiKey" placeholder="sk-..." autocomplete="off" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="openaiModel">Modelo OpenAI</label>
+                <input type="text" id="openaiModel" value="gpt-4o-mini" placeholder="gpt-4o-mini ou gpt-4o" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Campos Groq -->
+          <div id="providerBox-groq" class="provider-config-box" style="display:none;">
+            <div class="grid-equal">
+              <div class="form-group">
+                <label class="form-label" for="groqApiKey">Chave da API Groq (GROQ_API_KEY)</label>
+                <input type="password" id="groqApiKey" placeholder="gsk_..." autocomplete="off" />
+                <div class="form-hint">Obtenha gratuitamente em: <strong>console.groq.com/keys</strong></div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="groqModel">Modelo Groq</label>
+                <input type="text" id="groqModel" value="llama-3.3-70b-versatile" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Campos OpenRouter -->
+          <div id="providerBox-openrouter" class="provider-config-box" style="display:none;">
+            <div class="grid-equal">
+              <div class="form-group">
+                <label class="form-label" for="openrouterApiKey">Chave OpenRouter (OPENROUTER_API_KEY)</label>
+                <input type="password" id="openrouterApiKey" placeholder="sk-or-v1-..." autocomplete="off" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="openrouterModel">Modelo no OpenRouter</label>
+                <input type="text" id="openrouterModel" value="deepseek/deepseek-chat" placeholder="Ex: deepseek/deepseek-chat" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Provedor Reserva Automático + Parâmetros -->
+          <div class="grid-equal" style="margin-top:10px; padding-top:16px; border-top:1px solid var(--border);">
+            <div class="form-group">
+              <label class="form-label" for="autoFallbackProvider">Provedor Reserva Automático (Auto-Fallback Anti-Queda)</label>
+              <select id="autoFallbackProvider">
+                <option value="groq">Groq (Usa sua chave Groq se o provedor principal oscilar)</option>
+                <option value="openrouter">OpenRouter (Usa sua chave OpenRouter como reserva)</option>
+                <option value="openai">OpenAI (Usa sua chave OpenAI como reserva)</option>
+                <option value="none">Desativado (Usar apenas o provedor principal)</option>
+              </select>
+              <div class="form-hint">Basta deixar uma chave cadastrada no provedor reserva escolhido acima para ativar a redundância automática.</div>
+            </div>
+
+            <div class="grid-equal" style="gap:12px;">
+              <div class="form-group">
+                <label class="form-label" for="aiTemperature">Criatividade (0.1 a 0.8)</label>
+                <input type="number" id="aiTemperature" step="0.05" min="0" max="1" value="0.35" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="aiMaxHistory">Memória (mensagens)</label>
+                <input type="number" id="aiMaxHistory" min="4" max="60" value="20" />
+              </div>
+            </div>
+          </div>
+
+          <div id="aiTestResultBox" style="display:none; margin-top:12px;" class="log-row"></div>
+        </div>
+      </section>
+
+      <!-- ==================== ABA 6: SEGURANÇA, ANTI-BAN, FILA & PIN ==================== -->
+      <section id="tab-seguranca" class="tab-pane">
+        <div class="page-header">
+          <div>
+            <h1>Anti-Ban, Fila Segura de Prospecção, PIN & Família</h1>
+            <p>Dispare abordagens em cadência humana segura, proteja o painel com PIN na rede Wi-Fi e filtre contatos pessoais.</p>
+          </div>
+          <button type="button" id="btnSaveSecurity" class="btn btn-primary">Salvar regras de segurança</button>
+        </div>
+
+        <!-- NOVO: Fila Segura de Abordagem Ativa (M01) com Cadência Anti-Ban -->
+        <div class="panel" style="border-left:3px solid var(--accent);">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Fila Segura de Abordagem Ativa (Cadência Humana Anti-Ban)</h2>
+              <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">
+                Cole uma lista pequena de contatos do dia (1 por linha: <code>5586999998888;Nome da Loja</code>). O sistema envia <strong>um por vez</strong> aguardando intervalo aleatório humano e respeita o teto diário.
+              </p>
+            </div>
+          </div>
+
+          <div class="grid-equal" style="margin-top:14px;">
+            <div>
+              <div class="form-group">
+                <label class="form-label" for="batchLeadsTextarea">Lista de Contatos (Telefone com DDD ; Nome opcional)</label>
+                <textarea id="batchLeadsTextarea" rows="5" placeholder="5586999112233;Auto Norte Veículos&#10;5586988445566; Garagem Premium"></textarea>
+              </div>
+              <div class="grid-equal" style="gap:10px;">
+                <div class="form-group">
+                  <label class="form-label" for="proactiveMinDelaySec">Espera mínima (seg)</label>
+                  <input type="number" id="proactiveMinDelaySec" min="20" max="600" value="45" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="proactiveMaxDelaySec">Espera máxima (seg)</label>
+                  <input type="number" id="proactiveMaxDelaySec" min="30" max="900" value="110" />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="grid-equal" style="gap:10px;">
+                <div class="form-group">
+                  <label class="form-label" for="batchTemplateSelect">Mensagem Aprovada</label>
+                  <select id="batchTemplateSelect"></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="dailyProactiveLimit">Teto máximo / dia</label>
+                  <input type="number" id="dailyProactiveLimit" min="1" max="150" value="25" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="batchMessageText">Texto da Abordagem (aceita {{nome}})</label>
+                <textarea id="batchMessageText" rows="3" placeholder="Texto de abertura..."></textarea>
+              </div>
+
+              <div id="proactiveQueueStatusBox" class="log-row" style="margin-bottom:10px;"></div>
+
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" id="btnStartBatchQueue" class="btn btn-primary btn-sm">Iniciar Fila Segura</button>
+                <button type="button" id="btnPauseBatchQueue" class="btn btn-secondary btn-sm">Pausar / Retomar</button>
+                <button type="button" id="btnClearBatchQueue" class="btn btn-danger btn-sm">Limpar Fila</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-equal">
+          <!-- Anti-Ban -->
+          <div class="panel">
+            <h2 class="panel-title" style="margin-bottom:6px;">Proteção Anti-Ban nas Respostas</h2>
+            <p class="panel-desc">Faz o atendimento parecer uma pessoa real digitando no aparelho.</p>
+
+            <div class="form-group">
+              <label class="form-label" for="debounceSeconds">Juntar mensagens picadas (Segundos de espera)</label>
+              <input type="number" id="debounceSeconds" min="1" max="25" value="6" />
+              <div class="form-hint">Se o cliente mandar 3 frases seguidas, o robô aguarda e responde tudo junto.</div>
+            </div>
+
+            <div class="grid-equal" style="gap:12px;">
+              <div class="form-group">
+                <label class="form-label" for="minTypingMs">Digitando mínimo (ms)</label>
+                <input type="number" id="minTypingMs" min="500" max="10000" step="100" value="1800" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="maxTypingMs">Digitando máximo (ms)</label>
+                <input type="number" id="maxTypingMs" min="1000" max="15000" step="100" value="5200" />
+              </div>
+            </div>
+
+            <div class="form-group" style="display:flex; flex-direction:column; gap:10px; margin-top:8px;">
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13.5px;">
+                <input type="checkbox" id="simulateTypingCheck" checked />
+                <span>Exibir status "Digitando..." antes de enviar cada resposta</span>
+              </label>
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13.5px;">
+                <input type="checkbox" id="splitLongMessagesCheck" checked />
+                <span>Dividir textos grandes em até 3 balões curtos naturais</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Transbordo Humano + WhatsApp do Dono + PIN do Painel -->
+          <div class="panel">
+            <h2 class="panel-title" style="margin-bottom:6px;">Alerta no Seu WhatsApp & PIN do Painel</h2>
+            <p class="panel-desc">Receba avisos de fechamento e proteja seu painel no Wi-Fi local.</p>
+
+            <div class="form-group">
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13.5px; margin-bottom:10px;">
+                <input type="checkbox" id="pauseOnOwnerReplyCheck" checked />
+                <span><strong>Pausar IA automaticamente</strong> se eu responder pelo meu celular</span>
+              </label>
+              <label class="form-label" for="pauseDurationMinutes">Tempo de pausa automática padrão (minutos)</label>
+              <input type="number" id="pauseDurationMinutes" min="5" max="1440" value="60" />
+            </div>
+
+            <div class="form-group" style="padding-top:10px; border-top:1px solid var(--border);">
+              <label class="form-label" for="ownerPersonalWhatsapp">Seu WhatsApp Pessoal para receber Resumos</label>
+              <div style="display:flex; gap:8px;">
+                <input type="text" id="ownerPersonalWhatsapp" placeholder="Ex: 5586999998888 (com DDD)" />
+                <button type="button" id="btnTestOwnerAlert" class="btn btn-secondary btn-sm">Testar alerta</button>
+              </div>
+            </div>
+
+            <div class="form-group" style="padding-top:10px; border-top:1px solid var(--border); margin-bottom:0;">
+              <label class="form-label" for="securityPinInput">PIN de Bloqueio do Painel na Rede Wi-Fi (opcional)</label>
+              <input type="password" id="securityPinInput" placeholder="Deixe vazio p/ livre ou digite 4 a 8 dígitos" autocomplete="new-password" />
+              <div class="form-hint">Protege seu painel quando estiver rodando no Termux ou PC conectado em Wi-Fi compartilhado.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-equal">
+          <!-- Horário de Funcionamento -->
+          <div class="panel">
+            <h2 class="panel-title" style="margin-bottom:6px;">Horário de Atendimento</h2>
+            <p class="panel-desc">Escolha se o robô atende 24 horas ou segue seu expediente.</p>
+
+            <div class="form-group">
+              <label class="form-label" for="scheduleMode">Modo de Operação</label>
+              <select id="scheduleMode">
+                <option value="always">Atender 24 horas por dia, 7 dias por semana</option>
+                <option value="business_hours_only">Atender apenas dentro do horário comercial</option>
+                <option value="outside_hours_only">Atender apenas FORA do horário comercial (plantão)</option>
+              </select>
+            </div>
+
+            <div class="grid-equal" style="gap:12px;">
+              <div class="form-group">
+                <label class="form-label" for="scheduleStart">Início do expediente</label>
+                <input type="time" id="scheduleStart" value="08:00" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="scheduleEnd">Fim do expediente</label>
+                <input type="time" id="scheduleEnd" value="18:00" />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="offHoursReplyMessage">Mensagem automática fora do horário (opcional)</label>
+              <textarea id="offHoursReplyMessage" rows="2"></textarea>
+            </div>
+          </div>
+
+          <!-- Lista de Contatos Ignorados -->
+          <div class="panel">
+            <h2 class="panel-title" style="margin-bottom:6px;">Contatos Ignorados (Família, Amigos & Opt-Out)</h2>
+            <p class="panel-desc">A IA nunca responderá nem enviará abordagem para os números abaixo.</p>
+
+            <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+              <input type="text" id="ignoreNameInput" placeholder="Nome (ex: Mãe)" style="flex:1; min-width:120px;" />
+              <input type="text" id="ignorePhoneInput" placeholder="DDD + Número (ex: 86999887766)" style="flex:1.2; min-width:150px;" />
+              <button type="button" id="btnAddIgnored" class="btn btn-secondary">Bloquear IA</button>
+            </div>
+
+            <div id="ignoredContactsList" class="log-list" style="max-height:200px;"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== ABA 7: CRM & CONVERSAS ==================== -->
+      <section id="tab-crm" class="tab-pane">
+        <div class="page-header">
+          <div>
+            <h1>CRM Comercial & Central de Conversas ao Vivo</h1>
+            <p>Acompanhe todas as conversas em tempo real, mova leads no Kanban, veja o Dossiê Executivo de 3 Linhas e rode o Raio-X do Funil com IA.</p>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <input type="text" id="crmSearchInput" placeholder="Buscar nome, telefone, mensagem ou tag..." style="width:230px;" />
+            <button type="button" id="btnSeedCrmDemo" class="btn btn-secondary btn-sm">Gerar exemplos</button>
+            <button type="button" id="btnExportFullBackup" class="btn btn-secondary btn-sm" title="Baixar backup completo de clientes, conversas e configurações p/ trocar de PC/celular">Backup Geral (.JSON)</button>
+            <label for="restoreFullBackupInput" class="btn btn-secondary btn-sm" style="cursor:pointer;" title="Restaurar backup completo .JSON">Restaurar (.JSON)</label>
+            <input type="file" id="restoreFullBackupInput" accept=".json,application/json" style="display:none;" />
+            <a id="btnExportCrmCsv" href="/api/crm/export.csv" class="btn btn-primary btn-sm">Exportar CSV</a>
+          </div>
+        </div>
+
+        <!-- Sub-Abas de Visão do CRM: Todas as Conversas | Quadro Kanban | Raio-X do Funil (Coach IA) -->
+        <div class="crm-subtabs" role="tablist" aria-label="Modos de visão do CRM">
+          <button type="button" class="crm-subtab-btn active" data-crmview="inbox" id="btnCrmViewInbox">
+            💬 Todas as Conversas <span class="tag" id="crmInboxTotalCount">0</span>
+          </button>
+          <button type="button" class="crm-subtab-btn" data-crmview="kanban" id="btnCrmViewKanban">
+            📋 Quadro Kanban (Etapas)
+          </button>
+          <button type="button" class="crm-subtab-btn" data-crmview="coach" id="btnCrmViewCoach">
+            🧠 Raio-X do Funil & Coach IA
+          </button>
+        </div>
+
+        <!-- Filtros Rápidos do CRM (compartilhados entre Todas as Conversas e Kanban) -->
+        <div id="crmFilterBar" class="filter-pills">
+          <button type="button" class="filter-pill active" data-crmfilter="all">Todos os Contatos</button>
+          <button type="button" class="filter-pill" data-crmfilter="human">Aguardando Você</button>
+          <button type="button" class="filter-pill" data-crmfilter="followup">Com Retorno Agendado</button>
+          <button type="button" class="filter-pill" data-crmfilter="hot">Etiqueta: Quente / Pediu Valor</button>
+        </div>
+
+        <!-- SUB-VISÃO 1: TODAS AS CONVERSAS (CENTRAL DE INBOX AO VIVO ESTILO WHATSAPP WEB) -->
+        <div id="crmSubView-inbox" class="crm-subview active">
+          <div class="crm-inbox-layout" id="crmInboxLayout">
+            <aside class="crm-inbox-sidebar" aria-label="Lista de todas as conversas">
+              <div class="crm-inbox-sidebar-head">
+                <strong>Conversas Recentes</strong>
+                <span style="font-size:11.5px; color:var(--text-secondary);" id="crmInboxFilteredLabel">0 conversas</span>
+              </div>
+              <div id="crmInboxList" class="crm-inbox-list"></div>
+            </aside>
+
+            <div class="crm-inbox-main" id="crmInboxMain">
+              <div id="crmInboxEmptyState" class="empty-state" style="margin:auto; max-width:380px;">
+                <strong>Selecione uma conversa ao lado</strong>
+                <p style="margin-top:6px; font-size:13px; color:var(--text-secondary);">
+                  Veja o histórico completo em tempo real, escute os áudios enviados/recebidos, confira o Dossiê Executivo de 3 Linhas e responda direto pelo painel.
+                </p>
+              </div>
+
+              <div id="crmInboxActivePane" class="crm-inbox-active-pane" style="display:none;">
+                <div class="crm-inbox-chat-head">
+                  <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+                    <button type="button" class="btn btn-secondary btn-sm crm-inbox-back-mob" id="btnInboxBackMobile">← Lista</button>
+                    <div style="min-width:0;">
+                      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <strong id="inboxContactName" style="font-size:15px;">Cliente</strong>
+                        <span id="inboxSentimentBadge" class="sentiment-pill" style="display:none;"></span>
+                        <span id="inboxAiStatusBadge" class="tag">Ativo</span>
+                      </div>
+                      <div style="font-size:12px; color:var(--text-secondary);" id="inboxContactPhone">+55...</div>
+                    </div>
+                  </div>
+                  <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                    <select id="inboxStageQuickSelect" aria-label="Etapa do contato no funil" style="width:auto; padding:6px 10px; font-size:12.5px;">
+                      <option value="novo">Etapa: Novo Contato</option>
+                      <option value="em_atendimento">Etapa: Em Atendimento</option>
+                      <option value="aguardando_humano">Etapa: Aguardando Você</option>
+                      <option value="concluido">Etapa: Concluído</option>
+                    </select>
+                    <button type="button" id="btnInboxTogglePause" class="btn btn-secondary btn-sm">Pausar / Assumir</button>
+                    <button type="button" id="btnInboxOpenFullModal" class="btn btn-secondary btn-sm" title="Abrir ficha completa com etiquetas, notas, retorno S19, catálogo e PIX">Ficha Completa / S19</button>
+                  </div>
+                </div>
+
+                <!-- Dossiê Executivo de 3 Linhas (Skill #2) -->
+                <div id="inboxDossierBanner" class="dossier-banner" style="display:none;"></div>
+
+                <!-- Histórico completo estilo WhatsApp -->
+                <div id="crmInboxMessages" class="wa-chat-box crm-inbox-messages"></div>
+
+                <!-- Barra de resposta rápida (Áudio Estratégico em 1 clique + Mensagem Escrita) -->
+                <div class="crm-inbox-composer">
+                  <div class="crm-inbox-voice-quick" id="inboxVoiceQuickRow">
+                    <select id="inboxQuickVoiceSelect" style="flex:1; min-width:160px; font-size:12.5px; padding:6px 10px;">
+                      <option value="">🎤 Enviar Áudio Estratégico da Biblioteca...</option>
+                    </select>
+                    <button type="button" id="btnInboxSendQuickVoice" class="btn btn-secondary btn-sm">Enviar Áudio</button>
+                  </div>
+                  <form id="crmInboxReplyForm" style="display:flex; gap:8px; align-items:center;">
+                    <input type="text" id="crmInboxReplyInput" placeholder="Digite sua mensagem humana para enviar agora no WhatsApp..." autocomplete="off" style="flex:1;" />
+                    <button type="submit" id="btnInboxSendText" class="btn btn-primary">Enviar</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SUB-VISÃO 2: QUADRO KANBAN (ETAPAS DO FUNIL) -->
+        <div id="crmSubView-kanban" class="crm-subview" style="display:none;">
+          <div class="kanban-board">
+            <div class="kanban-col" data-stage="novo">
+              <div class="kanban-col-head"><span>Novos Contatos</span><span class="tag" id="count-novo">0</span></div>
+              <div id="col-novo" style="flex:1;"></div>
+            </div>
+            <div class="kanban-col" data-stage="em_atendimento">
+              <div class="kanban-col-head"><span>Em Atendimento</span><span class="tag" id="count-em_atendimento">0</span></div>
+              <div id="col-em_atendimento" style="flex:1;"></div>
+            </div>
+            <div class="kanban-col" data-stage="aguardando_humano">
+              <div class="kanban-col-head"><span style="color:var(--warning-bright);">Aguardando Você</span><span class="badge-count" id="count-aguardando_humano">0</span></div>
+              <div id="col-aguardando_humano" style="flex:1;"></div>
+            </div>
+            <div class="kanban-col" data-stage="concluido">
+              <div class="kanban-col-head"><span style="color:var(--accent-bright);">Pedido / Concluído</span><span class="tag" id="count-concluido">0</span></div>
+              <div id="col-concluido" style="flex:1;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SUB-VISÃO 3: RAIO-X DO FUNIL & COACH DE CONVERSAS COM IA (SKILL #10) -->
+        <div id="crmSubView-coach" class="crm-subview" style="display:none;">
+          <div class="panel-card" style="margin-bottom:16px;">
+            <div class="panel-head" style="flex-wrap:wrap; gap:10px;">
+              <div>
+                <h2 class="panel-title">🧠 Raio-X do Funil & Coaching de Conversas (Skill RevOps)</h2>
+                <p style="font-size:13px; color:var(--text-secondary); margin-top:4px;">
+                  Analisa suas conversas reais no WhatsApp, identifica objeções recorrentes, gargalos de passagem humana e sugere ajustes práticos.
+                </p>
+              </div>
+              <button type="button" id="btnRunFunnelCoach" class="btn btn-primary">
+                Analisar Conversas & Gargalos Agora
+              </button>
+            </div>
+            <div id="funnelCoachResultsBox" style="margin-top:14px;">
+              <div class="empty-state">
+                Clique em <strong>"Analisar Conversas & Gargalos Agora"</strong> acima para gerar o diagnóstico completo das suas conversas atuais do CRM.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ABA 9: GERENCIAMENTO DE CONTAS & USUÁRIOS (EXCLUSIVA ADMIN MASTER) -->
+      <section id="tab-contas" class="tab-pane">
+        <div class="page-head">
+          <div>
+            <h1 class="page-title">👑 Contas & Usuários da Plataforma</h1>
+            <p class="page-subtitle">Crie logins e senhas isolados para clientes ou parceiros. Cada conta possui WhatsApp, Treinamento, Áudios e CRM 100% separados.</p>
+          </div>
+          <button type="button" id="btnRefreshManagedUsers" class="btn btn-secondary btn-sm">🔄 Atualizar Lista</button>
+        </div>
+
+        <div class="grid-main">
+          <!-- CARD 1: CRIAR NOVA CONTA ISOLADA -->
+          <div class="panel">
+            <div class="panel-head">
+              <div>
+                <h2 class="panel-title">➕ Criar Nova Conta Isolada</h2>
+                <p class="panel-desc">A nova conta nasce 100% limpa para qualquer nicho, sem acesso aos dados da conta Master.</p>
+              </div>
+            </div>
+
+            <form id="createManagedUserForm" style="display:flex; flex-direction:column; gap:12px;">
+              <div class="form-group" style="margin:0;">
+                <label class="form-label" for="newAccountDisplayName">Nome da Empresa / Responsável *</label>
+                <input type="text" id="newAccountDisplayName" required placeholder="Ex: Clínica OdontoVida ou Loja AutoSul" />
+              </div>
+
+              <div class="grid-equal" style="gap:10px;">
+                <div class="form-group" style="margin:0;">
+                  <label class="form-label" for="newAccountUsername">Usuário de Login *</label>
+                  <input type="text" id="newAccountUsername" required placeholder="Ex: odontovida" autocomplete="off" />
+                  <div class="form-hint">Apenas letras minúsculas e números (sem espaços).</div>
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label class="form-label" for="newAccountPassword">Senha Inicial *</label>
+                  <input type="text" id="newAccountPassword" required minlength="6" placeholder="Mínimo 6 caracteres" autocomplete="off" />
+                </div>
+              </div>
+
+              <div style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:12px; color:var(--text-secondary);">
+                🛡️ <strong>Isolamento Total (Row Level Security):</strong> O novo usuário entra pelo mesmo link da Vercel usando seu <strong>Usuário + Senha</strong>, treina a IA para o próprio negócio e roda o Motor WhatsApp no próprio celular/PC.
+              </div>
+
+              <button type="submit" id="btnCreateManagedUser" class="btn btn-primary" style="justify-content:center;">
+                ➕ Criar Conta Agora
+              </button>
+            </form>
+          </div>
+
+          <!-- CARD 2: COMO CONECTAR O MOTOR INDIVIDUAL (TERMUX / PC) -->
+          <div class="panel">
+            <div class="panel-head">
+              <div>
+                <h2 class="panel-title">📱 Como Ligar o Motor WhatsApp de Cada Conta</h2>
+                <p class="panel-desc">Passo a passo rápido para você ou para enviar ao dono de uma conta criada.</p>
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:10px; font-size:13px; color:var(--text-secondary); line-height:1.55;">
+              <div style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:8px; padding:12px;">
+                <strong style="color:var(--text-main);">1️⃣ Pelo Navegador (Vercel — de qualquer lugar do mundo):</strong><br/>
+                Acesse o link da Vercel e entre com <strong>Usuário</strong> e <strong>Senha</strong>. Você já pode configurar Treinamento, Áudios Estratégicos, Catálogo, PIX, Simulador e CRM imediatamente!
+              </div>
+              <div style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:8px; padding:12px;">
+                <strong style="color:var(--text-main);">2️⃣ No Celular (Termux) ou Computador (Windows PC):</strong><br/>
+                Abra o Motor ZAP-IA (<code>bash 5_Iniciar_No_Termux.sh</code> no Android ou <code>2_Iniciar_Atendente_IA.bat</code> no Windows) e informe o <strong>mesmo Usuário e Senha</strong> da conta.<br/>
+                Pronto! O indicador no topo mudará para <strong style="color:var(--accent-bright);">🟢 Motor Online</strong> e o QR Code / Código de 8 Dígitos sincronizará em tempo real com a nuvem!
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LISTA DE CONTAS CADASTRADAS -->
+        <div class="panel" style="margin-top:18px;">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title">👥 Contas Cadastradas</h2>
+              <p class="panel-desc">Gerencie acessos, altere senhas, bloqueie temporariamente ou exclua contas secundárias.</p>
+            </div>
+          </div>
+          <div id="managedUsersListContainer">
+            <div class="empty-state">Carregando contas cadastradas...</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- BARRA INFERIOR MOBILE NATIVA (PWA ANDROID / TERMUX) -->
+  <nav class="mobile-bottom-nav" aria-label="Navegação rápida mobile">
+    <button type="button" class="mob-nav-btn active" data-mobtab="dashboard">
+      <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>
+      <span>Painel</span>
+    </button>
+    <button type="button" class="mob-nav-btn" data-mobtab="simulador">
+      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2v5Z"></path><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"></path></svg>
+      <span>Simulador</span>
+    </button>
+    <button type="button" class="mob-nav-btn" data-mobtab="treinamento">
+      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+      <span>Treino</span>
+    </button>
+    <button type="button" class="mob-nav-btn" data-mobtab="crm">
+      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+      <span>CRM</span>
+      <span id="mobCrmBadge" class="mob-badge" style="display:none;">0</span>
+    </button>
+    <button type="button" id="btnMobileMore" class="mob-nav-btn">
+      <svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
+      <span>Mais</span>
+    </button>
+  </nav>
+
+  <!-- GAVETA MOBILE "MAIS OPÇÕES" -->
+  <div id="mobileMoreSheet" class="mobile-more-sheet" role="dialog" aria-modal="true" aria-label="Mais abas do sistema">
+    <div class="mobile-more-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <strong style="font-size:15px;">Mais Ferramentas</strong>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('mobileMoreSheet').classList.remove('open')">Fechar</button>
+      </div>
+      <button type="button" class="btn btn-secondary" style="justify-content:flex-start;" onclick="switchMobileMore('audios')">🎤 Áudios Estratégicos (Voz Real)</button>
+      <button type="button" class="btn btn-secondary" style="justify-content:flex-start;" onclick="switchMobileMore('catalogo')">Catálogo, Fotos & PIX</button>
+      <button type="button" class="btn btn-secondary" style="justify-content:flex-start;" onclick="switchMobileMore('ia')">Motor de IA (Pool Gemini & Reserva)</button>
+      <button type="button" class="btn btn-secondary" style="justify-content:flex-start;" onclick="switchMobileMore('seguranca')">Anti-Ban, Fila de Abordagem & PIN</button>
+      <button type="button" id="mobMasterUsersBtn" class="btn btn-secondary" style="display:none; justify-content:flex-start;" onclick="switchMobileMore('contas')">👑 Contas & Usuários (Master)</button>
+      <button type="button" class="btn btn-secondary" style="justify-content:flex-start;" onclick="document.getElementById('mobileMoreSheet').classList.remove('open'); document.getElementById('brandModal').classList.add('open');">Personalizar Nome & Marca</button>
+    </div>
+  </div>
+
+  <!-- MODAL: PERSONALIZAR MARCA / NOME DO SISTEMA (WHITE-LABEL) -->
+  <div id="brandModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="brandModalTitle">
+    <div class="modal-dialog" style="max-width:480px;">
+      <div class="modal-head">
+        <h3 id="brandModalTitle" class="panel-title">Personalizar Nome & Marca do Sistema</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('brandModal')">Fechar</button>
+      </div>
+      <form id="brandForm" class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="brandNameInput">Nome Principal no Topo e Aba</label>
+          <input type="text" id="brandNameInput" placeholder="Ex: ZAP-IA Studio" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="brandSubtitleInput">Subtítulo abaixo do nome</label>
+          <input type="text" id="brandSubtitleInput" placeholder="Ex: Atendente Universal" />
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('brandModal')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Marca</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: BUSCA RÁPIDA GLOBAL (CTRL+K) -->
+  <div id="cmdPaletteModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="cmdModalTitle">
+    <div class="modal-dialog" style="max-width:560px;">
+      <div class="modal-head">
+        <h3 id="cmdModalTitle" class="panel-title">Busca Rápida Global (Ctrl+K)</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('cmdPaletteModal')">ESC</button>
+      </div>
+      <div class="modal-body">
+        <input type="text" id="cmdSearchInput" placeholder="Busque um cliente do CRM, mensagem M01–M13, skill ou aba..." autocomplete="off" />
+        <div id="cmdResultsList" class="cmd-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ENSINAR / CORRIGIR RESPOSTA EM 1 CLIQUE (SIMULADOR) -->
+  <div id="teachSimulatorModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="teachModalTitle">
+    <div class="modal-dialog" style="max-width:540px;">
+      <div class="modal-head">
+        <h3 id="teachModalTitle" class="panel-title">Ensinar / Corrigir Resposta em 1 Clique</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('teachSimulatorModal')">Fechar</button>
+      </div>
+      <form id="teachSimulatorForm" class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="teachQuestionInput">Quando o cliente disser / perguntar:</label>
+          <input type="text" id="teachQuestionInput" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="teachAnswerInput">Como a IA deve responder ou agir:</label>
+          <textarea id="teachAnswerInput" rows="4" required placeholder="Escreva a resposta exata ou regra que ela deve seguir..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="teachTargetSelect">Onde salvar este aprendizado?</label>
+          <select id="teachTargetSelect">
+            <option value="faq">Salvar em Perguntas Frequentes (FAQ) do perfil ativo</option>
+            <option value="rule">Adicionar nas Regras de Ouro do perfil ativo</option>
+          </select>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('teachSimulatorModal')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar no Treinamento</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: EDITAR / CRIAR MENSAGEM APROVADA (M01–M13+) -->
+  <div id="editPackMessageModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="editPackMsgTitle">
+    <div class="modal-dialog" style="max-width:560px;">
+      <div class="modal-head">
+        <h3 id="editPackMsgTitle" class="panel-title">Editar Mensagem Aprovada</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('editPackMessageModal')">Fechar</button>
+      </div>
+      <form id="editPackMessageForm" class="modal-body">
+        <div class="grid-equal" style="gap:10px;">
+          <div class="form-group">
+            <label class="form-label" for="packMsgId">Código (ex: M01, M14)</label>
+            <input type="text" id="packMsgId" required placeholder="M14" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="packMsgTitle">Título / Finalidade</label>
+            <input type="text" id="packMsgTitle" required placeholder="Ex: Abertura para lojista" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="packMsgText">Texto Aprovado (aceita {{nome}} no disparador)</label>
+          <textarea id="packMsgText" rows="5" required></textarea>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('editPackMessageModal')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Mensagem</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: EDITAR / CRIAR SKILL NO PACOTE TURBO -->
+  <div id="editPackSkillModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="editPackSkillTitle">
+    <div class="modal-dialog" style="max-width:600px;">
+      <div class="modal-head">
+        <h3 id="editPackSkillTitle" class="panel-title">Criar / Editar Skill</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('editPackSkillModal')">Fechar</button>
+      </div>
+      <form id="editPackSkillForm" class="modal-body">
+        <div class="grid-equal" style="gap:10px;">
+          <div class="form-group">
+            <label class="form-label" for="packSkillType">Categoria da Skill</label>
+            <select id="packSkillType">
+              <option value="operational">Skill Operacional (Sxx)</option>
+              <option value="humanization">Skill de Humanização (Hxx)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="packSkillId">Código (ex: S32 ou H26)</label>
+            <input type="text" id="packSkillId" required placeholder="Ex: S32" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="packSkillName">Nome da Skill</label>
+          <input type="text" id="packSkillName" required placeholder="Ex: responder-duvida-garantia" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="packSkillWhen">Quando / Gatilho para ativar</label>
+          <input type="text" id="packSkillWhen" required placeholder="Ex: Quando o lojista perguntar sobre..." />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="packSkillExample">Orientação completa / Exemplo de resposta ideal</label>
+          <textarea id="packSkillExample" rows="5" required placeholder="Descreva a conduta e um exemplo natural de resposta..."></textarea>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('editPackSkillModal')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar Skill no Pacote</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: CADASTRAR / EDITAR ÁUDIO ESTRATÉGICO (3 CAMPOS + AUTO-TRANSCRIÇÃO IA) -->
+  <div id="voiceLibraryModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="voiceModalTitle">
+    <div class="modal-dialog" style="max-width:610px;">
+      <div class="modal-head">
+        <h3 id="voiceModalTitle" class="panel-title">Novo Áudio Estratégico (Voz Humana Real)</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeVoiceModal()">Fechar</button>
+      </div>
+      <form id="voiceLibraryForm" class="modal-body">
+        <input type="hidden" id="voiceItemId" />
+
+        <!-- CAMPO 1: O ÁUDIO -->
+        <div class="form-group">
+          <label class="form-label">1. Áudio na Voz Responsável (Convertido p/ OGG/Opus Nativo + Waveform 64b)</label>
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <button type="button" id="btnVoiceModalRecord" class="btn btn-secondary">🎤 Gravar pelo Microfone</button>
+            <label for="voiceModalFileInput" class="btn btn-secondary" style="cursor:pointer;">📁 Escolher Arquivo de Áudio</label>
+            <input type="file" id="voiceModalFileInput" accept="audio/*,.ogg,.opus,.mp3,.m4a,.wav,.webm" style="display:none;" />
+            <span id="voiceModalFileStatus" style="font-size:12px; color:var(--text-secondary);">Nenhum áudio selecionado</span>
+          </div>
+          <div id="voiceModalPreviewWrap" style="display:none; margin-top:10px; background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:8px; padding:10px;">
+            <audio id="voiceModalPreviewPlayer" controls style="width:100%; height:36px;"></audio>
+          </div>
+          <div class="form-hint">Pode gravar agora ou enviar <code>.ogg</code>, <code>.opus</code>, <code>.mp3</code>, <code>.m4a</code> ou <code>.wav</code> — o sistema converte tudo automaticamente para o formato exato de gravação nativa do WhatsApp.</div>
+        </div>
+
+        <!-- CAMPO 2: NOME + MOMENTO DE USO -->
+        <div class="form-group">
+          <label class="form-label" for="voiceItemName">2. Nome Identificador do Áudio *</label>
+          <input type="text" id="voiceItemName" required placeholder="Ex: Explicação rápida — Como funciona a assessoria (Lojista sem tempo)" />
+        </div>
+
+        <div class="grid-equal" style="gap:10px;">
+          <div class="form-group">
+            <label class="form-label" for="voiceItemWhen">Quando usar (Gatilho / Contexto p/ a IA)</label>
+            <input type="text" id="voiceItemWhen" placeholder="Ex: Quando pedir explicação por mensagem de como funciona" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="voiceItemAiMode">Modo de Disparo</label>
+            <select id="voiceItemAiMode">
+              <option value="true">Automático pela IA + Manual no CRM</option>
+              <option value="false">Apenas Manual por você no CRM / Disparo</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="voiceItemLinkedCode">Equivalente falado de Mensagem Aprovada (Opcional)</label>
+          <select id="voiceItemLinkedCode">
+            <option value="">Sem vínculo específico (uso livre pelo contexto)</option>
+          </select>
+        </div>
+
+        <!-- CAMPO 3: TRANSCRIÇÃO DO ÁUDIO (+ BOTÃO TRANSCREVER COM IA) -->
+        <div class="form-group">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
+            <label class="form-label" for="voiceItemTranscription" style="margin-bottom:0;">3. Transcrição Fiel do Áudio *</label>
+            <button type="button" id="btnAutoTranscribeVoice" class="btn btn-secondary btn-sm" style="min-height:28px; padding:3px 10px;">
+              ✨ Transcrever Automaticamente com IA
+            </button>
+          </div>
+          <textarea id="voiceItemTranscription" rows="4" required placeholder="O que é falado no áudio... (Clique em '✨ Transcrever Automaticamente com IA' após gravar/subir o áudio para preencher sozinho!)"></textarea>
+          <div class="form-hint">A IA lê esta transcrição para encaixar o áudio na hora certa, responder detalhes extras sem repetir o que sua voz já diz e ter texto pronto se o cliente não puder ouvir áudio.</div>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
+          <button type="button" class="btn btn-secondary" onclick="closeVoiceModal()">Cancelar</button>
+          <button type="submit" id="btnSaveVoiceItem" class="btn btn-primary">Converter p/ Nativo WhatsApp & Salvar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADICIONAR / EDITAR ITEM DO CATÁLOGO (ATÉ 5 MÍDIAS) -->
+  <div id="catalogModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="catalogModalTitle">
+    <div class="modal-dialog" style="max-width:580px;">
+      <div class="modal-head">
+        <h3 id="catalogModalTitle" class="panel-title">Item do Catálogo / Galeria de Mídias</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('catalogModal')">Fechar</button>
+      </div>
+      <form id="catalogItemForm" class="modal-body">
+        <input type="hidden" id="catItemId" />
+        <div class="form-group">
+          <label class="form-label" for="catItemName">Nome do Produto, Veículo, Serviço ou Apresentação</label>
+          <input type="text" id="catItemName" required placeholder="Ex: Apresentação Assessoria PDF ou Corolla XEi 2023" />
+        </div>
+        <div class="grid-equal" style="gap:12px;">
+          <div class="form-group">
+            <label class="form-label" for="catItemCategory">Categoria</label>
+            <input type="text" id="catItemCategory" value="Produto" placeholder="Apresentação, Veículo, Serviço..." />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="catItemPrice">Preço (R$)</label>
+            <input type="text" id="catItemPrice" placeholder="Ex: 149,90 (ou deixe em branco)" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="catItemDesc">Descrição / Detalhes para a IA saber explicar</label>
+          <textarea id="catItemDesc" rows="3" placeholder="Detalhes confirmados, itens inclusos, regras..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="catItemLink">Link Externo / Compra (opcional)</label>
+          <input type="text" id="catItemLink" placeholder="https://..." />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="catItemFile">Fotos, PDFs ou Áudios Explicativos (Selecione até 5 arquivos!)</label>
+          <input type="file" id="catItemFile" multiple accept="image/*,application/pdf,audio/*,.ogg,.opus,.mp3,.m4a,.wav,.webm" />
+          <div class="form-hint">Se anexar áudio (.ogg/.mp3), o robô envia como Nota de Voz nativa ("Gravando áudio...") — ideal para a Skill S06!</div>
+          <div id="catExistingMediaBox" class="thumb-mini-row"></div>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('catalogModal')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar item no catálogo</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: DETALHES DO CLIENTE NO CRM & CHAT MANUAL RICO -->
+  <div id="crmLeadModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="crmModalClientName">
+    <div class="modal-dialog" style="max-width:920px;">
+      <div class="modal-head">
+        <div>
+          <h3 id="crmModalClientName" class="panel-title">Cliente</h3>
+          <div id="crmModalClientPhone" style="font-size:12px; color:var(--text-secondary);"></div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <button type="button" id="btnToggleContactPause" class="btn btn-secondary btn-sm">Pausar IA</button>
+          <button type="button" id="btnIgnoreFromCrm" class="btn btn-danger btn-sm">Ignorar (Pessoal)</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('crmLeadModal')">Fechar</button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div class="grid-2">
+          <div class="wa-frame" style="height:490px;">
+            <div id="crmChatHistory" class="wa-messages"></div>
+
+            <!-- Barra de Atalhos Rápidos no Chat Manual do CRM -->
+            <div class="crm-quick-bar">
+              <select id="crmQuickMsgSelect" aria-label="Inserir mensagem aprovada M01 a M13">
+                <option value="">Inserir M01–M13...</option>
+              </select>
+              <select id="crmQuickVoiceSelect" aria-label="Enviar áudio pronto da Biblioteca de Áudios">
+                <option value="">🎤 Áudio Pronto...</option>
+              </select>
+              <select id="crmQuickItemSelect" aria-label="Enviar item do catálogo">
+                <option value="">Enviar item catálogo...</option>
+              </select>
+              <button type="button" id="btnCrmRecordAudio" class="btn btn-secondary btn-sm" style="min-height:32px; padding:4px 9px;" title="Gravar na hora e enviar Nota de Voz nativa (Skill S06)">🎤 Gravar Voz</button>
+              <label for="crmAudioFileInput" class="btn btn-secondary btn-sm" style="min-height:32px; padding:4px 9px; cursor:pointer;" title="Subir áudio avulso (.ogg/.mp3) como Nota de Voz">Subir Áudio</label>
+              <input type="file" id="crmAudioFileInput" accept="audio/*,.ogg,.opus,.mp3,.m4a,.wav,.webm" style="display:none;" />
+              <button type="button" id="btnCrmSendPix" class="btn btn-secondary btn-sm" style="min-height:32px; padding:4px 9px;">Enviar PIX</button>
+            </div>
+
+            <form id="crmManualSendForm" class="wa-composer">
+              <input type="text" id="crmManualTextInput" placeholder="Enviar mensagem manual e pausar IA..." autocomplete="off" />
+              <button type="submit" class="btn btn-primary btn-sm">Enviar</button>
+            </form>
+          </div>
+
+          <div>
+            <div class="grid-equal" style="gap:10px;">
+              <div class="form-group">
+                <label class="form-label" for="crmStageSelect">Etapa no Funil CRM</label>
+                <select id="crmStageSelect">
+                  <option value="novo">Novo Contato</option>
+                  <option value="em_atendimento">Em Atendimento IA</option>
+                  <option value="aguardando_humano">Aguardando Humano / Fechamento</option>
+                  <option value="concluido">Pedido Fechado / Concluído</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="crmFollowUpInput">Retorno Agendado (Skill S19)</label>
+                <input type="datetime-local" id="crmFollowUpInput" />
+                <div class="form-hint" style="font-size:11px;">Você recebe lembrete no seu WhatsApp pessoal na hora marcada.</div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Etiquetas Rápidas (Tags)</label>
+              <div id="crmTagsPicker" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Resumo gerado pela IA</label>
+              <div id="crmModalSummary" style="background:var(--bg-card-subtle); border:1px solid var(--border); padding:10px; border-radius:8px; font-size:12.5px; color:var(--text-secondary); min-height:50px;"></div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="crmModalNotes">Suas Anotações Internas</label>
+              <textarea id="crmModalNotes" rows="3" placeholder="Anote condições combinadas, estoque do lojista, preferências..."></textarea>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; gap:8px;">
+              <button type="button" id="btnDeleteContact" class="btn btn-danger btn-sm">Excluir conversa</button>
+              <button type="button" id="btnSaveCrmLead" class="btn btn-primary btn-sm">Salvar ficha</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: VISUALIZAR SYSTEM PROMPT -->
+  <div id="promptPreviewModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="promptModalTitle">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h3 id="promptModalTitle" class="panel-title">Cérebro Completo da IA (Prompt + Skills Dinâmicas)</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('promptPreviewModal')">Fechar</button>
+      </div>
+      <div class="modal-body">
+        <p class="panel-desc">Este é o conjunto exato de instruções compiladas dinamicamente (incluindo blindagem OWASP LLM01 e seleção de skills):</p>
+        <pre id="promptPreviewText" style="background:var(--bg-input); border:1px solid var(--border); padding:14px; border-radius:8px; white-space:pre-wrap; font-size:12.5px; color:var(--text-main); max-height:440px; overflow-y:auto;"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: INSPECIONAR PACOTE DE TREINAMENTO TURBO -->
+  <div id="packInspectorModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="packModalTitle">
+    <div class="modal-dialog">
+      <div class="modal-head">
+        <h3 id="packModalTitle" class="panel-title">Detalhes do Pacote Turbo</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('packInspectorModal')">Fechar</button>
+      </div>
+      <div id="packInspectorBody" class="modal-body" style="max-height:500px; overflow-y:auto;"></div>
+    </div>
+  </div>
+
+  <div id="toastStack" class="toast-stack" aria-live="polite"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

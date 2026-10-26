@@ -1,0 +1,15 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.vercel/
+.DS_Store
+Thumbs.db
+
+# Dados sensíveis, sessões WhatsApp e sessões de login locais NUNCA vão para o Git
+data/database.json
+data/database.json.tmp
+data/cloud_session.json
+data/wa_auth/
+data/uploads/
+*.log

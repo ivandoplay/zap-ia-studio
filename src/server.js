@@ -843,14 +843,14 @@ app.post('/api/wa/sync-history', async (req, res) => {
       return res.json({
         ok: true,
         ...out,
-        contacts: freshCtx ? freshCtx.listContacts() : undefined
+        contacts: freshCtx ? sortContactsForInbox(freshCtx.data.contacts) : undefined
       });
     }
     const result = await whatsappManager.syncAllConversationsFromPhone({
       force: true,
       waitMs: Number(req.body?.waitMs) || 6500
     });
-    res.json({ ok: true, ...result, contacts: storage.listContacts() });
+    res.json({ ok: true, ...result, contacts: sortContactsForInbox(storage.data.contacts) });
   } catch (err) {
     res.status(err.statusCode || 400).json({ ok: false, workerOffline: Boolean(err.workerOffline), error: err.message });
   }
@@ -902,6 +902,8 @@ app.post('/api/wa/proactive-send', async (req, res) => {
         'send_proactive',
         { phone, text: personalizedText, name: cleanName, voiceId: voiceId || '' }
       );
+      storage.workspaceDirty = false;
+      storage.dirtyContactIds.clear();
       return res.json({ ok: true, ...out });
     }
     const result = await whatsappManager.sendProactiveAiOpening(phone, personalizedText, cleanName, voiceId || '');

@@ -605,6 +605,7 @@ const MOTOR_EXCLUDED_SEGMENTS = new Set([
   'node_modules',
   '.git',
   '.agents',
+  '.runtime',
   '.vercel',
   'uploads',
   'wa_auth',
@@ -646,7 +647,7 @@ function collectCleanMotorZipEntries(includeMasterPack = false) {
     }
   }
 
-  for (const subDir of ['src', 'api', 'public']) {
+  for (const subDir of ['src', 'api', 'public', 'scripts']) {
     walkDir(path.join(ROOT_DIR, subDir), subDir);
   }
 

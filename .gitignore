@@ -13,5 +13,7 @@ data/cloud_session.json
 data/wa_auth/
 data/uploads/
 .agents/
+.runtime/
+uploads/
 .tmp_*
 *.log

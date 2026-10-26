@@ -363,11 +363,11 @@
                   <h2 class="panel-title">Motor WhatsApp (Windows PC &amp; Android Termux)</h2>
                   <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">Baixe sempre a última versão oficial do motor direto pelo painel.</p>
                 </div>
-                <span class="tag" id="dashMotorVersionBadge" style="font-variant-numeric:tabular-nums;">v4.9.0</span>
+                <span class="tag" id="dashMotorVersionBadge" style="font-variant-numeric:tabular-nums;">v4.9.1</span>
               </div>
 
               <div id="dashMotorVersionStatus" class="motor-status-banner">
-                Baixe o pacote abaixo para instalar ou atualizar seu Motor WhatsApp no Windows PC ou Android Termux.
+                Baixe o pacote abaixo para iniciar no Windows PC (100% portatil, sem instalar nada por fora) ou no Android Termux.
               </div>
 
               <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
@@ -378,9 +378,9 @@
               </div>
 
               <details style="margin-top:10px; font-size:12px; color:var(--text-secondary);">
-                <summary style="cursor:pointer; font-weight:600; color:var(--text-main);">Como instalar ou atualizar sem perder sua sessão WhatsApp</summary>
+                <summary style="cursor:pointer; font-weight:600; color:var(--text-main);">Como abrir ou atualizar (Zero instalação externa no PC)</summary>
                 <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px; line-height:1.5;">
-                  <div><strong>No Windows PC:</strong> extraia o <code>.ZIP</code> na mesma pasta (substituindo os arquivos antigos; suas pastas <code>data/wa_auth</code> e <code>database.json</code> permanecem intactas) e abra <code>2_Iniciar_Atendente_IA.bat</code>.</div>
+                  <div><strong>No Windows PC (Zero Instalação):</strong> extraia o <code>.ZIP</code> e dê <strong>2 cliques direto em <code>2_Iniciar_Atendente_IA.bat</code></strong>. Na 1ª abertura ele baixa o motor Node.js portátil oficial sozinho dentro da própria pasta (sem pedir Administrador e sem instalar programas no seu PC)!</div>
                   <div><strong>No Android Termux:</strong> após baixar o <code>.ZIP</code> no celular, rode:<br/><code style="display:block; margin-top:4px; padding:6px 8px; background:var(--bg-input); border:1px solid var(--border); border-radius:6px; user-select:all; word-break:break-all;">unzip -o ~/storage/downloads/ZAP-IA-Studio-v*.zip -d ~ && cd ~/atendente-ia-whatsapp && bash 5_Iniciar_No_Termux.sh</code></div>
                 </div>
               </details>
@@ -1610,7 +1610,7 @@
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           <span>Baixar Motor Atualizado (.ZIP)</span>
         </span>
-        <span id="sheetMotorVersionHint" style="font-size:11px; color:var(--accent-bright); font-weight:600; font-variant-numeric:tabular-nums;">v4.9.0</span>
+        <span id="sheetMotorVersionHint" style="font-size:11px; color:var(--accent-bright); font-weight:600; font-variant-numeric:tabular-nums;">v4.9.1</span>
       </button>
 
       <button type="button" id="btnInstallPwa" class="sheet-item-btn" style="display:none;">

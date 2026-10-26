@@ -30,12 +30,16 @@ Plataforma comercial pronta para venda e operação diária de atendimento autô
 
 ---
 
-## 1. Como abrir e usar no PC Windows
+## 1. Como abrir e usar no PC Windows (Zero Instalação Externa — 100% Portátil!)
 
-1. Caso ainda não tenha o Node.js instalado, baixe a versão **LTS (Gratuita)** em: https://nodejs.org/pt
-2. Dê **2 cliques** em **`1_Instalar_No_Windows.bat`** (apenas na 1ª vez).
-3. *(Opcional)* Dê **2 cliques** em **`3_Criar_Atalho_Area_de_Trabalho.bat`** para criar o ícone **ZAP-IA Studio** na Área de Trabalho.
-4. Dê **2 cliques** em **`2_Iniciar_Atendente_IA.bat`**. Na primeira vez, faça login com seu `@usuario` e `senha` para vincular o motor à sua conta na nuvem.
+Você **não precisa instalar Node.js nem nenhum programa por fora** no seu computador e **não precisa de senha de Administrador**:
+
+1. Baixe o `.ZIP` direto pelo botão **`Baixar Motor (.ZIP)`** dentro do painel, clique com o botão direito nele e escolha **`Extrair Tudo...`**.
+2. Abra a pasta `atendente-ia-whatsapp` e dê **2 cliques direto em `2_Iniciar_Atendente_IA.bat`**!
+   - **Na 1ª abertura:** o próprio sistema baixa automaticamente o **Node.js v22 LTS Portátil Oficial** (com validação de integridade SHA-256) para dentro da subpasta `.runtime\node\`, configura as bibliotecas em 20 a 40 segundos e já abre o aplicativo!
+   - **Nas próximas aberturas:** pula toda a preparação e abre em **2 segundos**!
+3. *(Opcional)* Dê **2 cliques** em **`3_Criar_Atalho_Area_de_Trabalho.bat`** para criar o ícone **ZAP-IA Studio (WhatsApp)** na sua Área de Trabalho.
+4. Na primeira vez que a janela abrir, faça login com seu `@usuario` e `senha` para vincular o PC à sua conta na nuvem.
 
 ---
 

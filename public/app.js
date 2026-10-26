@@ -102,14 +102,15 @@ function formatWaText(str = '') {
 function showToast(msg, isError = false) {
   const stack = document.getElementById('toastStack');
   if (!stack) return;
-  while (stack.children.length >= 2) {
+  const maxVisible = window.innerWidth <= 820 ? 1 : 2;
+  while (stack.children.length >= maxVisible) {
     stack.firstElementChild?.remove();
   }
   const el = document.createElement('div');
   el.className = `toast ${isError ? 'error' : ''}`;
   el.textContent = msg;
   stack.appendChild(el);
-  setTimeout(() => el.remove(), 2800);
+  setTimeout(() => el.remove(), window.innerWidth <= 820 ? 2200 : 2800);
 }
 
 function playHandoffChime() {
@@ -216,25 +217,73 @@ window.openInboxProDirect = function openInboxProDirect() {
   window.switchCrmSubView('inbox');
 };
 
-window.switchTab = function switchTab(tabId, highlightQuickInbox = false) {
+const HUB_BY_TAB = {
+  dashboard: 'dashboard',
+  crm: 'crm',
+  treinamento: 'cerebro',
+  audios: 'cerebro',
+  catalogo: 'cerebro',
+  simulador: 'cerebro',
+  ia: 'config',
+  seguranca: 'config',
+  contas: 'contas'
+};
+
+const HUB_TITLE_MAP = {
+  dashboard: 'Início',
+  crm: 'Conversas',
+  cerebro: 'Cérebro IA',
+  config: 'Ajustes',
+  contas: 'Clientes SaaS'
+};
+
+const lastHubSubTab = {
+  cerebro: 'treinamento',
+  config: 'ia'
+};
+
+window.switchTab = function switchTab(tabId) {
   if (!tabId) return;
-  document.querySelectorAll('.nav-btn').forEach((btn) => {
-    if (btn.id === 'navQuickInboxBtn') {
-      btn.classList.toggle('active', Boolean(highlightQuickInbox));
-    } else {
-      btn.classList.toggle('active', !highlightQuickInbox && btn.dataset.tab === tabId);
-    }
+  const hub = HUB_BY_TAB[tabId] || 'dashboard';
+  if (hub === 'cerebro') lastHubSubTab.cerebro = tabId;
+  if (hub === 'config') lastHubSubTab.config = tabId;
+
+  // Ao trocar de hub no mobile, fecha conversa em tela cheia ou gaveta aberta
+  if (tabId !== 'crm') {
+    const inboxLayout = document.getElementById('crmInboxLayout');
+    inboxLayout?.classList.remove('mob-chat-open', 'mob-inspector-open');
+    document.getElementById('inspectorMobileBackdrop')?.classList.remove('open');
+  }
+
+  document.querySelectorAll('.nav-btn[data-tab]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.tab === tabId);
   });
-  document.querySelectorAll('.mob-nav-btn[data-mobtab]').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.mobtab === tabId);
+
+  document.querySelectorAll('.mob-nav-btn[data-mobhub]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.mobhub === hub);
   });
+
+  // Sub-navegação compartilhada por Hub (Cérebro IA / Configurações)
+  const subCerebro = document.getElementById('hubSubNavCerebro');
+  const subConfig = document.getElementById('hubSubNavConfig');
+  if (subCerebro) subCerebro.classList.toggle('visible', hub === 'cerebro');
+  if (subConfig) subConfig.classList.toggle('visible', hub === 'config');
+  document.querySelectorAll('.hub-subnav-btn[data-subtab]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.subtab === tabId);
+  });
+
+  const mobTitle = document.getElementById('mobCurrentHubTitle');
+  if (mobTitle) mobTitle.textContent = HUB_TITLE_MAP[hub] || 'ZAP-IA';
+
   document.querySelectorAll('.tab-pane').forEach((pane) => {
     pane.classList.toggle('active', pane.id === `tab-${tabId}`);
   });
+
   try {
     document.querySelector('.content-area')?.scrollTo({ top: 0, behavior: 'instant' });
     window.scrollTo({ top: 0, behavior: 'instant' });
   } catch {}
+
   if (tabId === 'contas' && state.currentUser?.role === 'master') {
     loadManagedUsers().catch(() => {});
   }
@@ -243,9 +292,26 @@ window.switchTab = function switchTab(tabId, highlightQuickInbox = false) {
   } catch {}
 };
 
+window.switchMobileHub = function switchMobileHub(hub) {
+  if (hub === 'cerebro') return window.switchTab(lastHubSubTab.cerebro || 'treinamento');
+  if (hub === 'config') return window.switchTab(lastHubSubTab.config || 'ia');
+  return window.switchTab(hub);
+};
+
 window.switchMobileMore = function switchMobileMore(tabId) {
   document.getElementById('mobileMoreSheet')?.classList.remove('open');
+  document.getElementById('accountSheet')?.classList.remove('open');
   switchTab(tabId);
+};
+
+window.openAccountSheet = function openAccountSheet() {
+  renderCloudHeaderBar();
+  document.getElementById('accountSheet')?.classList.add('open');
+};
+
+window.closeMobileInspectorSheet = function closeMobileInspectorSheet() {
+  document.getElementById('crmInboxLayout')?.classList.remove('mob-inspector-open');
+  document.getElementById('inspectorMobileBackdrop')?.classList.remove('open');
 };
 
 window.closeModal = function closeModal(id) {
@@ -500,16 +566,21 @@ function connectWebSocket() {
 function renderCloudHeaderBar() {
   const userBar = document.getElementById('cloudAccountBar');
   const userBadge = document.getElementById('cloudUserBadge');
+  const avatarInitials = document.getElementById('accountAvatarInitials');
   const workerPill = document.getElementById('workerStatusPill');
   const workerText = document.getElementById('workerStatusText');
   const masterNav = document.getElementById('navMasterUsersBtn');
+  const masterGroupLbl = document.getElementById('navMasterGroupLabel');
   const masterMob = document.getElementById('mobMasterUsersBtn');
+  const clientMob = document.getElementById('mobClientAccountBtn');
   const impBanner = document.getElementById('impersonationBanner');
   const impTarget = document.getElementById('impersonationTargetLabel');
 
   const isMaster = state.currentUser?.role === 'master';
   if (masterNav) masterNav.style.display = isMaster ? '' : 'none';
-  if (masterMob) masterMob.style.display = isMaster ? 'inline-flex' : 'none';
+  if (masterGroupLbl) masterGroupLbl.style.display = isMaster ? '' : 'none';
+  if (masterMob) masterMob.style.display = isMaster ? '' : 'none';
+  if (clientMob) clientMob.style.display = isMaster ? 'none' : '';
 
   const isImpersonating = Boolean(state.currentUser?.impersonating || state.actAsUser?.userId);
   if (impBanner && impTarget) {
@@ -523,31 +594,52 @@ function renderCloudHeaderBar() {
     }
   }
 
-  if (state.currentUser?.username) {
+  const displayName = state.currentUser?.displayName || state.currentUser?.username || 'Minha Conta';
+  const username = state.currentUser?.username || '';
+  if (avatarInitials) {
+    const parts = String(displayName).trim().split(/\s+/).filter(Boolean);
+    const initials = parts.length >= 2
+      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+      : String(displayName).slice(0, 2).toUpperCase();
+    avatarInitials.textContent = initials || 'ZA';
+  }
+
+  if (username) {
     if (userBar) userBar.style.display = 'inline-flex';
-    if (userBadge) {
-      userBadge.textContent = isImpersonating
-        ? `🛠️ @${state.currentUser.username}`
-        : `${isMaster ? '👑' : '👤'} @${state.currentUser.username}`;
-    }
+    if (userBadge) userBadge.textContent = `@${username}`;
   } else if (userBar) {
     userBar.style.display = 'none';
   }
 
+  let workerDesc = 'Motor Local Ativo';
   if (workerPill && workerText) {
     workerPill.style.display = 'inline-flex';
     if (state.waState?.workerOnline) {
       const plat = state.waState.workerPlatform ? ` · ${state.waState.workerPlatform}` : '';
       workerPill.className = 'status-pill connected';
-      workerText.textContent = `🟢 Motor Online${plat}`;
+      workerDesc = `Motor Online${plat}`;
+      workerText.textContent = workerDesc;
     } else if (state.runtimeMode === 'vercel_cloud') {
       workerPill.className = 'status-pill';
-      workerText.textContent = '⚪ Motor Offline (Painel Nuvem Ativo)';
+      workerDesc = 'Painel Nuvem (Motor Offline)';
+      workerText.textContent = 'Painel Nuvem';
     } else {
       workerPill.className = 'status-pill connected';
-      workerText.textContent = '🟢 Motor Local Ativo';
+      workerDesc = 'Motor Local Ativo';
+      workerText.textContent = 'Motor Local';
     }
   }
+
+  const sheetName = document.getElementById('accountSheetDisplayName');
+  const sheetRole = document.getElementById('accountSheetRoleSub');
+  const sheetWorker = document.getElementById('accountSheetWorkerLine');
+  if (sheetName) sheetName.textContent = displayName;
+  if (sheetRole) {
+    sheetRole.textContent = username
+      ? `@${username} · ${isImpersonating ? 'Modo Suporte Master' : isMaster ? 'Administrador Master' : 'Workspace Isolado'}`
+      : 'Sessão Local';
+  }
+  if (sheetWorker) sheetWorker.textContent = `Ambiente: ${workerDesc}`;
 }
 
 function renderSaasOnboardingBox() {
@@ -626,29 +718,38 @@ function renderSaasOnboardingBox() {
   const pct = Math.round((doneCount / steps.length) * 100);
 
   // Na conta Master já 100% pronta e conectada, não polui o topo (a menos que esteja em Modo Suporte de cliente)
-  if (pct === 100 && state.currentUser?.tenantRole === 'master' && !state.actAsUser?.userId) {
+  if (pct === 100 && (state.currentUser?.role === 'master' || state.currentUser?.tenantRole === 'master') && !state.actAsUser?.userId) {
     box.style.display = 'none';
     return;
   }
 
+  const collapsedKey = `zapia_onb_collapsed_${uid}`;
+  const savedCollapse = localStorage.getItem(collapsedKey);
+  const isMasterSelf = (state.currentUser?.role === 'master' || state.currentUser?.tenantRole === 'master') && !state.actAsUser?.userId;
+  const isCollapsed = savedCollapse ? savedCollapse === '1' : isMasterSelf;
+
   box.style.display = 'block';
   box.innerHTML = `
     <div class="saas-onboarding-card">
-      <div class="saas-onboarding-head">
+      <div class="saas-onboarding-head" style="${isCollapsed ? 'margin-bottom:0;' : ''}">
         <div>
-          <strong style="font-size:14.5px; color:var(--text-main);">
-            ${pct === 100 ? '🎉 Configuração 100% Concluída! Sua operação está pronta.' : `🚀 Guia Rápido de Ativação da Conta (${pct}% concluído)`}
+          <strong style="font-size:14px; color:var(--text-main);">
+            ${pct === 100 ? 'Configuração 100% Concluída' : `Ativação Guiada da Conta (${pct}%)`}
           </strong>
-          <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">
-            Siga os passos abaixo na ordem para deixar seu atendimento 100% afiado no WhatsApp.
-          </div>
+          ${isCollapsed ? '' : `<div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Complete os passos na ordem para operar 100% no automático.</div>`}
         </div>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="dismissSaasOnboarding()">Ocultar guia</button>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="toggleSaasOnboardingCollapse()">${isCollapsed ? 'Expandir' : 'Minimizar'}</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="dismissSaasOnboarding()">Ocultar</button>
+        </div>
       </div>
-      <div class="saas-progress-track">
+      <div class="saas-progress-track" style="${isCollapsed ? 'margin:8px 0 0;' : ''}">
         <div class="saas-progress-fill" style="width:${pct}%;"></div>
       </div>
-      <div class="saas-steps-grid">
+      ${
+        isCollapsed
+          ? ''
+          : `<div class="saas-steps-grid">
         ${steps
           .map(
             (st) => `
@@ -665,10 +766,23 @@ function renderSaasOnboardingBox() {
         `
           )
           .join('')}
-      </div>
+      </div>`
+      }
     </div>
   `;
 }
+
+window.toggleSaasOnboardingCollapse = function toggleSaasOnboardingCollapse() {
+  const uid = state.currentUser?.id || 'local';
+  const key = `zapia_onb_collapsed_${uid}`;
+  const isMasterSelf = (state.currentUser?.role === 'master' || state.currentUser?.tenantRole === 'master') && !state.actAsUser?.userId;
+  const cur = localStorage.getItem(key);
+  const currentlyCollapsed = cur ? cur === '1' : isMasterSelf;
+  try {
+    localStorage.setItem(key, currentlyCollapsed ? '0' : '1');
+  } catch {}
+  renderSaasOnboardingBox();
+};
 
 window.dismissSaasOnboarding = function dismissSaasOnboarding() {
   const uid = state.currentUser?.id || 'local';
@@ -731,11 +845,12 @@ function renderWaState() {
 
   const botOn = state.waState?.botEnabled !== false;
   masterToggle.checked = botOn;
-  masterLabel.textContent = botOn ? 'IA Automática: Ativa' : 'IA Automática: Pausada';
+  masterLabel.textContent = botOn ? 'IA Ativa' : 'IA Pausada';
 
   if (st === 'connected') {
     const phone = state.waState.connectedUser?.phone || '';
-    txt.textContent = `Conectado (${phone ? '+' + phone : 'Online'})`;
+    txt.textContent = window.innerWidth <= 820 ? 'Online' : (phone ? `Online (+${phone})` : 'Online');
+    pill.title = phone ? `WhatsApp conectado: +${phone}` : 'WhatsApp conectado';
     btnConn.style.display = 'none';
     btnDisc.style.display = 'inline-flex';
     stage.innerHTML = `
@@ -747,14 +862,14 @@ function renderWaState() {
     btnConn.style.display = 'none';
     btnDisc.style.display = 'inline-flex';
     if (state.waState.pairingCode) {
-      txt.textContent = 'Aguardando Código no Celular';
+      txt.textContent = 'Parear Código';
       stage.innerHTML = `
         <div style="font-size:13.5px; color:var(--text-secondary);">Digite este código de 8 dígitos na notificação do seu WhatsApp:</div>
         <div class="pairing-code-display">${escapeHtml(state.waState.pairingCode)}</div>
         <div style="font-size:12px; color:var(--text-muted);">No celular: Aparelhos Conectados &gt; Conectar com número de telefone</div>
       `;
     } else if (state.waState.qrDataUrl) {
-      txt.textContent = 'Escaneie o QR Code';
+      txt.textContent = 'Parear QR';
       stage.innerHTML = `
         <img class="qr-image" src="${state.waState.qrDataUrl}" alt="QR Code do WhatsApp" />
         <div style="font-size:12.5px; color:var(--text-secondary);">Aponte a câmera do seu WhatsApp para conectar</div>
@@ -769,7 +884,8 @@ function renderWaState() {
       <div style="font-size:12.5px; color:var(--text-secondary);">${escapeHtml(state.waState.lastError || 'Gerando sessão criptografada, aguarde alguns segundos.')}</div>
     `;
   } else {
-    txt.textContent = 'WhatsApp Desconectado';
+    txt.textContent = 'Offline';
+    pill.title = 'WhatsApp desconectado';
     btnConn.style.display = 'inline-flex';
     btnDisc.style.display = 'none';
     const isCloudWorkerOff = state.runtimeMode === 'vercel_cloud' && !state.waState?.workerOnline;
@@ -1997,21 +2113,25 @@ function renderActiveInboxConversation() {
   document.getElementById('inboxContactName').textContent = `${c.pinned ? '📌 ' : ''}${c.name || 'Cliente'}`;
   document.getElementById('inboxContactPhone').textContent = `+${c.phone || c.chatId}`;
   document.getElementById('inboxStageQuickSelect').value = c.stage || 'em_atendimento';
+  const mobStageMirror = document.getElementById('inspMobStageMirror');
+  if (mobStageMirror) mobStageMirror.value = c.stage || 'em_atendimento';
 
   const paused = isContactCurrentlyPaused(c);
   const statusBadge = document.getElementById('inboxAiStatusBadge');
-  statusBadge.textContent = paused ? '👤 Com Você (IA Pausada)' : '🤖 IA Automática Ativa';
+  statusBadge.textContent = paused ? 'Com Você' : 'IA Ativa';
   statusBadge.className = `tag ${paused ? 'paused' : ''}`;
-  document.getElementById('btnInboxTogglePause').textContent = paused ? '▶️ Devolver p/ IA' : '✋ Assumir';
+  document.getElementById('btnInboxTogglePause').textContent = paused ? 'Retomar IA' : 'Assumir';
 
   const pinBtn = document.getElementById('btnInboxTogglePin');
   if (pinBtn) {
-    pinBtn.textContent = c.pinned ? '📌 Fixada' : '📌';
+    pinBtn.style.borderColor = c.pinned ? 'var(--warning-bright)' : '';
+    pinBtn.style.color = c.pinned ? 'var(--warning-bright)' : '';
     pinBtn.title = c.pinned ? 'Desafixar conversa' : 'Fixar conversa no topo';
   }
   const archBtn = document.getElementById('btnInboxToggleArchive');
   if (archBtn) {
-    archBtn.textContent = c.archived ? '📤 Reativar' : '📥';
+    archBtn.style.borderColor = c.archived ? 'var(--accent)' : '';
+    archBtn.style.color = c.archived ? 'var(--accent-bright)' : '';
     archBtn.title = c.archived ? 'Reativar conversa na fila principal' : 'Arquivar conversa';
   }
 
@@ -2514,9 +2634,9 @@ function renderSimulator() {
 
   if (!hist.length) {
     box.innerHTML = `
-      <div class="empty-state" style="background:rgba(15,23,42,0.55); color:#e2e8f0; margin:auto;">
+      <div class="empty-state" style="background:var(--bg-card); color:var(--text-main); border:1px solid var(--border); box-shadow:var(--shadow-sm); max-width:390px; margin:auto;">
         <strong>Simulador pronto para testar "${escapeHtml(p?.name || 'Seu Negócio')}"!</strong>
-        <p style="margin-top:6px;">Clique no microfone para gravar sua voz, use os atalhos ao lado ou digite como um contato real no WhatsApp.</p>
+        <p style="margin-top:6px; color:var(--text-secondary);">Clique no microfone para gravar sua voz, use os atalhos ao lado ou digite como um contato real no WhatsApp.</p>
       </div>
     `;
     return;
@@ -2865,15 +2985,33 @@ function bindEvents() {
     });
   });
 
-  // Navegação Desktop + Mobile
+  // Navegação Desktop + Mobile (5 Hubs Coesos)
   document.querySelectorAll('.nav-btn[data-tab]').forEach((btn) => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
-  document.querySelectorAll('.mob-nav-btn[data-mobtab]').forEach((btn) => {
-    btn.addEventListener('click', () => switchTab(btn.dataset.mobtab));
+  document.querySelectorAll('.mob-nav-btn[data-mobhub]').forEach((btn) => {
+    btn.addEventListener('click', () => window.switchMobileHub(btn.dataset.mobhub));
   });
   document.getElementById('btnMobileMore')?.addEventListener('click', () => {
     document.getElementById('mobileMoreSheet')?.classList.add('open');
+  });
+
+  // Popovers / Bottom Sheets de Conta e Ferramentas do CRM
+  document.getElementById('btnOpenAccountSheet')?.addEventListener('click', () => {
+    window.openAccountSheet();
+  });
+  document.getElementById('btnOpenCrmToolsSheet')?.addEventListener('click', () => {
+    document.getElementById('crmToolsSheet')?.classList.add('open');
+  });
+  document.querySelectorAll('.action-sheet-backdrop').forEach((sheet) => {
+    sheet.addEventListener('mousedown', (e) => {
+      if (e.target === sheet) sheet.classList.remove('open');
+    });
+  });
+
+  // Gaveta recolhível de Áudio Estratégico & Catálogo no Composer do Inbox
+  document.getElementById('btnToggleComposerMediaTray')?.addEventListener('click', () => {
+    document.getElementById('inboxVoiceQuickRow')?.classList.toggle('open');
   });
 
   // Atalhos de Teclado (Ctrl+K e Escape)
@@ -2882,7 +3020,8 @@ function bindEvents() {
       e.preventDefault();
       openCommandPalette();
     } else if (e.key === 'Escape') {
-      document.querySelectorAll('.modal-backdrop.open, .mobile-more-sheet.open').forEach((el) => el.classList.remove('open'));
+      document.querySelectorAll('.modal-backdrop.open, .mobile-more-sheet.open, .action-sheet-backdrop.open').forEach((el) => el.classList.remove('open'));
+      window.closeMobileInspectorSheet();
     }
   });
   document.getElementById('btnOpenCmdPalette')?.addEventListener('click', openCommandPalette);
@@ -3557,8 +3696,9 @@ function bindEvents() {
     const layout = document.getElementById('crmInboxLayout');
     if (!layout) return;
     if (window.innerWidth <= 900) {
-      layout.classList.toggle('mob-inspector-open');
-    } else if (window.innerWidth <= 1220) {
+      const nowOpen = layout.classList.toggle('mob-inspector-open');
+      document.getElementById('inspectorMobileBackdrop')?.classList.toggle('open', nowOpen);
+    } else if (window.innerWidth <= 1240) {
       layout.classList.toggle('force-inspector-open');
     } else {
       layout.classList.toggle('inspector-collapsed');
@@ -4826,8 +4966,8 @@ function renderManagedUsers() {
     if (filterVal === 'active' && !u.isActive) return false;
     if (filterVal === 'blocked' && u.isActive) return false;
     if (filterVal === 'online' && !u.workerOnline) return false;
-    if (filterVal === 'setup_pending' && u.role !== 'master' && (Number(u.setupScore) || 0) >= 3) return false;
-    if (filterVal === 'setup_pending' && u.role === 'master') return false;
+    if ((filterVal === 'pending_setup' || filterVal === 'setup_pending') && u.role !== 'master' && (Number(u.setupScore) || 0) >= 3) return false;
+    if ((filterVal === 'pending_setup' || filterVal === 'setup_pending') && u.role === 'master') return false;
     return true;
   });
 
@@ -5159,6 +5299,7 @@ function bindCloudAuthAndAdminEvents() {
       saveCloudSession(null);
       state.currentUser = null;
       if (cloudPollTimer) clearTimeout(cloudPollTimer);
+      closeModal('accountSheet');
       renderCloudHeaderBar();
       document.getElementById('cloudLoginScreen')?.classList.add('open');
     }
@@ -5186,15 +5327,16 @@ function bindCloudAuthAndAdminEvents() {
         body: JSON.stringify({ displayName, username, password, customerPhone, adminNotes })
       });
       document.getElementById('createManagedUserForm').reset();
+      closeModal('createClientModal');
       await window.copyClientWelcomeKit(res.user.username, res.user.displayName, password);
-      showToast(`✅ Conta @${res.user.username} criada e Kit de Boas-Vindas copiado!`);
+      showToast(`Conta @${res.user.username} criada e Kit de Boas-Vindas copiado!`);
       await loadManagedUsers();
     } catch (err) {
       showToast(err.message, true);
     } finally {
       if (btn) {
         btn.disabled = false;
-        btn.textContent = '+ Criar Conta & Gerar Kit de Boas-Vindas';
+        btn.textContent = 'Criar Conta & Gerar Kit';
       }
     }
   });

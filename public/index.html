@@ -29,28 +29,28 @@
       </div>
 
       <div class="saas-login-pills">
-        <span class="saas-login-pill">💬 Inbox Ao Vivo 360º</span>
-        <span class="saas-login-pill">🎤 Voz Humana OGG</span>
-        <span class="saas-login-pill">🧠 Cérebro Único</span>
-        <span class="saas-login-pill">🔒 Dados 100% Isolados</span>
+        <span class="saas-login-pill">Inbox Ao Vivo 360º</span>
+        <span class="saas-login-pill">Voz Humana OGG</span>
+        <span class="saas-login-pill">Cérebro Único</span>
+        <span class="saas-login-pill">Isolamento Multi-Tenant</span>
       </div>
 
       <p id="cloudLoginSubtitle" class="panel-desc" style="margin:0 0 14px; font-size:13px;">
         Entre com seu usuário e senha para acessar sua operação isolada no WhatsApp.
       </p>
 
-      <div id="cloudLoginErrorBox" style="display:none; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.35); color:var(--danger); border-radius:8px; padding:10px 12px; font-size:12.5px; margin-bottom:12px;"></div>
+      <div id="cloudLoginErrorBox" role="alert" aria-live="assertive" style="display:none; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.35); color:var(--danger); border-radius:8px; padding:10px 12px; font-size:12.5px; margin-bottom:12px;"></div>
 
       <form id="cloudLoginForm" style="display:flex; flex-direction:column; gap:12px;">
         <div class="form-group" style="margin:0;">
           <label class="form-label" for="cloudLoginUser">Usuário</label>
-          <input type="text" id="cloudLoginUser" required autocomplete="username" placeholder="Digite seu usuário..." />
+          <input type="text" id="cloudLoginUser" required autocomplete="username" placeholder="Digite seu usuário..." name="username" spellcheck="false" autocapitalize="none" autocorrect="off" />
         </div>
         <div class="form-group" style="margin:0;">
           <label class="form-label" for="cloudLoginPass">Senha</label>
           <div style="display:flex; gap:8px;">
-            <input type="password" id="cloudLoginPass" required autocomplete="current-password" placeholder="Digite sua senha..." style="flex:1;" />
-            <button type="button" id="btnToggleLoginPass" class="btn btn-secondary btn-sm" title="Mostrar/ocultar senha" style="padding:0 12px;">👁️</button>
+            <input type="password" id="cloudLoginPass" required autocomplete="current-password" placeholder="Digite sua senha..." style="flex:1;" name="password" />
+            <button type="button" id="btnToggleLoginPass" class="btn btn-secondary btn-sm" aria-label="Mostrar ou ocultar senha" title="Mostrar ou ocultar senha" style="padding:0 12px; min-width:44px;"><svg class="icon-svg icon-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
           </div>
         </div>
         <button type="submit" id="btnCloudLoginSubmit" class="btn btn-primary" style="width:100%; justify-content:center; margin-top:4px; min-height:44px; font-size:14px;">
@@ -59,7 +59,7 @@
       </form>
 
       <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border); font-size:11.5px; color:var(--text-muted); text-align:center;">
-        🔒 Acesso exclusivo para assinantes e contas autorizadas.
+        Acesso exclusivo para assinantes e contas autorizadas.
       </div>
     </div>
   </div>
@@ -73,7 +73,7 @@
       <h2 id="pinLockTitle" class="panel-title">Painel Protegido por PIN</h2>
       <p class="panel-desc" style="margin:6px auto 16px;">Digite seu PIN de segurança para acessar o painel.</p>
       <form id="pinUnlockForm" style="display:flex; flex-direction:column; gap:10px;">
-        <input type="password" id="pinUnlockInput" placeholder="Digite o PIN..." autocomplete="current-password" style="text-align:center; font-size:18px; letter-spacing:4px;" / aria-label="PIN de desbloqueio do painel">
+        <input type="password" id="pinUnlockInput" placeholder="Digite o PIN..." autocomplete="current-password" style="text-align:center; font-size:18px; letter-spacing:4px;" aria-label="PIN de desbloqueio do painel" inputmode="numeric" />
         <button type="submit" class="btn btn-primary" style="width:100%;">Desbloquear Painel</button>
       </form>
     </div>
@@ -345,7 +345,7 @@
               <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
                 <label class="form-label" for="pairingPhoneInput">Conectar sem câmera (Código de 8 dígitos)</label>
                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                  <input type="text" id="pairingPhoneInput" placeholder="Ex: 5586999998888 (com 55 + DDD)" style="flex:1; min-width:180px;" />
+                  <input type="text" id="pairingPhoneInput" placeholder="Ex: 5586999998888 (com 55 + DDD)" style="flex:1; min-width:180px;" inputmode="tel" autocomplete="tel" />
                   <button type="button" id="btnConnectCode" class="btn btn-secondary">Gerar Código</button>
                 </div>
                 <div class="form-hint">Digite apenas números com código do país (55) e DDD.</div>
@@ -366,7 +366,7 @@
                 <div class="grid-equal" style="gap:10px;">
                   <div class="form-group" style="margin-bottom:10px;">
                     <label class="form-label" for="dashProactivePhone">WhatsApp do Contato (DDD + Número)</label>
-                    <input type="text" id="dashProactivePhone" placeholder="Ex: 5586999998888" />
+                    <input type="text" id="dashProactivePhone" placeholder="Ex: 5586999998888" inputmode="tel" autocomplete="tel" />
                   </div>
                   <div class="form-group" style="margin-bottom:10px;">
                     <label class="form-label" for="dashProactiveName">Nome / Loja (opcional — usa em {{nome}})</label>
@@ -385,7 +385,7 @@
                 </div>
 
                 <div class="form-group" style="margin-bottom:12px;">
-                  <label class="form-label" for="dashProactiveVoiceSelect">🎤 Nota de Voz Estratégica (opcional — enviar junto ou sozinha)</label>
+                  <label class="form-label" for="dashProactiveVoiceSelect">Nota de Voz Estratégica (opcional — enviar junto ou sozinha)</label>
                   <select id="dashProactiveVoiceSelect">
                     <option value="">Sem áudio anexado (apenas texto)</option>
                   </select>
@@ -452,7 +452,7 @@
                 <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
               </button>
 
-              <input type="text" id="simTextInput" placeholder="Digite ou clique no microfone para falar..." autocomplete="off" / aria-label="Mensagem de teste para o simulador">
+              <input type="text" id="simTextInput" placeholder="Digite ou clique no microfone para falar..." autocomplete="off" aria-label="Mensagem de teste para o simulador" />
               <button type="submit" id="simSendBtn" class="btn btn-primary">Enviar</button>
             </form>
           </div>
@@ -530,7 +530,7 @@
                 <button type="button" class="studio-subtab" data-studiotab="humanization">Skills de Humanização (Hxx)</button>
               </div>
               <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                <input type="text" id="studioSearchInput" placeholder="Filtrar mensagem ou skill..." style="width:210px; min-height:36px;" / aria-label="Filtrar mensagens aprovadas ou skills">
+                <input type="text" id="studioSearchInput" placeholder="Filtrar mensagem ou skill..." style="width:210px; min-height:36px;" aria-label="Filtrar mensagens aprovadas ou skills" />
                 <button type="button" id="btnNewStudioItem" class="btn btn-primary btn-sm">+ Nova Mensagem / Skill</button>
               </div>
             </div>
@@ -618,7 +618,7 @@
             </div>
             <p class="panel-desc">Suba tabelas de preços, manuais ou políticas em texto para a IA consultar durante o atendimento.</p>
             <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
-              <input type="file" id="knowledgeFileInput" accept=".txt,.csv,.md,.json" style="flex:1;" / aria-label="Selecionar arquivo PDF ou TXT de conhecimento">
+              <input type="file" id="knowledgeFileInput" accept=".txt,.csv,.md,.json" style="flex:1;" aria-label="Selecionar arquivo PDF ou TXT de conhecimento" />
               <button type="button" id="btnUploadKnowledge" class="btn btn-secondary">Anexar arquivo</button>
             </div>
             <div id="knowledgeDocsList"></div>
@@ -667,7 +667,7 @@
               <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">A IA escolhe automaticamente os áudios marcados como <strong>Uso pela IA: Ativo</strong> quando encaixam na conversa, e todos ficam disponíveis em 1 clique no CRM.</p>
             </div>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <input type="text" id="voiceSearchInput" placeholder="Buscar áudio ou transcrição..." style="width:230px; min-height:36px;" / aria-label="Buscar áudio ou transcrição na biblioteca de voz">
+              <input type="text" id="voiceSearchInput" placeholder="Buscar áudio ou transcrição..." style="width:230px; min-height:36px;" aria-label="Buscar áudio ou transcrição na biblioteca de voz" />
             </div>
           </div>
           <div id="voiceLibraryGrid" class="voice-grid" style="margin-top:14px;"></div>
@@ -709,7 +709,7 @@
                 </div>
                 <div class="form-group">
                   <label class="form-label" for="pixKey">Chave PIX</label>
-                  <input type="text" id="pixKey" placeholder="Digite sua chave PIX..." />
+                  <input type="text" id="pixKey" placeholder="Digite sua chave PIX..." spellcheck="false" autocapitalize="none" autocorrect="off" />
                 </div>
               </div>
               <div class="grid-equal" style="gap:12px;">
@@ -761,7 +761,7 @@
               <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">Ideal para portfólio de assessoria, veículos com várias fotos, cardápios ou tabelas em PDF.</p>
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-              <input type="text" id="catalogSearchInput" placeholder="Buscar item..." style="width:190px; min-height:36px;" / aria-label="Buscar produto ou serviço no catálogo">
+              <input type="text" id="catalogSearchInput" placeholder="Buscar item..." style="width:190px; min-height:36px;" aria-label="Buscar produto ou serviço no catálogo" />
               <select id="catalogCatFilter" style="width:auto; min-width:140px; min-height:36px;" aria-label="Filtrar catálogo por categoria">
                 <option value="">Todas as categorias</option>
               </select>
@@ -835,7 +835,7 @@
             <div class="grid-equal">
               <div class="form-group">
                 <label class="form-label" for="geminiApiKey">Chave Principal do Google Gemini (GEMINI_API_KEY)</label>
-                <input type="password" id="geminiApiKey" placeholder="AIzaSy..." autocomplete="off" />
+                <input type="password" id="geminiApiKey" placeholder="AIzaSy..." autocomplete="off" spellcheck="false" autocapitalize="none" autocorrect="off" />
                 <div class="form-hint">Obtenha gratuitamente em: <strong>aistudio.google.com/apikey</strong></div>
               </div>
               <div class="form-group">
@@ -862,11 +862,11 @@
             <div class="grid-equal">
               <div class="form-group">
                 <label class="form-label" for="openaiApiKey">Chave da API OpenAI (OPENAI_API_KEY)</label>
-                <input type="password" id="openaiApiKey" placeholder="sk-..." autocomplete="off" />
+                <input type="password" id="openaiApiKey" placeholder="sk-..." autocomplete="off" spellcheck="false" autocapitalize="none" autocorrect="off" />
               </div>
               <div class="form-group">
                 <label class="form-label" for="openaiModel">Modelo OpenAI</label>
-                <input type="text" id="openaiModel" value="gpt-4o-mini" placeholder="gpt-4o-mini ou gpt-4o" />
+                <input type="text" id="openaiModel" value="gpt-4o-mini" placeholder="gpt-4o-mini ou gpt-4o" spellcheck="false" autocapitalize="none" autocorrect="off" />
               </div>
             </div>
           </div>
@@ -876,12 +876,12 @@
             <div class="grid-equal">
               <div class="form-group">
                 <label class="form-label" for="groqApiKey">Chave da API Groq (GROQ_API_KEY)</label>
-                <input type="password" id="groqApiKey" placeholder="gsk_..." autocomplete="off" />
+                <input type="password" id="groqApiKey" placeholder="gsk_..." autocomplete="off" spellcheck="false" autocapitalize="none" autocorrect="off" />
                 <div class="form-hint">Obtenha gratuitamente em: <strong>console.groq.com/keys</strong></div>
               </div>
               <div class="form-group">
                 <label class="form-label" for="groqModel">Modelo Groq</label>
-                <input type="text" id="groqModel" value="llama-3.3-70b-versatile" />
+                <input type="text" id="groqModel" value="llama-3.3-70b-versatile" spellcheck="false" autocapitalize="none" autocorrect="off" />
               </div>
             </div>
           </div>
@@ -891,11 +891,11 @@
             <div class="grid-equal">
               <div class="form-group">
                 <label class="form-label" for="openrouterApiKey">Chave OpenRouter (OPENROUTER_API_KEY)</label>
-                <input type="password" id="openrouterApiKey" placeholder="sk-or-v1-..." autocomplete="off" />
+                <input type="password" id="openrouterApiKey" placeholder="sk-or-v1-..." autocomplete="off" spellcheck="false" autocapitalize="none" autocorrect="off" />
               </div>
               <div class="form-group">
                 <label class="form-label" for="openrouterModel">Modelo no OpenRouter</label>
-                <input type="text" id="openrouterModel" value="deepseek/deepseek-chat" placeholder="Ex: deepseek/deepseek-chat" />
+                <input type="text" id="openrouterModel" value="deepseek/deepseek-chat" placeholder="Ex: deepseek/deepseek-chat" spellcheck="false" autocapitalize="none" autocorrect="off" />
               </div>
             </div>
           </div>
@@ -1047,14 +1047,14 @@
             <div class="form-group" style="padding-top:10px; border-top:1px solid var(--border);">
               <label class="form-label" for="ownerPersonalWhatsapp">Seu WhatsApp Pessoal para receber Resumos</label>
               <div style="display:flex; gap:8px;">
-                <input type="text" id="ownerPersonalWhatsapp" placeholder="Ex: 5586999998888 (com DDD)" />
+                <input type="text" id="ownerPersonalWhatsapp" placeholder="Ex: 5586999998888 (com DDD)" inputmode="tel" autocomplete="tel" />
                 <button type="button" id="btnTestOwnerAlert" class="btn btn-secondary btn-sm">Testar alerta</button>
               </div>
             </div>
 
             <div class="form-group" style="padding-top:10px; border-top:1px solid var(--border); margin-bottom:0;">
               <label class="form-label" for="securityPinInput">PIN de Bloqueio do Painel na Rede Wi-Fi (opcional)</label>
-              <input type="password" id="securityPinInput" placeholder="Deixe vazio p/ livre ou digite 4 a 8 dígitos" autocomplete="new-password" />
+              <input type="password" id="securityPinInput" placeholder="Deixe vazio p/ livre ou digite 4 a 8 dígitos" autocomplete="new-password" inputmode="numeric" />
               <div class="form-hint">Protege seu painel quando estiver rodando no Termux ou PC conectado em Wi-Fi compartilhado.</div>
             </div>
           </div>
@@ -1098,8 +1098,8 @@
             <p class="panel-desc">A IA nunca responderá nem enviará abordagem para os números abaixo.</p>
 
             <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
-              <input type="text" id="ignoreNameInput" placeholder="Nome (ex: Mãe)" style="flex:1; min-width:120px;" / aria-label="Nome do contato ignorado na lista branca">
-              <input type="text" id="ignorePhoneInput" placeholder="DDD + Número (ex: 86999887766)" style="flex:1.2; min-width:150px;" / aria-label="Número de WhatsApp com DDD para lista branca">
+              <input type="text" id="ignoreNameInput" placeholder="Nome (ex: Mãe)" style="flex:1; min-width:120px;" aria-label="Nome do contato ignorado na lista branca" />
+              <input type="text" id="ignorePhoneInput" placeholder="DDD + Número (ex: 86999887766)" style="flex:1.2; min-width:150px;" aria-label="Número de WhatsApp com DDD para lista branca" inputmode="tel" autocomplete="tel" />
               <button type="button" id="btnAddIgnored" class="btn btn-secondary">Bloquear IA</button>
             </div>
 
@@ -1131,7 +1131,7 @@
           <div class="crm-hub-actions">
             <div class="crm-search-wrap">
               <svg class="crm-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
-              <input type="text" id="crmSearchInput" placeholder="Buscar nome, número ou mensagem..." / aria-label="Buscar conversa por nome, telefone ou mensagem">
+              <input type="text" id="crmSearchInput" placeholder="Buscar nome, número ou mensagem..." aria-label="Buscar conversa por nome, telefone ou mensagem" />
             </div>
             <button type="button" id="btnOpenNewContactModal" class="btn btn-primary btn-sm">
               <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
@@ -1273,7 +1273,7 @@
                   </div>
 
                   <form id="crmInboxReplyForm" style="display:flex; gap:8px; align-items:center;">
-                    <input type="text" id="crmInboxReplyInput" placeholder="Mensagem ou digite / para atalhos..." autocomplete="off" style="flex:1;" / aria-label="Escrever resposta ou nota interna no chat">
+                    <input type="text" id="crmInboxReplyInput" placeholder="Mensagem ou digite / para atalhos..." autocomplete="off" style="flex:1;" aria-label="Escrever resposta ou nota interna no chat" />
                     <button type="submit" id="btnInboxSendText" class="btn btn-primary">Enviar</button>
                   </form>
                 </div>
@@ -1313,7 +1313,7 @@
                 <!-- Agendamento S19 Rápido -->
                 <div class="inspector-section">
                   <div class="inspector-label">Retorno Combinado (S19)</div>
-                  <input type="datetime-local" id="inspFollowUpInput" style="width:100%; font-size:12.5px; padding:6px 8px; margin-bottom:6px;" / aria-label="Data e hora do lembrete de retorno">
+                  <input type="datetime-local" id="inspFollowUpInput" style="width:100%; font-size:12.5px; padding:6px 8px; margin-bottom:6px;" aria-label="Data e hora do lembrete de retorno" />
                   <div style="display:flex; gap:5px; flex-wrap:wrap;">
                     <button type="button" class="composer-tool-btn" onclick="quickSetInspectorFollowup(60)">+1 hora</button>
                     <button type="button" class="composer-tool-btn" onclick="quickSetInspectorFollowup('tomorrow9')">Amanhã 09h</button>
@@ -1440,7 +1440,7 @@
               <p class="panel-desc" style="margin-bottom:0;">Entre em Modo Suporte em 1 clique, copie o Kit de Acesso, edite notas financeiras ou bloqueie/libere contas.</p>
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; width:100%; max-width:460px;">
-              <input type="text" id="masterUserSearchInput" placeholder="Buscar cliente, @usuario ou nota..." style="flex:1; min-width:160px;" / aria-label="Buscar conta de cliente por nome, usuário ou nota">
+              <input type="text" id="masterUserSearchInput" placeholder="Buscar cliente, @usuario ou nota..." style="flex:1; min-width:160px;" aria-label="Buscar conta de cliente por nome, usuário ou nota" />
               <select id="masterUserFilterSelect" style="width:auto; min-width:145px; font-size:12.5px; padding:7px 10px;" aria-label="Filtrar contas de clientes por status">
                 <option value="all">Todas as contas</option>
                 <option value="active">Somente Ativas</option>
@@ -1615,18 +1615,18 @@
           </div>
           <div class="form-group" style="margin:0;">
             <label class="form-label" for="newAccountCustomerPhone">WhatsApp do Contratante</label>
-            <input type="text" id="newAccountCustomerPhone" placeholder="Ex: 5586999887766" />
+            <input type="text" id="newAccountCustomerPhone" placeholder="Ex: 5586999887766" inputmode="tel" autocomplete="tel" />
           </div>
         </div>
 
         <div class="grid-equal" style="gap:10px;">
           <div class="form-group" style="margin:0;">
             <label class="form-label" for="newAccountUsername">Usuário de Login *</label>
-            <input type="text" id="newAccountUsername" required placeholder="Ex: odontovida" autocomplete="off" />
+            <input type="text" id="newAccountUsername" required placeholder="Ex: odontovida" autocomplete="off" spellcheck="false" autocapitalize="none" autocorrect="off" />
           </div>
           <div class="form-group" style="margin:0;">
             <label class="form-label" for="newAccountPassword">Senha Inicial *</label>
-            <input type="text" id="newAccountPassword" required minlength="6" placeholder="Mínimo 6 caracteres" autocomplete="off" />
+            <input type="text" id="newAccountPassword" required minlength="6" placeholder="Mínimo 6 caracteres" autocomplete="off" spellcheck="false" autocapitalize="none" autocorrect="off" />
           </div>
         </div>
 
@@ -1680,7 +1680,7 @@
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('cmdPaletteModal')">ESC</button>
       </div>
       <div class="modal-body">
-        <input type="text" id="cmdSearchInput" placeholder="Busque um cliente do CRM, mensagem M01–M13, skill ou aba..." autocomplete="off" / aria-label="Busca rápida global de clientes, mensagens e abas">
+        <input type="text" id="cmdSearchInput" placeholder="Busque um cliente do CRM, mensagem M01–M13, skill ou aba..." autocomplete="off" aria-label="Busca rápida global de clientes, mensagens e abas" />
         <div id="cmdResultsList" class="cmd-list"></div>
       </div>
     </div>
@@ -1728,7 +1728,7 @@
         <div class="grid-equal" style="gap:10px;">
           <div class="form-group">
             <label class="form-label" for="packMsgId">Código (ex: M01, M14)</label>
-            <input type="text" id="packMsgId" required placeholder="M14" />
+            <input type="text" id="packMsgId" required placeholder="M14" spellcheck="false" autocapitalize="none" autocorrect="off" />
           </div>
           <div class="form-group">
             <label class="form-label" for="packMsgTitle">Título / Finalidade</label>
@@ -1765,7 +1765,7 @@
           </div>
           <div class="form-group">
             <label class="form-label" for="packSkillId">Código (ex: S32 ou H26)</label>
-            <input type="text" id="packSkillId" required placeholder="Ex: S32" />
+            <input type="text" id="packSkillId" required placeholder="Ex: S32" spellcheck="false" autocapitalize="none" autocorrect="off" />
           </div>
         </div>
         <div class="form-group">
@@ -1802,8 +1802,8 @@
         <div class="form-group">
           <label class="form-label">1. Áudio na Voz Responsável (Convertido p/ OGG/Opus Nativo + Waveform 64b)</label>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <button type="button" id="btnVoiceModalRecord" class="btn btn-secondary">🎤 Gravar pelo Microfone</button>
-            <label for="voiceModalFileInput" class="btn btn-secondary" style="cursor:pointer;">📁 Escolher Arquivo de Áudio</label>
+            <button type="button" id="btnVoiceModalRecord" class="btn btn-secondary">Gravar pelo Microfone</button>
+            <label for="voiceModalFileInput" class="btn btn-secondary" style="cursor:pointer;">Escolher Arquivo de Áudio</label>
             <input type="file" id="voiceModalFileInput" accept="audio/*,.ogg,.opus,.mp3,.m4a,.wav,.webm" style="display:none;" />
             <span id="voiceModalFileStatus" style="font-size:12px; color:var(--text-secondary);">Nenhum áudio selecionado</span>
           </div>
@@ -1845,10 +1845,10 @@
           <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
             <label class="form-label" for="voiceItemTranscription" style="margin-bottom:0;">3. Transcrição Fiel do Áudio *</label>
             <button type="button" id="btnAutoTranscribeVoice" class="btn btn-secondary btn-sm" style="min-height:28px; padding:3px 10px;">
-              ✨ Transcrever Automaticamente com IA
+              Transcrever Automaticamente com IA
             </button>
           </div>
-          <textarea id="voiceItemTranscription" rows="4" required placeholder="O que é falado no áudio... (Clique em '✨ Transcrever Automaticamente com IA' após gravar/subir o áudio para preencher sozinho!)"></textarea>
+          <textarea id="voiceItemTranscription" rows="4" required placeholder="O que é falado no áudio... (Clique em 'Transcrever Automaticamente com IA' após gravar/subir o áudio para preencher sozinho!)"></textarea>
           <div class="form-hint">A IA lê esta transcrição para encaixar o áudio na hora certa, responder detalhes extras sem repetir o que sua voz já diz e ter texto pronto se o cliente não puder ouvir áudio.</div>
         </div>
 
@@ -1889,7 +1889,7 @@
         </div>
         <div class="form-group">
           <label class="form-label" for="catItemLink">Link Externo / Compra (opcional)</label>
-          <input type="text" id="catItemLink" placeholder="https://..." />
+          <input type="text" id="catItemLink" placeholder="https://..." spellcheck="false" autocapitalize="none" autocorrect="off" />
         </div>
         <div class="form-group">
           <label class="form-label" for="catItemFile">Fotos, PDFs ou Áudios Explicativos (Selecione até 5 arquivos!)</label>
@@ -1930,19 +1930,19 @@
                 <option value="">Inserir M01–M13...</option>
               </select>
               <select id="crmQuickVoiceSelect" aria-label="Enviar áudio pronto da Biblioteca de Áudios">
-                <option value="">🎤 Áudio Pronto...</option>
+                <option value="">Áudio Pronto...</option>
               </select>
               <select id="crmQuickItemSelect" aria-label="Enviar item do catálogo">
                 <option value="">Enviar item catálogo...</option>
               </select>
-              <button type="button" id="btnCrmRecordAudio" class="btn btn-secondary btn-sm" style="min-height:32px; padding:4px 9px;" title="Gravar na hora e enviar Nota de Voz nativa (Skill S06)">🎤 Gravar Voz</button>
+              <button type="button" id="btnCrmRecordAudio" class="btn btn-secondary btn-sm" style="min-height:32px; padding:4px 9px;" title="Gravar na hora e enviar Nota de Voz nativa (Skill S06)">Gravar Voz</button>
               <label for="crmAudioFileInput" class="btn btn-secondary btn-sm" style="min-height:32px; padding:4px 9px; cursor:pointer;" title="Subir áudio avulso (.ogg/.mp3) como Nota de Voz">Subir Áudio</label>
               <input type="file" id="crmAudioFileInput" accept="audio/*,.ogg,.opus,.mp3,.m4a,.wav,.webm" style="display:none;" />
               <button type="button" id="btnCrmSendPix" class="btn btn-secondary btn-sm" style="min-height:32px; padding:4px 9px;">Enviar PIX</button>
             </div>
 
             <form id="crmManualSendForm" class="wa-composer">
-              <input type="text" id="crmManualTextInput" placeholder="Enviar mensagem manual e pausar IA..." autocomplete="off" / aria-label="Enviar mensagem manual pelo detalhe do lead">
+              <input type="text" id="crmManualTextInput" placeholder="Enviar mensagem manual e pausar IA..." autocomplete="off" aria-label="Enviar mensagem manual pelo detalhe do lead" />
               <button type="submit" class="btn btn-primary btn-sm">Enviar</button>
             </form>
           </div>
@@ -2019,7 +2019,7 @@
   <div id="quickRepliesModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="qrModalTitle">
     <div class="modal-dialog" style="max-width:620px;">
       <div class="modal-head">
-        <h3 id="qrModalTitle" class="panel-title">⚡ Respostas Rápidas com Barra (<code>/</code>)</h3>
+        <h3 id="qrModalTitle" class="panel-title">Respostas Rápidas com Barra (<code>/</code>)</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('quickRepliesModal')">Fechar</button>
       </div>
       <div class="modal-body">
@@ -2031,7 +2031,7 @@
           <div class="grid-equal" style="gap:10px; margin-bottom:8px;">
             <div class="form-group" style="margin:0;">
               <label class="form-label" for="qrShortcutInput">Atalho (sem a barra) *</label>
-              <input type="text" id="qrShortcutInput" required placeholder="Ex: pix, garantia, endereco" />
+              <input type="text" id="qrShortcutInput" required placeholder="Ex: pix, garantia, endereco" spellcheck="false" autocapitalize="none" autocorrect="off" />
             </div>
             <div class="form-group" style="margin:0;">
               <label class="form-label" for="qrTitleInput">Título curto *</label>
@@ -2044,7 +2044,7 @@
           </div>
           <div style="display:flex; justify-content:flex-end; gap:8px;">
             <button type="button" id="btnQrResetForm" class="btn btn-secondary btn-sm" style="display:none;" onclick="resetQuickReplyForm()">Cancelar edição</button>
-            <button type="submit" class="btn btn-primary btn-sm">💾 Salvar Atalho</button>
+            <button type="submit" class="btn btn-primary btn-sm">Salvar Atalho</button>
           </div>
         </form>
         <div id="quickRepliesManagerList" style="display:flex; flex-direction:column; gap:8px; max-height:260px; overflow-y:auto;"></div>
@@ -2056,7 +2056,7 @@
   <div id="newContactModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="newContactModalTitle">
     <div class="modal-dialog" style="max-width:460px;">
       <div class="modal-head">
-        <h3 id="newContactModalTitle" class="panel-title">➕ Nova Conversa / Contato Manual</h3>
+        <h3 id="newContactModalTitle" class="panel-title">Nova Conversa / Contato Manual</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('newContactModal')">Fechar</button>
       </div>
       <form id="newContactForm" class="modal-body">
@@ -2066,7 +2066,7 @@
         </div>
         <div class="form-group">
           <label class="form-label" for="newContactPhoneInput">WhatsApp com DDD *</label>
-          <input type="text" id="newContactPhoneInput" required placeholder="Ex: 5586999887766" />
+          <input type="text" id="newContactPhoneInput" required placeholder="Ex: 5586999887766" inputmode="tel" autocomplete="tel" />
         </div>
         <div class="form-group">
           <label class="form-label" for="newContactNotesInput">Observação Inicial (opcional)</label>
@@ -2084,7 +2084,7 @@
   <div id="editManagedUserModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="editManagedModalTitle">
     <div class="modal-dialog" style="max-width:500px;">
       <div class="modal-head">
-        <h3 id="editManagedModalTitle" class="panel-title">📝 Editar Cliente SaaS & Anotações</h3>
+        <h3 id="editManagedModalTitle" class="panel-title">Editar Cliente SaaS & Anotações</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('editManagedUserModal')">Fechar</button>
       </div>
       <form id="editManagedUserForm" class="modal-body">
@@ -2095,7 +2095,7 @@
         </div>
         <div class="form-group">
           <label class="form-label" for="editManagedCustomerPhone">WhatsApp do Contratante</label>
-          <input type="text" id="editManagedCustomerPhone" placeholder="Ex: 5586999887766" />
+          <input type="text" id="editManagedCustomerPhone" placeholder="Ex: 5586999887766" inputmode="tel" autocomplete="tel" />
         </div>
         <div class="form-group">
           <label class="form-label" for="editManagedAdminNotes">Observações Comerciais & Financeiras (Só você vê)</label>
@@ -2103,13 +2103,13 @@
         </div>
         <div style="display:flex; justify-content:flex-end; gap:10px;">
           <button type="button" class="btn btn-secondary" onclick="closeModal('editManagedUserModal')">Cancelar</button>
-          <button type="submit" class="btn btn-primary">💾 Salvar Dados do Cliente</button>
+          <button type="submit" class="btn btn-primary">Salvar Dados do Cliente</button>
         </div>
       </form>
     </div>
   </div>
 
-  <div id="toastStack" class="toast-stack" aria-live="polite"></div>
+  <div id="toastStack" class="toast-stack" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <script src="/app.js"></script>
 </body>

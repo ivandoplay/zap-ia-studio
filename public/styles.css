@@ -150,6 +150,26 @@ body {
   color: var(--text-main);
 }
 
+.panel-title,
+.section-title,
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+.panel-desc {
+  text-wrap: pretty;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .btn:not(:disabled):active,
+  .crm-filter-chip:active,
+  .mob-nav-btn:active {
+    transform: scale(0.98);
+  }
+}
+
 /* Keyboard Skip-to-Content Link (WCAG 2.4.1) */
 .skip-link {
   position: fixed;

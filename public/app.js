@@ -281,8 +281,18 @@ const lastHubSubTab = {
   config: 'ia'
 };
 
-window.switchTab = function switchTab(tabId) {
-  if (!tabId) return;
+const LEGACY_TAB_ALIASES = {
+  conexao: 'dashboard',
+  pix: 'catalogo',
+  config: 'seguranca',
+  usuarios: 'contas',
+  master: 'contas'
+};
+
+window.switchTab = function switchTab(rawTabId) {
+  if (!rawTabId) return;
+  const candidate = LEGACY_TAB_ALIASES[rawTabId] || rawTabId;
+  const tabId = document.getElementById(`tab-${candidate}`) ? candidate : 'dashboard';
   const hub = HUB_BY_TAB[tabId] || 'dashboard';
   if (hub === 'cerebro') lastHubSubTab.cerebro = tabId;
   if (hub === 'config') lastHubSubTab.config = tabId;
@@ -2055,14 +2065,25 @@ function renderCrmInbox(filteredList) {
     state.selectedInboxChatId = list[0].chatId;
   }
 
+  const allActiveCount = (state.contacts || []).filter((c) => !c.archived).length;
+  const countAllEl = document.getElementById('crmCountAll');
+  if (countAllEl) countAllEl.textContent = String(allActiveCount);
+  const inboxTotalEl = document.getElementById('crmInboxTotalCount');
+  if (inboxTotalEl) inboxTotalEl.textContent = String(allActiveCount);
+
   if (!list.length) {
     listEl.innerHTML = `<div class="empty-state" style="padding:28px 14px;">Nenhuma conversa encontrada neste filtro.</div>`;
   } else {
     const stageLabels = {
       novo: 'Novo',
+      qualificando: 'Qualificando',
       em_atendimento: 'Em Atendimento',
+      proposta_enviada: 'Proposta Enviada',
+      negociacao: 'Em Negociação',
       aguardando_humano: 'Aguardando Você',
-      concluido: 'Concluído'
+      fechado: 'Fechado',
+      concluido: 'Concluído',
+      perdido: 'Perdido'
     };
     listEl.innerHTML = list
       .map((c) => {
@@ -2076,9 +2097,10 @@ function renderCrmInbox(filteredList) {
           : '';
         const initials = getSafeInitials(c.name || c.phone || 'C', 'C');
         const avatarTint = getAvatarTintStyle(c.chatId || c.phone || c.name);
-        const paused = isContactCurrentlyPaused(c);
+        const paused = isContactCurrentlyPaused(c) || c.stage === 'aguardando_humano';
         const unread = Math.max(0, Number(c.unreadCount) || 0);
         const encId = encodeURIComponent(c.chatId);
+        const prettyStage = stageLabels[c.stage] || String(c.stage || 'Novo').replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
 
         return `
           <button type="button" class="crm-inbox-item ${isSelected ? 'active' : ''} ${unread > 0 ? 'unread' : ''}" onclick="selectInboxChat('${encId}')">
@@ -2094,7 +2116,7 @@ function renderCrmInbox(filteredList) {
               <div style="font-size:11px; color:var(--text-muted); font-variant-numeric:tabular-nums;">+${escapeHtml(c.phone || '')}</div>
               <div class="crm-inbox-item-preview">${escapeHtml(preview)}</div>
               <div class="crm-inbox-item-badges">
-                <span class="tag ${c.stage === 'aguardando_humano' ? 'paused' : ''}" style="font-size:10.5px; padding:1px 6px;">${escapeHtml(stageLabels[c.stage] || c.stage)}</span>
+                <span class="tag ${c.stage === 'aguardando_humano' ? 'paused' : ''}" style="font-size:10.5px; padding:1px 6px;">${escapeHtml(prettyStage)}</span>
                 ${paused ? '<span class="tag paused" style="font-size:10.5px; padding:1px 6px;">Humano</span>' : '<span class="tag" style="font-size:10.5px; padding:1px 6px;">IA Ativa</span>'}
                 ${c.archived ? '<span class="tag" style="font-size:10.5px; padding:1px 6px;">Arquivada</span>' : ''}
                 ${renderSentimentPillHtml(c.sentiment)}
@@ -2905,8 +2927,11 @@ function renderCommandPaletteResults(query = '') {
     { id: 'audios', title: 'Ir para: Biblioteca de Áudios Estratégicos (Voz Real)', sub: 'Gravar/subir áudios OGG/Opus + transcrição IA' },
     { id: 'catalogo', title: 'Ir para: Catálogo Multi-Fotos & PIX QR (Aba 4)', sub: 'Até 5 mídias por item + QR Code PIX' },
     { id: 'ia', title: 'Ir para: Motor de IA & Pool Gemini (Aba 5)', sub: 'Rotação de chaves grátis e reserva' },
-    { id: 'seguranca', title: 'Ir para: Anti-Ban, Fila Segura & PIN (Aba 6)', sub: 'Prospecção cadenciada e bloqueio' },
-    { id: 'crm', title: 'Ir para: CRM Comercial & Conversas (Aba 7)', sub: 'Kanban, etiquetas e retorno S19' }
+    { id: 'seguranca', title: 'Ir para: Anti-Ban, Fila Segura & PIN', sub: 'Prospecção cadenciada e bloqueio' },
+    { id: 'crm', title: 'Ir para: Conversas & CRM Comercial', sub: 'Inbox 360º, Kanban, etiquetas e retorno S19' },
+    ...(state.currentUser?.role === 'master'
+      ? [{ id: 'contas', title: 'Ir para: Clientes SaaS (Torre Master)', sub: 'Criar contas, Modo Suporte em 1 clique e Kit Boas-Vindas' }]
+      : [])
   ];
 
   for (const t of tabs) {

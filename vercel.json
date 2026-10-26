@@ -1,9 +1,11 @@
 {
   "version": 2,
+  "framework": null,
+  "outputDirectory": "public",
   "functions": {
     "api/index.js": {
       "maxDuration": 30,
-      "includeFiles": "data/training_packs/**"
+      "includeFiles": "{data/training_packs/**,public/**}"
     }
   },
   "rewrites": [

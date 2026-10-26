@@ -60,6 +60,9 @@ app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 // Servir arquivos estáticos (incluindo manifest.json e sw.js livres de auth p/ Chrome PWA)
 app.use('/uploads', express.static(UPLOADS_DIR));
 app.use(express.static(path.join(ROOT_DIR, 'public')));
+app.get('/', (_req, res) => {
+  res.sendFile(path.join(ROOT_DIR, 'public', 'index.html'));
+});
 
 // Upload em disco para Catálogo (até 5 Fotos/PDFs por item)
 const diskUpload = multer({

@@ -76,7 +76,7 @@ function saveActAs(targetObj) {
 }
 
 const state = {
-  appVersion: '4.9.1',
+  appVersion: '5.0.0',
   runtimeMode: 'local_worker',
   currentUser: null,
   cloudSession: loadSavedCloudSession(),
@@ -1145,7 +1145,7 @@ function renderMotorDownloadStatus() {
     statusEl.innerHTML = `<strong>Nova versão disponível (v${escapeHtml(ver)}):</strong> seu motor em execução (${escapeHtml(workerPlat || 'versão anterior')}) está desatualizado. Baixe o <code>.ZIP</code> abaixo e substitua a pasta para habilitar player e download de todos os arquivos enviados pelos clientes.`;
   } else {
     statusEl.className = 'motor-status-banner';
-    statusEl.innerHTML = `Pacote oficial <strong>v${escapeHtml(ver)}</strong> pronto para <strong>Windows PC (100% portátil — não precisa instalar Node nem nada por fora)</strong> e <strong>Android Termux</strong>.`;
+    statusEl.innerHTML = `Pacote Institucional <strong>v${escapeHtml(ver)}</strong> 100% portátil pronto para <strong>Windows PC</strong>, <strong>Linux (Desktop/VPS)</strong> e <strong>Android Termux</strong> — zero instalação externa.`;
   }
 }
 

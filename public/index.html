@@ -356,32 +356,33 @@
               </div>
             </div>
 
-            <!-- DOWNLOAD DA ÚLTIMA VERSÃO DO MOTOR (WINDOWS PC & ANDROID TERMUX) -->
+            <!-- DOWNLOAD DA ÚLTIMA VERSÃO DO MOTOR (WINDOWS, LINUX & ANDROID TERMUX) -->
             <div class="panel" id="motorDownloadPanel">
               <div class="panel-header">
                 <div>
-                  <h2 class="panel-title">Motor WhatsApp (Windows PC &amp; Android Termux)</h2>
-                  <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">Baixe sempre a última versão oficial do motor direto pelo painel.</p>
+                  <h2 class="panel-title">Motor WhatsApp Oficial (Windows, Linux &amp; Termux)</h2>
+                  <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">Pacote Institucional 100% Portátil — não precisa instalar Node nem nada por fora.</p>
                 </div>
-                <span class="tag" id="dashMotorVersionBadge" style="font-variant-numeric:tabular-nums;">v4.9.1</span>
+                <span class="tag" id="dashMotorVersionBadge" style="font-variant-numeric:tabular-nums;">v5.0.0</span>
               </div>
 
               <div id="dashMotorVersionStatus" class="motor-status-banner">
-                Baixe o pacote abaixo para iniciar no Windows PC (100% portatil, sem instalar nada por fora) ou no Android Termux.
+                Baixe o pacote institucional abaixo para rodar no Windows PC, Linux (Desktop/VPS) ou Android Termux.
               </div>
 
               <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
                 <button type="button" id="btnDashDownloadMotor" class="btn btn-primary" style="flex:1; min-width:210px;" onclick="downloadLatestMotorZip()">
                   <svg class="icon-svg" style="width:16px; height:16px;" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                  <span id="btnDashDownloadMotorLabel">Baixar Última Versão (.ZIP)</span>
+                  <span id="btnDashDownloadMotorLabel">Baixar Pacote Oficial (.ZIP)</span>
                 </button>
               </div>
 
               <details style="margin-top:10px; font-size:12px; color:var(--text-secondary);">
-                <summary style="cursor:pointer; font-weight:600; color:var(--text-main);">Como abrir ou atualizar (Zero instalação externa no PC)</summary>
-                <div style="margin-top:8px; display:flex; flex-direction:column; gap:6px; line-height:1.5;">
-                  <div><strong>No Windows PC (Zero Instalação):</strong> extraia o <code>.ZIP</code> e dê <strong>2 cliques direto em <code>2_Iniciar_Atendente_IA.bat</code></strong>. Na 1ª abertura ele baixa o motor Node.js portátil oficial sozinho dentro da própria pasta (sem pedir Administrador e sem instalar programas no seu PC)!</div>
-                  <div><strong>No Android Termux:</strong> após baixar o <code>.ZIP</code> no celular, rode:<br/><code style="display:block; margin-top:4px; padding:6px 8px; background:var(--bg-input); border:1px solid var(--border); border-radius:6px; user-select:all; word-break:break-all;">unzip -o ~/storage/downloads/ZAP-IA-Studio-v*.zip -d ~ && cd ~/atendente-ia-whatsapp && bash 5_Iniciar_No_Termux.sh</code></div>
+                <summary style="cursor:pointer; font-weight:600; color:var(--text-main);">Como abrir em cada sistema (Windows / Linux / Android Termux)</summary>
+                <div style="margin-top:8px; display:flex; flex-direction:column; gap:7px; line-height:1.5;">
+                  <div><strong>Windows 10/11 (Portátil):</strong> extraia o <code>.ZIP</code> e dê 2 cliques em <code>INICIAR_NO_WINDOWS.bat</code> (prepara o Node v22 portátil sozinho na 1ª vez).</div>
+                  <div><strong>Linux (Desktop ou VPS SSH):</strong><br/><code style="display:block; margin-top:3px; padding:5px 8px; background:var(--bg-input); border:1px solid var(--border); border-radius:6px; user-select:all; word-break:break-all;">unzip -o ZAP-IA-Studio-v*.zip -d ~ &amp;&amp; cd ~/ZAP-IA-Studio &amp;&amp; bash INICIAR_NO_LINUX.sh</code></div>
+                  <div><strong>Android Termux (24h):</strong><br/><code style="display:block; margin-top:3px; padding:5px 8px; background:var(--bg-input); border:1px solid var(--border); border-radius:6px; user-select:all; word-break:break-all;">unzip -o ~/storage/downloads/ZAP-IA-Studio-v*.zip -d ~ &amp;&amp; cd ~/ZAP-IA-Studio &amp;&amp; bash INICIAR_NO_TERMUX.sh</code></div>
                 </div>
               </details>
             </div>
@@ -1610,7 +1611,7 @@
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           <span>Baixar Motor Atualizado (.ZIP)</span>
         </span>
-        <span id="sheetMotorVersionHint" style="font-size:11px; color:var(--accent-bright); font-weight:600; font-variant-numeric:tabular-nums;">v4.9.1</span>
+        <span id="sheetMotorVersionHint" style="font-size:11px; color:var(--accent-bright); font-weight:600; font-variant-numeric:tabular-nums;">v5.0.0</span>
       </button>
 
       <button type="button" id="btnInstallPwa" class="sheet-item-btn" style="display:none;">

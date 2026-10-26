@@ -1,7 +1,7 @@
 {
   "name": "zap-ia-studio",
-  "version": "4.9.1",
-  "description": "ZAP-IA Studio v4.9.1 Commercial SaaS — Zero-Install Portable Windows Motor, In-App ZIP Updater, Universal Customer Media/File Player & Downloader",
+  "version": "5.0.0",
+  "description": "ZAP-IA Studio v5.0 Institutional Edition — Portable Windows, Linux & Android Termux Motor, Universal Customer Media/File Player & Downloader, Vercel + Supabase RLS",
   "type": "module",
   "main": "src/server.js",
   "scripts": {

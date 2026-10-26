@@ -1,0 +1,62 @@
+==============================================================================
+  ZAP-IA STUDIO v5.0 -- EDICAO INSTITUCIONAL MULTI-CONTAS
+  Atendimento Humano com IA, Voz Nativa OGG/Opus & Central de Conversas 360
+  Painel Oficial 24h: https://zap-ia-studio.vercel.app/
+==============================================================================
+
+DICA: Abra o arquivo "MANUAL_OFICIAL.html" com 2 cliques para ver o manual
+visual completo com abas e botoes de copiar comando!
+
+
+------------------------------------------------------------------------------
+1. COMO USAR NO WINDOWS 10 OU WINDOWS 11 (100% PORTATIL -- ZERO INSTALACAO)
+------------------------------------------------------------------------------
+Voce NAO precisa instalar Node.js nem nenhum programa por fora e NAO precisa
+de senha de Administrador:
+
+  1) Extraia este arquivo .ZIP completamente em uma pasta fixa.
+  2) De 2 cliques direto em:  INICIAR_NO_WINDOWS.bat
+     - Na 1a abertura, ele baixa automaticamente o Node.js v22 LTS Portatil
+       Oficial dentro de "sistema\.runtime\node", instala as bibliotecas em
+       ~30 segundos e abre a janela do aplicativo.
+     - Da 2a vez em diante, abre direto em 2 segundos!
+  3) Opcional: use "Ferramentas_Extras\Windows_Criar_Atalho_Desktop.bat"
+     para criar o icone na sua Area de Trabalho.
+
+
+------------------------------------------------------------------------------
+2. COMO USAR NO LINUX (DESKTOP UBUNTU/MINT/DEBIAN/FEDORA OU SERVIDOR VPS)
+------------------------------------------------------------------------------
+100% portatil (nao pede sudo):
+
+  unzip -o ZAP-IA-Studio-v*.zip -d ~
+  cd ~/ZAP-IA-Studio
+  bash INICIAR_NO_LINUX.sh
+
+  - Em PC Linux com tela: abre automaticamente http://localhost:3000.
+  - Em VPS / SSH sem tela: abre o assistente guiado no terminal (@usuario,
+    senha e geracao do Codigo de 8 Digitos do WhatsApp).
+
+
+------------------------------------------------------------------------------
+3. COMO USAR 24H NO CELULAR ANDROID (APP TERMUX OFICIAL F-DROID)
+------------------------------------------------------------------------------
+Desative a restricao de bateria do Termux nas Configuracoes do Android e rode:
+
+  termux-setup-storage
+  pkg install -y unzip
+  unzip -o ~/storage/downloads/ZAP-IA-Studio-v*.zip -d ~
+  cd ~/ZAP-IA-Studio
+  bash INICIAR_NO_TERMUX.sh
+
+
+------------------------------------------------------------------------------
+4. ORGANIZACAO DO PACOTE
+------------------------------------------------------------------------------
+  INICIAR_NO_WINDOWS.bat   -> Inicializador automatico Windows (Zero instalacao)
+  INICIAR_NO_LINUX.sh      -> Inicializador automatico Linux Desktop & VPS
+  INICIAR_NO_TERMUX.sh     -> Inicializador automatico Android Termux 24h
+  MANUAL_OFICIAL.html      -> Manual Institucional Interativo (abre offline)
+  Ferramentas_Extras/      -> Criadores de atalho Desktop e reparo rapido
+  sistema/                 -> Nucleo tecnico isolado do ZAP-IA Studio
+==============================================================================

@@ -586,19 +586,11 @@ app.get('/api/cloud/poll', (req, res) => {
 
 // ======================== DOWNLOAD DO MOTOR ATUALIZADO (.ZIP) & DOWNLOAD SEGURO DE MÍDIA/ARQUIVOS ========================
 
-const MOTOR_ALLOWED_ROOT_FILES = new Set([
+const MOTOR_SYSTEM_ROOT_FILES = new Set([
   '.env.example',
-  '.gitignore',
   '.npmrc',
-  '1_Instalar_No_Windows.bat',
-  '2_Iniciar_Atendente_IA.bat',
-  '3_Criar_Atalho_Area_de_Trabalho.bat',
-  '4_Instalar_No_Termux.sh',
-  '5_Iniciar_No_Termux.sh',
-  'LEIA-ME_COMO_USAR.md',
   'package.json',
-  'package-lock.json',
-  'vercel.json'
+  'package-lock.json'
 ]);
 
 const MOTOR_EXCLUDED_SEGMENTS = new Set([
@@ -618,42 +610,46 @@ const MOTOR_EXCLUDED_SEGMENTS = new Set([
 
 function collectCleanMotorZipEntries(includeMasterPack = false) {
   const entries = [];
-  const walkDir = (absDir, relDir) => {
+  const walkIntoZipPrefix = (absDir, zipPrefix) => {
     if (!fs.existsSync(absDir)) return;
-    for (const dirent of fs.readdirSync(absDir, { withFileTypes: true })) {
+    for (const dirent of fs.readdirSync(absDir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       if (MOTOR_EXCLUDED_SEGMENTS.has(dirent.name) || dirent.name.endsWith('.log') || dirent.name.endsWith('.bak')) {
         continue;
       }
       const nextAbs = path.join(absDir, dirent.name);
-      const nextRel = `${relDir}/${dirent.name}`;
+      const nextZipPath = `${zipPrefix}/${dirent.name}`;
       if (dirent.isDirectory()) {
-        walkDir(nextAbs, nextRel);
+        walkIntoZipPrefix(nextAbs, nextZipPath);
       } else if (dirent.isFile()) {
         entries.push({
-          path: `atendente-ia-whatsapp/${nextRel}`,
+          path: nextZipPath,
           content: fs.readFileSync(nextAbs)
         });
       }
     }
   };
 
-  for (const rootFile of MOTOR_ALLOWED_ROOT_FILES) {
-    const abs = path.join(ROOT_DIR, rootFile);
+  // 1. Camada Institucional Externa (ZAP-IA-Studio/INICIAR_NO_WINDOWS.bat, INICIAR_NO_LINUX.sh, INICIAR_NO_TERMUX.sh, MANUAL_OFICIAL.html, LEIA-ME.txt, Ferramentas_Extras/*)
+  walkIntoZipPrefix(path.join(ROOT_DIR, 'dist_kit'), 'ZAP-IA-Studio');
+
+  // 2. Núcleo Técnico Encapsulado (ZAP-IA-Studio/sistema/*)
+  for (const sysFile of MOTOR_SYSTEM_ROOT_FILES) {
+    const abs = path.join(ROOT_DIR, sysFile);
     if (fs.existsSync(abs) && fs.statSync(abs).isFile()) {
       entries.push({
-        path: `atendente-ia-whatsapp/${rootFile}`,
+        path: `ZAP-IA-Studio/sistema/${sysFile}`,
         content: fs.readFileSync(abs)
       });
     }
   }
 
-  for (const subDir of ['src', 'api', 'public', 'scripts']) {
-    walkDir(path.join(ROOT_DIR, subDir), subDir);
+  for (const subDir of ['src', 'api', 'public', 'scripts', 'dist_kit']) {
+    walkIntoZipPrefix(path.join(ROOT_DIR, subDir), `ZAP-IA-Studio/sistema/${subDir}`);
   }
 
-  // Pacote privado Lizandro vai exclusivamente para o Admin Master; clientes recebem motor 100% limpo
+  // 3. Pacote privado Lizandro vai exclusivamente para o Admin Master; clientes recebem motor 100% limpo
   if (includeMasterPack) {
-    walkDir(path.join(ROOT_DIR, 'data', 'training_packs'), 'data/training_packs');
+    walkIntoZipPrefix(path.join(ROOT_DIR, 'data', 'training_packs'), 'ZAP-IA-Studio/sistema/data/training_packs');
   }
 
   return entries;

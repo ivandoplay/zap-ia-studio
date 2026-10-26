@@ -28,9 +28,16 @@ if ($CreateShortcut) {
     $ws = New-Object -ComObject WScript.Shell
     $desktop = [Environment]::GetFolderPath('Desktop')
     $lnkPath = Join-Path $desktop 'ZAP-IA Studio (WhatsApp).lnk'
+    $OuterDir = Split-Path -Parent $RootDir
+    $OuterBat = Join-Path $OuterDir 'INICIAR_NO_WINDOWS.bat'
     $s = $ws.CreateShortcut($lnkPath)
-    $s.TargetPath = Join-Path $RootDir '2_Iniciar_Atendente_IA.bat'
-    $s.WorkingDirectory = $RootDir
+    if (Test-Path -LiteralPath $OuterBat) {
+        $s.TargetPath = $OuterBat
+        $s.WorkingDirectory = $OuterDir
+    } else {
+        $s.TargetPath = Join-Path $RootDir '2_Iniciar_Atendente_IA.bat'
+        $s.WorkingDirectory = $RootDir
+    }
     $s.IconLocation = 'shell32.dll,13'
     $s.Description = 'Abrir ZAP-IA Studio (Motor Portatil Automatico)'
     $s.Save()

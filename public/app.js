@@ -134,8 +134,8 @@ function escapeJsArg(str = '') {
 
 function formatWaText(str = '') {
   return escapeHtml(str)
-    .replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>')
-    .replace(/_([^_\n]+)_/g, '<em>$1</em>');
+    .replace(/(?<![\w])\*([^*\n]+)\*(?![\w])/g, '<strong>$1</strong>')
+    .replace(/(?<![\w])_([^_\n]+)_(?![\w])/g, '<em>$1</em>');
 }
 
 function showToast(msg, isError = false) {
@@ -534,12 +534,73 @@ async function ensureFullPackLoaded(packId, force = false) {
   }
 }
 
+const notifiedFollowUpSessionKeys = new Set();
+
+function syncDesktopNotifyLabel() {
+  const lbl = document.getElementById('desktopNotifyLabel');
+  if (!lbl) return;
+  if (!('Notification' in window)) {
+    lbl.textContent = 'Notificações: Indisponível';
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    lbl.textContent = 'Notificações na Tela: Ativas';
+  } else if (Notification.permission === 'denied') {
+    lbl.textContent = 'Notificações: Bloqueadas no navegador';
+  } else {
+    lbl.textContent = 'Notificações na Tela: Ativar';
+  }
+}
+
+function fireDesktopNotification(title, body, chatId = null) {
+  try {
+    if (!('Notification' in window) || Notification.permission !== 'granted') return;
+    const n = new Notification(title, {
+      body: String(body || '').slice(0, 180),
+      icon: '/icon.svg',
+      tag: chatId ? `zapia-${chatId}` : `zapia-${Date.now()}`
+    });
+    n.onclick = () => {
+      try { window.focus(); } catch {}
+      if (chatId) {
+        switchTab('crm');
+        window.selectInboxChat(encodeURIComponent(chatId));
+      }
+      n.close();
+    };
+  } catch {}
+}
+
+function checkClientSideDueFollowUps(seedOnly = false) {
+  const now = Date.now();
+  for (const c of state.contacts || []) {
+    if (!c?.followUpAt) continue;
+    const key = `${c.chatId}::${c.followUpAt}`;
+    const dueMs = new Date(c.followUpAt).getTime();
+    if (Number.isNaN(dueMs) || dueMs > now) continue;
+    if (seedOnly || c.followUpNotifiedAt) {
+      notifiedFollowUpSessionKeys.add(key);
+      continue;
+    }
+    if (!notifiedFollowUpSessionKeys.has(key)) {
+      notifiedFollowUpSessionKeys.add(key);
+      playHandoffChime();
+      const msg = `Hora do retorno agendado (S19) com ${c.name || 'Cliente'}!`;
+      showToast(msg);
+      fireDesktopNotification('ZAP-IA • Retorno Agendado (S19)', msg, c.chatId);
+    }
+  }
+}
+
 function startCloudPoller() {
   if (cloudPollTimer) clearTimeout(cloudPollTimer);
+  checkClientSideDueFollowUps(true);
   const tick = async () => {
     try {
-      if (!document.hidden && !document.getElementById('cloudLoginScreen')?.classList.contains('open')) {
-        const prevHumanCount = (state.contacts || []).filter((c) => c.stage === 'aguardando_humano' && c.unreadAlert).length;
+      if (!document.getElementById('cloudLoginScreen')?.classList.contains('open')) {
+        const prevHumanIds = new Set(
+          (state.contacts || []).filter((c) => c.stage === 'aguardando_humano' && c.unreadAlert).map((c) => c.chatId)
+        );
         const snap = await api('/api/cloud/poll');
         state.waState = snap.waState || state.waState;
         state.proactiveQueueState = snap.proactiveQueueState || state.proactiveQueueState;
@@ -547,22 +608,31 @@ function startCloudPoller() {
         state.stats = snap.stats || state.stats;
         state.logs = snap.logs || state.logs;
 
-        const nextHumanCount = (state.contacts || []).filter((c) => c.stage === 'aguardando_humano' && c.unreadAlert).length;
-        if (nextHumanCount > prevHumanCount) {
+        const newHumans = (state.contacts || []).filter(
+          (c) => c.stage === 'aguardando_humano' && c.unreadAlert && !prevHumanIds.has(c.chatId)
+        );
+        if (newHumans.length > 0) {
           playHandoffChime();
-          showToast('🚨 Novo contato aguardando você no CRM!');
+          const first = newHumans[0];
+          const msg = `${first.name || 'Cliente'} aguarda atendimento humano no CRM!`;
+          showToast(msg);
+          fireDesktopNotification('ZAP-IA • Passagem Humana', msg, first.chatId);
         }
+        checkClientSideDueFollowUps(false);
 
-        renderCloudHeaderBar();
-        renderWaState();
-        renderStatsAndLogs();
-        renderReadinessAndFunnel();
-        renderProactiveQueueStatus();
-        renderCrmBoard();
+        if (!document.hidden) {
+          renderCloudHeaderBar();
+          renderWaState();
+          renderStatsAndLogs();
+          renderReadinessAndFunnel();
+          renderProactiveQueueStatus();
+          renderCrmBoard();
+        }
       }
     } catch {}
     const fast = state.waState?.status === 'qr_ready' || state.waState?.status === 'connecting';
-    cloudPollTimer = setTimeout(tick, fast ? 2200 : 4200);
+    const interval = document.hidden ? 12000 : (fast ? 2200 : 4200);
+    cloudPollTimer = setTimeout(tick, interval);
   };
   cloudPollTimer = setTimeout(tick, 3500);
 }
@@ -592,11 +662,15 @@ function connectWebSocket() {
         loadBootstrap();
       } else if (event === 'handoff_alert') {
         playHandoffChime();
-        showToast(`Passagem humana: ${payload?.contactName || 'Cliente'} aguarda você no CRM!`);
+        const msg = `${payload?.contactName || 'Cliente'} aguarda você no CRM!`;
+        showToast(`Passagem humana: ${msg}`);
+        fireDesktopNotification('ZAP-IA • Passagem Humana', msg, payload?.chatId || null);
         loadBootstrap();
       } else if (event === 'followup_due') {
         playHandoffChime();
-        showToast(`⏰ Hora do retorno agendado (S19) com ${payload?.contactName || 'Cliente'}!`);
+        const msg = `Hora do retorno agendado (S19) com ${payload?.contactName || 'Cliente'}!`;
+        showToast(msg);
+        fireDesktopNotification('ZAP-IA • Retorno Agendado (S19)', msg, payload?.chatId || null);
         loadBootstrap();
       } else if (event === 'crm_updated' || event === 'logs_updated') {
         loadBootstrap();
@@ -2163,11 +2237,18 @@ function renderActiveInboxConversation() {
   emptyEl.style.display = 'none';
   paneEl.style.display = 'flex';
 
-  document.getElementById('inboxContactName').textContent = `${c.pinned ? '📌 ' : ''}${c.name || 'Cliente'}`;
+  document.getElementById('inboxContactName').textContent = c.name || 'Cliente';
   document.getElementById('inboxContactPhone').textContent = `+${c.phone || c.chatId}`;
-  document.getElementById('inboxStageQuickSelect').value = c.stage || 'em_atendimento';
+  const stageSel = document.getElementById('inboxStageQuickSelect');
+  if (stageSel) {
+    stageSel.value = c.stage || 'em_atendimento';
+    if (!stageSel.value) stageSel.value = 'em_atendimento';
+  }
   const mobStageMirror = document.getElementById('inspMobStageMirror');
-  if (mobStageMirror) mobStageMirror.value = c.stage || 'em_atendimento';
+  if (mobStageMirror) {
+    mobStageMirror.value = c.stage || 'em_atendimento';
+    if (!mobStageMirror.value) mobStageMirror.value = 'em_atendimento';
+  }
 
   const paused = isContactCurrentlyPaused(c);
   const statusBadge = document.getElementById('inboxAiStatusBadge');
@@ -2277,19 +2358,10 @@ function renderActiveInboxConversation() {
         }
 
         const who = m.role === 'user' ? c.name || 'Cliente' : m.role === 'owner' ? 'Você (Manual)' : 'Equipe (IA)';
-        const imgExtra = m.mediaUrl && /\.(jpg|jpeg|png|webp|gif)$/i.test(m.mediaUrl)
-          ? `<img src="${escapeHtml(m.mediaUrl)}" style="max-width:100%; border-radius:6px; margin-bottom:6px;" alt="" />`
-          : '';
-        const audExtra = m.mediaUrl && /\.(ogg|opus|mp3|m4a|wav|webm)$/i.test(m.mediaUrl)
-          ? `<div class="wa-voice-note">
-               ${Array.isArray(m.waveform) ? renderWaveformBarsHtml(m.waveform, 18) : ''}
-               <audio controls preload="metadata" src="${escapeHtml(m.mediaUrl)}" style="width:100%; height:32px; margin-top:4px;"></audio>
-             </div>`
-          : '';
+        const mediaExtra = renderBubbleMediaHtml(m);
         return `
           <div class="wa-bubble ${m.role}">
-            ${imgExtra}
-            ${audExtra}
+            ${mediaExtra}
             <div class="wa-text">${formatWaText(m.text)}</div>
             <div class="wa-meta">${escapeHtml(who)} • ${escapeHtml(time)}</div>
           </div>
@@ -2298,6 +2370,29 @@ function renderActiveInboxConversation() {
       .join('');
     msgBox.scrollTop = msgBox.scrollHeight;
   }
+}
+
+function renderBubbleMediaHtml(m) {
+  if (!m?.mediaUrl) return '';
+  const safeUrl = escapeHtml(m.mediaUrl);
+  const cleanPath = String(m.mediaUrl).split('?')[0].split('#')[0];
+  if (/\.(jpg|jpeg|png|webp|gif)$/i.test(cleanPath)) {
+    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" title="Abrir imagem em tamanho original" style="display:block; margin-bottom:6px;"><img src="${safeUrl}" loading="lazy" style="max-width:100%; max-height:260px; object-fit:cover; border-radius:6px; display:block;" alt="Imagem anexada" /></a>`;
+  }
+  if (/\.(ogg|opus|mp3|m4a|wav|webm)$/i.test(cleanPath)) {
+    return `<div class="wa-voice-note">
+      ${Array.isArray(m.waveform) ? renderWaveformBarsHtml(m.waveform, 18) : ''}
+      <audio controls preload="metadata" src="${safeUrl}" style="width:100%; height:32px; margin-top:4px;"></audio>
+    </div>`;
+  }
+  if (/\.pdf$/i.test(cleanPath)) {
+    const label = m.mediaName || decodeURIComponent(cleanPath.split('/').pop() || 'Documento.pdf');
+    return `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="display:flex; align-items:center; gap:8px; padding:8px 10px; margin-bottom:6px; border-radius:7px; background:rgba(15,23,42,0.14); border:1px solid var(--border); color:inherit; text-decoration:none; font-size:12px; font-weight:600;">
+      <svg class="icon-svg" style="width:16px; height:16px; flex-shrink:0;" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+      <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(label)}</span>
+    </a>`;
+  }
+  return '';
 }
 
 function renderInboxInspector360(c) {
@@ -2624,19 +2719,10 @@ window.openLeadModal = function openLeadModal(encodedChatId) {
     .map((m) => {
       const who = m.role === 'user' ? 'Cliente' : m.role === 'owner' ? 'Você (Manual)' : 'IA';
       const time = m.timestamp ? new Date(m.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
-      const imgExtra = m.mediaUrl && /\.(jpg|jpeg|png|webp|gif)$/i.test(m.mediaUrl)
-        ? `<img src="${escapeHtml(m.mediaUrl)}" style="max-width:100%; border-radius:6px; margin-bottom:6px;" alt="" />`
-        : '';
-      const audExtra = m.mediaUrl && /\.(ogg|opus|mp3|m4a|wav|webm)$/i.test(m.mediaUrl)
-        ? `<div class="wa-voice-note">
-             ${Array.isArray(m.waveform) ? renderWaveformBarsHtml(m.waveform, 18) : ''}
-             <audio controls preload="metadata" src="${escapeHtml(m.mediaUrl)}" style="width:100%; height:32px; margin-top:4px;"></audio>
-           </div>`
-        : '';
+      const mediaExtra = renderBubbleMediaHtml(m);
       return `
         <div class="wa-bubble ${m.role}">
-          ${imgExtra}
-          ${audExtra}
+          ${mediaExtra}
           <div class="wa-text">${formatWaText(m.text)}</div>
           <div class="wa-meta">${who} • ${time}</div>
         </div>
@@ -5245,6 +5331,140 @@ window.removeManagedUser = async function removeManagedUser(userId, username) {
 };
 
 function bindCloudAuthAndAdminEvents() {
+  syncDesktopNotifyLabel();
+
+  document.getElementById('btnDesktopNotifyToggle')?.addEventListener('click', async () => {
+    if (!('Notification' in window)) {
+      showToast('Este navegador não suporta notificações na área de trabalho.', true);
+      return;
+    }
+    if (Notification.permission === 'granted') {
+      fireDesktopNotification('ZAP-IA Studio', 'Notificações em segundo plano estão ativas neste aparelho!');
+      showToast('Notificações já estão ativas! Enviamos um alerta de teste.');
+      return;
+    }
+    try {
+      const perm = await Notification.requestPermission();
+      syncDesktopNotifyLabel();
+      if (perm === 'granted') {
+        fireDesktopNotification('ZAP-IA Studio', 'Pronto! Você receberá alertas de passagem humana e retornos S19.');
+        showToast('Notificações em segundo plano ativadas!');
+      } else {
+        showToast('Permissão de notificação negada no navegador.', true);
+      }
+    } catch {
+      showToast('Não foi possível solicitar permissão de notificação.', true);
+    }
+  });
+
+  document.getElementById('btnOpenChangeMyPass')?.addEventListener('click', () => {
+    window.closeModal?.('accountSheet');
+    if (state.actAsUser?.userId || state.currentUser?.impersonating) {
+      showToast('No Modo Suporte Master, altere a senha do cliente pela aba Clientes SaaS.', true);
+      return;
+    }
+    document.getElementById('changeMyPasswordForm')?.reset();
+    document.getElementById('changeMyPasswordModal')?.classList.add('open');
+    setTimeout(() => document.getElementById('myCurrentPassInput')?.focus(), 50);
+  });
+
+  document.getElementById('changeMyPasswordForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const currentPassword = document.getElementById('myCurrentPassInput')?.value || '';
+    const newPassword = document.getElementById('myNewPassInput')?.value || '';
+    const confirmPassword = document.getElementById('myConfirmPassInput')?.value || '';
+
+    if (newPassword.length < 6) {
+      showToast('A nova senha deve ter pelo menos 6 caracteres.', true);
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showToast('A confirmação da nova senha não confere.', true);
+      return;
+    }
+
+    const btn = document.getElementById('btnSubmitChangeMyPass');
+    if (btn) btn.disabled = true;
+    try {
+      const out = await api('/api/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword, newPassword })
+      });
+      if (out?.session) {
+        saveCloudSession({ ...out.session, user: out.user || state.currentUser });
+      }
+      window.closeModal?.('changeMyPasswordModal');
+      showToast('Sua senha foi alterada com sucesso!');
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  });
+
+  document.getElementById('btnInboxAttachFile')?.addEventListener('click', () => {
+    if (!state.selectedInboxChatId) {
+      showToast('Selecione uma conversa primeiro.', true);
+      return;
+    }
+    const fileInp = document.getElementById('inboxAttachmentFileInput');
+    if (fileInp) {
+      fileInp.value = '';
+      fileInp.click();
+    }
+  });
+
+  document.getElementById('inboxAttachmentFileInput')?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    const chatId = state.selectedInboxChatId;
+    if (!file || !chatId) return;
+
+    const btn = document.getElementById('btnInboxAttachFile');
+    const replyInp = document.getElementById('crmInboxReplyInput');
+    const caption = (replyInp?.value || '').trim();
+    const fd = new FormData();
+    fd.append('file', file);
+    if (caption) fd.append('caption', caption);
+
+    if (btn) btn.disabled = true;
+    showToast(`Enviando anexo "${file.name}"...`);
+    try {
+      const headers = {};
+      if (state.cloudSession?.accessToken) {
+        headers.Authorization = `Bearer ${state.cloudSession.accessToken}`;
+      }
+      if (state.actAsUser?.userId) {
+        headers['x-zapia-act-as'] = state.actAsUser.userId;
+      }
+      if (state.sessionPin) {
+        headers['x-panel-pin'] = state.sessionPin;
+      }
+      const res = await fetch(`/api/crm/${encodeURIComponent(chatId)}/send-attachment`, {
+        method: 'POST',
+        headers,
+        body: fd
+      });
+      const out = await res.json().catch(() => ({}));
+      if (!res.ok || out.ok === false) {
+        throw new Error(out.error || 'Falha ao enviar anexo.');
+      }
+      if (replyInp && caption) replyInp.value = '';
+      if (out.contact) {
+        const idx = (state.contacts || []).findIndex((x) => x.chatId === out.contact.chatId || x.chatId === chatId);
+        if (idx >= 0) state.contacts[idx] = out.contact;
+        renderCrmInbox();
+      } else {
+        await loadBootstrap();
+      }
+      showToast(out.sentRealWhatsApp ? 'Anexo enviado no WhatsApp!' : 'Anexo registrado na conversa!');
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      if (btn) btn.disabled = false;
+      e.target.value = '';
+    }
+  });
+
   document.getElementById('btnToggleLoginPass')?.addEventListener('click', () => {
     const inp = document.getElementById('cloudLoginPass');
     if (!inp) return;

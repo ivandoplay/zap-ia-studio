@@ -544,7 +544,7 @@ class WhatsAppManager {
       return;
     }
 
-    // 3. Registrar mensagem recebida do cliente no CRM
+    // 3. Registrar mensagem recebida do cliente no CRM (já salvando mídia recebida para tocar/abrir direto no Inbox!)
     storage.data.stats.totalIncoming += 1;
     const displayLabel = hasAudio
       ? `🎤 [Áudio do cliente] ${textContent}`.trim()
@@ -559,9 +559,50 @@ class WhatsAppManager {
       name: pushName || storage.data.contacts[remoteJid]?.name || `Cliente ${bestPhone.slice(-4)}`
     });
 
+    let downloadedMedia = null;
+    let inboundMediaUrl = null;
+    let inboundMediaName = null;
+    if ((hasAudio || hasImage || hasPdfDoc) && !storage.isContactIgnored(bestPhone) && !storage.isContactIgnored(remoteJid)) {
+      try {
+        const buffer = await downloadMediaMessage(
+          msg,
+          'buffer',
+          {},
+          { logger, reuploadRequest: this.sock.updateMediaMessage }
+        );
+        const mimeType = hasAudio
+          ? (unwrapped.audioMessage?.mimetype || 'audio/ogg')
+          : hasImage
+            ? (unwrapped.imageMessage?.mimetype || 'image/jpeg')
+            : 'application/pdf';
+        downloadedMedia = { buffer, mimeType };
+        if (hasAudio) storage.data.stats.totalAudiosProcessed += 1;
+        if (hasImage || hasPdfDoc) storage.data.stats.totalImagesProcessed += 1;
+
+        if (buffer && buffer.length <= 16 * 1024 * 1024) {
+          const ext = hasAudio
+            ? (mimeType.includes('mpeg') || mimeType.includes('mp3') ? '.mp3' : mimeType.includes('mp4') || mimeType.includes('m4a') ? '.m4a' : '.ogg')
+            : hasImage
+              ? (mimeType.includes('png') ? '.png' : mimeType.includes('webp') ? '.webp' : '.jpg')
+              : '.pdf';
+          const savedInName = `in_${Date.now()}_${Math.random().toString(36).slice(2, 7)}${ext}`;
+          fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+          fs.writeFileSync(path.join(UPLOADS_DIR, savedInName), buffer);
+          inboundMediaUrl = `/uploads/${savedInName}`;
+          if (hasPdfDoc) {
+            inboundMediaName = String(unwrapped.documentMessage?.fileName || 'documento.pdf').slice(0, 120);
+          }
+        }
+      } catch (err) {
+        storage.addLog('error', `Não foi possível baixar mídia de ${contact.name}: ${err.message}`);
+      }
+    }
+
     storage.appendContactMessage(remoteJid, {
       role: 'user',
-      text: displayLabel
+      text: displayLabel,
+      ...(inboundMediaUrl ? { mediaUrl: inboundMediaUrl } : {}),
+      ...(inboundMediaName ? { mediaName: inboundMediaName } : {})
     });
     this.broadcastFn('crm_updated', { chatId: remoteJid });
 
@@ -597,29 +638,6 @@ class WhatsAppManager {
         }
       }
       return;
-    }
-
-    // 8. Baixar mídia (Áudio / Imagem / PDF) se presente
-    let downloadedMedia = null;
-    if (hasAudio || hasImage || hasPdfDoc) {
-      try {
-        const buffer = await downloadMediaMessage(
-          msg,
-          'buffer',
-          {},
-          { logger, reuploadRequest: this.sock.updateMediaMessage }
-        );
-        const mimeType = hasAudio
-          ? (unwrapped.audioMessage.mimetype || 'audio/ogg')
-          : hasImage
-            ? (unwrapped.imageMessage.mimetype || 'image/jpeg')
-            : 'application/pdf';
-        downloadedMedia = { buffer, mimeType };
-        if (hasAudio) storage.data.stats.totalAudiosProcessed += 1;
-        if (hasImage || hasPdfDoc) storage.data.stats.totalImagesProcessed += 1;
-      } catch (err) {
-        storage.addLog('error', `Não foi possível baixar mídia de ${contact.name}: ${err.message}`);
-      }
     }
 
     // 9. Enfileirar no Debounce Inteligente (juntar mensagens picadas)
@@ -1127,6 +1145,46 @@ class WhatsAppManager {
         ? 'forever'
         : (Number(storage.data.settings.humanHandoff?.pauseDurationMinutes) || 60);
       storage.pauseContact(chatId, mins, 'Mensagem manual enviada pelo painel');
+    }
+    this.broadcastFn('crm_updated', { chatId });
+    return true;
+  }
+
+  /**
+   * Envia imagem (JPG/PNG/WEBP/GIF) ou documento PDF avulso pelo compositor do Inbox 360º.
+   */
+  async sendManualAttachment({ chatId, buffer, mimeType = 'image/jpeg', fileName = 'anexo', caption = '', mediaUrl = '', pauseAi = true }) {
+    if (!this.sock || this.status !== 'connected') {
+      throw new Error('O WhatsApp não está conectado no momento.');
+    }
+    const isPdf = mimeType === 'application/pdf' || /\.pdf$/i.test(fileName);
+    const payload = isPdf
+      ? {
+          document: buffer,
+          mimetype: 'application/pdf',
+          fileName: fileName || 'documento.pdf',
+          ...(caption ? { caption } : {})
+        }
+      : {
+          image: buffer,
+          ...(caption ? { caption } : {})
+        };
+
+    const sent = await this.sock.sendMessage(chatId, payload);
+    this.rememberBotMessage(sent);
+    storage.data.stats.totalMediaSent += 1;
+    storage.appendContactMessage(chatId, {
+      role: 'owner',
+      text: caption || (isPdf ? `📄 [PDF enviado: ${fileName || 'documento.pdf'}]` : '🖼️ [Imagem enviada]'),
+      ...(mediaUrl ? { mediaUrl } : {}),
+      ...(isPdf ? { mediaName: fileName || 'documento.pdf' } : {})
+    });
+    if (pauseAi) {
+      const activeBiz = storage.getBusiness();
+      const mins = activeBiz?.lockUntilManualResume
+        ? 'forever'
+        : (Number(storage.data.settings.humanHandoff?.pauseDurationMinutes) || 60);
+      storage.pauseContact(chatId, mins, 'Anexo enviado manualmente pelo painel');
     }
     this.broadcastFn('crm_updated', { chatId });
     return true;

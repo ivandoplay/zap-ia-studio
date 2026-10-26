@@ -18,6 +18,7 @@ const { whatsappManager } = IS_VERCEL
   ? { whatsappManager: null }
   : await import('./whatsappManager.js');
 import {
+  changeOwnPassword,
   cloudWorker,
   createManagedUser,
   deleteManagedUser,
@@ -1521,6 +1522,169 @@ app.post('/api/crm/:chatId/send-pix', async (req, res) => {
     res.json({ ok: true, contact: storage.data.contacts[key], sentRealWhatsApp: !usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_') });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+// Anexo livre de Foto / Imagem / PDF direto no compositor do Inbox 360º
+const ALLOWED_CHAT_ATTACH_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf']);
+app.post('/api/crm/:chatId/send-attachment', memUpload.single('file'), async (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  if (!req.file || !req.file.buffer) {
+    return res.status(400).json({ ok: false, error: 'Selecione uma imagem (JPG, PNG, WEBP, GIF) ou documento PDF.' });
+  }
+
+  const origName = String(req.file.originalname || 'anexo').replace(/[^\w.\- ()áàâãéêíóôõúçÁÀÂÃÉÊÍÓÔÕÚÇ]/g, '_').slice(0, 100);
+  const rawExt = path.extname(origName).toLowerCase();
+  const mime = String(req.file.mimetype || '').toLowerCase();
+  const safeExt = ALLOWED_CHAT_ATTACH_EXTS.has(rawExt)
+    ? rawExt
+    : mime === 'application/pdf'
+      ? '.pdf'
+      : mime.includes('png')
+        ? '.png'
+        : mime.includes('webp')
+          ? '.webp'
+          : mime.includes('gif')
+            ? '.gif'
+            : mime.startsWith('image/')
+              ? '.jpg'
+              : '';
+
+  if (!safeExt) {
+    return res.status(400).json({ ok: false, error: 'Formato não permitido. Envie imagens (JPG, PNG, WEBP, GIF) ou arquivos PDF.' });
+  }
+
+  const isPdf = safeExt === '.pdf';
+  const resolvedMime = isPdf
+    ? 'application/pdf'
+    : safeExt === '.png'
+      ? 'image/png'
+      : safeExt === '.webp'
+        ? 'image/webp'
+        : safeExt === '.gif'
+          ? 'image/gif'
+          : 'image/jpeg';
+  const caption = String(req.body?.caption || '').trim();
+  const savedFilename = `att_${Date.now()}_${Math.random().toString(36).slice(2, 7)}${safeExt}`;
+  const displayFileName = isPdf && !origName.toLowerCase().endsWith('.pdf') ? `${origName}.pdf` : origName;
+
+  try {
+    let mediaUrl = `/uploads/${savedFilename}`;
+
+    if (usesCloudBridge(req)) {
+      const uploadedUrl = await uploadMediaBufferToCloud(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        savedFilename,
+        req.file.buffer,
+        resolvedMime
+      );
+      if (!uploadedUrl) {
+        return res.status(500).json({ ok: false, error: 'Falha ao salvar anexo no armazenamento seguro da conta.' });
+      }
+      mediaUrl = uploadedUrl;
+
+      if (!chatId.startsWith('demo_')) {
+        const waState = getEffectiveWaState(req);
+        if (!waState.workerOnline || waState.status !== 'connected') {
+          return res.status(503).json({
+            ok: false,
+            workerOffline: !waState.workerOnline,
+            error: !waState.workerOnline
+              ? 'Seu Motor WhatsApp (Termux / PC) está offline. Ligue o motor para enviar arquivos reais no WhatsApp.'
+              : 'O WhatsApp da sua conta não está conectado no momento.'
+          });
+        }
+        const out = await dispatchCommandToWorker(
+          req.cloudAuth.client,
+          req.cloudAuth.authUser.id,
+          'send_crm_attachment',
+          {
+            chatId,
+            filename: savedFilename,
+            mediaUrl,
+            mimeType: resolvedMime,
+            originalName: displayFileName,
+            caption
+          }
+        );
+        storage.markContactRead(chatId);
+        return res.json({
+          ok: true,
+          contact: out.contact || storage.data.contacts[chatId],
+          sentRealWhatsApp: true
+        });
+      }
+    } else {
+      fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+      fs.writeFileSync(path.join(UPLOADS_DIR, savedFilename), req.file.buffer);
+    }
+
+    const cleanTargetJid = chatId.replace(/^demo_/, '');
+    if (!usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
+      await whatsappManager.sendManualAttachment({
+        chatId: cleanTargetJid,
+        buffer: req.file.buffer,
+        mimeType: resolvedMime,
+        fileName: displayFileName,
+        caption,
+        mediaUrl,
+        pauseAi: true
+      });
+      storage.markContactRead(chatId);
+    } else {
+      storage.appendContactMessage(chatId, {
+        role: 'owner',
+        text: caption || (isPdf ? `📄 [PDF enviado: ${displayFileName}]` : '🖼️ [Imagem enviada]'),
+        mediaUrl,
+        ...(isPdf ? { mediaName: displayFileName } : {})
+      });
+      storage.pauseContact(chatId, 60, 'Anexo registrado no painel');
+    }
+
+    const key = storage.findSiblingContactKey(chatId) || chatId;
+    res.json({
+      ok: true,
+      contact: storage.data.contacts[key],
+      sentRealWhatsApp: !usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')
+    });
+  } catch (err) {
+    res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+// Autonomia para o próprio cliente/usuário autenticado alterar sua senha
+app.post('/api/auth/change-password', async (req, res) => {
+  try {
+    if (req.cloudAuth?.isRemoteImpersonation) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Você está em Modo Suporte Master. Para redefinir a senha deste cliente, use o botão "Senha" na aba Clientes SaaS.'
+      });
+    }
+    const ownUsername = IS_VERCEL
+      ? (req.realMasterProfile?.username || req.cloudAuth?.profile?.username)
+      : cloudWorker.user?.username;
+
+    if (!ownUsername) {
+      return res.status(401).json({ ok: false, error: 'Faça login na sua conta para alterar a senha.' });
+    }
+
+    const currentPassword = String(req.body?.currentPassword || '');
+    const newPassword = String(req.body?.newPassword || '');
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ ok: false, error: 'Preencha sua senha atual e a nova senha.' });
+    }
+
+    const updatedAuth = await changeOwnPassword(ownUsername, currentPassword, newPassword);
+
+    if (!IS_VERCEL && cloudWorker.user?.username === ownUsername) {
+      await cloudWorker.loginWorkerWithCredentials(ownUsername, newPassword).catch(() => {});
+    }
+
+    res.json({ ok: true, ...updatedAuth });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || 'Não foi possível alterar a senha.' });
   }
 });
 

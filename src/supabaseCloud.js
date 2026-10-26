@@ -205,6 +205,37 @@ export async function signInWithUsernamePassword(usernameInput, password) {
   };
 }
 
+/**
+ * Permite que o próprio cliente/usuário autenticado troque sua senha com segurança
+ * (exige confirmação da senha atual; funciona tanto na Vercel quanto no Termux/PC sem expor service_role).
+ */
+export async function changeOwnPassword(usernameInput, currentPassword, newPassword) {
+  const cleanNew = String(newPassword || '');
+  if (cleanNew.length < 6) {
+    throw new Error('A nova senha deve ter pelo menos 6 caracteres.');
+  }
+  const verified = await signInWithUsernamePassword(usernameInput, currentPassword).catch(() => null);
+  if (!verified?.session?.accessToken) {
+    throw new Error('Sua senha atual está incorreta.');
+  }
+
+  const client = createAnonClient();
+  const { error: sessErr } = await client.auth.setSession({
+    access_token: verified.session.accessToken,
+    refresh_token: verified.session.refreshToken
+  });
+  if (sessErr) {
+    throw new Error('Não foi possível validar sua sessão para trocar a senha.');
+  }
+
+  const { error: updErr } = await client.auth.updateUser({ password: cleanNew });
+  if (updErr) {
+    throw new Error(updErr.message || 'Falha ao atualizar a senha.');
+  }
+
+  return signInWithUsernamePassword(usernameInput, cleanNew);
+}
+
 export async function refreshCloudSession(refreshToken) {
   if (!refreshToken) throw new Error('Sessão expirada. Faça login novamente.');
   const anon = createAnonClient();
@@ -1000,6 +1031,18 @@ class CloudWorkerBridge {
 
   async promptTerminalLoginIfInteractive() {
     if (IS_VERCEL || this.user?.id) return;
+
+    // Suporte opcional a login automático via variáveis de ambiente (ZAPIA_USER / ZAPIA_PASS)
+    if (process.env.ZAPIA_USER && process.env.ZAPIA_PASS) {
+      try {
+        await this.loginWorkerWithCredentials(process.env.ZAPIA_USER, process.env.ZAPIA_PASS);
+        console.log(`✅ [Auto-Login] Conectado à nuvem como @${this.user.username}!`);
+        return;
+      } catch (err) {
+        console.error(`⚠️  [Auto-Login] Falhou (${err.message}).`);
+      }
+    }
+
     if (!process.stdin.isTTY || process.env.ZAPIA_NO_TTY_PROMPT === '1') {
       console.log('☁️  [Nuvem ZAP-IA] Motor aguardando login da conta em http://localhost:3000 (ou via API).');
       return;
@@ -1009,22 +1052,67 @@ class CloudWorkerBridge {
     const ask = (q) => new Promise((res) => rl.question(q, res));
     try {
       console.log('\n========================================================');
-      console.log('🔐 LOGIN DA SUA CONTA ZAP-IA STUDIO (MOTOR WHATSAPP)');
-      console.log('   (Ou pressione ENTER em branco para logar pelo navegador)');
+      console.log('🔐 1º PASSO — VINCULAR SUA CONTA ZAP-IA STUDIO');
+      console.log('   Digite o @usuario e senha entregues pelo administrador');
+      console.log('   (ou aperte ENTER em branco para entrar pelo navegador)');
       console.log('========================================================');
-      const u = (await ask('👉 Usuário: ')).trim();
-      if (!u) {
+
+      let loggedIn = false;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const u = (await ask('👉 Usuário: ')).trim();
+        if (!u) {
+          rl.close();
+          console.log('🌐 Abra http://localhost:3000 no navegador para entrar na sua conta.\n');
+          return;
+        }
+        const p = (await ask('🔑 Senha: ')).trim();
+        try {
+          await this.loginWorkerWithCredentials(u, p);
+          loggedIn = true;
+          break;
+        } catch (loginErr) {
+          console.error(`❌ Tentativa ${attempt}/3: ${loginErr.message}`);
+        }
+      }
+
+      if (!loggedIn) {
         rl.close();
-        console.log('🌐 Abra http://localhost:3000 no navegador para entrar na sua conta.\n');
+        console.log('🌐 Você também pode fazer login pelo navegador em http://localhost:3000.\n');
         return;
       }
-      const p = (await ask('🔑 Senha: ')).trim();
-      rl.close();
-      await this.loginWorkerWithCredentials(u, p);
-      console.log(`✅ Conectado à nuvem como @${this.user.username} (${this.user.displayName})!\n`);
+
+      console.log(`\n✅ Conta @${this.user.username} (${this.user.displayName}) vinculada com sucesso!`);
+      console.log('   Esta sessão já ficou salva neste aparelho para as próximas aberturas.\n');
+
+      // Se o WhatsApp desta conta ainda não estiver pareado, oferece gerar Código de 8 Dígitos ali mesmo no Termux!
+      if (this.whatsappManager && this.whatsappManager.status !== 'connected') {
+        const phoneAns = (
+          await ask(
+            '📱 2º PASSO (Opcional) — Quer gerar o Código de 8 Dígitos para conectar seu WhatsApp agora mesmo?\n   Digite seu DDD + Número (ex: 86999887766) ou aperte ENTER para conectar pelo painel web: '
+          )
+        ).trim();
+        rl.close();
+        const digits = phoneAns.replace(/\D/g, '');
+        if (digits.length >= 10) {
+          console.log('⏳ Gerando Código de Pareamento de 8 dígitos junto ao WhatsApp...');
+          const st = await this.whatsappManager.connect(digits);
+          await this.pushRuntimeHeartbeat();
+          if (st?.pairingCode) {
+            console.log('\n========================================================');
+            console.log(`🔢 SEU CÓDIGO DE CONEXÃO WHATSAPP:  ${st.pairingCode}`);
+            console.log('   Abra seu WhatsApp > Aparelhos Conectados > Conectar Aparelho');
+            console.log('   > "Conectar com número de telefone" e digite o código acima!');
+            console.log('========================================================\n');
+          }
+        } else {
+          console.log('🌐 Gerencie tudo ao vivo em: https://zap-ia-studio.vercel.app (ou http://localhost:3000)\n');
+        }
+      } else {
+        rl.close();
+      }
     } catch (err) {
       try { rl.close(); } catch {}
-      console.error(`⚠️  Falha no login pelo terminal: ${err.message}. Você pode entrar pelo navegador em http://localhost:3000.\n`);
+      console.error(`⚠️  Aviso no assistente de terminal: ${err.message}. Você pode operar normalmente em http://localhost:3000.\n`);
     }
   }
 
@@ -1197,7 +1285,7 @@ class CloudWorkerBridge {
       for (const cid of localStorageInstance.dirtyContactIds) {
         const contact = localStorageInstance.data.contacts[cid];
         if (!contact?.messages?.length) continue;
-        const recent = contact.messages.slice(-4);
+        const recent = contact.messages.slice(-8);
         for (const m of recent) {
           if (m?.mediaUrl && m.mediaUrl.startsWith('/uploads/')) {
             const fn = path.basename(m.mediaUrl);
@@ -1205,9 +1293,14 @@ class CloudWorkerBridge {
             if (fs.existsSync(fp)) {
               const ext = path.extname(fn).toLowerCase();
               const mime =
-                ext === '.ogg' ? 'audio/ogg' :
+                ext === '.ogg' || ext === '.opus' ? 'audio/ogg' :
                 ext === '.mp3' ? 'audio/mpeg' :
+                ext === '.m4a' ? 'audio/mp4' :
+                ext === '.wav' ? 'audio/wav' :
+                ext === '.webm' ? 'audio/webm' :
                 ext === '.png' ? 'image/png' :
+                ext === '.webp' ? 'image/webp' :
+                ext === '.gif' ? 'image/gif' :
                 ext === '.pdf' ? 'application/pdf' : 'image/jpeg';
               const pubUrl = await uploadMediaBufferToCloud(this.client, this.user.id, fn, fs.readFileSync(fp), mime);
               if (pubUrl) m.mediaUrl = pubUrl;
@@ -1433,6 +1526,24 @@ class CloudWorkerBridge {
             waveform: p.waveform
           });
           localStorageInstance.pauseContact(p.chatId, biz.lockUntilManualResume ? 'forever' : 60, 'Nota de voz enviada manualmente pelo painel');
+          await this.flushLocalToCloud();
+          const key = localStorageInstance.findSiblingContactKey(p.chatId) || p.chatId;
+          result = { ok: true, sentRealWhatsApp: true, contact: localStorageInstance.data.contacts[key] };
+          break;
+        }
+        case 'send_crm_attachment': {
+          const localFile = await ensureLocalMediaCached(p.filename, p.mediaUrl);
+          if (!localFile) throw new Error('Arquivo anexo não encontrado para envio.');
+          const fileBuffer = fs.readFileSync(localFile);
+          await this.whatsappManager.sendManualAttachment({
+            chatId: p.chatId,
+            buffer: fileBuffer,
+            mimeType: p.mimeType || 'image/jpeg',
+            fileName: p.originalName || p.filename || 'anexo',
+            caption: p.caption || '',
+            mediaUrl: p.mediaUrl || `/uploads/${p.filename}`,
+            pauseAi: true
+          });
           await this.flushLocalToCloud();
           const key = localStorageInstance.findSiblingContactKey(p.chatId) || p.chatId;
           result = { ok: true, sentRealWhatsApp: true, contact: localStorageInstance.data.contacts[key] };

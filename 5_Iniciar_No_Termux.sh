@@ -39,8 +39,9 @@ echo "use a opcao 'Codigo de 8 digitos' na aba Conexao & Painel!"
 echo "=============================================================="
 echo ""
 
-# Abre o painel automaticamente no navegador do Android se disponivel
-if command -v termux-open-url >/dev/null 2>&1; then
+# Abre o painel automaticamente no navegador do Android APENAS se a conta ja estiver vinculada
+# (Na 1a execucao, mantem o foco aqui no Termux para o assistente guiado de Usuario/Senha + Codigo de 8 digitos!)
+if [ -f "data/cloud_session.json" ] && command -v termux-open-url >/dev/null 2>&1; then
   (sleep 3 && termux-open-url "http://localhost:3000") &
 fi
 

@@ -1196,6 +1196,7 @@
                   <div class="crm-chat-head-right">
                     <select id="inboxStageQuickSelect" class="hide-mob-chat" aria-label="Etapa do contato no funil" style="width:auto; min-height:32px; padding:4px 8px; font-size:12px;">
                       <option value="novo">Novo Contato</option>
+                      <option value="qualificando">Qualificando</option>
                       <option value="em_atendimento">Em Atendimento</option>
                       <option value="aguardando_humano">Aguardando Você</option>
                       <option value="concluido">Concluído</option>
@@ -1273,7 +1274,11 @@
                   </div>
 
                   <form id="crmInboxReplyForm" style="display:flex; gap:8px; align-items:center;">
-                    <input type="text" id="crmInboxReplyInput" placeholder="Mensagem ou digite / para atalhos..." autocomplete="off" style="flex:1;" aria-label="Escrever resposta ou nota interna no chat" />
+                    <input type="file" id="inboxAttachmentFileInput" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf" style="display:none;" />
+                    <button type="button" id="btnInboxAttachFile" class="btn btn-secondary btn-sm" style="padding:0 11px; min-width:40px; min-height:40px; flex-shrink:0;" aria-label="Anexar foto, imagem ou documento PDF" title="Anexar foto, print ou documento PDF">
+                      <svg class="icon-svg" style="width:16px; height:16px;" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                    </button>
+                    <input type="text" id="crmInboxReplyInput" placeholder="Mensagem, legenda do anexo ou / para atalhos..." autocomplete="off" style="flex:1;" aria-label="Escrever resposta ou nota interna no chat" />
                     <button type="submit" id="btnInboxSendText" class="btn btn-primary">Enviar</button>
                   </form>
                 </div>
@@ -1301,6 +1306,7 @@
                   <div style="display:flex; gap:6px; width:100%; flex-wrap:wrap;">
                     <select id="inspMobStageMirror" aria-label="Etapa no funil" style="flex:1; min-width:150px;" onchange="const s=document.getElementById('inboxStageQuickSelect'); if(s){s.value=this.value; s.dispatchEvent(new Event('change'));}">
                       <option value="novo">Novo Contato</option>
+                      <option value="qualificando">Qualificando</option>
                       <option value="em_atendimento">Em Atendimento</option>
                       <option value="aguardando_humano">Aguardando Você</option>
                       <option value="concluido">Concluído</option>
@@ -1542,11 +1548,27 @@
         <span style="font-size:11px; color:var(--text-muted);">Alerta</span>
       </button>
 
+      <button type="button" id="btnDesktopNotifyToggle" class="sheet-item-btn">
+        <span style="display:inline-flex; align-items:center; gap:9px;">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+          <span id="desktopNotifyLabel">Notificações na Tela: Ativar</span>
+        </span>
+        <span style="font-size:11px; color:var(--text-muted);">2º Plano</span>
+      </button>
+
       <button type="button" class="sheet-item-btn" onclick="closeModal('accountSheet'); document.getElementById('btnOpenBrandModal')?.click();">
         <span style="display:inline-flex; align-items:center; gap:9px;">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
           <span>Personalizar Nome &amp; Marca</span>
         </span>
+      </button>
+
+      <button type="button" id="btnOpenChangeMyPass" class="sheet-item-btn">
+        <span style="display:inline-flex; align-items:center; gap:9px;">
+          <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          <span>Alterar Minha Senha</span>
+        </span>
+        <span style="font-size:11px; color:var(--text-muted);">Segurança</span>
       </button>
 
       <button type="button" id="btnInstallPwa" class="sheet-item-btn" style="display:none;">
@@ -2104,6 +2126,37 @@
         <div style="display:flex; justify-content:flex-end; gap:10px;">
           <button type="button" class="btn btn-secondary" onclick="closeModal('editManagedUserModal')">Cancelar</button>
           <button type="submit" class="btn btn-primary">Salvar Dados do Cliente</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ALTERAR MINHA PRÓPRIA SENHA -->
+  <div id="changeMyPasswordModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="changeMyPassTitle">
+    <div class="modal-dialog" style="max-width:440px;">
+      <div class="modal-head">
+        <h3 id="changeMyPassTitle" class="panel-title">Alterar Minha Senha</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('changeMyPasswordModal')">Fechar</button>
+      </div>
+      <form id="changeMyPasswordForm" class="modal-body">
+        <p class="panel-desc" style="margin-top:0;">
+          Confirme sua senha atual e escolha uma nova senha com pelo menos 6 caracteres.
+        </p>
+        <div class="form-group">
+          <label class="form-label" for="myCurrentPassInput">Senha Atual</label>
+          <input type="password" id="myCurrentPassInput" required autocomplete="current-password" spellcheck="false" autocapitalize="none" placeholder="Digite sua senha atual..." />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="myNewPassInput">Nova Senha (mínimo 6 caracteres)</label>
+          <input type="password" id="myNewPassInput" required minlength="6" autocomplete="new-password" spellcheck="false" autocapitalize="none" placeholder="Digite a nova senha..." />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="myConfirmPassInput">Confirmar Nova Senha</label>
+          <input type="password" id="myConfirmPassInput" required minlength="6" autocomplete="new-password" spellcheck="false" autocapitalize="none" placeholder="Repita a nova senha..." />
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('changeMyPasswordModal')">Cancelar</button>
+          <button type="submit" id="btnSubmitChangeMyPass" class="btn btn-primary">Salvar Nova Senha</button>
         </div>
       </form>
     </div>

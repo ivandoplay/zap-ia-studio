@@ -54,6 +54,17 @@ done
 echo "[1/3] Baixando versao mais recente do Motor em $BASE_URL..."
 curl -fsSL "$BASE_URL/api/public/motor-update.zip" -o "$TMP_ZIP"
 
+# Pausa qualquer instancia anterior antes de substituir os arquivos
+if [ -f "$TARGET_APP/data/.wrapper.pid" ]; then
+  OLD_PID=$(cat "$TARGET_APP/data/.wrapper.pid" 2>/dev/null || echo "")
+  if [ -n "$OLD_PID" ]; then
+    kill -9 "$OLD_PID" 2>/dev/null || true
+  fi
+fi
+pkill -f "INICIAR_NO_TERMUX.sh" 2>/dev/null || true
+pkill -f "src/server.js" 2>/dev/null || true
+sleep 1
+
 echo "[2/3] Atualizando arquivos do sistema (preservando seu WhatsApp e sua conta)..."
 node - "$TMP_ZIP" "$HOME" << 'EOF_NODE'
 const fs = require('node:fs');

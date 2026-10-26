@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import dns from 'node:dns';
 import http from 'http';
 import path from 'path';
 import fs from 'fs';
@@ -7,6 +8,41 @@ import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import { WebSocketServer } from 'ws';
+
+// Corrige falhas de DNS/IPv6 ("TypeError: fetch failed") em redes móveis 4G/5G e Wi-Fi no Android Termux e Windows
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {}
+
+// Silencia logs internos ruidosos da criptografia libsignal (rotação normal de chaves Signal que polui o terminal)
+(function suppressNoisyLibsignalLogs() {
+  const NOISY_SIGNAL_PREFIXES = [
+    'Closing session:',
+    'Opening session:',
+    'Removing old closed session:',
+    'Session already closed',
+    'Closing open session in favor of incoming prekey bundle'
+  ];
+  const isNoisySignalArg = (firstArg) => {
+    if (typeof firstArg !== 'string') return false;
+    return NOISY_SIGNAL_PREFIXES.some((p) => firstArg.startsWith(p));
+  };
+  const origInfo = console.info.bind(console);
+  const origWarn = console.warn.bind(console);
+  const origLog = console.log.bind(console);
+  console.info = (...args) => {
+    if (isNoisySignalArg(args[0])) return;
+    origInfo(...args);
+  };
+  console.warn = (...args) => {
+    if (isNoisySignalArg(args[0])) return;
+    origWarn(...args);
+  };
+  console.log = (...args) => {
+    if (isNoisySignalArg(args[0])) return;
+    origLog(...args);
+  };
+})();
 
 import { ROOT_DIR, UPLOADS_DIR, storage, tenantStorageContext, uid, normalizePhoneDigits, normalizeCatalogItem, buildContactVCard } from './storage.js';
 import { NICHE_TEMPLATES } from './templates.js';
@@ -3078,11 +3114,31 @@ if (!IS_VERCEL && server) {
     }
   });
 
-  // Garante gravação atômica de dados pendentes ao fechar janela .BAT ou encerrar Termux (SIGINT / SIGTERM)
+  // Blindagem 24/7 contra quedas do Node 20 por oscilações de rede / Promises internas do Baileys no Android Termux
+  process.on('unhandledRejection', (reason) => {
+    const msg = reason instanceof Error ? reason.message : String(reason || '');
+    console.warn(`⚠️  [Motor 24h Blindado] Oscilação assíncrona absorvida sem derrubar o servidor: ${msg.slice(0, 180)}`);
+  });
+
+  process.on('uncaughtException', (err) => {
+    if (err?.code === 'EADDRINUSE') {
+      console.error(`\n[!] Já existe um Motor ativo na porta ${PORT}.\n`);
+      process.exit(0);
+    }
+    console.warn(`⚠️  [Motor 24h Blindado] Exceção recuperada automaticamente: ${(err?.message || String(err)).slice(0, 180)}`);
+  });
+
+  // Ignora SIGHUP ao minimizar o Termux ou apagar a tela do celular
+  try {
+    process.on('SIGHUP', () => {});
+  } catch {}
+
+  // Garante gravação atômica de dados pendentes ao encerrar (Ctrl+C = 130 encerra loop; SIGTERM = 143 permite auto-recuperação)
   let shuttingDown = false;
-  async function gracefulFlushAndExit() {
+  async function gracefulFlushAndExit(exitCode = 0, label = '') {
     if (shuttingDown) return;
     shuttingDown = true;
+    if (label) console.log(`\n⏹️  [ZAP-IA] ${label}`);
     try {
       if (storage.saveTimer) {
         clearTimeout(storage.saveTimer);
@@ -3096,10 +3152,10 @@ if (!IS_VERCEL && server) {
         ]);
       }
     } catch {}
-    process.exit(0);
+    process.exit(exitCode);
   }
-  process.on('SIGINT', () => { gracefulFlushAndExit(); });
-  process.on('SIGTERM', () => { gracefulFlushAndExit(); });
+  process.on('SIGINT', () => { gracefulFlushAndExit(130, 'Motor encerrado manualmente (Ctrl+C).'); });
+  process.on('SIGTERM', () => { gracefulFlushAndExit(143, 'Sinal do sistema recebido — salvando estado seguro...'); });
 }
 
 export default app;

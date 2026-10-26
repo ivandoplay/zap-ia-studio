@@ -39,23 +39,34 @@ echo "use a opcao 'Codigo de 8 digitos' na aba Conexao & Painel!"
 echo "=============================================================="
 echo ""
 
-# Abre o painel automaticamente no navegador do Android APENAS se a conta ja estiver vinculada
-# (Na 1a execucao, mantem o foco aqui no Termux para o assistente guiado de Usuario/Senha + Codigo de 8 digitos!)
-if [ -f "data/cloud_session.json" ] && command -v termux-open-url >/dev/null 2>&1; then
-  (sleep 3 && termux-open-url "http://localhost:3000") &
+# Garante instancia unica REAL (encerra qualquer loop antigo de outra aba + node antigo)
+trap '' HUP
+mkdir -p data
+if [ -f "data/.wrapper.pid" ]; then
+  OLD_WPID=$(cat "data/.wrapper.pid" 2>/dev/null || echo "")
+  if [ -n "$OLD_WPID" ] && [ "$OLD_WPID" != "$$" ]; then
+    kill -9 "$OLD_WPID" 2>/dev/null || true
+  fi
 fi
-
-# Garante instancia unica (evita conflito 440 caso outra aba antiga estivesse aberta)
+echo "$$" > "data/.wrapper.pid"
 pkill -f "src/server.js" 2>/dev/null || true
 sleep 1
 
-# Loop de auto-recuperacao caso o processo reinicie
+# Loop de auto-recuperacao blindado 24/7
 while true; do
-  node src/server.js
-  EXIT_CODE=$?
-  if [ "$EXIT_CODE" -eq 0 ] || [ "$EXIT_CODE" -eq 130 ] || [ "$EXIT_CODE" -eq 143 ]; then
+  CUR_WPID=$(cat "data/.wrapper.pid" 2>/dev/null || echo "$$")
+  if [ "$CUR_WPID" != "$$" ]; then
     break
   fi
-  echo "[AVISO] Processo encerrado (codigo $EXIT_CODE). Reiniciando em 4 segundos (Ctrl+C para parar)..."
-  sleep 4
+  node --dns-result-order=ipv4first src/server.js
+  EXIT_CODE=$?
+  CUR_WPID=$(cat "data/.wrapper.pid" 2>/dev/null || echo "$$")
+  if [ "$CUR_WPID" != "$$" ]; then
+    break
+  fi
+  if [ "$EXIT_CODE" -eq 130 ] || [ "$EXIT_CODE" -eq 0 ]; then
+    break
+  fi
+  echo "[AUTO-RECUPERACAO] Reiniciando motor em 3 segundos (codigo $EXIT_CODE | Ctrl+C para parar)..."
+  sleep 3
 done

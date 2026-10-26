@@ -356,10 +356,11 @@ class WhatsAppManager {
 
   hasCompletedHistoryBootstrap() {
     try {
+      if (Object.keys(storage.data.contacts || {}).length >= 1) return true;
       const fp = this.getHistorySyncMetaFile();
       if (!fs.existsSync(fp)) return false;
       const parsed = JSON.parse(fs.readFileSync(fp, 'utf-8'));
-      return Boolean(parsed?.completedAt) && Object.keys(storage.data.contacts || {}).length >= 3;
+      return Boolean(parsed?.completedAt);
     } catch {
       return false;
     }
@@ -952,6 +953,7 @@ class WhatsAppManager {
             this.lastConnectedLogPhone = this.connectedUser.phone;
             this.lastConnectedLogAt = nowMs;
             storage.addLog('whatsapp', `WhatsApp conectado com sucesso! (${this.connectedUser.phone})`);
+            console.log(`✅ [WhatsApp 24h Ativo] Conectado em +${this.connectedUser.phone} (${this.connectedUser.name}) — Atendendo normalmente!`);
           }
           this.resolveConnectionWaiters(true);
           this.emitState();
@@ -1171,23 +1173,16 @@ class WhatsAppManager {
     });
 
     try {
-      // Passo 1: Resync completo de Snapshots do App-State (traz agenda de contatos, pins, arquivadas e mapeamentos LID!)
-      if (this.sock.authState?.keys?.set && typeof this.sock.resyncAppState === 'function') {
+      // Passo 1: Resync de Snapshots do App-State apenas quando solicitado manualmente (force=true),
+      // evitando downloads pesados em mmg.whatsapp.net a cada reconexão de rede móvel!
+      if (force && this.sock.authState?.keys?.set && typeof this.sock.resyncAppState === 'function') {
         try {
-          await this.sock.authState.keys.set({
-            'app-state-sync-version': {
-              regular_high: null,
-              regular_low: null,
-              critical_unblock_low: null,
-              regular: null
-            }
-          });
           await this.sock.resyncAppState(
             ['regular_high', 'regular_low', 'critical_unblock_low', 'regular'],
-            true
+            false
           );
         } catch (err) {
-          console.warn('[WA Sync] Aviso no resyncAppState:', err?.message || err);
+          console.warn('[WA Sync] Aviso leve no resyncAppState (seguindo via PeerData):', err?.message || err);
         }
       }
 

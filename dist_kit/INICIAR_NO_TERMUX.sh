@@ -78,7 +78,16 @@ echo "=============================================================="
 echo "  ZAP-IA STUDIO v${APP_VER} -- MOTOR 24H ATIVO NO ANDROID (TERMUX)"
 echo "=============================================================="
 
-# Garante que nenhuma outra aba antiga do Termux fique disputando a conexao do WhatsApp (erro 440)
+# Garante instancia unica REAL: encerra qualquer loop anterior de outra aba do Termux + qualquer node antigo
+trap '' HUP
+mkdir -p data
+if [ -f "data/.wrapper.pid" ]; then
+  OLD_WPID=$(cat "data/.wrapper.pid" 2>/dev/null || echo "")
+  if [ -n "$OLD_WPID" ] && [ "$OLD_WPID" != "$$" ]; then
+    kill -9 "$OLD_WPID" 2>/dev/null || true
+  fi
+fi
+echo "$$" > "data/.wrapper.pid"
 pkill -f "src/server.js" 2>/dev/null || true
 sleep 1
 
@@ -97,18 +106,28 @@ fi
 echo "=============================================================="
 echo ""
 
-if [ -f "data/cloud_session.json" ] && command -v termux-open-url >/dev/null 2>&1; then
-  (sleep 3 && termux-open-url "http://localhost:3000") &
-fi
-
 while true; do
-  set +e
-  node src/server.js
-  EXIT_CODE=$?
-  set -e
-  if [ "$EXIT_CODE" -eq 0 ] || [ "$EXIT_CODE" -eq 130 ] || [ "$EXIT_CODE" -eq 143 ]; then
+  # Se outra aba mais nova assumiu o .wrapper.pid, encerra esta aba antiga silenciosamente
+  CUR_WPID=$(cat "data/.wrapper.pid" 2>/dev/null || echo "$$")
+  if [ "$CUR_WPID" != "$$" ]; then
+    echo "[OK] Nova janela do Motor assumiu a execucao. Encerrando aba antiga."
     break
   fi
-  echo "[AVISO] Motor encerrado (codigo $EXIT_CODE). Reiniciando em 4 segundos (Ctrl+C para parar)..."
-  sleep 4
+
+  set +e
+  node --dns-result-order=ipv4first src/server.js
+  EXIT_CODE=$?
+  set -e
+
+  CUR_WPID=$(cat "data/.wrapper.pid" 2>/dev/null || echo "$$")
+  if [ "$CUR_WPID" != "$$" ]; then
+    break
+  fi
+
+  # Somente Ctrl+C manual (130) ou porta ja ocupada (0) encerram o loop; qualquer queda ou sinal do Android reinicia sozinho!
+  if [ "$EXIT_CODE" -eq 130 ] || [ "$EXIT_CODE" -eq 0 ]; then
+    break
+  fi
+  echo "[AUTO-RECUPERACAO] Motor reiniciando automaticamente em 3 segundos (codigo $EXIT_CODE | Ctrl+C para parar)..."
+  sleep 3
 done

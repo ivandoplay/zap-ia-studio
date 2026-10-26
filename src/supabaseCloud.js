@@ -125,7 +125,7 @@ export async function signInWithUsernamePassword(usernameInput, password) {
       user_id: data.user.id,
       username: meta.username || cleanUser || 'usuario',
       display_name: meta.display_name || cleanUser || 'Usuário',
-      role: meta.role === 'master' ? 'master' : 'user',
+      role: 'user',
       is_active: true,
       last_seen_at: new Date().toISOString()
     };
@@ -258,11 +258,12 @@ export async function verifyCloudAccessToken(accessToken) {
     throw blockedErr;
   }
 
+  // Zero-Trust: role NUNCA é lida de user_metadata (editável pelo cliente), somente da tabela protegida zapia_users!
   const effectiveProfile = profile || {
     user_id: data.user.id,
-    username: data.user.user_metadata?.username || normalizeUsername(data.user.email || ''),
+    username: normalizeUsername(data.user.email || '') || 'usuario',
     display_name: data.user.user_metadata?.display_name || 'Usuário',
-    role: data.user.user_metadata?.role === 'master' ? 'master' : 'user',
+    role: 'user',
     is_active: true
   };
 
@@ -270,6 +271,39 @@ export async function verifyCloudAccessToken(accessToken) {
     client: authed,
     authUser: data.user,
     profile: effectiveProfile
+  };
+}
+
+/**
+ * Modo Suporte 1-Clique (Impersonation Exclusiva do Admin Master):
+ * Carrega o workspace isolado de um cliente específico usando service_role no servidor,
+ * somente após comprovar que o token chamador pertence ao Admin Master.
+ */
+export async function loadTenantContextAsMasterSupport(targetUserId) {
+  const admin = getAdminClient();
+  const { data: targetProfile, error } = await admin
+    .from('zapia_users')
+    .select('*')
+    .eq('user_id', targetUserId)
+    .maybeSingle();
+
+  if (error || !targetProfile) {
+    const notFound = new Error('Conta de cliente não encontrada para Modo Suporte.');
+    notFound.statusCode = 404;
+    throw notFound;
+  }
+
+  const fakeAuthUser = {
+    id: targetProfile.user_id,
+    email: usernameToAuthEmail(targetProfile.username)
+  };
+
+  const tenantStore = await loadTenantContextFromCloud(admin, fakeAuthUser, targetProfile);
+  return {
+    adminClient: admin,
+    targetAuthUser: fakeAuthUser,
+    targetProfile,
+    tenantStore
   };
 }
 
@@ -541,41 +575,101 @@ export async function dispatchCommandToWorker(client, userId, action, payload = 
 
 export async function listManagedUsers() {
   const admin = getAdminClient();
-  const [usersRes, rtRes, contactsRes] = await Promise.all([
+  const [usersRes, rtRes, contactsRes, wsRes] = await Promise.all([
     admin.from('zapia_users').select('*').order('created_at', { ascending: true }),
     admin.from('zapia_wa_runtime').select('user_id, status, connected_user, worker_online, worker_heartbeat_at, worker_platform'),
-    admin.from('zapia_contacts').select('user_id')
+    admin.from('zapia_contacts').select('user_id, data'),
+    admin.from('zapia_workspaces').select('user_id, business, settings, stats, updated_at')
   ]);
 
   if (usersRes.error) throw new Error(usersRes.error.message);
 
   const rtMap = new Map((rtRes.data || []).map((r) => [r.user_id, r]));
-  const contactCounts = new Map();
+  const wsMap = new Map((wsRes.data || []).map((w) => [w.user_id, w]));
+  const contactStats = new Map();
+
   for (const c of contactsRes.data || []) {
-    contactCounts.set(c.user_id, (contactCounts.get(c.user_id) || 0) + 1);
+    const uid = c.user_id;
+    const prev = contactStats.get(uid) || { total: 0, awaitingHuman: 0, unread: 0, messages: 0 };
+    prev.total += 1;
+    const cd = c.data || {};
+    if (cd.stage === 'aguardando_humano' && !cd.archived) prev.awaitingHuman += 1;
+    prev.unread += Math.max(0, Number(cd.unreadCount) || 0);
+    prev.messages += Array.isArray(cd.messages) ? cd.messages.length : 0;
+    contactStats.set(uid, prev);
   }
 
   return (usersRes.data || []).map((u) => {
     const rt = rtMap.get(u.user_id);
+    const ws = wsMap.get(u.user_id);
+    const cStat = contactStats.get(u.user_id) || { total: 0, awaitingHuman: 0, unread: 0, messages: 0 };
     const workerOnline = Boolean(rt?.worker_online) && isWorkerHeartbeatFresh(rt?.worker_heartbeat_at);
+    const waConnected = workerOnline && rt?.status === 'connected';
+
+    const ai = ws?.settings?.ai || {};
+    const hasAiKey = Boolean(
+      String(ai.geminiApiKey || '').trim() ||
+      String(ai.geminiKeyPool || '').trim() ||
+      String(ai.groqApiKey || '').trim() ||
+      String(ai.openaiApiKey || '').trim() ||
+      String(ai.openrouterApiKey || '').trim()
+    );
+
+    const biz = ws?.business || {};
+    const defaultSummaryHint = 'Descreva aqui o que sua empresa vende';
+    const hasCustomTraining = Boolean(
+      biz.trainingPackId ||
+      (biz.companySummary && !String(biz.companySummary).startsWith(defaultSummaryHint)) ||
+      (Array.isArray(biz.faqs) && biz.faqs.length > 0) ||
+      (Array.isArray(biz.knowledgeDocs) && biz.knowledgeDocs.length > 0)
+    );
+    const catalogCount = Array.isArray(biz.catalog) ? biz.catalog.length : 0;
+    const voiceCount = Array.isArray(biz.voiceLibrary) ? biz.voiceLibrary.length : 0;
+    const hasCatalogOrVoice = catalogCount > 0 || voiceCount > 0 || Boolean(biz.pix?.enabled && biz.pix?.key);
+
+    const setupSteps = {
+      aiKey: hasAiKey,
+      training: hasCustomTraining,
+      assets: hasCatalogOrVoice,
+      whatsapp: waConnected
+    };
+    const setupScore = Object.values(setupSteps).filter(Boolean).length;
+
     return {
       userId: u.user_id,
       username: u.username,
       displayName: u.display_name || u.username,
+      customerPhone: u.customer_phone || '',
+      adminNotes: u.admin_notes || '',
       role: u.role || 'user',
       isActive: u.is_active !== false,
       createdAt: u.created_at,
       lastSeenAt: u.last_seen_at,
-      contactsCount: contactCounts.get(u.user_id) || 0,
+      businessName: biz.name || u.display_name || u.username,
+      niche: biz.niche || '',
+      botEnabled: ws?.settings?.botEnabled !== false,
+      hasAiKey,
+      hasCustomTraining,
+      catalogCount,
+      voiceCount,
+      setupSteps,
+      setupScore,
+      contactsCount: cStat.total,
+      awaitingHumanCount: cStat.awaitingHuman,
+      unreadCount: cStat.unread,
+      totalMessagesCount: cStat.messages,
+      totalAiReplies: Number(ws?.stats?.totalAiReplies) || 0,
       workerOnline,
       workerPlatform: rt?.worker_platform || null,
       waStatus: workerOnline ? (rt?.status || 'disconnected') : 'offline',
-      connectedPhone: rt?.connected_user?.id ? String(rt.connected_user.id).split(':')[0].split('@')[0] : null
+      connectedPhone: rt?.connected_user?.id
+        ? String(rt.connected_user.id).split(':')[0].split('@')[0]
+        : (rt?.connected_user?.phone || null)
     };
   });
 }
 
-export async function createManagedUser({ username, password, displayName }) {
+export async function createManagedUser({ username, password, displayName, customerPhone = '', adminNotes = '' }) {
   const admin = getAdminClient();
   const cleanUsername = normalizeUsername(username);
   if (!cleanUsername || cleanUsername.length < 3) {
@@ -597,14 +691,17 @@ export async function createManagedUser({ username, password, displayName }) {
   }
 
   const cleanDisplay = String(displayName || cleanUsername).trim();
+  const cleanPhone = String(customerPhone || '').replace(/\D/g, '');
+  const cleanNotes = String(adminNotes || '').trim();
+
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
     email,
     password: String(password),
     email_confirm: true,
+    app_metadata: { role: 'user' },
     user_metadata: {
       username: cleanUsername,
-      display_name: cleanDisplay,
-      role: 'user'
+      display_name: cleanDisplay
     }
   });
 
@@ -621,6 +718,8 @@ export async function createManagedUser({ username, password, displayName }) {
       user_id: uid,
       username: cleanUsername,
       display_name: cleanDisplay,
+      customer_phone: cleanPhone,
+      admin_notes: cleanNotes,
       role: 'user',
       is_active: true
     }, { onConflict: 'user_id' }),
@@ -653,12 +752,14 @@ export async function createManagedUser({ username, password, displayName }) {
     userId: uid,
     username: cleanUsername,
     displayName: cleanDisplay,
+    customerPhone: cleanPhone,
+    adminNotes: cleanNotes,
     role: 'user',
     isActive: true
   };
 }
 
-export async function updateManagedUser(targetUserId, { password, displayName, isActive } = {}) {
+export async function updateManagedUser(targetUserId, { password, displayName, isActive, customerPhone, adminNotes } = {}) {
   const admin = getAdminClient();
   const { data: target } = await admin
     .from('zapia_users')
@@ -681,8 +782,7 @@ export async function updateManagedUser(targetUserId, { password, displayName, i
   if (displayName !== undefined) {
     authPatch.user_metadata = {
       username: target.username,
-      display_name: String(displayName || target.username).trim(),
-      role: target.role
+      display_name: String(displayName || target.username).trim()
     };
   }
 
@@ -694,6 +794,8 @@ export async function updateManagedUser(targetUserId, { password, displayName, i
   const dbPatch = {};
   if (displayName !== undefined) dbPatch.display_name = String(displayName || target.username).trim();
   if (typeof isActive === 'boolean') dbPatch.is_active = isActive;
+  if (customerPhone !== undefined) dbPatch.customer_phone = String(customerPhone || '').replace(/\D/g, '');
+  if (adminNotes !== undefined) dbPatch.admin_notes = String(adminNotes || '').trim();
 
   if (Object.keys(dbPatch).length > 0) {
     const { error: dbErr } = await admin.from('zapia_users').update(dbPatch).eq('user_id', targetUserId);

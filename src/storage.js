@@ -96,6 +96,55 @@ export function normalizeVoiceLibraryItem(v = {}) {
   };
 }
 
+export function normalizeQuickReplyItem(q = {}) {
+  const cleanShortcut = String(q.shortcut || 'atalho')
+    .trim()
+    .replace(/^\/+/, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '') || 'atalho';
+  return {
+    id: q.id || uid('qr'),
+    shortcut: cleanShortcut,
+    title: String(q.title || cleanShortcut).trim(),
+    text: String(q.text || '').trim()
+  };
+}
+
+export function createDefaultQuickReplies() {
+  return [
+    {
+      id: 'qr_boasvindas',
+      shortcut: 'boasvindas',
+      title: 'Boas-vindas Rápida',
+      text: 'Olá! Tudo bem? Vi sua mensagem aqui agora e já assumi seu atendimento pessoalmente. Como posso te ajudar?'
+    },
+    {
+      id: 'qr_horario',
+      shortcut: 'horario',
+      title: 'Horário de Atendimento',
+      text: 'Nosso horário de atendimento é de segunda a sábado, das 08h às 18h. Qualquer dúvida pode deixar aqui que já te retorno!'
+    },
+    {
+      id: 'qr_proposta',
+      shortcut: 'proposta',
+      title: 'Alinhamento de Proposta',
+      text: 'Perfeito! Vou separar as condições certinhas para o seu cenário e já te mando aqui em seguida.'
+    },
+    {
+      id: 'qr_pix',
+      shortcut: 'pix',
+      title: 'Confirmação de PIX',
+      text: 'Assim que finalizar o PIX, pode me mandar o comprovante aqui mesmo na conversa para eu liberar tudo pra você!'
+    },
+    {
+      id: 'qr_retorno',
+      shortcut: 'retorno',
+      title: 'Retorno de Acompanhamento',
+      text: 'Oi! Passando rapidinho como combinamos para saber se conseguiu ver nossa última conversa ou se ficou alguma dúvida.'
+    }
+  ];
+}
+
 export function createBusinessFromTemplate(tpl = NICHE_TEMPLATES[0]) {
   const p = tpl.profile;
   return {
@@ -115,6 +164,7 @@ export function createBusinessFromTemplate(tpl = NICHE_TEMPLATES[0]) {
     faqs: (p.faqs || []).map(f => ({ id: f.id || uid('faq'), question: f.question, answer: f.answer })),
     knowledgeDocs: [],
     voiceLibrary: [],
+    quickReplies: createDefaultQuickReplies(),
     catalog: (p.sampleCatalog || []).map(item => normalizeCatalogItem({
       id: uid('item'),
       name: item.name,
@@ -157,6 +207,9 @@ function normalizeBusinessObject(raw = {}, fallback = createBusinessFromTemplate
     voiceLibrary: Array.isArray(raw.voiceLibrary)
       ? raw.voiceLibrary.filter(Boolean).map(normalizeVoiceLibraryItem)
       : [],
+    quickReplies: Array.isArray(raw.quickReplies) && raw.quickReplies.length > 0
+      ? raw.quickReplies.filter(Boolean).map(normalizeQuickReplyItem)
+      : (fallback.quickReplies || createDefaultQuickReplies()),
     catalog: Array.isArray(raw.catalog) ? raw.catalog.map(normalizeCatalogItem) : fallback.catalog,
     updatedAt: raw.updatedAt || new Date().toISOString()
   };
@@ -349,6 +402,7 @@ export function createCleanBusinessForNewTenant(displayName = 'Meu Negócio') {
     faqs: [],
     knowledgeDocs: [],
     voiceLibrary: [],
+    quickReplies: createDefaultQuickReplies(),
     catalog: [],
     pix: {
       enabled: false,
@@ -615,6 +669,40 @@ export class Storage {
     return this.data.business;
   }
 
+  getQuickReplies() {
+    const biz = this.getBusiness();
+    if (!Array.isArray(biz.quickReplies) || biz.quickReplies.length === 0) {
+      biz.quickReplies = createDefaultQuickReplies();
+    }
+    return biz.quickReplies;
+  }
+
+  saveQuickReply(rawItem = {}) {
+    const biz = this.getBusiness();
+    biz.quickReplies = this.getQuickReplies();
+    const normalized = normalizeQuickReplyItem(rawItem);
+    const idx = biz.quickReplies.findIndex((q) => q.id === normalized.id || q.shortcut === normalized.shortcut);
+    if (idx >= 0) {
+      biz.quickReplies[idx] = { ...biz.quickReplies[idx], ...normalized, id: biz.quickReplies[idx].id };
+    } else {
+      biz.quickReplies.push(normalized);
+    }
+    biz.updatedAt = new Date().toISOString();
+    this.writeNow();
+    return normalized;
+  }
+
+  deleteQuickReply(id) {
+    const biz = this.getBusiness();
+    biz.quickReplies = this.getQuickReplies();
+    const idx = biz.quickReplies.findIndex((q) => q.id === id);
+    if (idx === -1) return null;
+    const [removed] = biz.quickReplies.splice(idx, 1);
+    biz.updatedAt = new Date().toISOString();
+    this.writeNow();
+    return removed;
+  }
+
   getVoiceLibrary() {
     const biz = this.getBusiness();
     biz.voiceLibrary = Array.isArray(biz.voiceLibrary) ? biz.voiceLibrary : [];
@@ -726,9 +814,13 @@ export class Storage {
       notes: '',
       tags: [],
       sentVoiceIds: [],
+      internalNotesList: [],
       followUpAt: null,
       followUpNotifiedAt: null,
       unreadAlert: false,
+      unreadCount: 0,
+      archived: false,
+      pinned: false,
       createdAt: new Date().toISOString(),
       lastMessageAt: new Date().toISOString(),
       messages: []
@@ -743,6 +835,14 @@ export class Storage {
       chatId: targetKey,
       tags: Array.isArray(patch.tags) ? patch.tags : (existing.tags || []),
       sentVoiceIds: Array.isArray(patch.sentVoiceIds) ? patch.sentVoiceIds : (existing.sentVoiceIds || []),
+      internalNotesList: Array.isArray(patch.internalNotesList)
+        ? patch.internalNotesList
+        : (existing.internalNotesList || []),
+      unreadCount: patch.unreadCount !== undefined
+        ? Math.max(0, Number(patch.unreadCount) || 0)
+        : Math.max(0, Number(existing.unreadCount) || 0),
+      archived: patch.archived !== undefined ? Boolean(patch.archived) : Boolean(existing.archived),
+      pinned: patch.pinned !== undefined ? Boolean(patch.pinned) : Boolean(existing.pinned),
       followUpAt: nextFollowUpAt,
       followUpNotifiedAt: followUpChanged
         ? null
@@ -768,17 +868,81 @@ export class Storage {
     return true;
   }
 
-  appendContactMessage(chatId, msgObj) {
-    const contact = this.upsertContact(chatId, {
-      lastMessageAt: new Date().toISOString()
+  markContactRead(chatId) {
+    const key = this.findSiblingContactKey(chatId) || chatId;
+    if (!this.data.contacts[key]) return null;
+    return this.upsertContact(key, {
+      unreadCount: 0,
+      unreadAlert: false
     });
+  }
+
+  addInternalNote(chatId, { text = '', author = 'Equipe' } = {}) {
+    const cleanText = String(text || '').trim();
+    if (!cleanText) return null;
+    const key = this.findSiblingContactKey(chatId) || chatId;
+    const existing = this.upsertContact(key, {});
+    const noteId = uid('inote');
+    const createdAt = new Date().toISOString();
+    const noteEntry = {
+      id: noteId,
+      text: cleanText,
+      author: String(author || 'Equipe').trim(),
+      createdAt
+    };
+    const nextNotes = [...(existing.internalNotesList || []), noteEntry].slice(-50);
+    existing.internalNotesList = nextNotes;
+    existing.messages.push({
+      id: noteId,
+      role: 'internal_note',
+      author: noteEntry.author,
+      text: cleanText,
+      timestamp: createdAt
+    });
+    if (existing.messages.length > 100) {
+      existing.messages = existing.messages.slice(-100);
+    }
+    this.dirtyContactIds.add(existing.chatId);
+    this.saveSoon();
+    return existing;
+  }
+
+  deleteInternalNote(chatId, noteId) {
+    const key = this.findSiblingContactKey(chatId) || chatId;
+    const existing = this.data.contacts[key];
+    if (!existing) return null;
+    existing.internalNotesList = (existing.internalNotesList || []).filter((n) => n.id !== noteId);
+    existing.messages = (existing.messages || []).filter((m) => m.id !== noteId);
+    this.dirtyContactIds.add(existing.chatId);
+    this.saveSoon();
+    return existing;
+  }
+
+  appendContactMessage(chatId, msgObj) {
+    const prevKey = this.findSiblingContactKey(chatId) || chatId;
+    const prev = this.data.contacts[prevKey];
+    const isIncomingUser = msgObj?.role === 'user' && !msgObj?.skipUnread;
+    const isManualOwner = msgObj?.role === 'owner';
+
+    const nextPatch = {
+      lastMessageAt: new Date().toISOString()
+    };
+    if (isIncomingUser) {
+      nextPatch.unreadCount = Math.max(0, Number(prev?.unreadCount) || 0) + 1;
+      nextPatch.archived = false;
+    } else if (isManualOwner) {
+      nextPatch.unreadCount = 0;
+    }
+
+    const contact = this.upsertContact(chatId, nextPatch);
+    const { skipUnread: _ignored, ...cleanMsg } = msgObj || {};
     contact.messages.push({
       id: uid('msg'),
       timestamp: new Date().toISOString(),
-      ...msgObj
+      ...cleanMsg
     });
-    if (contact.messages.length > 80) {
-      contact.messages = contact.messages.slice(-80);
+    if (contact.messages.length > 100) {
+      contact.messages = contact.messages.slice(-100);
     }
     this.dirtyContactIds.add(contact.chatId);
     this.saveSoon();

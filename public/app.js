@@ -19,10 +19,28 @@ function saveCloudSession(sessionObj) {
   } catch {}
 }
 
+function loadSavedActAs() {
+  try {
+    const raw = sessionStorage.getItem('zapia_act_as');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveActAs(targetObj) {
+  state.actAsUser = targetObj || null;
+  try {
+    if (targetObj) sessionStorage.setItem('zapia_act_as', JSON.stringify(targetObj));
+    else sessionStorage.removeItem('zapia_act_as');
+  } catch {}
+}
+
 const state = {
   runtimeMode: 'local_worker',
   currentUser: null,
   cloudSession: loadSavedCloudSession(),
+  actAsUser: null,
   managedUsers: [],
   waState: { status: 'disconnected', botEnabled: true },
   proactiveQueueState: { running: false, paused: false, remaining: 0, sentSession: 0, dailySent: 0, dailyLimit: 25 },
@@ -33,8 +51,10 @@ const state = {
   trainingPacks: [],
   fullPackCache: {}, // packId -> full details (messages, operationalSkills, humanizationSkills)
   activeStudioTab: 'messages', // 'messages' | 'operational' | 'humanization'
-  activeCrmFilter: 'all', // 'all' | 'human' | 'followup' | 'hot'
+  activeCrmFilter: 'all', // 'all' | 'unread' | 'human' | 'followup' | 'hot' | 'archived'
   activeCrmSubView: 'inbox', // 'inbox' | 'kanban' | 'coach'
+  inboxComposerMode: 'reply', // 'reply' | 'note'
+  slashSelectedIndex: 0,
   selectedInboxChatId: null,
   contacts: [],
   stats: {},
@@ -51,6 +71,7 @@ const state = {
   micStartedAt: 0,
   micCancelled: false
 };
+state.actAsUser = loadSavedActAs();
 
 // ======================== UTILITÁRIOS & ÁUDIO DE ALERTA ========================
 
@@ -81,11 +102,14 @@ function formatWaText(str = '') {
 function showToast(msg, isError = false) {
   const stack = document.getElementById('toastStack');
   if (!stack) return;
+  while (stack.children.length >= 2) {
+    stack.firstElementChild?.remove();
+  }
   const el = document.createElement('div');
   el.className = `toast ${isError ? 'error' : ''}`;
   el.textContent = msg;
   stack.appendChild(el);
-  setTimeout(() => el.remove(), 3800);
+  setTimeout(() => el.remove(), 2800);
 }
 
 function playHandoffChime() {
@@ -120,6 +144,9 @@ function buildDownloadQuery() {
   }
   if (state.sessionPin) {
     params.set('pin', state.sessionPin);
+  }
+  if (state.actAsUser?.userId) {
+    params.set('actAs', state.actAsUser.userId);
   }
   const qs = params.toString();
   return qs ? `?${qs}` : '';
@@ -159,6 +186,9 @@ async function api(url, options = {}, _retried = false) {
   if (state.cloudSession?.accessToken) {
     headers.Authorization = `Bearer ${state.cloudSession.accessToken}`;
   }
+  if (state.actAsUser?.userId && !String(url).startsWith('/api/admin/')) {
+    headers['x-zapia-act-as'] = state.actAsUser.userId;
+  }
   const res = await fetch(url, {
     ...options,
     headers: { ...headers, ...(options.headers || {}) }
@@ -181,9 +211,19 @@ async function api(url, options = {}, _retried = false) {
   return data;
 }
 
-window.switchTab = function switchTab(tabId) {
+window.openInboxProDirect = function openInboxProDirect() {
+  switchTab('crm', true);
+  window.switchCrmSubView('inbox');
+};
+
+window.switchTab = function switchTab(tabId, highlightQuickInbox = false) {
+  if (!tabId) return;
   document.querySelectorAll('.nav-btn').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.tab === tabId);
+    if (btn.id === 'navQuickInboxBtn') {
+      btn.classList.toggle('active', Boolean(highlightQuickInbox));
+    } else {
+      btn.classList.toggle('active', !highlightQuickInbox && btn.dataset.tab === tabId);
+    }
   });
   document.querySelectorAll('.mob-nav-btn[data-mobtab]').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.mobtab === tabId);
@@ -191,6 +231,10 @@ window.switchTab = function switchTab(tabId) {
   document.querySelectorAll('.tab-pane').forEach((pane) => {
     pane.classList.toggle('active', pane.id === `tab-${tabId}`);
   });
+  try {
+    document.querySelector('.content-area')?.scrollTo({ top: 0, behavior: 'instant' });
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  } catch {}
   if (tabId === 'contas' && state.currentUser?.role === 'master') {
     loadManagedUsers().catch(() => {});
   }
@@ -460,15 +504,31 @@ function renderCloudHeaderBar() {
   const workerText = document.getElementById('workerStatusText');
   const masterNav = document.getElementById('navMasterUsersBtn');
   const masterMob = document.getElementById('mobMasterUsersBtn');
+  const impBanner = document.getElementById('impersonationBanner');
+  const impTarget = document.getElementById('impersonationTargetLabel');
 
   const isMaster = state.currentUser?.role === 'master';
   if (masterNav) masterNav.style.display = isMaster ? '' : 'none';
   if (masterMob) masterMob.style.display = isMaster ? 'inline-flex' : 'none';
 
+  const isImpersonating = Boolean(state.currentUser?.impersonating || state.actAsUser?.userId);
+  if (impBanner && impTarget) {
+    if (isImpersonating) {
+      const disp = state.currentUser?.displayName || state.actAsUser?.displayName || 'Cliente';
+      const uname = state.currentUser?.username || state.actAsUser?.username || 'cliente';
+      impTarget.textContent = `${disp} (@${uname})`;
+      impBanner.style.display = 'flex';
+    } else {
+      impBanner.style.display = 'none';
+    }
+  }
+
   if (state.currentUser?.username) {
     if (userBar) userBar.style.display = 'inline-flex';
     if (userBadge) {
-      userBadge.textContent = `${isMaster ? '👑' : '👤'} @${state.currentUser.username}`;
+      userBadge.textContent = isImpersonating
+        ? `🛠️ @${state.currentUser.username}`
+        : `${isMaster ? '👑' : '👤'} @${state.currentUser.username}`;
     }
   } else if (userBar) {
     userBar.style.display = 'none';
@@ -490,6 +550,134 @@ function renderCloudHeaderBar() {
   }
 }
 
+function renderSaasOnboardingBox() {
+  const box = document.getElementById('saasOnboardingBox');
+  if (!box) return;
+
+  const uid = state.currentUser?.id || 'local';
+  const dismissedKey = `zapia_onb_hide_${uid}`;
+  if (localStorage.getItem(dismissedKey) === '1') {
+    box.style.display = 'none';
+    return;
+  }
+
+  const ai = state.settings?.ai || {};
+  const hasAiKey = Boolean(
+    String(ai.geminiApiKey || '').trim() ||
+    String(ai.geminiKeyPool || '').trim() ||
+    String(ai.groqApiKey || '').trim() ||
+    String(ai.openaiApiKey || '').trim() ||
+    String(ai.openrouterApiKey || '').trim()
+  );
+
+  const biz = getActiveProfile() || {};
+  const defaultSummaryHint = 'Descreva aqui o que sua empresa vende';
+  const hasTraining = Boolean(
+    biz.trainingPackId ||
+    (biz.companySummary && !String(biz.companySummary).startsWith(defaultSummaryHint)) ||
+    (Array.isArray(biz.faqs) && biz.faqs.length > 0) ||
+    (Array.isArray(biz.knowledgeDocs) && biz.knowledgeDocs.length > 0)
+  );
+  const hasAssets = Boolean(
+    (Array.isArray(biz.catalog) && biz.catalog.length > 0) ||
+    (Array.isArray(biz.voiceLibrary) && biz.voiceLibrary.length > 0) ||
+    (biz.pix?.enabled && biz.pix?.key)
+  );
+  const hasTestedOrConnected = Boolean(
+    state.waState?.status === 'connected' ||
+    (Array.isArray(state.simulatorHistory) && state.simulatorHistory.length > 0)
+  );
+
+  // Endowed Progress Effect (20% inicial pela conta já provisionada + 4 passos de 20% = 100%)
+  const steps = [
+    {
+      done: true,
+      title: '1. Conta Isolada Ativa',
+      desc: 'Seu painel, CRM e banco em nuvem já estão protegidos.',
+      actionHtml: '<span style="font-size:11.5px; color:var(--accent-bright); font-weight:600;">Concluído ✓</span>'
+    },
+    {
+      done: hasAiKey,
+      title: '2. Colar Sua Chave de IA',
+      desc: 'Cole sua chave gratuita do Google Gemini (ou Groq) em 1 minuto.',
+      actionHtml: `<button type="button" class="btn ${hasAiKey ? 'btn-secondary' : 'btn-primary'} btn-sm" onclick="switchTab('ia')">${hasAiKey ? 'Revisar Chave' : 'Configurar Chave →'}</button>`
+    },
+    {
+      done: hasTraining,
+      title: '3. Treinar Seu Negócio',
+      desc: 'Defina o resumo, regras ou escolha um modelo pronto do seu nicho.',
+      actionHtml: `<button type="button" class="btn btn-secondary btn-sm" onclick="switchTab('treinamento')">Abrir Treinamento →</button>`
+    },
+    {
+      done: hasAssets,
+      title: '4. Catálogo, PIX ou Áudios',
+      desc: 'Cadastre seus produtos/fotos, chave PIX ou notas de voz humanas.',
+      actionHtml: `<div style="display:flex; gap:5px; flex-wrap:wrap;"><button type="button" class="btn btn-secondary btn-sm" onclick="switchTab('catalogo')">Catálogo/PIX</button><button type="button" class="btn btn-secondary btn-sm" onclick="switchTab('audios')">Áudios</button></div>`
+    },
+    {
+      done: hasTestedOrConnected,
+      title: '5. Testar & Conectar WhatsApp',
+      desc: 'Valide no Simulador e pareie seu aparelho para atender ao vivo.',
+      actionHtml: `<button type="button" class="btn btn-secondary btn-sm" onclick="switchTab('simulador')">Testar Simulador →</button>`
+    }
+  ];
+
+  const doneCount = steps.filter((s) => s.done).length;
+  const pct = Math.round((doneCount / steps.length) * 100);
+
+  // Na conta Master já 100% pronta e conectada, não polui o topo (a menos que esteja em Modo Suporte de cliente)
+  if (pct === 100 && state.currentUser?.tenantRole === 'master' && !state.actAsUser?.userId) {
+    box.style.display = 'none';
+    return;
+  }
+
+  box.style.display = 'block';
+  box.innerHTML = `
+    <div class="saas-onboarding-card">
+      <div class="saas-onboarding-head">
+        <div>
+          <strong style="font-size:14.5px; color:var(--text-main);">
+            ${pct === 100 ? '🎉 Configuração 100% Concluída! Sua operação está pronta.' : `🚀 Guia Rápido de Ativação da Conta (${pct}% concluído)`}
+          </strong>
+          <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">
+            Siga os passos abaixo na ordem para deixar seu atendimento 100% afiado no WhatsApp.
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="dismissSaasOnboarding()">Ocultar guia</button>
+      </div>
+      <div class="saas-progress-track">
+        <div class="saas-progress-fill" style="width:${pct}%;"></div>
+      </div>
+      <div class="saas-steps-grid">
+        ${steps
+          .map(
+            (st) => `
+          <div class="saas-step-item ${st.done ? 'done' : ''}">
+            <div>
+              <div class="saas-step-top">
+                <span class="saas-step-check">${st.done ? '✓' : '•'}</span>
+                <span>${escapeHtml(st.title)}</span>
+              </div>
+              <div style="font-size:11.8px; color:var(--text-secondary); margin-top:5px; line-height:1.4;">${escapeHtml(st.desc)}</div>
+            </div>
+            <div>${st.actionHtml}</div>
+          </div>
+        `
+          )
+          .join('')}
+      </div>
+    </div>
+  `;
+}
+
+window.dismissSaasOnboarding = function dismissSaasOnboarding() {
+  const uid = state.currentUser?.id || 'local';
+  try {
+    localStorage.setItem(`zapia_onb_hide_${uid}`, '1');
+  } catch {}
+  renderSaasOnboardingBox();
+};
+
 function applyBrandingToDom(branding = {}) {
   const appName = branding.appName || 'ZAP-IA Studio';
   const appSub = branding.appSubtitle || 'Atendente Universal';
@@ -508,6 +696,7 @@ function applyBrandingToDom(branding = {}) {
 function renderAll() {
   applyBrandingToDom(state.settings?.branding || {});
   renderCloudHeaderBar();
+  renderSaasOnboardingBox();
   renderWaState();
   renderStatsAndLogs();
   renderReadinessAndFunnel();
@@ -1546,14 +1735,61 @@ function getTagClass(tag = '') {
   return '';
 }
 
+function updateInboxFilterCounters() {
+  const allContacts = state.contacts || [];
+  let activeCnt = 0;
+  let unreadCnt = 0;
+  let humanCnt = 0;
+  let hotCnt = 0;
+  let followCnt = 0;
+  let archivedCnt = 0;
+
+  for (const c of allContacts) {
+    if (c.archived) {
+      archivedCnt += 1;
+      continue;
+    }
+    activeCnt += 1;
+    if ((Number(c.unreadCount) || 0) > 0) unreadCnt += 1;
+    if (c.stage === 'aguardando_humano') humanCnt += 1;
+    if (c.followUpAt) followCnt += 1;
+    if ((c.tags || []).some((t) => /quente|valor/i.test(t)) || c.sentiment?.code === 'hot') hotCnt += 1;
+  }
+
+  const setCnt = (id, n) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = n > 0 ? `(${n})` : '';
+  };
+  setCnt('fltCntAll', activeCnt);
+  setCnt('fltCntUnread', unreadCnt);
+  setCnt('fltCntHuman', humanCnt);
+  setCnt('fltCntHot', hotCnt);
+  setCnt('fltCntFollowup', followCnt);
+  setCnt('fltCntArchived', archivedCnt);
+
+  const navUnread = document.getElementById('navUnreadBadge');
+  const attentionTotal = unreadCnt + humanCnt;
+  if (navUnread) {
+    navUnread.style.display = attentionTotal > 0 ? 'inline-flex' : 'none';
+    navUnread.textContent = String(attentionTotal);
+  }
+}
+
 function getFilteredCrmContacts() {
   const q = (document.getElementById('crmSearchInput')?.value || '').toLowerCase().trim();
   const out = [];
   for (const c of state.contacts || []) {
     const tagsStr = (c.tags || []).join(' ');
-    const msgsBlob = (c.messages || []).slice(-6).map((m) => m.text || '').join(' ');
-    if (q && !`${c.name} ${c.phone} ${c.summary || ''} ${tagsStr} ${msgsBlob}`.toLowerCase().includes(q)) continue;
+    const msgsBlob = (c.messages || []).slice(-8).map((m) => m.text || '').join(' ');
+    if (q && !`${c.name} ${c.phone} ${c.summary || ''} ${c.notes || ''} ${tagsStr} ${msgsBlob}`.toLowerCase().includes(q)) continue;
 
+    if (state.activeCrmFilter === 'archived') {
+      if (!c.archived) continue;
+    } else if (c.archived && !q) {
+      continue;
+    }
+
+    if (state.activeCrmFilter === 'unread' && !(Number(c.unreadCount) > 0)) continue;
     if (state.activeCrmFilter === 'human' && c.stage !== 'aguardando_humano') continue;
     if (state.activeCrmFilter === 'followup' && !c.followUpAt) continue;
     if (state.activeCrmFilter === 'hot') {
@@ -1571,9 +1807,10 @@ function renderSentimentPillHtml(sentiment) {
 }
 
 function renderCrmBoard() {
+  updateInboxFilterCounters();
   const filtered = getFilteredCrmContacts();
   const totalCountEl = document.getElementById('crmInboxTotalCount');
-  if (totalCountEl) totalCountEl.textContent = (state.contacts || []).length;
+  if (totalCountEl) totalCountEl.textContent = (state.contacts || []).filter((c) => !c.archived).length;
 
   const cols = {
     novo: [],
@@ -1599,7 +1836,8 @@ function renderCrmBoard() {
     container.innerHTML = list
       .map((c) => {
         const paused = isContactCurrentlyPaused(c);
-        const lastMsg = c.messages?.[c.messages.length - 1]?.text || c.summary || 'Sem mensagens';
+        const realMsgs = (c.messages || []).filter((m) => m.role !== 'internal_note');
+        const lastMsg = realMsgs[realMsgs.length - 1]?.text || c.summary || 'Sem mensagens';
         const sentHtml = renderSentimentPillHtml(c.sentiment);
         const tagsHtml = (c.tags || []).length || sentHtml
           ? `<div class="lead-tags-row">${sentHtml}${(c.tags || []).map((t) => `<span class="lead-tag ${getTagClass(t)}">${escapeHtml(t)}</span>`).join('')}</div>`
@@ -1625,7 +1863,7 @@ function renderCrmBoard() {
             onclick="openLeadModal('${encId}')"
           >
             <div class="lead-title-row">
-              <span>${escapeHtml(c.name)}</span>
+              <span>${c.pinned ? '📌 ' : ''}${escapeHtml(c.name)}</span>
               ${paused ? '<span class="tag paused">Pausado</span>' : '<span class="tag">Ativo</span>'}
             </div>
             <div class="lead-phone">+${escapeHtml(c.phone || '')}</div>
@@ -1662,7 +1900,6 @@ function renderCrmInbox(filteredList) {
 
   if (lblEl) lblEl.textContent = `${list.length} conversa${list.length === 1 ? '' : 's'}`;
 
-  // Se ainda não há conversa selecionada (ou foi removida) e há conversas disponíveis, seleciona a mais recente em desktop
   if ((!state.selectedInboxChatId || !state.contacts.some((c) => c.chatId === state.selectedInboxChatId)) && list.length > 0) {
     state.selectedInboxChatId = list[0].chatId;
   }
@@ -1679,8 +1916,9 @@ function renderCrmInbox(filteredList) {
     listEl.innerHTML = list
       .map((c) => {
         const isSelected = c.chatId === state.selectedInboxChatId;
-        const lastObj = c.messages?.[c.messages.length - 1];
-        const prefix = lastObj ? (lastObj.role === 'user' ? '' : 'Equipe: ') : '';
+        const realMsgs = (c.messages || []).filter((m) => m.role !== 'internal_note');
+        const lastObj = realMsgs[realMsgs.length - 1];
+        const prefix = lastObj ? (lastObj.role === 'user' ? '' : 'Você: ') : '';
         const preview = lastObj?.text ? `${prefix}${lastObj.text}` : (c.summary || 'Sem mensagens registradas');
         const timeStr = c.lastMessageAt
           ? new Date(c.lastMessageAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -1692,21 +1930,26 @@ function renderCrmInbox(filteredList) {
           .map((w) => w[0]?.toUpperCase() || '')
           .join('') || 'C';
         const paused = isContactCurrentlyPaused(c);
+        const unread = Math.max(0, Number(c.unreadCount) || 0);
         const encId = encodeURIComponent(c.chatId);
 
         return `
-          <button type="button" class="crm-inbox-item ${isSelected ? 'active' : ''}" onclick="selectInboxChat('${encId}')">
+          <button type="button" class="crm-inbox-item ${isSelected ? 'active' : ''} ${unread > 0 ? 'unread' : ''}" onclick="selectInboxChat('${encId}')">
             <div class="crm-inbox-avatar">${escapeHtml(initials)}</div>
             <div class="crm-inbox-item-body">
               <div class="crm-inbox-item-top">
-                <span class="crm-inbox-item-name">${escapeHtml(c.name || 'Contato')}</span>
-                <span class="crm-inbox-item-time">${escapeHtml(timeStr)}</span>
+                <span class="crm-inbox-item-name">${c.pinned ? '📌 ' : ''}${escapeHtml(c.name || 'Contato')}</span>
+                <div style="display:flex; align-items:center; gap:5px; flex-shrink:0;">
+                  <span class="crm-inbox-item-time">${escapeHtml(timeStr)}</span>
+                  ${unread > 0 ? `<span class="inbox-unread-pill">${unread > 99 ? '99+' : unread}</span>` : ''}
+                </div>
               </div>
               <div style="font-size:11px; color:var(--text-muted);">+${escapeHtml(c.phone || '')}</div>
               <div class="crm-inbox-item-preview">${escapeHtml(preview)}</div>
               <div class="crm-inbox-item-badges">
                 <span class="tag ${c.stage === 'aguardando_humano' ? 'paused' : ''}" style="font-size:10.5px; padding:1px 6px;">${escapeHtml(stageLabels[c.stage] || c.stage)}</span>
-                ${paused ? '<span class="tag paused" style="font-size:10.5px; padding:1px 6px;">Com Você</span>' : ''}
+                ${paused ? '<span class="tag paused" style="font-size:10.5px; padding:1px 6px;">👤 Com Você</span>' : '<span class="tag" style="font-size:10.5px; padding:1px 6px;">🤖 IA Ativa</span>'}
+                ${c.archived ? '<span class="tag" style="font-size:10.5px; padding:1px 6px;">📥 Arquivada</span>' : ''}
                 ${renderSentimentPillHtml(c.sentiment)}
               </div>
             </div>
@@ -1719,9 +1962,18 @@ function renderCrmInbox(filteredList) {
   renderActiveInboxConversation();
 }
 
-window.selectInboxChat = function selectInboxChat(encodedChatId) {
-  state.selectedInboxChatId = decodeURIComponent(encodedChatId);
+window.selectInboxChat = async function selectInboxChat(encodedChatId) {
+  const chatId = decodeURIComponent(encodedChatId);
+  state.selectedInboxChatId = chatId;
   document.getElementById('crmInboxLayout')?.classList.add('mob-chat-open');
+
+  const found = (state.contacts || []).find((x) => x.chatId === chatId);
+  if (found && (Number(found.unreadCount) || 0) > 0) {
+    found.unreadCount = 0;
+    found.unreadAlert = false;
+    api(`/api/crm/${encodeURIComponent(chatId)}/mark-read`, { method: 'POST', body: JSON.stringify({}) }).catch(() => {});
+  }
+  updateInboxFilterCounters();
   renderCrmInbox();
 };
 
@@ -1731,6 +1983,8 @@ function renderActiveInboxConversation() {
   if (!emptyEl || !paneEl) return;
 
   const c = (state.contacts || []).find((x) => x.chatId === state.selectedInboxChatId);
+  renderInboxInspector360(c);
+
   if (!c) {
     emptyEl.style.display = '';
     paneEl.style.display = 'none';
@@ -1740,15 +1994,26 @@ function renderActiveInboxConversation() {
   emptyEl.style.display = 'none';
   paneEl.style.display = 'flex';
 
-  document.getElementById('inboxContactName').textContent = c.name || 'Cliente';
+  document.getElementById('inboxContactName').textContent = `${c.pinned ? '📌 ' : ''}${c.name || 'Cliente'}`;
   document.getElementById('inboxContactPhone').textContent = `+${c.phone || c.chatId}`;
   document.getElementById('inboxStageQuickSelect').value = c.stage || 'em_atendimento';
 
   const paused = isContactCurrentlyPaused(c);
   const statusBadge = document.getElementById('inboxAiStatusBadge');
-  statusBadge.textContent = paused ? 'Pausado (Com Você)' : 'Atendimento Ativo';
+  statusBadge.textContent = paused ? '👤 Com Você (IA Pausada)' : '🤖 IA Automática Ativa';
   statusBadge.className = `tag ${paused ? 'paused' : ''}`;
-  document.getElementById('btnInboxTogglePause').textContent = paused ? 'Retomar Automático' : 'Assumir Conversa';
+  document.getElementById('btnInboxTogglePause').textContent = paused ? '▶️ Devolver p/ IA' : '✋ Assumir';
+
+  const pinBtn = document.getElementById('btnInboxTogglePin');
+  if (pinBtn) {
+    pinBtn.textContent = c.pinned ? '📌 Fixada' : '📌';
+    pinBtn.title = c.pinned ? 'Desafixar conversa' : 'Fixar conversa no topo';
+  }
+  const archBtn = document.getElementById('btnInboxToggleArchive');
+  if (archBtn) {
+    archBtn.textContent = c.archived ? '📤 Reativar' : '📥';
+    archBtn.title = c.archived ? 'Reativar conversa na fila principal' : 'Arquivar conversa';
+  }
 
   const sentBadge = document.getElementById('inboxSentimentBadge');
   if (c.sentiment?.code && c.sentiment.code !== 'neutral') {
@@ -1773,39 +2038,72 @@ function renderActiveInboxConversation() {
     dossierEl.style.display = 'none';
   }
 
-  // Popular seletor rápido de Áudios Estratégicos
+  // Popular seletores rápidos de Áudios Estratégicos e Catálogo
   const voiceSel = document.getElementById('inboxQuickVoiceSelect');
+  const voiceBtn = document.getElementById('btnInboxSendQuickVoice');
+  const catSel = document.getElementById('inboxQuickCatalogSelect');
+  const catBtn = document.getElementById('btnInboxSendQuickCatalog');
   const voiceRow = document.getElementById('inboxVoiceQuickRow');
   const voices = getActiveProfile()?.voiceLibrary || [];
-  if (voiceSel && voiceRow) {
-    if (!voices.length) {
-      voiceRow.style.display = 'none';
-    } else {
-      voiceRow.style.display = 'flex';
-      const sentIds = new Set(c.sentVoiceIds || []);
-      voiceSel.innerHTML =
-        `<option value="">🎤 Enviar Áudio Estratégico (${voices.length} na biblioteca)...</option>` +
-        voices
-          .map(
-            (v) =>
-              `<option value="${escapeHtml(v.id)}">${escapeHtml(v.name)} (${v.durationSec || 1}s)${sentIds.has(v.id) ? ' • já enviado' : ''}</option>`
-          )
-          .join('');
+  const catalog = (getActiveProfile()?.catalog || []).filter((it) => it.active !== false);
+
+  if (voiceRow) {
+    const showAny = voices.length > 0 || catalog.length > 0;
+    voiceRow.style.display = showAny ? 'flex' : 'none';
+    if (voiceSel && voiceBtn) {
+      voiceSel.style.display = voices.length ? '' : 'none';
+      voiceBtn.style.display = voices.length ? '' : 'none';
+      if (voices.length) {
+        const sentIds = new Set(c.sentVoiceIds || []);
+        voiceSel.innerHTML =
+          `<option value="">🎤 Áudio Biblioteca (${voices.length})...</option>` +
+          voices
+            .map(
+              (v) =>
+                `<option value="${escapeHtml(v.id)}">${escapeHtml(v.name)} (${v.durationSec || 1}s)${sentIds.has(v.id) ? ' • enviado' : ''}</option>`
+            )
+            .join('');
+      }
+    }
+    if (catSel && catBtn) {
+      catSel.style.display = catalog.length ? '' : 'none';
+      catBtn.style.display = catalog.length ? '' : 'none';
+      if (catalog.length) {
+        catSel.innerHTML =
+          `<option value="">🛍️ Catálogo (${catalog.length} itens)...</option>` +
+          catalog
+            .map((it) => `<option value="${escapeHtml(it.id)}">${escapeHtml(it.name)}${it.price ? ` — R$ ${escapeHtml(it.price)}` : ''}</option>`)
+            .join('');
+      }
     }
   }
 
-  // Renderizar histórico completo de mensagens
+  // Renderizar histórico completo de mensagens + Notas Internas Amarelas
   const msgBox = document.getElementById('crmInboxMessages');
   const msgs = c.messages || [];
+  const encChatId = encodeURIComponent(c.chatId);
   if (!msgs.length) {
     msgBox.innerHTML = `<div class="empty-state" style="margin:auto;">Nenhuma mensagem trocada ainda nesta conversa.</div>`;
   } else {
     msgBox.innerHTML = msgs
       .map((m) => {
-        const who = m.role === 'user' ? c.name || 'Cliente' : m.role === 'owner' ? 'Você (Manual)' : 'Equipe';
         const time = m.timestamp
           ? new Date(m.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
           : '';
+
+        if (m.role === 'internal_note') {
+          return `
+            <div class="wa-bubble internal_note">
+              <div class="internal-note-head">
+                <span>🔒 Nota Interna • ${escapeHtml(m.author || 'Equipe')} • ${escapeHtml(time)}</span>
+                <button type="button" style="background:none; border:none; color:inherit; cursor:pointer; font-size:13px; padding:0 4px;" title="Remover nota interna" onclick="removeInboxInternalNote('${encChatId}', '${escapeJsArg(m.id || '')}')">×</button>
+              </div>
+              <div class="wa-text">${formatWaText(m.text)}</div>
+            </div>
+          `;
+        }
+
+        const who = m.role === 'user' ? c.name || 'Cliente' : m.role === 'owner' ? 'Você (Manual)' : 'Equipe (IA)';
         const imgExtra = m.mediaUrl && /\.(jpg|jpeg|png|webp|gif)$/i.test(m.mediaUrl)
           ? `<img src="${escapeHtml(m.mediaUrl)}" style="max-width:100%; border-radius:6px; margin-bottom:6px;" alt="" />`
           : '';
@@ -1827,6 +2125,269 @@ function renderActiveInboxConversation() {
       .join('');
     msgBox.scrollTop = msgBox.scrollHeight;
   }
+}
+
+function renderInboxInspector360(c) {
+  const emptyBox = document.getElementById('inspectorEmptyBox');
+  const activeBox = document.getElementById('inspectorActiveBox');
+  if (!emptyBox || !activeBox) return;
+
+  if (!c) {
+    emptyBox.style.display = '';
+    activeBox.style.display = 'none';
+    return;
+  }
+
+  emptyBox.style.display = 'none';
+  activeBox.style.display = 'flex';
+
+  const nameEl = document.getElementById('inspNameTitle');
+  if (nameEl) nameEl.textContent = c.name || 'Cliente';
+
+  const followEl = document.getElementById('inspFollowUpInput');
+  if (followEl && document.activeElement !== followEl) {
+    followEl.value = c.followUpAt ? String(c.followUpAt).slice(0, 16) : '';
+  }
+
+  const notesEl = document.getElementById('inspNotesInput');
+  if (notesEl && document.activeElement !== notesEl) {
+    notesEl.value = c.notes || '';
+  }
+
+  const sumEl = document.getElementById('inspSummaryText');
+  if (sumEl) {
+    sumEl.textContent = c.handoffDossier?.trigger || c.summary || 'Sem resumo de fechamento registrado ainda.';
+  }
+
+  const tagsBox = document.getElementById('inspTagsBox');
+  if (tagsBox) {
+    const currentTags = Array.isArray(c.tags) ? c.tags : [];
+    const allChoices = Array.from(new Set([...PRESET_CRM_TAGS, ...currentTags]));
+    tagsBox.innerHTML =
+      allChoices
+        .map((tag) => {
+          const sel = currentTags.includes(tag);
+          return `<button type="button" class="tag-toggle-chip ${sel ? 'selected' : ''}" onclick="toggleInspectorTag('${escapeJsArg(tag)}')">${escapeHtml(tag)}</button>`;
+        })
+        .join('') + `<button type="button" class="tag-toggle-chip" onclick="addCustomInspectorTag()">+ Tag</button>`;
+  }
+}
+
+window.toggleInspectorTag = async function toggleInspectorTag(tag) {
+  const chatId = state.selectedInboxChatId;
+  const c = (state.contacts || []).find((x) => x.chatId === chatId);
+  if (!c) return;
+  const cur = Array.isArray(c.tags) ? [...c.tags] : [];
+  const next = cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag];
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ tags: next })
+    });
+    Object.assign(c, res.contact || { tags: next });
+    renderCrmBoard();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.addCustomInspectorTag = async function addCustomInspectorTag() {
+  const custom = prompt('Nome da nova etiqueta (ex: Fechou Contrato, Quente):');
+  if (!custom || !custom.trim()) return;
+  await window.toggleInspectorTag(custom.trim().slice(0, 26));
+};
+
+window.quickSetInspectorFollowup = async function quickSetInspectorFollowup(mode) {
+  const chatId = state.selectedInboxChatId;
+  if (!chatId) return;
+  let isoLocal = null;
+  if (mode === 60) {
+    const d = new Date(Date.now() + 60 * 60 * 1000 - new Date().getTimezoneOffset() * 60000);
+    isoLocal = d.toISOString().slice(0, 16);
+  } else if (mode === 'tomorrow9') {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(9, 0, 0, 0);
+    const localD = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+    isoLocal = localD.toISOString().slice(0, 16);
+  }
+  try {
+    await api(`/api/crm/${encodeURIComponent(chatId)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ followUpAt: isoLocal })
+    });
+    await loadBootstrap();
+    showToast(isoLocal ? '⏰ Retorno S19 agendado!' : 'Retorno S19 removido.');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.removeInboxInternalNote = async function removeInboxInternalNote(encodedChatId, noteId) {
+  if (!noteId) return;
+  try {
+    await api(`/api/crm/${encodedChatId}/internal-note/${encodeURIComponent(noteId)}`, { method: 'DELETE' });
+    await loadBootstrap();
+    showToast('Nota interna removida.');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.setInboxComposerMode = function setInboxComposerMode(mode = 'reply') {
+  state.inboxComposerMode = mode === 'note' ? 'note' : 'reply';
+  const wrap = document.getElementById('crmInboxComposerWrap');
+  const btnReply = document.getElementById('btnModeWhatsappReply');
+  const btnNote = document.getElementById('btnModeInternalNote');
+  const inp = document.getElementById('crmInboxReplyInput');
+  const submitBtn = document.getElementById('btnInboxSendText');
+
+  const isNote = state.inboxComposerMode === 'note';
+  wrap?.classList.toggle('note-mode', isNote);
+  btnReply?.classList.toggle('active', !isNote);
+  btnNote?.classList.toggle('active', isNote);
+
+  if (inp) {
+    inp.placeholder = isNote
+      ? '🔒 Escreva uma nota privada interna (o cliente NÃO recebe no WhatsApp)...'
+      : 'Digite sua mensagem ou digite / para respostas rápidas...';
+    inp.focus();
+  }
+  if (submitBtn) {
+    submitBtn.textContent = isNote ? 'Salvar Nota' : 'Enviar';
+    submitBtn.style.background = isNote ? 'var(--warning)' : '';
+    submitBtn.style.borderColor = isNote ? 'var(--warning)' : '';
+  }
+  if (isNote) hideSlashPopover();
+};
+
+function getQuickRepliesList() {
+  return Array.isArray(getActiveProfile()?.quickReplies) ? getActiveProfile().quickReplies : [];
+}
+
+function hideSlashPopover() {
+  const pop = document.getElementById('slashMenuPopover');
+  if (pop) pop.style.display = 'none';
+}
+
+function renderSlashPopover(query = '') {
+  const pop = document.getElementById('slashMenuPopover');
+  const listEl = document.getElementById('slashMenuList');
+  if (!pop || !listEl) return;
+
+  const cleanQ = String(query || '').replace(/^\/+/, '').toLowerCase().trim();
+  const items = getQuickRepliesList().filter(
+    (q) =>
+      !cleanQ ||
+      q.shortcut.toLowerCase().includes(cleanQ) ||
+      q.title.toLowerCase().includes(cleanQ) ||
+      q.text.toLowerCase().includes(cleanQ)
+  );
+
+  if (!items.length) {
+    listEl.innerHTML = `<div style="padding:10px 12px; font-size:12px; color:var(--text-muted);">Nenhum atalho para "/${escapeHtml(cleanQ)}". Clique em <strong>Gerenciar</strong> acima para criar!</div>`;
+    pop.style.display = 'block';
+    return;
+  }
+
+  if (state.slashSelectedIndex >= items.length) state.slashSelectedIndex = 0;
+  listEl.innerHTML = items
+    .map(
+      (it, idx) => `
+      <button type="button" class="slash-item ${idx === state.slashSelectedIndex ? 'selected' : ''}" onclick="applySlashQuickReply('${escapeJsArg(it.id)}')">
+        <div style="display:flex; justify-content:space-between; gap:8px;">
+          <span class="slash-code">/${escapeHtml(it.shortcut)}</span>
+          <span style="font-size:11.5px; color:var(--text-secondary); font-weight:600;">${escapeHtml(it.title)}</span>
+        </div>
+        <div style="font-size:12px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(it.text)}</div>
+      </button>
+    `
+    )
+    .join('');
+  pop.style.display = 'block';
+}
+
+window.applySlashQuickReply = function applySlashQuickReply(id) {
+  const item = getQuickRepliesList().find((q) => q.id === id);
+  const inp = document.getElementById('crmInboxReplyInput');
+  if (item && inp) {
+    const c = (state.contacts || []).find((x) => x.chatId === state.selectedInboxChatId);
+    const firstName = (c?.name || '').split(' ')[0] || '';
+    inp.value = String(item.text || '')
+      .replace(/\{\{\s*nome\s*\}\}/gi, firstName)
+      .replace(/\{\s*nome\s*\}/gi, firstName)
+      .trim();
+    inp.focus();
+  }
+  hideSlashPopover();
+};
+
+window.openQuickRepliesManager = function openQuickRepliesManager() {
+  hideSlashPopover();
+  resetQuickReplyForm();
+  renderQuickRepliesManagerList();
+  document.getElementById('quickRepliesModal')?.classList.add('open');
+};
+
+window.resetQuickReplyForm = function resetQuickReplyForm() {
+  const idEl = document.getElementById('qrEditId');
+  const scEl = document.getElementById('qrShortcutInput');
+  const tiEl = document.getElementById('qrTitleInput');
+  const txEl = document.getElementById('qrTextInput');
+  const rstBtn = document.getElementById('btnQrResetForm');
+  if (idEl) idEl.value = '';
+  if (scEl) scEl.value = '';
+  if (tiEl) tiEl.value = '';
+  if (txEl) txEl.value = '';
+  if (rstBtn) rstBtn.style.display = 'none';
+};
+
+window.editQuickReplyItem = function editQuickReplyItem(id) {
+  const it = getQuickRepliesList().find((q) => q.id === id);
+  if (!it) return;
+  document.getElementById('qrEditId').value = it.id;
+  document.getElementById('qrShortcutInput').value = it.shortcut;
+  document.getElementById('qrTitleInput').value = it.title;
+  document.getElementById('qrTextInput').value = it.text;
+  document.getElementById('btnQrResetForm').style.display = 'inline-flex';
+};
+
+window.removeQuickReplyItem = async function removeQuickReplyItem(id) {
+  if (!confirm('Remover este atalho de resposta rápida?')) return;
+  try {
+    const res = await api(`/api/quick-replies/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (res.business) state.business = res.business;
+    renderQuickRepliesManagerList();
+    showToast('Atalho removido.');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+function renderQuickRepliesManagerList() {
+  const box = document.getElementById('quickRepliesManagerList');
+  if (!box) return;
+  const list = getQuickRepliesList();
+  if (!list.length) {
+    box.innerHTML = `<div class="empty-state">Nenhum atalho cadastrado.</div>`;
+    return;
+  }
+  box.innerHTML = list
+    .map(
+      (it) => `
+      <div style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:8px; padding:9px 12px; display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+        <div style="min-width:0;">
+          <div><code style="color:var(--accent-bright); font-weight:700;">/${escapeHtml(it.shortcut)}</code> — <strong>${escapeHtml(it.title)}</strong></div>
+          <div style="font-size:12px; color:var(--text-secondary); margin-top:3px;">${escapeHtml(it.text)}</div>
+        </div>
+        <div style="display:flex; gap:6px; flex-shrink:0;">
+          <button type="button" class="btn btn-secondary btn-sm" onclick="editQuickReplyItem('${escapeJsArg(it.id)}')">Editar</button>
+          <button type="button" class="btn btn-danger btn-sm" onclick="removeQuickReplyItem('${escapeJsArg(it.id)}')">×</button>
+        </div>
+      </div>
+    `
+    )
+    .join('');
 }
 
 window.handleLeadDragStart = function handleLeadDragStart(ev, encodedChatId) {
@@ -2305,7 +2866,7 @@ function bindEvents() {
   });
 
   // Navegação Desktop + Mobile
-  document.querySelectorAll('.nav-btn').forEach((btn) => {
+  document.querySelectorAll('.nav-btn[data-tab]').forEach((btn) => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
   document.querySelectorAll('.mob-nav-btn[data-mobtab]').forEach((btn) => {
@@ -2970,12 +3531,62 @@ function bindEvents() {
   });
 
   document.getElementById('btnInboxBackMobile')?.addEventListener('click', () => {
-    document.getElementById('crmInboxLayout')?.classList.remove('mob-chat-open');
+    const layout = document.getElementById('crmInboxLayout');
+    layout?.classList.remove('mob-chat-open');
+    layout?.classList.remove('mob-inspector-open');
   });
 
   document.getElementById('btnInboxOpenFullModal')?.addEventListener('click', () => {
     if (!state.selectedInboxChatId) return;
     window.openLeadModal(encodeURIComponent(state.selectedInboxChatId));
+  });
+
+  document.getElementById('btnCopyInboxPhone')?.addEventListener('click', async () => {
+    const c = (state.contacts || []).find((x) => x.chatId === state.selectedInboxChatId);
+    if (!c) return;
+    const digits = c.phone || c.chatId;
+    try {
+      await navigator.clipboard.writeText(digits);
+      showToast(`Número +${digits} copiado!`);
+    } catch {
+      showToast(`Número: +${digits}`);
+    }
+  });
+
+  document.getElementById('btnToggleInspectorCol')?.addEventListener('click', () => {
+    const layout = document.getElementById('crmInboxLayout');
+    if (!layout) return;
+    if (window.innerWidth <= 900) {
+      layout.classList.toggle('mob-inspector-open');
+    } else if (window.innerWidth <= 1220) {
+      layout.classList.toggle('force-inspector-open');
+    } else {
+      layout.classList.toggle('inspector-collapsed');
+    }
+  });
+
+  document.getElementById('btnInboxTogglePin')?.addEventListener('click', async () => {
+    const chatId = state.selectedInboxChatId;
+    if (!chatId) return;
+    try {
+      const res = await api(`/api/crm/${encodeURIComponent(chatId)}/pin`, { method: 'POST', body: JSON.stringify({}) });
+      await loadBootstrap();
+      showToast(res.contact?.pinned ? '📌 Conversa fixada no topo!' : 'Conversa desafixada.');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+
+  document.getElementById('btnInboxToggleArchive')?.addEventListener('click', async () => {
+    const chatId = state.selectedInboxChatId;
+    if (!chatId) return;
+    try {
+      const res = await api(`/api/crm/${encodeURIComponent(chatId)}/archive`, { method: 'POST', body: JSON.stringify({}) });
+      await loadBootstrap();
+      showToast(res.contact?.archived ? '📥 Conversa arquivada!' : '📤 Conversa reativada na fila principal!');
+    } catch (err) {
+      showToast(err.message, true);
+    }
   });
 
   document.getElementById('inboxStageQuickSelect')?.addEventListener('change', async (e) => {
@@ -2993,6 +3604,50 @@ function bindEvents() {
     }
   });
 
+  document.getElementById('inspFollowUpInput')?.addEventListener('change', async (e) => {
+    const chatId = state.selectedInboxChatId;
+    if (!chatId) return;
+    try {
+      await api(`/api/crm/${encodeURIComponent(chatId)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ followUpAt: e.target.value || null })
+      });
+      await loadBootstrap();
+      showToast(e.target.value ? '⏰ Retorno S19 agendado!' : 'Retorno S19 removido.');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+
+  document.getElementById('btnSaveInspectorNotes')?.addEventListener('click', async () => {
+    const chatId = state.selectedInboxChatId;
+    if (!chatId) return;
+    const notes = document.getElementById('inspNotesInput')?.value || '';
+    try {
+      await api(`/api/crm/${encodeURIComponent(chatId)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ notes })
+      });
+      await loadBootstrap();
+      showToast('📝 Observações fixas salvas!');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+
+  document.getElementById('btnInspectorDeleteChat')?.addEventListener('click', async () => {
+    const chatId = state.selectedInboxChatId;
+    if (!chatId || !confirm('Excluir esta conversa do CRM permanentemente?')) return;
+    try {
+      await api(`/api/crm/${encodeURIComponent(chatId)}`, { method: 'DELETE' });
+      state.selectedInboxChatId = null;
+      await loadBootstrap();
+      showToast('Conversa excluída.');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+
   document.getElementById('btnInboxTogglePause')?.addEventListener('click', async () => {
     const chatId = state.selectedInboxChatId;
     if (!chatId) return;
@@ -3004,9 +3659,236 @@ function bindEvents() {
         body: JSON.stringify({})
       });
       await loadBootstrap();
-      showToast(paused ? 'Atendimento automático retomado!' : 'Conversa assumida por você!');
+      showToast(paused ? '▶️ Atendimento automático retomado!' : '✋ Conversa assumida por você!');
     } catch (err) {
       showToast(err.message, true);
+    }
+  });
+
+  // Atalho "/" e Teclado Inteligente no Composer da Central de Conversas Pro
+  const inboxReplyInp = document.getElementById('crmInboxReplyInput');
+  inboxReplyInp?.addEventListener('input', (e) => {
+    const val = e.target.value || '';
+    if (state.inboxComposerMode === 'reply' && val.startsWith('/')) {
+      state.slashSelectedIndex = 0;
+      renderSlashPopover(val);
+    } else {
+      hideSlashPopover();
+    }
+  });
+
+  inboxReplyInp?.addEventListener('keydown', (e) => {
+    const pop = document.getElementById('slashMenuPopover');
+    if (!pop || pop.style.display === 'none') return;
+    const cleanQ = String(inboxReplyInp.value || '').replace(/^\/+/, '').toLowerCase().trim();
+    const items = getQuickRepliesList().filter(
+      (q) =>
+        !cleanQ ||
+        q.shortcut.toLowerCase().includes(cleanQ) ||
+        q.title.toLowerCase().includes(cleanQ) ||
+        q.text.toLowerCase().includes(cleanQ)
+    );
+    if (!items.length) {
+      if (e.key === 'Escape') hideSlashPopover();
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      state.slashSelectedIndex = (state.slashSelectedIndex + 1) % items.length;
+      renderSlashPopover(inboxReplyInp.value);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      state.slashSelectedIndex = (state.slashSelectedIndex - 1 + items.length) % items.length;
+      renderSlashPopover(inboxReplyInp.value);
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      const chosen = items[state.slashSelectedIndex] || items[0];
+      if (chosen) window.applySlashQuickReply(chosen.id);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      hideSlashPopover();
+    }
+  });
+
+  document.getElementById('btnInboxSlashTrigger')?.addEventListener('click', () => {
+    window.setInboxComposerMode('reply');
+    if (inboxReplyInp) {
+      if (!inboxReplyInp.value.startsWith('/')) inboxReplyInp.value = '/';
+      inboxReplyInp.focus();
+      state.slashSelectedIndex = 0;
+      renderSlashPopover(inboxReplyInp.value);
+    }
+  });
+
+  document.getElementById('btnOpenQuickRepliesModal')?.addEventListener('click', () => {
+    window.openQuickRepliesManager();
+  });
+
+  document.getElementById('quickReplyForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      const res = await api('/api/quick-replies', {
+        method: 'POST',
+        body: JSON.stringify({
+          id: document.getElementById('qrEditId')?.value || undefined,
+          shortcut: document.getElementById('qrShortcutInput')?.value || '',
+          title: document.getElementById('qrTitleInput')?.value || '',
+          text: document.getElementById('qrTextInput')?.value || ''
+        })
+      });
+      if (res.business) state.business = res.business;
+      window.resetQuickReplyForm();
+      renderQuickRepliesManagerList();
+      showToast('⚡ Atalho salvo e pronto para usar com / !');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+
+  document.getElementById('btnOpenNewContactModal')?.addEventListener('click', () => {
+    document.getElementById('newContactForm')?.reset();
+    document.getElementById('newContactModal')?.classList.add('open');
+  });
+
+  document.getElementById('newContactForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      const res = await api('/api/crm/new-contact', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: document.getElementById('newContactNameInput')?.value || '',
+          phone: document.getElementById('newContactPhoneInput')?.value || '',
+          notes: document.getElementById('newContactNotesInput')?.value || ''
+        })
+      });
+      closeModal('newContactModal');
+      if (res.contact?.chatId) state.selectedInboxChatId = res.contact.chatId;
+      await loadBootstrap();
+      window.switchCrmSubView('inbox');
+      showToast('Conversa criada e selecionada!');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+
+  // Sugerir Resposta Humana com IA (Copilot 1-Clique)
+  document.getElementById('btnInboxAiSuggest')?.addEventListener('click', async () => {
+    const chatId = state.selectedInboxChatId;
+    if (!chatId) return;
+    const btn = document.getElementById('btnInboxAiSuggest');
+    btn.disabled = true;
+    btn.textContent = '✨ Pensando...';
+    try {
+      window.setInboxComposerMode('reply');
+      const res = await api(`/api/crm/${encodeURIComponent(chatId)}/suggest-reply`, {
+        method: 'POST',
+        body: JSON.stringify({})
+      });
+      if (inboxReplyInp) {
+        inboxReplyInp.value = res.suggestion || '';
+        inboxReplyInp.focus();
+      }
+      showToast('✨ Sugestão pronta! Revise ou aperte Enviar.');
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '✨ Sugerir c/ IA';
+    }
+  });
+
+  // Gravar Nota de Voz ao Vivo Direto no Composer da Central de Conversas
+  let inboxMicRecorder = null;
+  let inboxMicStream = null;
+  let inboxMicChunks = [];
+  document.getElementById('btnInboxRecordVoice')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const chatId = state.selectedInboxChatId;
+    if (!chatId) return;
+
+    if (inboxMicRecorder && inboxMicRecorder.state === 'recording') {
+      inboxMicRecorder.stop();
+      return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      return showToast('Microfone indisponível neste navegador.', true);
+    }
+    try {
+      inboxMicStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
+        ? 'audio/ogg;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : '';
+      inboxMicRecorder = mime ? new MediaRecorder(inboxMicStream, { mimeType: mime }) : new MediaRecorder(inboxMicStream);
+      inboxMicChunks = [];
+      inboxMicRecorder.ondataavailable = (ev) => {
+        if (ev.data.size > 0) inboxMicChunks.push(ev.data);
+      };
+      inboxMicRecorder.onstop = async () => {
+        btn.textContent = '🎙️ Gravar Voz';
+        btn.classList.remove('recording');
+        if (inboxMicStream) inboxMicStream.getTracks().forEach((t) => t.stop());
+        if (inboxMicChunks.length > 0) {
+          const blob = new Blob(inboxMicChunks, { type: inboxMicRecorder.mimeType || 'audio/webm' });
+          const fd = new FormData();
+          fd.append('audio', blob, 'nota-voz-inbox.ogg');
+          try {
+            showToast('Convertendo e enviando Nota de Voz OGG/Opus...');
+            const res = await api(`/api/crm/${encodeURIComponent(chatId)}/send-audio`, { method: 'POST', body: fd });
+            await loadBootstrap();
+            showToast(res.sentRealWhatsApp ? '🎤 Nota de Voz enviada no WhatsApp!' : '🎤 Nota de Voz registrada na conversa.');
+          } catch (err) {
+            showToast(err.message, true);
+          }
+        }
+      };
+      inboxMicRecorder.start();
+      btn.textContent = '⏹ Enviar Voz';
+      btn.classList.add('recording');
+      showToast('🎙️ Gravando voz... clique em "⏹ Enviar Voz" para disparar!');
+    } catch (err) {
+      showToast(`Permissão de microfone negada: ${err.message}`, true);
+    }
+  });
+
+  // Enviar PIX 1-Clique Direto no Composer
+  document.getElementById('btnInboxQuickPix')?.addEventListener('click', async () => {
+    const chatId = state.selectedInboxChatId;
+    if (!chatId) return;
+    try {
+      const res = await api(`/api/crm/${encodeURIComponent(chatId)}/send-pix`, {
+        method: 'POST',
+        body: JSON.stringify({})
+      });
+      await loadBootstrap();
+      showToast(res.sentRealWhatsApp ? '💠 QR Code PIX + Copia e Cola enviados!' : '💠 PIX registrado na conversa.');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+
+  // Enviar Item do Catálogo Direto no Composer
+  document.getElementById('btnInboxSendQuickCatalog')?.addEventListener('click', async () => {
+    const chatId = state.selectedInboxChatId;
+    const sel = document.getElementById('inboxQuickCatalogSelect');
+    const itemId = sel?.value;
+    if (!chatId) return;
+    if (!itemId) return showToast('Escolha um item do catálogo primeiro.', true);
+    const btn = document.getElementById('btnInboxSendQuickCatalog');
+    btn.disabled = true;
+    try {
+      const res = await api(`/api/crm/${encodeURIComponent(chatId)}/send-item`, {
+        method: 'POST',
+        body: JSON.stringify({ itemId })
+      });
+      if (sel) sel.value = '';
+      await loadBootstrap();
+      showToast(res.sentRealWhatsApp ? '🛍️ Item e mídias enviados no WhatsApp!' : '🛍️ Item registrado na conversa.');
+    } catch (err) {
+      showToast(err.message, true);
+    } finally {
+      btn.disabled = false;
     }
   });
 
@@ -3016,16 +3898,28 @@ function bindEvents() {
     const input = document.getElementById('crmInboxReplyInput');
     const text = input?.value?.trim();
     if (!chatId || !text) return;
+    hideSlashPopover();
+
     const btn = document.getElementById('btnInboxSendText');
     btn.disabled = true;
     try {
-      await api(`/api/crm/${encodeURIComponent(chatId)}/reply`, {
-        method: 'POST',
-        body: JSON.stringify({ text })
-      });
-      input.value = '';
-      await loadBootstrap();
-      showToast('Mensagem enviada no WhatsApp!');
+      if (state.inboxComposerMode === 'note') {
+        await api(`/api/crm/${encodeURIComponent(chatId)}/internal-note`, {
+          method: 'POST',
+          body: JSON.stringify({ text })
+        });
+        input.value = '';
+        await loadBootstrap();
+        showToast('🔒 Nota interna privada registrada!');
+      } else {
+        const res = await api(`/api/crm/${encodeURIComponent(chatId)}/send`, {
+          method: 'POST',
+          body: JSON.stringify({ text })
+        });
+        input.value = '';
+        await loadBootstrap();
+        showToast(res.sentRealWhatsApp ? 'Mensagem enviada no WhatsApp!' : 'Mensagem registrada na conversa.');
+      }
     } catch (err) {
       showToast(err.message, true);
     } finally {
@@ -3888,18 +4782,66 @@ async function loadManagedUsers() {
 
 function renderManagedUsers() {
   const box = document.getElementById('managedUsersListContainer');
+  const kpiBox = document.getElementById('saasMasterKpiGrid');
   if (!box) return;
-  const list = state.managedUsers || [];
+
+  const allUsers = state.managedUsers || [];
+  const clientUsers = allUsers.filter((u) => u.role !== 'master');
+
+  if (kpiBox) {
+    const activeCount = clientUsers.filter((u) => u.isActive).length;
+    const blockedCount = clientUsers.filter((u) => !u.isActive).length;
+    const workersOnline = allUsers.filter((u) => u.workerOnline).length;
+    const totalLeads = allUsers.reduce((acc, u) => acc + (Number(u.contactsCount) || 0), 0);
+    const readyCount = clientUsers.filter((u) => (Number(u.setupScore) || 0) >= 3).length;
+
+    kpiBox.innerHTML = `
+      <div class="saas-kpi-card">
+        <div class="kpi-num">${clientUsers.length}</div>
+        <div class="kpi-lbl">Contas de Clientes (${activeCount} ativas${blockedCount ? ` • ${blockedCount} bloq.` : ''})</div>
+      </div>
+      <div class="saas-kpi-card">
+        <div class="kpi-num" style="color:var(--accent-bright);">${workersOnline}</div>
+        <div class="kpi-lbl">Motores WhatsApp Conectados</div>
+      </div>
+      <div class="saas-kpi-card">
+        <div class="kpi-num">${readyCount}/${clientUsers.length || 0}</div>
+        <div class="kpi-lbl">Clientes com Setup Avançado (3+/4)</div>
+      </div>
+      <div class="saas-kpi-card">
+        <div class="kpi-num">${totalLeads}</div>
+        <div class="kpi-lbl">Leads Totais Geridos na Plataforma</div>
+      </div>
+    `;
+  }
+
+  const searchQ = (document.getElementById('masterUserSearchInput')?.value || '').toLowerCase().trim();
+  const filterVal = document.getElementById('masterUserFilterSelect')?.value || 'all';
+
+  const list = allUsers.filter((u) => {
+    if (searchQ) {
+      const hay = `${u.displayName || ''} ${u.username || ''} ${u.customerPhone || ''} ${u.adminNotes || ''}`.toLowerCase();
+      if (!hay.includes(searchQ)) return false;
+    }
+    if (filterVal === 'active' && !u.isActive) return false;
+    if (filterVal === 'blocked' && u.isActive) return false;
+    if (filterVal === 'online' && !u.workerOnline) return false;
+    if (filterVal === 'setup_pending' && u.role !== 'master' && (Number(u.setupScore) || 0) >= 3) return false;
+    if (filterVal === 'setup_pending' && u.role === 'master') return false;
+    return true;
+  });
+
   if (!list.length) {
-    box.innerHTML = `<div class="empty-state">Nenhuma conta encontrada.</div>`;
+    box.innerHTML = `<div class="empty-state">Nenhuma conta encontrada neste filtro.</div>`;
     return;
   }
 
   box.innerHTML = `
-    <div style="display:flex; flex-direction:column; gap:10px;">
+    <div style="display:flex; flex-direction:column; gap:12px;">
       ${list
         .map((u) => {
           const isMaster = u.role === 'master';
+          const isCurrentlyImpersonated = state.actAsUser?.userId === u.userId;
           const lastSeen = u.lastSeenAt ? new Date(u.lastSeenAt).toLocaleString('pt-BR') : 'Ainda não acessou';
           const workerBadge = u.workerOnline
             ? `<span class="tag" style="background:rgba(37,211,102,0.16); color:var(--accent-bright);">🟢 Motor Online${u.connectedPhone ? ' (+' + escapeHtml(u.connectedPhone) + ')' : ''}</span>`
@@ -3908,36 +4850,82 @@ function renderManagedUsers() {
             ? `<span class="tag" style="background:rgba(16,185,129,0.14); color:var(--accent-bright);">Ativa</span>`
             : `<span class="tag" style="background:rgba(239,68,68,0.15); color:var(--danger);">Bloqueada</span>`;
 
-          return `
-            <div style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:10px; padding:14px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-              <div style="min-width:220px;">
-                <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                  <strong style="font-size:14.5px; color:var(--text-main);">${escapeHtml(u.displayName)}</strong>
-                  <code style="font-size:12px;">@${escapeHtml(u.username)}</code>
-                  ${isMaster ? `<span class="tag" style="background:rgba(245,158,11,0.18); color:var(--warning-bright); font-weight:700;">👑 Master</span>` : statusBadge}
-                  ${workerBadge}
-                </div>
-                <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">
-                  Clientes no CRM: <strong>${u.contactsCount || 0}</strong> • Último acesso: ${escapeHtml(lastSeen)}
-                </div>
-              </div>
+          const score = Math.min(4, Math.max(0, Number(u.setupScore) || 0));
+          const steps = u.setupSteps || {};
+          const stepBadges = `
+            <span class="tag" style="font-size:10.5px; opacity:${steps.aiKey ? '1' : '0.45'};">${steps.aiKey ? '✓' : '○'} Chave IA</span>
+            <span class="tag" style="font-size:10.5px; opacity:${steps.training ? '1' : '0.45'};">${steps.training ? '✓' : '○'} Cérebro</span>
+            <span class="tag" style="font-size:10.5px; opacity:${steps.whatsapp ? '1' : '0.45'};">${steps.whatsapp ? '✓' : '○'} WhatsApp</span>
+          `;
 
-              <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button type="button" class="btn btn-secondary btn-sm" onclick="promptResetUserPass('${escapeJsArg(u.userId)}', '${escapeJsArg(u.username)}')">
-                  🔑 Nova Senha
-                </button>
-                ${
-                  !isMaster
-                    ? `
-                  <button type="button" class="btn btn-secondary btn-sm" onclick="toggleManagedUserActive('${escapeJsArg(u.userId)}', ${u.isActive ? 'false' : 'true'})">
-                    ${u.isActive ? '⏸ Bloquear' : '▶ Desbloquear'}
+          return `
+            <div class="saas-client-row" style="${isCurrentlyImpersonated ? 'border-color:rgba(245,158,11,0.7); background:rgba(245,158,11,0.06);' : ''}">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+                <div style="min-width:240px; flex:1;">
+                  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <strong style="font-size:15px; color:var(--text-main);">${escapeHtml(u.displayName)}</strong>
+                    <code style="font-size:12px;">@${escapeHtml(u.username)}</code>
+                    ${isMaster ? `<span class="tag" style="background:rgba(245,158,11,0.18); color:var(--warning-bright); font-weight:700;">👑 Master</span>` : statusBadge}
+                    ${workerBadge}
+                    ${u.awaitingHumanCount > 0 ? `<span class="tag paused">👤 ${u.awaitingHumanCount} aguardando humano</span>` : ''}
+                  </div>
+
+                  <div style="font-size:12px; color:var(--text-muted); margin-top:6px; display:flex; gap:12px; flex-wrap:wrap;">
+                    <span>👥 CRM: <strong>${u.contactsCount || 0}</strong></span>
+                    <span>🤖 Respostas IA: <strong>${u.totalAiReplies || 0}</strong></span>
+                    ${u.customerPhone ? `<span>📱 WhatsApp dono: <strong>+${escapeHtml(u.customerPhone)}</strong></span>` : ''}
+                    <span>🕒 Acesso: ${escapeHtml(lastSeen)}</span>
+                  </div>
+
+                  <div style="margin-top:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                      <span style="font-size:11px; font-weight:700; color:var(--text-secondary);">Setup ${score}/4</span>
+                      <div class="setup-score-bar">
+                        ${[1, 2, 3, 4].map((n) => `<span class="${score >= n ? 'on' : ''}"></span>`).join('')}
+                      </div>
+                    </div>
+                    ${stepBadges}
+                  </div>
+
+                  ${
+                    u.adminNotes
+                      ? `<div style="margin-top:8px; font-size:12px; padding:6px 10px; border-radius:7px; background:rgba(245,158,11,0.08); border:1px dashed rgba(245,158,11,0.3); color:var(--text-secondary);">📝 <strong>Nota Master:</strong> ${escapeHtml(u.adminNotes)}</div>`
+                      : ''
+                  }
+                </div>
+
+                <div style="display:flex; gap:7px; flex-wrap:wrap; align-items:center;">
+                  ${
+                    !isMaster
+                      ? `
+                    <button type="button" class="btn btn-primary btn-sm" onclick="enterClientSupportMode('${escapeJsArg(u.userId)}', '${escapeJsArg(u.username)}', '${escapeJsArg(u.displayName)}')">
+                      👁️ ${isCurrentlyImpersonated ? 'No Painel Agora' : 'Acessar Painel'}
+                    </button>
+                  `
+                      : ''
+                  }
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="copyClientWelcomeKit('${escapeJsArg(u.username)}', '${escapeJsArg(u.displayName)}')" title="Copiar instruções de acesso para enviar no WhatsApp do cliente">
+                    📋 Kit Boas-Vindas
                   </button>
-                  <button type="button" class="btn btn-danger btn-sm" onclick="removeManagedUser('${escapeJsArg(u.userId)}', '${escapeJsArg(u.username)}')">
-                    🗑 Excluir
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="openEditManagedUserModal('${escapeJsArg(u.userId)}')">
+                    ✏️ Ficha
                   </button>
-                `
-                    : ''
-                }
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="promptResetUserPass('${escapeJsArg(u.userId)}', '${escapeJsArg(u.username)}')">
+                    🔑 Senha
+                  </button>
+                  ${
+                    !isMaster
+                      ? `
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="toggleManagedUserActive('${escapeJsArg(u.userId)}', ${u.isActive ? 'false' : 'true'})">
+                      ${u.isActive ? '⏸ Bloquear' : '▶ Ativar'}
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm" onclick="removeManagedUser('${escapeJsArg(u.userId)}', '${escapeJsArg(u.username)}')">
+                      🗑
+                    </button>
+                  `
+                      : ''
+                  }
+                </div>
               </div>
             </div>
           `;
@@ -3946,6 +4934,71 @@ function renderManagedUsers() {
     </div>
   `;
 }
+
+window.enterClientSupportMode = async function enterClientSupportMode(userId, username, displayName) {
+  if (state.currentUser?.role !== 'master') return;
+  saveActAs({ userId, username, displayName });
+  state.selectedInboxChatId = null;
+  renderCloudHeaderBar();
+  showToast(`👁️ Entrando no painel isolado de ${displayName || '@' + username}...`);
+  await loadBootstrap();
+  switchTab('dashboard');
+};
+
+window.exitClientSupportMode = async function exitClientSupportMode() {
+  saveActAs(null);
+  state.selectedInboxChatId = null;
+  renderCloudHeaderBar();
+  showToast('👑 De volta à sua Conta Master!');
+  await loadBootstrap();
+  switchTab('contas');
+};
+
+function buildWelcomeKitMessage(username, displayName, knownPassword = '') {
+  const panelUrl = window.location.origin;
+  const passLine = knownPassword ? `🔑 *Senha inicial:* ${knownPassword}` : `🔑 *Senha:* (a senha definida para sua conta)`;
+  return [
+    `🚀 *Bem-vindo(a) ao ZAP-IA Studio — ${displayName || username}!*`,
+    ``,
+    `Seu painel isolado de Atendimento Humano com IA e CRM já está liberado:`,
+    `🌐 *Link do Painel:* ${panelUrl}`,
+    `👤 *Usuário:* ${username}`,
+    passLine,
+    ``,
+    `*3 Passos Rápidos no seu Primeiro Acesso:*`,
+    `1️⃣ Vá na aba *Motor de IA* e cole sua chave gratuita do Google AI Studio (Gemini).`,
+    `2️⃣ Vá em *Cérebro Único* para ajustar os dados do seu negócio, produtos e PIX.`,
+    `3️⃣ Pareie seu WhatsApp pelo QR Code / Código de 8 dígitos e teste no *Simulador*!`
+  ].join('\n');
+}
+
+window.copyClientWelcomeKit = async function copyClientWelcomeKit(username, displayName, knownPassword = '') {
+  const kit = buildWelcomeKitMessage(username, displayName, knownPassword);
+  const box = document.getElementById('welcomeKitCreatedBox');
+  const pre = document.getElementById('welcomeKitPreviewText');
+  if (box && pre) {
+    pre.textContent = kit;
+    box.style.display = 'block';
+  }
+  try {
+    await navigator.clipboard.writeText(kit);
+    showToast(`📋 Kit de Boas-Vindas de @${username} copiado para colar no WhatsApp!`);
+  } catch {
+    showToast(`📋 Kit de Boas-Vindas gerado abaixo do formulário!`);
+  }
+};
+
+window.openEditManagedUserModal = function openEditManagedUserModal(userId) {
+  const u = (state.managedUsers || []).find((x) => x.userId === userId);
+  if (!u) return;
+  document.getElementById('editManagedUserId').value = u.userId;
+  document.getElementById('editManagedDisplayName').value = u.displayName || '';
+  const phEl = document.getElementById('editManagedCustomerPhone');
+  if (phEl) phEl.value = u.customerPhone || '';
+  const ntEl = document.getElementById('editManagedAdminNotes');
+  if (ntEl) ntEl.value = u.adminNotes || '';
+  document.getElementById('editManagedUserModal')?.classList.add('open');
+};
 
 window.promptResetUserPass = async function promptResetUserPass(userId, username) {
   const newPass = prompt(`Digite a nova senha para @${username} (mínimo 6 caracteres):`);
@@ -3983,6 +5036,10 @@ window.removeManagedUser = async function removeManagedUser(userId, username) {
     return;
   }
   try {
+    if (state.actAsUser?.userId === userId) {
+      saveActAs(null);
+      renderCloudHeaderBar();
+    }
     await api(`/api/admin/users/${encodeURIComponent(userId)}`, { method: 'DELETE' });
     showToast(`Conta @${username} excluída com sucesso.`);
     await loadManagedUsers();
@@ -3996,6 +5053,50 @@ function bindCloudAuthAndAdminEvents() {
     const inp = document.getElementById('cloudLoginPass');
     if (!inp) return;
     inp.type = inp.type === 'password' ? 'text' : 'password';
+  });
+
+  document.getElementById('btnExitImpersonation')?.addEventListener('click', () => {
+    window.exitClientSupportMode();
+  });
+
+  document.getElementById('masterUserSearchInput')?.addEventListener('input', () => {
+    renderManagedUsers();
+  });
+
+  document.getElementById('masterUserFilterSelect')?.addEventListener('change', () => {
+    renderManagedUsers();
+  });
+
+  document.getElementById('btnCopyWelcomeKit')?.addEventListener('click', async () => {
+    const txt = document.getElementById('welcomeKitPreviewText')?.textContent || '';
+    if (!txt) return;
+    try {
+      await navigator.clipboard.writeText(txt);
+      showToast('📋 Kit de Acesso copiado!');
+    } catch {
+      showToast('Selecione o texto abaixo para copiar.');
+    }
+  });
+
+  document.getElementById('editManagedUserForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const userId = document.getElementById('editManagedUserId')?.value;
+    if (!userId) return;
+    try {
+      await api(`/api/admin/users/${encodeURIComponent(userId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          displayName: document.getElementById('editManagedDisplayName')?.value?.trim() || '',
+          customerPhone: document.getElementById('editManagedCustomerPhone')?.value?.trim() || '',
+          adminNotes: document.getElementById('editManagedAdminNotes')?.value || ''
+        })
+      });
+      closeModal('editManagedUserModal');
+      showToast('Ficha comercial atualizada!');
+      await loadManagedUsers();
+    } catch (err) {
+      showToast(err.message, true);
+    }
   });
 
   document.getElementById('cloudLoginForm')?.addEventListener('submit', async (e) => {
@@ -4019,6 +5120,7 @@ function bindCloudAuthAndAdminEvents() {
       if (!r.ok || !d.ok) {
         throw new Error(d.error || 'Usuário ou senha inválidos.');
       }
+      saveActAs(null);
       saveCloudSession({ ...d.session, user: d.user });
       state.currentUser = d.user;
       document.getElementById('cloudLoginPass').value = '';
@@ -4053,9 +5155,11 @@ function bindCloudAuthAndAdminEvents() {
         body: JSON.stringify({ logoutWorker: isLocal })
       }).catch(() => {});
     } finally {
+      saveActAs(null);
       saveCloudSession(null);
       state.currentUser = null;
       if (cloudPollTimer) clearTimeout(cloudPollTimer);
+      renderCloudHeaderBar();
       document.getElementById('cloudLoginScreen')?.classList.add('open');
     }
   });
@@ -4069,6 +5173,8 @@ function bindCloudAuthAndAdminEvents() {
     const displayName = document.getElementById('newAccountDisplayName')?.value?.trim() || '';
     const username = document.getElementById('newAccountUsername')?.value?.trim() || '';
     const password = document.getElementById('newAccountPassword')?.value || '';
+    const customerPhone = document.getElementById('newAccountCustomerPhone')?.value?.trim() || '';
+    const adminNotes = document.getElementById('newAccountAdminNotes')?.value?.trim() || '';
     const btn = document.getElementById('btnCreateManagedUser');
     if (btn) {
       btn.disabled = true;
@@ -4077,17 +5183,18 @@ function bindCloudAuthAndAdminEvents() {
     try {
       const res = await api('/api/admin/users', {
         method: 'POST',
-        body: JSON.stringify({ displayName, username, password })
+        body: JSON.stringify({ displayName, username, password, customerPhone, adminNotes })
       });
       document.getElementById('createManagedUserForm').reset();
-      showToast(`✅ Conta @${res.user.username} criada com workspace 100% limpo e isolado!`);
+      await window.copyClientWelcomeKit(res.user.username, res.user.displayName, password);
+      showToast(`✅ Conta @${res.user.username} criada e Kit de Boas-Vindas copiado!`);
       await loadManagedUsers();
     } catch (err) {
       showToast(err.message, true);
     } finally {
       if (btn) {
         btn.disabled = false;
-        btn.textContent = '➕ Criar Conta Agora';
+        btn.textContent = '+ Criar Conta & Gerar Kit de Boas-Vindas';
       }
     }
   });

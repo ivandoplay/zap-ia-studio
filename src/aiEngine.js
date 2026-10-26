@@ -984,7 +984,7 @@ export async function generateSmartReply({
 }) {
   const startedAt = Date.now();
   const maxHist = Number(settings.ai?.maxHistoryMessages) || 20;
-  const trimmedHistory = history.slice(-maxHist);
+  const trimmedHistory = (history || []).filter((m) => m && m.role !== 'internal_note').slice(-maxHist);
 
   // Skill #8: Escudo Tripwire Anti-Prompt-Injection & Concorrentes (OWASP Agentic Security 2026)
   const shieldActive = profile.promptShieldEnabled !== false && settings.ai?.promptShieldEnabled !== false;

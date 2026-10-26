@@ -24,6 +24,7 @@ import {
   dispatchCommandToWorker,
   ensureLocalMediaCached,
   listManagedUsers,
+  loadTenantContextAsMasterSupport,
   loadTenantContextFromCloud,
   refreshCloudSession,
   signInWithUsernamePassword,
@@ -292,8 +293,44 @@ app.post('/api/auth/verify-pin', (req, res) => {
   return res.status(401).json({ ok: false, error: 'PIN incorreto.' });
 });
 
-// Middleware Multi-Tenant Cloud (isola 100% dos dados por conta na Vercel e sincroniza antes do término da Function)
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function extractActAsUserId(req) {
+  const raw = String(req.headers['x-zapia-act-as'] || req.query?.actAs || '').trim();
+  return raw || '';
+}
+
+function attachAtomicCloudFlush(res, tenantStore) {
+  let flushed = false;
+  const ensureFlushed = async () => {
+    if (flushed) return;
+    flushed = true;
+    await tenantStore.flushCloud();
+  };
+
+  const origJson = res.json.bind(res);
+  const origSend = res.send.bind(res);
+
+  res.json = (body) => {
+    ensureFlushed()
+      .catch((e) => console.error('[CloudFlush] Erro ao salvar estado:', e.message))
+      .finally(() => origJson(body));
+    return res;
+  };
+
+  res.send = (body) => {
+    if (flushed) return origSend(body);
+    ensureFlushed()
+      .catch((e) => console.error('[CloudFlush] Erro ao salvar estado:', e.message))
+      .finally(() => origSend(body));
+    return res;
+  };
+}
+
+// Middleware Multi-Tenant Cloud + Modo Suporte 1-Clique (isola 100% dos dados por conta e sincroniza antes do término da Function)
 app.use('/api', async (req, res, next) => {
+  const actAsUserId = extractActAsUserId(req);
+
   if (IS_VERCEL) {
     const token = extractBearerToken(req);
     if (!token) {
@@ -304,43 +341,51 @@ app.use('/api', async (req, res, next) => {
       if (!verified) {
         return res.status(401).json({ ok: false, authRequired: true, error: 'Sessão expirada. Faça login novamente.' });
       }
+
+      req.realMasterProfile = verified.profile;
+
+      if (actAsUserId && actAsUserId !== verified.authUser.id) {
+        if (verified.profile?.role !== 'master') {
+          return res.status(403).json({ ok: false, error: 'Modo Suporte permitido exclusivamente para a conta Admin Master.' });
+        }
+        if (!UUID_RE.test(actAsUserId)) {
+          return res.status(400).json({ ok: false, error: 'Identificador de cliente inválido.' });
+        }
+        const supportCtx = await loadTenantContextAsMasterSupport(actAsUserId);
+        req.cloudAuth = {
+          client: supportCtx.adminClient,
+          authUser: supportCtx.targetAuthUser,
+          profile: supportCtx.targetProfile,
+          tenantStore: supportCtx.tenantStore,
+          isRemoteImpersonation: true,
+          impersonatedBy: {
+            id: verified.authUser.id,
+            username: verified.profile.username,
+            displayName: verified.profile.display_name || verified.profile.username
+          }
+        };
+        attachAtomicCloudFlush(res, supportCtx.tenantStore);
+        return tenantStorageContext.run(supportCtx.tenantStore, () => next());
+      }
+
       const tenantStore = await loadTenantContextFromCloud(verified.client, verified.authUser, verified.profile);
       req.cloudAuth = {
         client: verified.client,
         authUser: verified.authUser,
         profile: verified.profile,
-        tenantStore
+        tenantStore,
+        isRemoteImpersonation: false,
+        impersonatedBy: null
       };
-
-      // Flush atômico ANTES de responder para evitar perda de dados quando a Vercel congela a Function Serverless
-      let flushed = false;
-      const ensureFlushed = async () => {
-        if (flushed) return;
-        flushed = true;
-        await tenantStore.flushCloud();
-      };
-
-      const origJson = res.json.bind(res);
-      const origSend = res.send.bind(res);
-
-      res.json = (body) => {
-        ensureFlushed()
-          .catch((e) => console.error('[CloudFlush] Erro ao salvar estado:', e.message))
-          .finally(() => origJson(body));
-        return res;
-      };
-
-      res.send = (body) => {
-        if (flushed) return origSend(body);
-        ensureFlushed()
-          .catch((e) => console.error('[CloudFlush] Erro ao salvar estado:', e.message))
-          .finally(() => origSend(body));
-        return res;
-      };
-
+      attachAtomicCloudFlush(res, tenantStore);
       return tenantStorageContext.run(tenantStore, () => next());
     } catch (err) {
-      return res.status(401).json({ ok: false, authRequired: true, error: err.message || 'Acesso negado.' });
+      const status = err.statusCode || 401;
+      return res.status(status).json({
+        ok: false,
+        authRequired: status === 401,
+        error: err.message || 'Acesso negado.'
+      });
     }
   }
 
@@ -351,22 +396,59 @@ app.use('/api', async (req, res, next) => {
   }
 
   const configuredPin = String(storage.data.settings.securityPin || '').trim();
-  if (!configuredPin) return next();
-  const headerPin = String(req.headers['x-panel-pin'] || req.query?.pin || '').trim();
-  if (safeComparePin(configuredPin, headerPin)) return next();
-  return res.status(401).json({ ok: false, pinRequired: true, error: 'Painel protegido por PIN.' });
+  if (configuredPin) {
+    const headerPin = String(req.headers['x-panel-pin'] || req.query?.pin || '').trim();
+    if (!safeComparePin(configuredPin, headerPin)) {
+      return res.status(401).json({ ok: false, pinRequired: true, error: 'Painel protegido por PIN.' });
+    }
+  }
+
+  req.realMasterProfile = workerSt.user || { role: 'master' };
+
+  // Se o Admin Master local clicar em "Acessar Painel deste Cliente", carrega o workspace remoto daquele cliente sem mexer no WhatsApp local!
+  if (actAsUserId && actAsUserId !== workerSt.user?.id) {
+    if (workerSt.user?.role !== 'master') {
+      return res.status(403).json({ ok: false, error: 'Modo Suporte permitido exclusivamente para a conta Admin Master.' });
+    }
+    if (!UUID_RE.test(actAsUserId)) {
+      return res.status(400).json({ ok: false, error: 'Identificador de cliente inválido.' });
+    }
+    try {
+      const supportCtx = await loadTenantContextAsMasterSupport(actAsUserId);
+      req.cloudAuth = {
+        client: supportCtx.adminClient,
+        authUser: supportCtx.targetAuthUser,
+        profile: supportCtx.targetProfile,
+        tenantStore: supportCtx.tenantStore,
+        isRemoteImpersonation: true,
+        impersonatedBy: {
+          id: workerSt.user.id,
+          username: workerSt.user.username,
+          displayName: workerSt.user.displayName || workerSt.user.username
+        }
+      };
+      attachAtomicCloudFlush(res, supportCtx.tenantStore);
+      return tenantStorageContext.run(supportCtx.tenantStore, () => next());
+    } catch (err) {
+      return res.status(err.statusCode || 400).json({ ok: false, error: err.message });
+    }
+  }
+
+  return next();
 });
 
 // ======================== GERENCIAMENTO DE CONTAS (EXCLUSIVO ADMIN MASTER) ========================
 
 function requireMasterAccount(req, res, next) {
-  const role = IS_VERCEL
-    ? req.cloudAuth?.profile?.role
-    : cloudWorker.getStatus().user?.role;
+  const role = req.realMasterProfile?.role || (IS_VERCEL ? req.cloudAuth?.profile?.role : cloudWorker.getStatus().user?.role);
   if (role !== 'master') {
     return res.status(403).json({ ok: false, error: 'Acesso restrito exclusivamente à conta Admin Master.' });
   }
   return next();
+}
+
+function usesCloudBridge(req) {
+  return Boolean(IS_VERCEL || req.cloudAuth?.isRemoteImpersonation);
 }
 
 app.get('/api/admin/users', requireMasterAccount, async (_req, res) => {
@@ -409,7 +491,7 @@ app.delete('/api/admin/users/:userId', requireMasterAccount, async (req, res) =>
 // ======================== ROTAS DE BOOTSTRAP & POLLING CLOUD ========================
 
 function getEffectiveWaState(req) {
-  if (IS_VERCEL && req.cloudAuth?.tenantStore?.waRuntime) {
+  if (usesCloudBridge(req) && req.cloudAuth?.tenantStore?.waRuntime) {
     return req.cloudAuth.tenantStore.waRuntime;
   }
   const st = whatsappManager.getPublicState();
@@ -422,35 +504,45 @@ function getEffectiveWaState(req) {
 }
 
 function getEffectiveCurrentUser(req) {
-  if (IS_VERCEL && req.cloudAuth?.profile) {
+  if (req.cloudAuth?.profile) {
     return {
       id: req.cloudAuth.authUser.id,
       username: req.cloudAuth.profile.username,
       displayName: req.cloudAuth.profile.display_name || req.cloudAuth.profile.username,
-      role: req.cloudAuth.profile.role || 'user'
+      role: req.realMasterProfile?.role === 'master' ? 'master' : (req.cloudAuth.profile.role || 'user'),
+      tenantRole: req.cloudAuth.profile.role || 'user',
+      impersonating: Boolean(req.cloudAuth.isRemoteImpersonation),
+      impersonatedBy: req.cloudAuth.impersonatedBy || null
     };
   }
-  return cloudWorker.getStatus().user || null;
+  const u = cloudWorker.getStatus().user;
+  return u ? { ...u, tenantRole: u.role, impersonating: false, impersonatedBy: null } : null;
+}
+
+function sortContactsForInbox(contactsObj = {}) {
+  return Object.values(contactsObj).sort((a, b) => {
+    const pinDiff = (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0);
+    if (pinDiff !== 0) return pinDiff;
+    return new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime();
+  });
 }
 
 app.get('/api/bootstrap', async (req, res) => {
   storage.ensureDailyRollover();
-  const ffmpegBin = IS_VERCEL ? 'cloud' : await resolveFfmpegPath();
+  const ffmpegBin = usesCloudBridge(req) ? 'cloud' : await resolveFfmpegPath();
   const waState = getEffectiveWaState(req);
   res.json({
-    runtimeMode: IS_VERCEL ? 'vercel_cloud' : 'local_worker',
+    runtimeMode: usesCloudBridge(req) ? 'vercel_cloud' : 'local_worker',
     currentUser: getEffectiveCurrentUser(req),
     waState,
-    proactiveQueueState: IS_VERCEL ? waState.proactive : whatsappManager.getProactiveQueueState(),
+    proactiveQueueState: usesCloudBridge(req) ? waState.proactive : whatsappManager.getProactiveQueueState(),
     audioEngineReady: Boolean(ffmpegBin),
     settings: storage.data.settings,
     geminiPoolCount: parseGeminiKeyPool(storage.data.settings.ai).length,
     business: storage.getBusiness(),
     templates: NICHE_TEMPLATES,
     trainingPacks: listTrainingPacks(),
-    contacts: Object.values(storage.data.contacts).sort(
-      (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
-    ),
+    contacts: sortContactsForInbox(storage.data.contacts),
     stats: storage.data.stats,
     logs: storage.data.logs,
     simulatorHistory: storage.data.simulatorHistory || []
@@ -461,13 +553,11 @@ app.get('/api/cloud/poll', (req, res) => {
   const waState = getEffectiveWaState(req);
   res.json({
     ok: true,
-    runtimeMode: IS_VERCEL ? 'vercel_cloud' : 'local_worker',
+    runtimeMode: usesCloudBridge(req) ? 'vercel_cloud' : 'local_worker',
     currentUser: getEffectiveCurrentUser(req),
     waState,
-    proactiveQueueState: IS_VERCEL ? waState.proactive : whatsappManager.getProactiveQueueState(),
-    contacts: Object.values(storage.data.contacts).sort(
-      (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
-    ),
+    proactiveQueueState: usesCloudBridge(req) ? waState.proactive : whatsappManager.getProactiveQueueState(),
+    contacts: sortContactsForInbox(storage.data.contacts),
     stats: storage.data.stats,
     logs: (storage.data.logs || []).slice(0, 60)
   });
@@ -478,7 +568,7 @@ app.get('/api/cloud/poll', (req, res) => {
 app.post('/api/wa/connect', async (req, res) => {
   try {
     const { pairingPhone } = req.body || {};
-    if (IS_VERCEL) {
+    if (usesCloudBridge(req)) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
         req.cloudAuth.authUser.id,
@@ -498,7 +588,7 @@ app.post('/api/wa/connect', async (req, res) => {
 app.post('/api/wa/disconnect', async (req, res) => {
   try {
     const clearSession = req.body?.clearSession !== false;
-    if (IS_VERCEL) {
+    if (usesCloudBridge(req)) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
         req.cloudAuth.authUser.id,
@@ -519,13 +609,13 @@ app.post('/api/wa/toggle-bot', (req, res) => {
   storage.data.settings.botEnabled = enabled;
   storage.writeNow();
   storage.addLog('info', enabled ? 'Atendimento automático ATIVADO.' : 'Atendimento automático PAUSADO globalmente.');
-  if (!IS_VERCEL) whatsappManager.emitState();
+  if (!usesCloudBridge(req)) whatsappManager.emitState();
   res.json({ ok: true, botEnabled: enabled });
 });
 
 app.post('/api/wa/test-owner-alert', async (req, res) => {
   try {
-    if (IS_VERCEL) {
+    if (usesCloudBridge(req)) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
         req.cloudAuth.authUser.id,
@@ -553,7 +643,7 @@ app.post('/api/wa/proactive-send', async (req, res) => {
       .replace(/\{\s*nome\s*\}/gi, cleanName !== 'Contato Abordado' ? cleanName.split(' ')[0] : '')
       .replace(/\s{2,}/g, ' ')
       .trim();
-    if (IS_VERCEL) {
+    if (usesCloudBridge(req)) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
         req.cloudAuth.authUser.id,
@@ -571,13 +661,13 @@ app.post('/api/wa/proactive-send', async (req, res) => {
 
 app.get('/api/wa/proactive-queue', (req, res) => {
   const waState = getEffectiveWaState(req);
-  res.json({ ok: true, queue: IS_VERCEL ? waState.proactive : whatsappManager.getProactiveQueueState() });
+  res.json({ ok: true, queue: usesCloudBridge(req) ? waState.proactive : whatsappManager.getProactiveQueueState() });
 });
 
 app.post('/api/wa/proactive-queue/start', async (req, res) => {
   try {
     const { leads, text } = req.body || {};
-    if (IS_VERCEL) {
+    if (usesCloudBridge(req)) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
         req.cloudAuth.authUser.id,
@@ -596,7 +686,7 @@ app.post('/api/wa/proactive-queue/start', async (req, res) => {
 app.post('/api/wa/proactive-queue/pause', async (req, res) => {
   try {
     const paused = req.body?.paused !== false;
-    if (IS_VERCEL) {
+    if (usesCloudBridge(req)) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
         req.cloudAuth.authUser.id,
@@ -614,7 +704,7 @@ app.post('/api/wa/proactive-queue/pause', async (req, res) => {
 
 app.post('/api/wa/proactive-queue/clear', async (req, res) => {
   try {
-    if (IS_VERCEL) {
+    if (usesCloudBridge(req)) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
         req.cloudAuth.authUser.id,
@@ -893,7 +983,7 @@ app.post('/api/pix/preview', async (req, res) => {
 });
 
 function getActiveCloudClientAndUser(req) {
-  if (IS_VERCEL && req.cloudAuth?.client && req.cloudAuth?.authUser?.id) {
+  if (req.cloudAuth?.client && req.cloudAuth?.authUser?.id) {
     return { client: req.cloudAuth.client, userId: req.cloudAuth.authUser.id };
   }
   if (!IS_VERCEL && cloudWorker.client && cloudWorker.user?.id) {
@@ -1156,13 +1246,143 @@ app.get('/api/crm/export.csv', (_req, res) => {
   res.send(csvContent);
 });
 
+// ======================== RESPOSTAS RÁPIDAS (ATALHOS "/") ========================
+
+app.get('/api/quick-replies', (_req, res) => {
+  res.json({ ok: true, quickReplies: storage.getQuickReplies() });
+});
+
+app.post('/api/quick-replies', (req, res) => {
+  const shortcut = String(req.body?.shortcut || '').trim();
+  const title = String(req.body?.title || '').trim();
+  const text = String(req.body?.text || '').trim();
+  if (!shortcut || !text) {
+    return res.status(400).json({ ok: false, error: 'Informe o atalho (ex: pix) e o texto da resposta rápida.' });
+  }
+  const saved = storage.saveQuickReply({ id: req.body?.id, shortcut, title, text });
+  res.json({ ok: true, item: saved, quickReplies: storage.getQuickReplies(), business: storage.getBusiness() });
+});
+
+app.delete('/api/quick-replies/:id', (req, res) => {
+  const removed = storage.deleteQuickReply(req.params.id);
+  if (!removed) return res.status(404).json({ ok: false, error: 'Resposta rápida não encontrada.' });
+  res.json({ ok: true, quickReplies: storage.getQuickReplies(), business: storage.getBusiness() });
+});
+
+// ======================== INBOX PRO & CRM OPERAÇÕES AVANÇADAS ========================
+
+app.post('/api/crm/new-contact', (req, res) => {
+  const rawPhone = normalizePhoneDigits(req.body?.phone || '');
+  const name = String(req.body?.name || '').trim() || 'Novo Contato';
+  if (!rawPhone || rawPhone.length < 10) {
+    return res.status(400).json({ ok: false, error: 'Informe um telefone válido com DDD (ex: 5586999887766).' });
+  }
+  const fullPhone = rawPhone.startsWith('55') || rawPhone.length >= 12 ? rawPhone : `55${rawPhone}`;
+  const chatId = `${fullPhone}@s.whatsapp.net`;
+  const contact = storage.upsertContact(chatId, {
+    name,
+    phone: fullPhone,
+    stage: req.body?.stage || 'novo',
+    notes: String(req.body?.notes || '').trim(),
+    archived: false
+  });
+  broadcast('crm_updated', {});
+  res.json({ ok: true, contact });
+});
+
 app.put('/api/crm/:chatId', (req, res) => {
   const chatId = decodeURIComponent(req.params.chatId);
-  if (!storage.data.contacts[chatId]) {
+  const key = storage.findSiblingContactKey(chatId) || chatId;
+  if (!storage.data.contacts[key]) {
     return res.status(404).json({ ok: false, error: 'Contato não encontrado.' });
   }
-  const updated = storage.upsertContact(chatId, req.body || {});
+  const updated = storage.upsertContact(key, req.body || {});
+  broadcast('crm_updated', {});
   res.json({ ok: true, contact: updated });
+});
+
+app.delete('/api/crm/:chatId', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const ok = storage.deleteContact(chatId);
+  if (!ok) return res.status(404).json({ ok: false, error: 'Conversa não encontrada.' });
+  broadcast('crm_updated', {});
+  res.json({ ok: true });
+});
+
+app.post('/api/crm/:chatId/mark-read', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const contact = storage.markContactRead(chatId);
+  if (!contact) return res.status(404).json({ ok: false, error: 'Conversa não encontrada.' });
+  res.json({ ok: true, contact });
+});
+
+app.post('/api/crm/:chatId/archive', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const key = storage.findSiblingContactKey(chatId) || chatId;
+  if (!storage.data.contacts[key]) return res.status(404).json({ ok: false, error: 'Conversa não encontrada.' });
+  const nextArchived = req.body?.archived !== undefined ? Boolean(req.body.archived) : !storage.data.contacts[key].archived;
+  const contact = storage.upsertContact(key, { archived: nextArchived, unreadCount: 0 });
+  broadcast('crm_updated', {});
+  res.json({ ok: true, contact });
+});
+
+app.post('/api/crm/:chatId/pin', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const key = storage.findSiblingContactKey(chatId) || chatId;
+  if (!storage.data.contacts[key]) return res.status(404).json({ ok: false, error: 'Conversa não encontrada.' });
+  const nextPinned = req.body?.pinned !== undefined ? Boolean(req.body.pinned) : !storage.data.contacts[key].pinned;
+  const contact = storage.upsertContact(key, { pinned: nextPinned });
+  broadcast('crm_updated', {});
+  res.json({ ok: true, contact });
+});
+
+app.post('/api/crm/:chatId/internal-note', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const text = String(req.body?.text || '').trim();
+  if (!text) return res.status(400).json({ ok: false, error: 'Escreva o conteúdo da nota interna.' });
+  const effUser = getEffectiveCurrentUser(req);
+  const author = effUser?.impersonating
+    ? `${effUser.impersonatedBy?.displayName || 'Master'} (Suporte)`
+    : (effUser?.displayName || 'Equipe');
+  const contact = storage.addInternalNote(chatId, { text, author });
+  broadcast('crm_updated', {});
+  res.json({ ok: true, contact });
+});
+
+app.delete('/api/crm/:chatId/internal-note/:noteId', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const contact = storage.deleteInternalNote(chatId, req.params.noteId);
+  if (!contact) return res.status(404).json({ ok: false, error: 'Conversa não encontrada.' });
+  broadcast('crm_updated', {});
+  res.json({ ok: true, contact });
+});
+
+app.post('/api/crm/:chatId/suggest-reply', async (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const key = storage.findSiblingContactKey(chatId) || chatId;
+  const contact = storage.data.contacts[key];
+  if (!contact) return res.status(404).json({ ok: false, error: 'Conversa não encontrada.' });
+
+  const biz = storage.getBusiness();
+  const realMsgs = (contact.messages || []).filter((m) => m && m.role !== 'internal_note');
+  const lastCustomerMsg = [...realMsgs].reverse().find((m) => m.role === 'user')?.text || 'Olá, gostaria de alinhar os próximos passos.';
+
+  try {
+    const out = await generateSmartReply({
+      profile: biz,
+      settings: storage.data.settings,
+      history: realMsgs.slice(0, -1),
+      userText: lastCustomerMsg,
+      contactName: contact.name || 'Cliente',
+      sentVoiceIds: contact.sentVoiceIds || [],
+      allowDemoFallback: false
+    });
+    const suggestion = String(out.cleanText || '').trim() ||
+      `Oi, ${(contact.name || '').split(' ')[0] || 'tudo bem'}! Vi sua mensagem aqui agora e já te retorno pessoalmente sobre isso.`;
+    res.json({ ok: true, suggestion, modelUsed: out.modelUsed });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message || 'Configure sua chave de IA na aba Motor de IA para usar sugestões.' });
+  }
 });
 
 app.post('/api/crm/:chatId/pause', (req, res) => {
@@ -1178,13 +1398,13 @@ app.post('/api/crm/:chatId/resume', (req, res) => {
   res.json({ ok: true, contact });
 });
 
-app.post('/api/crm/:chatId/send', async (req, res) => {
+app.post(['/api/crm/:chatId/send', '/api/crm/:chatId/reply'], async (req, res) => {
   const chatId = decodeURIComponent(req.params.chatId);
   const text = (req.body?.text || '').trim();
   if (!text) return res.status(400).json({ ok: false, error: 'Digite uma mensagem.' });
 
   try {
-    if (IS_VERCEL && !chatId.startsWith('demo_')) {
+    if (usesCloudBridge(req) && !chatId.startsWith('demo_')) {
       const waState = getEffectiveWaState(req);
       if (waState.workerOnline && waState.status === 'connected') {
         const out = await dispatchCommandToWorker(
@@ -1193,6 +1413,7 @@ app.post('/api/crm/:chatId/send', async (req, res) => {
           'send_crm_reply',
           { chatId, text }
         );
+        storage.markContactRead(chatId);
         return res.json({
           ok: true,
           contact: out.contact || storage.data.contacts[chatId],
@@ -1209,16 +1430,18 @@ app.post('/api/crm/:chatId/send', async (req, res) => {
     }
 
     const cleanTargetJid = chatId.replace(/^demo_/, '');
-    if (!IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
+    if (!usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
       await whatsappManager.sendManualOwnerMessage(cleanTargetJid, text, true);
+      storage.markContactRead(chatId);
     } else {
       storage.appendContactMessage(chatId, { role: 'owner', text });
       storage.pauseContact(chatId, 60, 'Mensagem registrada localmente no painel');
     }
+    const key = storage.findSiblingContactKey(chatId) || chatId;
     res.json({
       ok: true,
-      contact: storage.data.contacts[chatId],
-      sentRealWhatsApp: !IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')
+      contact: storage.data.contacts[key],
+      sentRealWhatsApp: !usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')
     });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
@@ -1233,7 +1456,7 @@ app.post('/api/crm/:chatId/send-item', async (req, res) => {
   if (!item) return res.status(404).json({ ok: false, error: 'Item do catálogo não encontrado.' });
 
   try {
-    if (IS_VERCEL && !chatId.startsWith('demo_')) {
+    if (usesCloudBridge(req) && !chatId.startsWith('demo_')) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
         req.cloudAuth.authUser.id,
@@ -1243,7 +1466,7 @@ app.post('/api/crm/:chatId/send-item', async (req, res) => {
       return res.json({ ok: true, contact: out.contact || storage.data.contacts[chatId], sentRealWhatsApp: true });
     }
 
-    if (!IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
+    if (!usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
       if ((item.mediaFiles && item.mediaFiles.length > 0) || item.mediaFile?.filename) {
         await whatsappManager.sendCatalogMediaFile(chatId, item, 'owner');
       } else {
@@ -1254,7 +1477,8 @@ app.post('/api/crm/:chatId/send-item', async (req, res) => {
     } else {
       storage.appendContactMessage(chatId, { role: 'owner', text: `[Item enviado no painel: ${item.name}]` });
     }
-    res.json({ ok: true, contact: storage.data.contacts[chatId], sentRealWhatsApp: !IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_') });
+    const key = storage.findSiblingContactKey(chatId) || chatId;
+    res.json({ ok: true, contact: storage.data.contacts[key], sentRealWhatsApp: !usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_') });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
   }
@@ -1267,7 +1491,7 @@ app.post('/api/crm/:chatId/send-pix', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'Ative e configure sua chave PIX na aba Catálogo & PIX primeiro.' });
   }
   try {
-    if (IS_VERCEL && !chatId.startsWith('demo_')) {
+    if (usesCloudBridge(req) && !chatId.startsWith('demo_')) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
         req.cloudAuth.authUser.id,
@@ -1277,14 +1501,15 @@ app.post('/api/crm/:chatId/send-pix', async (req, res) => {
       return res.json({ ok: true, contact: out.contact || storage.data.contacts[chatId], sentRealWhatsApp: true });
     }
 
-    if (!IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
+    if (!usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
       await whatsappManager.sendPixPayloadToChat(chatId, biz, req.body?.amount || null, 'owner', chatId);
       storage.pauseContact(chatId, biz.lockUntilManualResume ? 'forever' : 60, 'PIX enviado manualmente no CRM');
     } else {
       const preview = await formatPixMessageWithQr(biz.pix, req.body?.amount || null);
       storage.appendContactMessage(chatId, { role: 'owner', text: preview?.summaryText || '[PIX]' });
     }
-    res.json({ ok: true, contact: storage.data.contacts[chatId], sentRealWhatsApp: !IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_') });
+    const key = storage.findSiblingContactKey(chatId) || chatId;
+    res.json({ ok: true, contact: storage.data.contacts[key], sentRealWhatsApp: !usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_') });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
   }
@@ -1430,7 +1655,7 @@ app.post('/api/crm/:chatId/send-library-voice', async (req, res) => {
 
   const biz = storage.getBusiness();
   try {
-    if (IS_VERCEL && !chatId.startsWith('demo_')) {
+    if (usesCloudBridge(req) && !chatId.startsWith('demo_')) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
         req.cloudAuth.authUser.id,
@@ -1445,7 +1670,7 @@ app.post('/api/crm/:chatId/send-library-voice', async (req, res) => {
       });
     }
 
-    if (!IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
+    if (!usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
       await whatsappManager.sendLibraryVoiceToChat(chatId, voiceId, {
         senderRole: 'owner',
         pauseAi: true
@@ -1466,7 +1691,7 @@ app.post('/api/crm/:chatId/send-library-voice', async (req, res) => {
       ok: true,
       contact: storage.data.contacts[key],
       business: storage.getBusiness(),
-      sentRealWhatsApp: !IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')
+      sentRealWhatsApp: !usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')
     });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
@@ -1480,7 +1705,7 @@ app.post('/api/crm/:chatId/send-audio', memUpload.single('audio'), async (req, r
   }
   const biz = storage.getBusiness();
   try {
-    if (IS_VERCEL && !chatId.startsWith('demo_')) {
+    if (usesCloudBridge(req) && !chatId.startsWith('demo_')) {
       const canonical = await convertToCanonicalWhatsAppVoice(req.file.buffer, req.file.originalname || 'nota-voz.ogg');
       const savedFn = `${Date.now()}_${uid('crmvoz')}.ogg`;
       const cloudUrl = await uploadMediaBufferToCloud(
@@ -1510,7 +1735,7 @@ app.post('/api/crm/:chatId/send-audio', memUpload.single('audio'), async (req, r
       });
     }
 
-    if (!IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
+    if (!usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
       await whatsappManager.sendVoiceNoteToChat(chatId, req.file.buffer, req.file.originalname || 'nota-voz.ogg', 'owner', true);
     } else {
       const canonical = await convertToCanonicalWhatsAppVoice(req.file.buffer, req.file.originalname || 'nota-voz.ogg');
@@ -1535,7 +1760,7 @@ app.post('/api/crm/:chatId/send-audio', memUpload.single('audio'), async (req, r
     res.json({
       ok: true,
       contact: storage.data.contacts[key],
-      sentRealWhatsApp: !IS_VERCEL && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')
+      sentRealWhatsApp: !usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')
     });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
@@ -1544,7 +1769,7 @@ app.post('/api/crm/:chatId/send-audio', memUpload.single('audio'), async (req, r
 
 app.post('/api/crm/check-followups', async (req, res) => {
   try {
-    if (IS_VERCEL) {
+    if (usesCloudBridge(req)) {
       return res.json({ ok: true, triggeredCount: 0, triggered: [] });
     }
     const due = await whatsappManager.checkDueFollowUpsNow({

@@ -1,17 +1,22 @@
-# ZAP-IA Studio v3.0 — Plataforma Cloud Multi-Contas & Atendimento Inteligente no WhatsApp
+# ZAP-IA Studio v4.0 SaaS Edition — Plataforma Comercial Multi-Contas & Inbox Pro no WhatsApp
 
-Sistema completo de atendimento autônomo 100% humano no WhatsApp, CRM comercial e prospecção segura, agora com **Arquitetura Cloud Multi-Contas (`Vercel` + `Supabase RLS` + `Motor Individual Termux/PC`)**, desenvolvido com `@whiskeysockets/baileys` v7, `@supabase/supabase-js` e `@google/genai`.
+Sistema comercial pronto para venda de atendimento autônomo 100% humano no WhatsApp, **Central de Conversas Pro em 3 Colunas** e CRM comercial, com **Arquitetura SaaS Multi-Contas (`Vercel` + `Supabase RLS Blindado` + `Motor Individual Termux/PC`)**, desenvolvido com `@whiskeysockets/baileys` v7, `@supabase/supabase-js` e `@google/genai`.
 
 ---
 
-## 0. Como funciona o Modo Nuvem Multi-Contas (v3.0)
+## 0. Como funciona o Modo Comercial SaaS Multi-Contas (v4.0)
 
-1. **Acesso Global pelo Navegador (Vercel Cloud):**
-   - Abra o link do seu projeto na **Vercel** de qualquer celular ou computador do mundo e entre com seu **Usuário** e **Senha**.
-   - **Sem cadastro público:** apenas a conta **👑 Admin Master (`jeffersonivan`)** possui a aba **`👑 Contas & Usuários`** para criar logins e senhas para outras contas.
-   - **Isolamento Total (`Row Level Security`):** a conta principal (`jeffersonivan`) já vem com o treinamento **`Alavancagem de Vendas — Lizandro Celestino (lizandro-v-turbo)`**; cada nova conta criada nasce **100% limpa** para qualquer nicho, com seu próprio WhatsApp, treinamento, áudios, catálogo, PIX e CRM completamente separados!
-   - **Painel 100% Autônomo na Nuvem:** Simulador, Treinamento, Upload de Áudios (`Supabase Storage`), Catálogo, PIX, CRM e Raio-X Coach IA funcionam direto na Vercel mesmo quando o celular/PC está desligado.
-2. **Motor Individual do WhatsApp (Termux no Android ou Windows PC):**
+1. **Torre de Comando Master SaaS (`👑 Painel Master SaaS`):**
+   - Apenas a conta **👑 Admin Master (`jeffersonivan`)** acessa a aba **`👑 Painel Master SaaS`**.
+   - **Gestão Comercial Manual:** crie contas limpas para qualquer nicho, salve WhatsApp e notas comerciais do cliente, copie o **📋 Kit de Boas-Vindas** pronto para colar no WhatsApp, acompanhe a barra de progresso de **Setup (`0/4` a `4/4`)** e ative/bloqueie contas manualmente em 1 clique.
+   - **👁️ Modo Suporte Master em 1 Clique (`Acessar Painel`):** entre no workspace de qualquer cliente sem precisar da senha dele para configurar Cérebro Único, Catálogo, Funil ou inspecionar conversas, com barra superior âmbar **`Voltar para Minha Conta Master`**.
+   - **Chave Própria por Cliente + Checklist de Onboarding:** cada cliente configura sua própria chave gratuita do Google AI Studio (`Gemini`) ou `Groq`, guiado por um **Checklist de Boas-Vindas** ao fazer o primeiro login.
+   - **Isolamento Zero-Trust (`Row Level Security` + Trigger Anti-Escalonamento):** cada conta é 100% isolada no banco (`Supabase RLS`) e nos arquivos (`Supabase Storage`), impedindo leitura cruzada ou auto-promoção de privilégios.
+2. **Central de Conversas Pro em 3 Colunas (`💬 Conversas ao Vivo`):**
+   - **Coluna 1 (Fila Inteligente):** contadores de não-lidas, fixação no topo (`📌`), arquivamento (`📥`) e filtros rápidos (*Ativas, Não Lidas, Aguardando Você, Quentes, Retorno S19, Arquivadas*).
+   - **Coluna 2 (Chat + Composer Pro):** digite **`/`** para **Respostas Rápidas** (`/boasvindas`, `/pix`, `/proposta`, etc.), alterne para **🔒 Nota Interna Privada** (balão amarelo visível só para você/equipe e nunca enviado ao WhatsApp nem lido pela IA), use **✨ Sugerir c/ IA**, grave **Nota de Voz OGG/Opus ao vivo** ou dispare **Catálogo / PIX** em 1 clique.
+   - **Coluna 3 (Inspetor 360º do Lead):** etapa do funil, agendamento rápido de retorno `S19` (`+1h`, `Amanhã 9h`), etiquetas em 1 clique e observações fixas.
+3. **Motor Individual do WhatsApp (Termux no Android ou Windows PC):**
    - Cada dono de conta abre o motor no próprio aparelho (`bash 5_Iniciar_No_Termux.sh` ou `2_Iniciar_Atendente_IA.bat`) e entra com **seu próprio Usuário e Senha**.
    - Assim que o motor liga, o topo do painel na Vercel muda para **`🟢 Motor Online`** e sincroniza QR Code, Código de 8 Dígitos, mensagens e áudios em tempo real (`<200ms`)!
 

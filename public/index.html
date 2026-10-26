@@ -14,21 +14,28 @@
 <body>
   <!-- TELA DE LOGIN DA CONTA (SUPABASE RLS MULTI-CONTAS ISOLADAS — SEM CADASTRO PÚBLICO) -->
   <div id="cloudLoginScreen" class="pin-lock-overlay" role="dialog" aria-modal="true" aria-labelledby="cloudLoginTitle">
-    <div class="panel" style="width:100%; max-width:410px; margin:0; text-align:left; padding:26px;">
-      <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px;">
+    <div class="panel saas-login-card">
+      <div style="display:flex; align-items:center; gap:12px;">
         <div class="brand-mark" aria-hidden="true">
           <svg class="icon-svg" viewBox="0 0 24 24">
             <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
           </svg>
         </div>
         <div>
-          <h2 id="cloudLoginTitle" class="panel-title" style="margin:0; font-size:19px;">ZAP-IA Studio</h2>
-          <div style="font-size:12px; color:var(--text-muted);">Plataforma Cloud Multi-Contas • Acesso Restrito</div>
+          <h2 id="cloudLoginTitle" class="panel-title" style="margin:0; font-size:20px;">ZAP-IA Studio</h2>
+          <div style="font-size:12px; color:var(--text-muted);">Plataforma SaaS de Atendimento Humanizado & CRM</div>
         </div>
       </div>
 
-      <p id="cloudLoginSubtitle" class="panel-desc" style="margin:0 0 16px; font-size:13px;">
-        Entre com seu usuário e senha para acessar seu painel, treinamento e WhatsApp isolado.
+      <div class="saas-login-pills">
+        <span class="saas-login-pill">💬 Inbox Ao Vivo 360º</span>
+        <span class="saas-login-pill">🎤 Voz Humana OGG</span>
+        <span class="saas-login-pill">🧠 Cérebro Único</span>
+        <span class="saas-login-pill">🔒 Dados 100% Isolados</span>
+      </div>
+
+      <p id="cloudLoginSubtitle" class="panel-desc" style="margin:0 0 14px; font-size:13px;">
+        Entre com seu usuário e senha para acessar sua operação isolada no WhatsApp.
       </p>
 
       <div id="cloudLoginErrorBox" style="display:none; background:rgba(239,68,68,0.12); border:1px solid rgba(239,68,68,0.35); color:var(--danger); border-radius:8px; padding:10px 12px; font-size:12.5px; margin-bottom:12px;"></div>
@@ -36,7 +43,7 @@
       <form id="cloudLoginForm" style="display:flex; flex-direction:column; gap:12px;">
         <div class="form-group" style="margin:0;">
           <label class="form-label" for="cloudLoginUser">Usuário</label>
-          <input type="text" id="cloudLoginUser" required autocomplete="username" placeholder="Ex: jeffersonivan" />
+          <input type="text" id="cloudLoginUser" required autocomplete="username" placeholder="Digite seu usuário..." />
         </div>
         <div class="form-group" style="margin:0;">
           <label class="form-label" for="cloudLoginPass">Senha</label>
@@ -45,13 +52,13 @@
             <button type="button" id="btnToggleLoginPass" class="btn btn-secondary btn-sm" title="Mostrar/ocultar senha" style="padding:0 12px;">👁️</button>
           </div>
         </div>
-        <button type="submit" id="btnCloudLoginSubmit" class="btn btn-primary" style="width:100%; justify-content:center; margin-top:4px; min-height:42px;">
-          Entrar na Minha Conta
+        <button type="submit" id="btnCloudLoginSubmit" class="btn btn-primary" style="width:100%; justify-content:center; margin-top:4px; min-height:44px; font-size:14px;">
+          Acessar Meu Painel
         </button>
       </form>
 
-      <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--border); font-size:11.5px; color:var(--text-muted); text-align:center;">
-        🔒 Plataforma fechada — novas contas são criadas exclusivamente pelo Administrador Master.
+      <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border); font-size:11.5px; color:var(--text-muted); text-align:center;">
+        🔒 Acesso exclusivo para assinantes e contas autorizadas.
       </div>
     </div>
   </div>
@@ -98,6 +105,22 @@
         </span>
       </button>
 
+      <button type="button" class="nav-btn" id="navQuickInboxBtn" onclick="openInboxProDirect()">
+        <span class="nav-btn-left">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          <span>Conversas ao Vivo</span>
+        </span>
+        <span id="navUnreadBadge" class="badge-count" style="display:none; background:var(--accent-bright); color:#fff;">0</span>
+      </button>
+
+      <button type="button" class="nav-btn" data-tab="crm">
+        <span class="nav-btn-left">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          <span>CRM, Kanban & Coach</span>
+        </span>
+        <span id="navCrmBadge" class="badge-count" style="display:none;">0</span>
+      </button>
+
       <button type="button" class="nav-btn" data-tab="simulador">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2v5Z"></path><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"></path></svg>
@@ -141,18 +164,10 @@
         </span>
       </button>
 
-      <button type="button" class="nav-btn" data-tab="crm">
-        <span class="nav-btn-left">
-          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-          <span>CRM & Conversas</span>
-        </span>
-        <span id="navCrmBadge" class="badge-count" style="display:none;">0</span>
-      </button>
-
       <button type="button" id="navMasterUsersBtn" class="nav-btn" data-tab="contas" style="display:none;">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
-          <span>👑 Contas & Usuários</span>
+          <span>👑 Painel Master SaaS</span>
         </span>
       </button>
     </nav>
@@ -167,6 +182,22 @@
 
   <!-- Área Principal -->
   <div class="main-wrapper">
+    <!-- FAIXA DE MODO SUPORTE MASTER 1-CLIQUE (IMPERSONATION) -->
+    <div id="impersonationBanner" class="impersonation-banner" style="display:none;" role="status">
+      <div class="impersonation-banner-left">
+        <span class="impersonation-dot"></span>
+        <span>
+          <strong>🛠️ MODO SUPORTE MASTER:</strong> Gerenciando o painel isolado de
+          <strong id="impersonationTargetLabel" style="color:var(--warning-bright);">@cliente</strong>
+        </span>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button type="button" id="btnExitImpersonation" class="btn btn-primary btn-sm" style="background:var(--warning); border-color:var(--warning); color:#fff;">
+          ↩️ Voltar para Minha Conta Master
+        </button>
+      </div>
+    </div>
+
     <header class="topbar">
       <div class="topbar-left" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
         <div id="waStatusPill" class="status-pill">
@@ -227,6 +258,9 @@
             <button type="button" class="btn btn-primary" onclick="switchTab('treinamento')">Editar Treinamento</button>
           </div>
         </div>
+
+        <!-- Checklist de Boas-Vindas & Ativação Guiada para Clientes SaaS -->
+        <div id="saasOnboardingBox" style="display:none;"></div>
 
         <!-- Checklist Rápido de Prontidão -->
         <div id="readinessStrip" class="readiness-strip"></div>
@@ -1041,30 +1075,32 @@
         </div>
       </section>
 
-      <!-- ==================== ABA 7: CRM & CONVERSAS ==================== -->
+      <!-- ==================== ABA 7: CRM & CENTRAL DE CONVERSAS PRO ==================== -->
       <section id="tab-crm" class="tab-pane">
         <div class="page-header">
           <div>
-            <h1>CRM Comercial & Central de Conversas ao Vivo</h1>
-            <p>Acompanhe todas as conversas em tempo real, mova leads no Kanban, veja o Dossiê Executivo de 3 Linhas e rode o Raio-X do Funil com IA.</p>
+            <h1>Central de Conversas Pro & CRM 360º</h1>
+            <p>Controle total em tempo real: assuma conversas em 1 clique, use atalhos <code>/</code>, registre notas internas, gerencie etapas no Kanban e rode o Coach IA.</p>
           </div>
           <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-            <input type="text" id="crmSearchInput" placeholder="Buscar nome, telefone, mensagem ou tag..." style="width:230px;" />
-            <button type="button" id="btnSeedCrmDemo" class="btn btn-secondary btn-sm">Gerar exemplos</button>
-            <button type="button" id="btnExportFullBackup" class="btn btn-secondary btn-sm" title="Baixar backup completo de clientes, conversas e configurações p/ trocar de PC/celular">Backup Geral (.JSON)</button>
-            <label for="restoreFullBackupInput" class="btn btn-secondary btn-sm" style="cursor:pointer;" title="Restaurar backup completo .JSON">Restaurar (.JSON)</label>
+            <input type="text" id="crmSearchInput" placeholder="Buscar nome, número, mensagem ou tag..." style="width:230px;" />
+            <button type="button" id="btnOpenNewContactModal" class="btn btn-primary btn-sm">+ Nova Conversa</button>
+            <button type="button" id="btnOpenQuickRepliesModal" class="btn btn-secondary btn-sm" title="Gerenciar atalhos rápidos com barra /">⚡ Atalhos (/)</button>
+            <button type="button" id="btnSeedCrmDemo" class="btn btn-secondary btn-sm">Exemplos</button>
+            <button type="button" id="btnExportFullBackup" class="btn btn-secondary btn-sm" title="Baixar backup completo de clientes, conversas e configurações p/ trocar de PC/celular">Backup (.JSON)</button>
+            <label for="restoreFullBackupInput" class="btn btn-secondary btn-sm" style="cursor:pointer;" title="Restaurar backup completo .JSON">Restaurar</label>
             <input type="file" id="restoreFullBackupInput" accept=".json,application/json" style="display:none;" />
-            <a id="btnExportCrmCsv" href="/api/crm/export.csv" class="btn btn-primary btn-sm">Exportar CSV</a>
+            <a id="btnExportCrmCsv" href="/api/crm/export.csv" class="btn btn-secondary btn-sm">CSV</a>
           </div>
         </div>
 
         <!-- Sub-Abas de Visão do CRM: Todas as Conversas | Quadro Kanban | Raio-X do Funil (Coach IA) -->
         <div class="crm-subtabs" role="tablist" aria-label="Modos de visão do CRM">
           <button type="button" class="crm-subtab-btn active" data-crmview="inbox" id="btnCrmViewInbox">
-            💬 Todas as Conversas <span class="tag" id="crmInboxTotalCount">0</span>
+            💬 Central de Conversas Pro <span class="tag" id="crmInboxTotalCount">0</span>
           </button>
           <button type="button" class="crm-subtab-btn" data-crmview="kanban" id="btnCrmViewKanban">
-            📋 Quadro Kanban (Etapas)
+            📋 Funil Kanban (Etapas)
           </button>
           <button type="button" class="crm-subtab-btn" data-crmview="coach" id="btnCrmViewCoach">
             🧠 Raio-X do Funil & Coach IA
@@ -1073,28 +1109,32 @@
 
         <!-- Filtros Rápidos do CRM (compartilhados entre Todas as Conversas e Kanban) -->
         <div id="crmFilterBar" class="filter-pills">
-          <button type="button" class="filter-pill active" data-crmfilter="all">Todos os Contatos</button>
-          <button type="button" class="filter-pill" data-crmfilter="human">Aguardando Você</button>
-          <button type="button" class="filter-pill" data-crmfilter="followup">Com Retorno Agendado</button>
-          <button type="button" class="filter-pill" data-crmfilter="hot">Etiqueta: Quente / Pediu Valor</button>
+          <button type="button" class="filter-pill active" data-crmfilter="all">Ativas <span id="fltCntAll" style="opacity:0.75;"></span></button>
+          <button type="button" class="filter-pill" data-crmfilter="unread">Não Lidas <span id="fltCntUnread" style="opacity:0.85;"></span></button>
+          <button type="button" class="filter-pill" data-crmfilter="human">Aguardando Você <span id="fltCntHuman" style="opacity:0.85;"></span></button>
+          <button type="button" class="filter-pill" data-crmfilter="hot">Quentes / Valor <span id="fltCntHot" style="opacity:0.75;"></span></button>
+          <button type="button" class="filter-pill" data-crmfilter="followup">Retorno S19 <span id="fltCntFollowup" style="opacity:0.75;"></span></button>
+          <button type="button" class="filter-pill" data-crmfilter="archived">Arquivadas <span id="fltCntArchived" style="opacity:0.75;"></span></button>
         </div>
 
-        <!-- SUB-VISÃO 1: TODAS AS CONVERSAS (CENTRAL DE INBOX AO VIVO ESTILO WHATSAPP WEB) -->
+        <!-- SUB-VISÃO 1: CENTRAL DE CONVERSAS PRO (3 COLUNAS ESTILO CHATWOOT / WHATSAPP PRO) -->
         <div id="crmSubView-inbox" class="crm-subview active">
-          <div class="crm-inbox-layout" id="crmInboxLayout">
+          <div class="crm-inbox-layout pro-3col" id="crmInboxLayout">
+            <!-- COLUNA 1: FILA DE CONVERSAS -->
             <aside class="crm-inbox-sidebar" aria-label="Lista de todas as conversas">
               <div class="crm-inbox-sidebar-head">
-                <strong>Conversas Recentes</strong>
+                <strong>Fila de Atendimento</strong>
                 <span style="font-size:11.5px; color:var(--text-secondary);" id="crmInboxFilteredLabel">0 conversas</span>
               </div>
               <div id="crmInboxList" class="crm-inbox-list"></div>
             </aside>
 
+            <!-- COLUNA 2: CHAT AO VIVO + NOTAS INTERNAS + BARRA PRO -->
             <div class="crm-inbox-main" id="crmInboxMain">
-              <div id="crmInboxEmptyState" class="empty-state" style="margin:auto; max-width:380px;">
-                <strong>Selecione uma conversa ao lado</strong>
+              <div id="crmInboxEmptyState" class="empty-state" style="margin:auto; max-width:390px;">
+                <strong>Selecione ou inicie uma conversa</strong>
                 <p style="margin-top:6px; font-size:13px; color:var(--text-secondary);">
-                  Veja o histórico completo em tempo real, escute os áudios enviados/recebidos, confira o Dossiê Executivo de 3 Linhas e responda direto pelo painel.
+                  Veja o histórico completo em tempo real, use atalhos <code>/</code>, adicione notas internas privadas e controle a IA conversa por conversa.
                 </p>
               </div>
 
@@ -1108,42 +1148,147 @@
                         <span id="inboxSentimentBadge" class="sentiment-pill" style="display:none;"></span>
                         <span id="inboxAiStatusBadge" class="tag">Ativo</span>
                       </div>
-                      <div style="font-size:12px; color:var(--text-secondary);" id="inboxContactPhone">+55...</div>
+                      <div style="display:flex; align-items:center; gap:8px; font-size:12px; color:var(--text-secondary);">
+                        <span id="inboxContactPhone">+55...</span>
+                        <button type="button" id="btnCopyInboxPhone" style="background:none; border:none; color:var(--accent-bright); font-size:11px; cursor:pointer; padding:0;">Copiar</button>
+                      </div>
                     </div>
                   </div>
                   <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-                    <select id="inboxStageQuickSelect" aria-label="Etapa do contato no funil" style="width:auto; padding:6px 10px; font-size:12.5px;">
-                      <option value="novo">Etapa: Novo Contato</option>
-                      <option value="em_atendimento">Etapa: Em Atendimento</option>
-                      <option value="aguardando_humano">Etapa: Aguardando Você</option>
-                      <option value="concluido">Etapa: Concluído</option>
+                    <select id="inboxStageQuickSelect" aria-label="Etapa do contato no funil" style="width:auto; padding:5px 9px; font-size:12px;">
+                      <option value="novo">Novo Contato</option>
+                      <option value="em_atendimento">Em Atendimento</option>
+                      <option value="aguardando_humano">Aguardando Você</option>
+                      <option value="concluido">Concluído</option>
                     </select>
-                    <button type="button" id="btnInboxTogglePause" class="btn btn-secondary btn-sm">Pausar / Assumir</button>
-                    <button type="button" id="btnInboxOpenFullModal" class="btn btn-secondary btn-sm" title="Abrir ficha completa com etiquetas, notas, retorno S19, catálogo e PIX">Ficha Completa / S19</button>
+                    <button type="button" id="btnInboxTogglePause" class="btn btn-secondary btn-sm">✋ Assumir</button>
+                    <button type="button" id="btnInboxTogglePin" class="btn btn-secondary btn-sm" title="Fixar conversa no topo">📌</button>
+                    <button type="button" id="btnInboxToggleArchive" class="btn btn-secondary btn-sm" title="Arquivar ou reativar conversa">📥</button>
+                    <button type="button" id="btnToggleInspectorCol" class="btn btn-secondary btn-sm" title="Mostrar ou ocultar Ficha 360º lateral">📋 360º</button>
+                    <button type="button" id="btnInboxOpenFullModal" class="btn btn-secondary btn-sm" title="Expandir janela completa">⤢</button>
                   </div>
                 </div>
 
                 <!-- Dossiê Executivo de 3 Linhas (Skill #2) -->
                 <div id="inboxDossierBanner" class="dossier-banner" style="display:none;"></div>
 
-                <!-- Histórico completo estilo WhatsApp -->
+                <!-- Histórico completo estilo WhatsApp + Notas Internas Amarelas -->
                 <div id="crmInboxMessages" class="wa-chat-box crm-inbox-messages"></div>
 
-                <!-- Barra de resposta rápida (Áudio Estratégico em 1 clique + Mensagem Escrita) -->
-                <div class="crm-inbox-composer">
+                <!-- Barra de Resposta Pro (Alternador WhatsApp vs Nota Interna + Menu / + IA Copilot + Voz + Catálogo + PIX) -->
+                <div class="crm-inbox-composer" id="crmInboxComposerWrap">
+                  <!-- Popover flutuante de Respostas Rápidas "/" -->
+                  <div id="slashMenuPopover" class="slash-popover" style="display:none;">
+                    <div class="slash-popover-head">
+                      <span>⚡ Respostas Rápidas — use ↑↓ e Enter</span>
+                      <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 7px; font-size:11px;" onclick="openQuickRepliesManager()">Gerenciar</button>
+                    </div>
+                    <div id="slashMenuList"></div>
+                  </div>
+
+                  <div class="composer-top-bar">
+                    <div class="composer-mode-tabs" role="tablist">
+                      <button type="button" id="btnModeWhatsappReply" class="composer-mode-btn active reply" onclick="setInboxComposerMode('reply')">
+                        💬 Responder no WhatsApp
+                      </button>
+                      <button type="button" id="btnModeInternalNote" class="composer-mode-btn note" onclick="setInboxComposerMode('note')">
+                        🔒 Nota Interna (Privada)
+                      </button>
+                    </div>
+
+                    <div class="composer-tools-strip">
+                      <button type="button" id="btnInboxAiSuggest" class="composer-tool-btn" title="Gerar sugestão de resposta humana usando o treinamento da IA">
+                        ✨ Sugerir c/ IA
+                      </button>
+                      <button type="button" id="btnInboxSlashTrigger" class="composer-tool-btn" title="Inserir resposta rápida (atalho /)">
+                        ⚡ / Rápidas
+                      </button>
+                      <button type="button" id="btnInboxRecordVoice" class="composer-tool-btn" title="Gravar e enviar nota de voz na hora pelo microfone">
+                        🎙️ Gravar Voz
+                      </button>
+                      <button type="button" id="btnInboxQuickPix" class="composer-tool-btn" title="Enviar chave PIX + QR Code agora">
+                        💠 Enviar PIX
+                      </button>
+                    </div>
+                  </div>
+
                   <div class="crm-inbox-voice-quick" id="inboxVoiceQuickRow">
-                    <select id="inboxQuickVoiceSelect" style="flex:1; min-width:160px; font-size:12.5px; padding:6px 10px;">
-                      <option value="">🎤 Enviar Áudio Estratégico da Biblioteca...</option>
+                    <select id="inboxQuickVoiceSelect" style="flex:1; min-width:140px; font-size:12px; padding:5px 9px;">
+                      <option value="">🎤 Áudio Estratégico da Biblioteca...</option>
                     </select>
                     <button type="button" id="btnInboxSendQuickVoice" class="btn btn-secondary btn-sm">Enviar Áudio</button>
+
+                    <select id="inboxQuickCatalogSelect" style="flex:1; min-width:140px; font-size:12px; padding:5px 9px;">
+                      <option value="">🛍️ Enviar Item do Catálogo...</option>
+                    </select>
+                    <button type="button" id="btnInboxSendQuickCatalog" class="btn btn-secondary btn-sm">Enviar Item</button>
                   </div>
+
                   <form id="crmInboxReplyForm" style="display:flex; gap:8px; align-items:center;">
-                    <input type="text" id="crmInboxReplyInput" placeholder="Digite sua mensagem humana para enviar agora no WhatsApp..." autocomplete="off" style="flex:1;" />
+                    <input type="text" id="crmInboxReplyInput" placeholder="Digite sua mensagem ou digite / para respostas rápidas..." autocomplete="off" style="flex:1;" />
                     <button type="submit" id="btnInboxSendText" class="btn btn-primary">Enviar</button>
                   </form>
                 </div>
               </div>
             </div>
+
+            <!-- COLUNA 3: FICHA 360º DO CLIENTE SEMPRE VISÍVEL -->
+            <aside class="crm-inbox-inspector" id="crmInboxInspector" aria-label="Ficha 360 graus do contato">
+              <div id="inspectorEmptyBox" class="empty-state" style="margin:auto; padding:18px 10px; font-size:12.5px;">
+                Selecione uma conversa para editar etiquetas, retorno S19 e notas em tempo real.
+              </div>
+
+              <div id="inspectorActiveBox" style="display:none; flex-direction:column; gap:13px;">
+                <div class="inspector-section" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                  <div>
+                    <div class="inspector-label" style="margin:0;">Ficha 360º do Contato</div>
+                    <strong id="inspNameTitle" style="font-size:14px;">Cliente</strong>
+                  </div>
+                  <button type="button" class="btn btn-secondary btn-sm crm-inbox-back-mob" onclick="document.getElementById('crmInboxLayout')?.classList.remove('mob-inspector-open')">Fechar</button>
+                </div>
+
+                <!-- Agendamento S19 Rápido -->
+                <div class="inspector-section">
+                  <div class="inspector-label">⏰ Retorno Combinado (S19)</div>
+                  <input type="datetime-local" id="inspFollowUpInput" style="width:100%; font-size:12.5px; padding:6px 8px; margin-bottom:6px;" />
+                  <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                    <button type="button" class="composer-tool-btn" onclick="quickSetInspectorFollowup(60)">+1 hora</button>
+                    <button type="button" class="composer-tool-btn" onclick="quickSetInspectorFollowup('tomorrow9')">Amanhã 09h</button>
+                    <button type="button" class="composer-tool-btn" onclick="quickSetInspectorFollowup(null)">Limpar</button>
+                  </div>
+                </div>
+
+                <!-- Etiquetas em 1 Clique -->
+                <div class="inspector-section">
+                  <div class="inspector-label">🏷️ Etiquetas do Funil</div>
+                  <div id="inspTagsBox" class="tags-picker-wrap"></div>
+                </div>
+
+                <!-- Resumo & Observações Fixas -->
+                <div class="inspector-section">
+                  <div class="inspector-label">📝 Observações Fixas do Lead</div>
+                  <textarea id="inspNotesInput" rows="3" placeholder="Ex: Tem loja c/ 35 carros, prefere contato à tarde..." style="font-size:12.5px;"></textarea>
+                  <button type="button" id="btnSaveInspectorNotes" class="btn btn-secondary btn-sm" style="width:100%; justify-content:center; margin-top:6px;">
+                    💾 Salvar Observações
+                  </button>
+                </div>
+
+                <!-- Resumo Automático da Conversa -->
+                <div class="inspector-section">
+                  <div class="inspector-label">📋 Último Contexto Registrado</div>
+                  <div id="inspSummaryText" style="font-size:12px; color:var(--text-secondary); line-height:1.45; background:var(--bg-card-subtle); padding:8px 10px; border-radius:8px; border:1px solid var(--border);">
+                    Sem resumo registrado.
+                  </div>
+                </div>
+
+                <!-- Ações de Limpeza -->
+                <div class="inspector-section" style="display:flex; gap:6px; flex-wrap:wrap;">
+                  <button type="button" id="btnInspectorDeleteChat" class="btn btn-danger btn-sm" style="width:100%; justify-content:center;">
+                    🗑️ Excluir Conversa
+                  </button>
+                </div>
+              </div>
+            </aside>
           </div>
         </div>
 
@@ -1192,37 +1337,45 @@
         </div>
       </section>
 
-      <!-- ABA 9: GERENCIAMENTO DE CONTAS & USUÁRIOS (EXCLUSIVA ADMIN MASTER) -->
+      <!-- ABA 9: CENTRAL DE ADMINISTRAÇÃO SAAS (EXCLUSIVA ADMIN MASTER) -->
       <section id="tab-contas" class="tab-pane">
-        <div class="page-head">
+        <div class="page-head" style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:16px;">
           <div>
-            <h1 class="page-title">👑 Contas & Usuários da Plataforma</h1>
-            <p class="page-subtitle">Crie logins e senhas isolados para clientes ou parceiros. Cada conta possui WhatsApp, Treinamento, Áudios e CRM 100% separados.</p>
+            <h1 class="page-title">👑 Painel Master SaaS — Gestão de Clientes & Operações</h1>
+            <p class="page-subtitle">Crie contas vendidas, acompanhe o progresso de ativação de cada cliente, entre em Modo Suporte em 1 clique e controle acessos manualmente.</p>
           </div>
-          <button type="button" id="btnRefreshManagedUsers" class="btn btn-secondary btn-sm">🔄 Atualizar Lista</button>
+          <button type="button" id="btnRefreshManagedUsers" class="btn btn-secondary btn-sm">🔄 Atualizar Painel SaaS</button>
         </div>
 
+        <!-- KPIs EXECUTIVOS DO SEU SAAS -->
+        <div id="saasMasterKpiGrid" class="saas-kpi-grid"></div>
+
         <div class="grid-main">
-          <!-- CARD 1: CRIAR NOVA CONTA ISOLADA -->
+          <!-- CARD 1: CRIAR NOVA CONTA DE CLIENTE SAAS -->
           <div class="panel">
             <div class="panel-head">
               <div>
-                <h2 class="panel-title">➕ Criar Nova Conta Isolada</h2>
-                <p class="panel-desc">A nova conta nasce 100% limpa para qualquer nicho, sem acesso aos dados da conta Master.</p>
+                <h2 class="panel-title">+ Cadastrar Novo Cliente SaaS</h2>
+                <p class="panel-desc">A conta nasce 100% limpa, isolada por RLS e com guia passo a passo para o próprio cliente configurar sua chave IA.</p>
               </div>
             </div>
 
-            <form id="createManagedUserForm" style="display:flex; flex-direction:column; gap:12px;">
-              <div class="form-group" style="margin:0;">
-                <label class="form-label" for="newAccountDisplayName">Nome da Empresa / Responsável *</label>
-                <input type="text" id="newAccountDisplayName" required placeholder="Ex: Clínica OdontoVida ou Loja AutoSul" />
+            <form id="createManagedUserForm" style="display:flex; flex-direction:column; gap:11px;">
+              <div class="grid-equal" style="gap:10px;">
+                <div class="form-group" style="margin:0;">
+                  <label class="form-label" for="newAccountDisplayName">Nome da Empresa / Cliente *</label>
+                  <input type="text" id="newAccountDisplayName" required placeholder="Ex: Clínica OdontoVida" />
+                </div>
+                <div class="form-group" style="margin:0;">
+                  <label class="form-label" for="newAccountCustomerPhone">WhatsApp do Contratante (opcional)</label>
+                  <input type="text" id="newAccountCustomerPhone" placeholder="Ex: 5586999887766" />
+                </div>
               </div>
 
               <div class="grid-equal" style="gap:10px;">
                 <div class="form-group" style="margin:0;">
                   <label class="form-label" for="newAccountUsername">Usuário de Login *</label>
                   <input type="text" id="newAccountUsername" required placeholder="Ex: odontovida" autocomplete="off" />
-                  <div class="form-hint">Apenas letras minúsculas e números (sem espaços).</div>
                 </div>
                 <div class="form-group" style="margin:0;">
                   <label class="form-label" for="newAccountPassword">Senha Inicial *</label>
@@ -1230,48 +1383,70 @@
                 </div>
               </div>
 
-              <div style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:12px; color:var(--text-secondary);">
-                🛡️ <strong>Isolamento Total (Row Level Security):</strong> O novo usuário entra pelo mesmo link da Vercel usando seu <strong>Usuário + Senha</strong>, treina a IA para o próprio negócio e roda o Motor WhatsApp no próprio celular/PC.
+              <div class="form-group" style="margin:0;">
+                <label class="form-label" for="newAccountAdminNotes">Observações Comerciais (Só você vê)</label>
+                <input type="text" id="newAccountAdminNotes" placeholder="Ex: Plano Mensal R$ 147 • Pago via PIX dia 26/10" />
               </div>
 
-              <button type="submit" id="btnCreateManagedUser" class="btn btn-primary" style="justify-content:center;">
-                ➕ Criar Conta Agora
+              <button type="submit" id="btnCreateManagedUser" class="btn btn-primary" style="justify-content:center; min-height:42px;">
+                + Criar Conta &amp; Gerar Kit de Boas-Vindas
               </button>
             </form>
+
+            <div id="welcomeKitCreatedBox" style="display:none; margin-top:12px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.4); border-radius:10px; padding:12px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <strong style="font-size:12.5px; color:var(--accent-bright);">✅ Kit de Acesso Pronto para Enviar ao Cliente:</strong>
+                <button type="button" id="btnCopyWelcomeKit" class="btn btn-primary btn-sm">📋 Copiar Mensagem</button>
+              </div>
+              <pre id="welcomeKitPreviewText" style="white-space:pre-wrap; font-size:11.5px; color:var(--text-main); background:var(--bg-input); padding:9px; border-radius:7px; border:1px solid var(--border); max-height:150px; overflow-y:auto;"></pre>
+            </div>
           </div>
 
-          <!-- CARD 2: COMO CONECTAR O MOTOR INDIVIDUAL (TERMUX / PC) -->
+          <!-- CARD 2: FLUXO DE ENTREGA E MODO SUPORTE -->
           <div class="panel">
             <div class="panel-head">
               <div>
-                <h2 class="panel-title">📱 Como Ligar o Motor WhatsApp de Cada Conta</h2>
-                <p class="panel-desc">Passo a passo rápido para você ou para enviar ao dono de uma conta criada.</p>
+                <h2 class="panel-title">🚀 Como Entregar & Dar Suporte aos Seus Clientes</h2>
+                <p class="panel-desc">Operação enxuta de custo R$ 0 de API para você escalar vendas com controle total.</p>
               </div>
             </div>
-            <div style="display:flex; flex-direction:column; gap:10px; font-size:13px; color:var(--text-secondary); line-height:1.55;">
-              <div style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:8px; padding:12px;">
-                <strong style="color:var(--text-main);">1️⃣ Pelo Navegador (Vercel — de qualquer lugar do mundo):</strong><br/>
-                Acesse o link da Vercel e entre com <strong>Usuário</strong> e <strong>Senha</strong>. Você já pode configurar Treinamento, Áudios Estratégicos, Catálogo, PIX, Simulador e CRM imediatamente!
+            <div style="display:flex; flex-direction:column; gap:10px; font-size:12.8px; color:var(--text-secondary); line-height:1.55;">
+              <div style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:8px; padding:11px 13px;">
+                <strong style="color:var(--text-main);">1️⃣ Crie a conta ao lado e envie o Kit de Acesso em 1 clique:</strong><br/>
+                O sistema já monta a mensagem pronta com link oficial, usuário, senha e instruções rápidas para você colar no WhatsApp do comprador.
               </div>
-              <div style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:8px; padding:12px;">
-                <strong style="color:var(--text-main);">2️⃣ No Celular (Termux) ou Computador (Windows PC):</strong><br/>
-                Abra o Motor ZAP-IA (<code>bash 5_Iniciar_No_Termux.sh</code> no Android ou <code>2_Iniciar_Atendente_IA.bat</code> no Windows) e informe o <strong>mesmo Usuário e Senha</strong> da conta.<br/>
-                Pronto! O indicador no topo mudará para <strong style="color:var(--accent-bright);">🟢 Motor Online</strong> e o QR Code / Código de 8 Dígitos sincronizará em tempo real com a nuvem!
+              <div style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:8px; padding:11px 13px;">
+                <strong style="color:var(--text-main);">2️⃣ Chave IA Própria + Checklist Automático no Painel do Cliente:</strong><br/>
+                Ao entrar, o cliente vê uma barra de ativação guiada para colar a própria chave gratuita do Google AI Studio, preencher o negócio e conectar o próprio WhatsApp.
+              </div>
+              <div style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:8px; padding:11px 13px;">
+                <strong style="color:var(--text-main);">3️⃣ Modo Suporte 1-Clique (Botão "👁️ Acessar Painel"):</strong><br/>
+                Vendeu um setup "Feito para Você" ou o cliente pediu ajuda? Clique em <strong>👁️ Acessar Painel</strong> em qualquer conta abaixo para configurar o treinamento, catálogo ou revisar conversas dele sem precisar pedir senha!
               </div>
             </div>
           </div>
         </div>
 
-        <!-- LISTA DE CONTAS CADASTRADAS -->
+        <!-- LISTA DE CONTAS CADASTRADAS COM FILTROS E BUSCA -->
         <div class="panel" style="margin-top:18px;">
-          <div class="panel-head">
+          <div class="panel-head" style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
             <div>
-              <h2 class="panel-title">👥 Contas Cadastradas</h2>
-              <p class="panel-desc">Gerencie acessos, altere senhas, bloqueie temporariamente ou exclua contas secundárias.</p>
+              <h2 class="panel-title">👥 Carteira de Clientes & Contas da Plataforma</h2>
+              <p class="panel-desc">Controle manual total: acesse em Modo Suporte, edite anotações financeiras, troque senhas ou bloqueie/libere em 1 clique.</p>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              <input type="text" id="masterUserSearchInput" placeholder="Buscar cliente, @usuario, telefone ou nota..." style="width:250px;" />
+              <select id="masterUserFilterSelect" style="width:auto; font-size:12.5px; padding:7px 10px;">
+                <option value="all">Todas as contas</option>
+                <option value="active">Somente Ativas</option>
+                <option value="online">Motor Online Agora</option>
+                <option value="pending_setup">Setup Incompleto</option>
+                <option value="blocked">Bloqueadas</option>
+              </select>
             </div>
           </div>
           <div id="managedUsersListContainer">
-            <div class="empty-state">Carregando contas cadastradas...</div>
+            <div class="empty-state">Carregando carteira de contas...</div>
           </div>
         </div>
       </section>
@@ -1683,6 +1858,100 @@
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('packInspectorModal')">Fechar</button>
       </div>
       <div id="packInspectorBody" class="modal-body" style="max-height:500px; overflow-y:auto;"></div>
+    </div>
+  </div>
+
+  <!-- MODAL: GERENCIAR ATALHOS DE RESPOSTAS RÁPIDAS "/" -->
+  <div id="quickRepliesModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="qrModalTitle">
+    <div class="modal-dialog" style="max-width:620px;">
+      <div class="modal-head">
+        <h3 id="qrModalTitle" class="panel-title">⚡ Respostas Rápidas com Barra (<code>/</code>)</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('quickRepliesModal')">Fechar</button>
+      </div>
+      <div class="modal-body">
+        <p class="panel-desc" style="margin-bottom:12px;">
+          Digite <code>/</code> no campo de mensagem da Central de Conversas para inserir qualquer resposta em 1 clique.
+        </p>
+        <form id="quickReplyForm" style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:14px;">
+          <input type="hidden" id="qrEditId" value="" />
+          <div class="grid-equal" style="gap:10px; margin-bottom:8px;">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" for="qrShortcutInput">Atalho (sem a barra) *</label>
+              <input type="text" id="qrShortcutInput" required placeholder="Ex: pix, garantia, endereco" />
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" for="qrTitleInput">Título curto *</label>
+              <input type="text" id="qrTitleInput" required placeholder="Ex: Dados para PIX" />
+            </div>
+          </div>
+          <div class="form-group" style="margin:0 0 10px;">
+            <label class="form-label" for="qrTextInput">Texto da Resposta *</label>
+            <textarea id="qrTextInput" rows="2" required placeholder="Texto que será preenchido na barra de resposta..."></textarea>
+          </div>
+          <div style="display:flex; justify-content:flex-end; gap:8px;">
+            <button type="button" id="btnQrResetForm" class="btn btn-secondary btn-sm" style="display:none;" onclick="resetQuickReplyForm()">Cancelar edição</button>
+            <button type="submit" class="btn btn-primary btn-sm">💾 Salvar Atalho</button>
+          </div>
+        </form>
+        <div id="quickRepliesManagerList" style="display:flex; flex-direction:column; gap:8px; max-height:260px; overflow-y:auto;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: INICIAR NOVA CONVERSA MANUAL NO INBOX -->
+  <div id="newContactModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="newContactModalTitle">
+    <div class="modal-dialog" style="max-width:460px;">
+      <div class="modal-head">
+        <h3 id="newContactModalTitle" class="panel-title">➕ Nova Conversa / Contato Manual</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('newContactModal')">Fechar</button>
+      </div>
+      <form id="newContactForm" class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="newContactNameInput">Nome do Cliente *</label>
+          <input type="text" id="newContactNameInput" required placeholder="Ex: Carlos Mendes" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="newContactPhoneInput">WhatsApp com DDD *</label>
+          <input type="text" id="newContactPhoneInput" required placeholder="Ex: 5586999887766" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="newContactNotesInput">Observação Inicial (opcional)</label>
+          <input type="text" id="newContactNotesInput" placeholder="Ex: Veio pelo Instagram / Indicação" />
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('newContactModal')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Abrir na Central de Conversas</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: EDITAR DADOS COMERCIAIS DO CLIENTE SAAS (MASTER) -->
+  <div id="editManagedUserModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="editManagedModalTitle">
+    <div class="modal-dialog" style="max-width:500px;">
+      <div class="modal-head">
+        <h3 id="editManagedModalTitle" class="panel-title">📝 Editar Cliente SaaS & Anotações</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('editManagedUserModal')">Fechar</button>
+      </div>
+      <form id="editManagedUserForm" class="modal-body">
+        <input type="hidden" id="editManagedUserId" value="" />
+        <div class="form-group">
+          <label class="form-label" for="editManagedDisplayName">Nome da Empresa / Cliente</label>
+          <input type="text" id="editManagedDisplayName" required />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="editManagedCustomerPhone">WhatsApp do Contratante</label>
+          <input type="text" id="editManagedCustomerPhone" placeholder="Ex: 5586999887766" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="editManagedAdminNotes">Observações Comerciais & Financeiras (Só você vê)</label>
+          <textarea id="editManagedAdminNotes" rows="3" placeholder="Ex: Pagou R$ 147 no PIX em 26/10 • Próxima renovação combinada p/ 26/11"></textarea>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('editManagedUserModal')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">💾 Salvar Dados do Cliente</button>
+        </div>
+      </form>
     </div>
   </div>
 

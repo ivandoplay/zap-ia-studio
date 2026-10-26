@@ -1,7 +1,7 @@
 {
   "name": "zap-ia-studio",
-  "version": "3.0.0",
-  "description": "ZAP-IA Studio v3.0 — Plataforma Cloud Multi-Contas (Vercel + Supabase RLS + Motor WhatsApp Individual Termux/PC)",
+  "version": "4.0.0",
+  "description": "ZAP-IA Studio v4.0 SaaS Edition — Plataforma Comercial Multi-Contas (Painel Master SaaS + Inbox Pro 3 Colunas + Vercel + Supabase RLS)",
   "type": "module",
   "main": "src/server.js",
   "scripts": {

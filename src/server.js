@@ -1386,38 +1386,43 @@ app.delete('/api/ignored-contacts/:id', (req, res) => {
 // ======================== CRM & ATENDIMENTO HUMANO RICO ========================
 
 app.post('/api/crm/demo-seed', (_req, res) => {
+  const biz = storage.getBusiness() || {};
+  const bizName = String(biz.name || 'Nossa Empresa').trim();
+  const agentName = String(biz.assistantName || 'Atendimento Comercial').trim();
   const samples = [
     {
       chatId: 'demo_5586999112233@s.whatsapp.net',
       phone: '5586999112233',
-      name: 'Marcos — AutoShopping Leste',
+      name: 'Marcos Oliveira (Exemplo)',
       stage: 'aguardando_humano',
       unreadAlert: true,
-      tags: ['Quente', 'Pediu Valor'],
+      unreadCount: 1,
+      tags: ['Quente', 'Pediu Proposta'],
       followUpAt: null,
-      summary: 'Tem 28 veículos no pátio e pediu valores/condições da assessoria completa.',
+      summary: 'Demonstrou alto interesse e pediu condições especiais para fechar hoje.',
       pausedUntil: 'forever',
-      pauseReason: 'Passagem humana comercial (valores)',
+      pauseReason: 'Passagem humana comercial (fechamento)',
       messages: [
-        { id: uid('m'), role: 'assistant', text: 'Oi! Tudo bem? Sou o Lizandro Celestino, da Alavancagem de Vendas. Posso te explicar rapidinho como ajudamos lojas de veículos?', timestamp: new Date(Date.now() - 600000).toISOString() },
-        { id: uid('m'), role: 'user', text: 'Pode sim! Como funciona e qual o investimento mensal?', timestamp: new Date(Date.now() - 300000).toISOString() },
-        { id: uid('m'), role: 'assistant', text: 'A gente cuida das redes sociais, conteúdo, campanhas por veículo e apoio comercial. Sobre valores e formato comercial, o Lizandro responde pessoalmente — já deixei organizado para ele continuar com você!', timestamp: new Date(Date.now() - 290000).toISOString() }
+        { id: uid('m'), role: 'assistant', text: `Oi! Tudo bem? Aqui é ${agentName}, da ${bizName}. Como posso te ajudar hoje?`, timestamp: new Date(Date.now() - 600000).toISOString() },
+        { id: uid('m'), role: 'user', text: 'Gostei bastante! Quero fechar ainda hoje, como funciona o pagamento e condições?', timestamp: new Date(Date.now() - 300000).toISOString() },
+        { id: uid('m'), role: 'assistant', text: 'Perfeito, Marcos! Já organizei tudo aqui para finalizar pessoalmente com você em instantes.', timestamp: new Date(Date.now() - 290000).toISOString() }
       ]
     },
     {
       chatId: 'demo_5586988445566@s.whatsapp.net',
       phone: '5586988445566',
-      name: 'Renato — Seminovos Premium',
+      name: 'Renata Souza (Exemplo)',
       stage: 'em_atendimento',
       unreadAlert: false,
-      tags: ['Lojista', 'Retorno Autorizado'],
+      unreadCount: 0,
+      tags: ['Qualificado', 'Retorno S19'],
       followUpAt: new Date(Date.now() + 86400000).toISOString().slice(0, 16),
-      summary: 'Pediu para retomar conversa amanhã às 10h.',
+      summary: 'Pediu para retomar a conversa amanhã às 10h.',
       pausedUntil: null,
       pauseReason: '',
       messages: [
-        { id: uid('m'), role: 'user', text: '[Áudio do cliente] Vocês fazem os vídeos e campanhas para cada carro separado?', timestamp: new Date(Date.now() - 180000).toISOString() },
-        { id: uid('m'), role: 'assistant', text: 'Fazemos sim a produção e publicação de conteúdo conectada às campanhas pensadas para cada veículo! Hoje quantos carros vocês costumam girar no estoque?', timestamp: new Date(Date.now() - 170000).toISOString() }
+        { id: uid('m'), role: 'user', text: 'Vocês atendem com agendamento rápido durante a semana?', timestamp: new Date(Date.now() - 180000).toISOString() },
+        { id: uid('m'), role: 'assistant', text: 'Atendemos sim, Renata! Qual período fica mais confortável para você: manhã ou tarde?', timestamp: new Date(Date.now() - 170000).toISOString() }
       ]
     }
   ];
@@ -1429,6 +1434,8 @@ app.post('/api/crm/demo-seed', (_req, res) => {
       createdAt: new Date().toISOString(),
       lastMessageAt: s.messages[s.messages.length - 1].timestamp
     };
+    storage.deletedContactIds.delete(s.chatId);
+    storage.dirtyContactIds.add(s.chatId);
   }
   storage.writeNow();
   res.json({

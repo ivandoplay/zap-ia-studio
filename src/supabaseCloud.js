@@ -24,7 +24,7 @@ import {
 } from './storage.js';
 
 const CLOUD_SESSION_FILE = path.join(DATA_DIR, 'cloud_session.json');
-const WORKER_HEARTBEAT_TTL_MS = 40_000;
+const WORKER_HEARTBEAT_TTL_MS = 95_000;
 const APP_VERSION = (() => {
   try {
     const pkgPath = path.resolve(DATA_DIR, '..', 'package.json');
@@ -70,21 +70,42 @@ export function isWorkerHeartbeatFresh(heartbeatAt) {
   if (!heartbeatAt) return false;
   const ts = new Date(heartbeatAt).getTime();
   if (Number.isNaN(ts)) return false;
-  return Date.now() - ts <= WORKER_HEARTBEAT_TTL_MS;
+  const age = Date.now() - ts;
+  // Tolera até 60s de relógio adiantado no celular e até 95s de oscilação 4G/Doze
+  return age >= -60_000 && age <= WORKER_HEARTBEAT_TTL_MS;
 }
 
 export function mapCloudRuntimeToWaState(rt = null, botEnabled = true) {
   const online = Boolean(rt?.worker_online) && isWorkerHeartbeatFresh(rt?.worker_heartbeat_at);
   const platformStr = String(rt?.worker_platform || '');
   const verMatch = platformStr.match(/v(\d+\.\d+\.\d+)/i);
+  const rawStatus = rt?.status || 'disconnected';
+  const updAgeMs = rt?.updated_at ? Math.max(0, Date.now() - new Date(rt.updated_at).getTime()) : 999_999;
+
+  // Anti-flap: micro-reconexão automática 4G/Wi-Fi (<20s) com aparelho já autenticado mantém UI estável como "connected"
+  const isTransientReconnect =
+    online &&
+    rawStatus === 'connecting' &&
+    Boolean(rt?.connected_user?.phone) &&
+    !rt?.qr_data_url &&
+    !rt?.pairing_code &&
+    updAgeMs <= 20_000;
+
+  const effectiveStatus = !online
+    ? 'disconnected'
+    : isTransientReconnect
+      ? 'connected'
+      : rawStatus;
+
   return {
-    status: online ? (rt?.status || 'disconnected') : 'disconnected',
-    rawStatus: rt?.status || 'disconnected',
+    status: effectiveStatus,
+    rawStatus,
+    reconnecting: isTransientReconnect,
     qrDataUrl: online ? (rt?.qr_data_url || null) : null,
     pairingCode: online ? (rt?.pairing_code || null) : null,
     connectedUser: online ? (rt?.connected_user || null) : null,
     lastKnownUser: rt?.connected_user || null,
-    lastError: online ? (rt?.last_error || null) : null,
+    lastError: online && !isTransientReconnect ? (rt?.last_error || null) : null,
     botEnabled,
     proactive: rt?.proactive_state || {
       running: false,
@@ -940,6 +961,7 @@ class CloudWorkerBridge {
     this.realtimeChannel = null;
     this.processingCommands = new Set();
     this.lastSyncedWorkspaceIso = '';
+    this.lastSyncedContactsIso = '';
     this.syncInFlight = false;
     this.pendingFlush = false;
   }
@@ -1220,27 +1242,78 @@ class CloudWorkerBridge {
     }
   }
 
+  async markWorkerOfflineNow() {
+    this.stopBackgroundLoops();
+    if (!this.client || !this.user?.id) return;
+    try {
+      await this.flushLocalToCloud().catch(() => {});
+      await this.client
+        .from('zapia_wa_runtime')
+        .update({
+          worker_online: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', this.user.id);
+    } catch {}
+  }
+
   async pullCloudIntoLocal(initial = false) {
     if (!this.client || !this.user?.id) return;
     const uid = this.user.id;
 
+    const contactsQuery = initial || !this.lastSyncedContactsIso
+      ? this.client.from('zapia_contacts').select('chat_id, data, updated_at').eq('user_id', uid)
+      : this.client
+          .from('zapia_contacts')
+          .select('chat_id, data, updated_at')
+          .eq('user_id', uid)
+          .gt('updated_at', this.lastSyncedContactsIso);
+
     const [wsRes, contactsRes] = await Promise.all([
       this.client.from('zapia_workspaces').select('*').eq('user_id', uid).maybeSingle(),
-      initial
-        ? this.client.from('zapia_contacts').select('chat_id, data').eq('user_id', uid)
-        : Promise.resolve({ data: null })
+      contactsQuery
     ]);
+
+    let contactsChanged = false;
+    if (Array.isArray(contactsRes?.data) && contactsRes.data.length > 0) {
+      const prevMutate = localStorageInstance.onMutate;
+      localStorageInstance.onMutate = null;
+      try {
+        if (initial) {
+          localStorageInstance.data.contacts = {};
+        }
+        let maxIso = this.lastSyncedContactsIso;
+        for (const row of contactsRes.data) {
+          if (row?.updated_at && (!maxIso || row.updated_at > maxIso)) {
+            maxIso = row.updated_at;
+          }
+          if (!row?.chat_id || !row?.data) continue;
+          // Não sobrescreve contato que possui mutação local pendente de upload
+          if (!initial && localStorageInstance.dirtyContactIds.has(row.chat_id)) continue;
+          localStorageInstance.data.contacts[row.chat_id] = row.data;
+          contactsChanged = true;
+        }
+        if (maxIso) this.lastSyncedContactsIso = maxIso;
+        if (!initial && contactsChanged) {
+          localStorageInstance.initialContactKeys = new Set(Object.keys(localStorageInstance.data.contacts || {}));
+          localStorageInstance.writeNow();
+          localStorageInstance.workspaceDirty = false;
+          if (this.broadcastFn) {
+            this.broadcastFn('crm_updated', {});
+          }
+        }
+      } finally {
+        localStorageInstance.onMutate = prevMutate;
+      }
+    } else if (initial && !this.lastSyncedContactsIso) {
+      this.lastSyncedContactsIso = new Date().toISOString();
+    }
 
     const ws = wsRes.data;
     if (ws) {
       if (initial || (ws.updated_at && ws.updated_at > this.lastSyncedWorkspaceIso)) {
         this.lastSyncedWorkspaceIso = ws.updated_at || new Date().toISOString();
-        const contactsMap = initial ? {} : localStorageInstance.data.contacts;
-        if (initial && Array.isArray(contactsRes.data)) {
-          for (const row of contactsRes.data) {
-            if (row?.chat_id && row?.data) contactsMap[row.chat_id] = row.data;
-          }
-        }
+        const contactsMap = localStorageInstance.data.contacts || {};
         const prevMutate = localStorageInstance.onMutate;
         localStorageInstance.onMutate = null;
         try {
@@ -1375,7 +1448,9 @@ class CloudWorkerBridge {
       }
 
       await flushTenantStoreToCloud(this.client, this.user.id, localStorageInstance);
-      this.lastSyncedWorkspaceIso = new Date().toISOString();
+      const nowIso = new Date().toISOString();
+      this.lastSyncedWorkspaceIso = nowIso;
+      this.lastSyncedContactsIso = nowIso;
     } finally {
       this.syncInFlight = false;
       if (this.pendingFlush) {
@@ -1440,6 +1515,33 @@ class CloudWorkerBridge {
           filter: `user_id=eq.${this.user.id}`
         },
         () => {
+          this.pullCloudIntoLocal(false).catch(() => {});
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'zapia_contacts',
+          filter: `user_id=eq.${this.user.id}`
+        },
+        (payload) => {
+          if (payload?.eventType === 'DELETE' && payload?.old?.chat_id) {
+            const delCid = payload.old.chat_id;
+            const prevMutate = localStorageInstance.onMutate;
+            localStorageInstance.onMutate = null;
+            try {
+              delete localStorageInstance.data.contacts[delCid];
+              localStorageInstance.initialContactKeys = new Set(Object.keys(localStorageInstance.data.contacts || {}));
+              localStorageInstance.writeNow();
+              localStorageInstance.workspaceDirty = false;
+            } finally {
+              localStorageInstance.onMutate = prevMutate;
+            }
+            if (this.broadcastFn) this.broadcastFn('crm_updated', {});
+            return;
+          }
           this.pullCloudIntoLocal(false).catch(() => {});
         }
       )

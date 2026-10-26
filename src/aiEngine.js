@@ -667,8 +667,9 @@ async function callGeminiWithPool({ apiKeys, model, systemPrompt, history, userT
     new Set([
       selectedModel,
       'gemini-3.5-flash-lite',
-      'gemini-flash-lite-latest',
-      'gemini-3.1-flash-lite'
+      'gemini-2.5-flash-lite',
+      'gemini-2.5-flash',
+      'gemini-flash-lite-latest'
     ])
   );
 
@@ -718,6 +719,10 @@ async function callGeminiWithPool({ apiKeys, model, systemPrompt, history, userT
           /429|quota|404|not_found|no longer available|overloaded|unavailable|abort|timeout|api_key_invalid/i.test(msg);
         if (!isRecoverable) {
           throw err;
+        }
+        // Em picos temporários 503 da API Gemini, aguarda 700ms antes do próximo modelo da cascata
+        if (status === 503 || /503|overloaded|unavailable/i.test(msg)) {
+          await new Promise((r) => setTimeout(r, 700));
         }
         console.warn(`[Gemini Pool #${keyIdx + 1}/${keys.length}] ${candidateModel} indisponível, tentando próximo...`);
       }

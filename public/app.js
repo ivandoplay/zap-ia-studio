@@ -677,45 +677,56 @@ function checkClientSideDueFollowUps(seedOnly = false) {
   }
 }
 
+let liveRefreshInFlight = null;
+
+async function refreshLiveStateOnly() {
+  if (liveRefreshInFlight) return liveRefreshInFlight;
+  liveRefreshInFlight = (async () => {
+    try {
+      if (document.getElementById('cloudLoginScreen')?.classList.contains('open')) return;
+      const prevHumanIds = new Set(
+        (state.contacts || []).filter((c) => c.stage === 'aguardando_humano' && c.unreadAlert).map((c) => c.chatId)
+      );
+      const snap = await api('/api/cloud/poll');
+      if (snap.appVersion) state.appVersion = snap.appVersion;
+      state.waState = snap.waState || state.waState;
+      state.proactiveQueueState = snap.proactiveQueueState || state.proactiveQueueState;
+      state.contacts = snap.contacts || state.contacts;
+      state.stats = snap.stats || state.stats;
+      state.logs = snap.logs || state.logs;
+
+      const newHumans = (state.contacts || []).filter(
+        (c) => c.stage === 'aguardando_humano' && c.unreadAlert && !prevHumanIds.has(c.chatId)
+      );
+      if (newHumans.length > 0) {
+        playHandoffChime();
+        const first = newHumans[0];
+        const msg = `${first.name || 'Cliente'} aguarda atendimento humano no CRM!`;
+        showToast(msg);
+        fireDesktopNotification('ZAP-IA • Passagem Humana', msg, first.chatId);
+      }
+      checkClientSideDueFollowUps(false);
+
+      if (!document.hidden) {
+        renderCloudHeaderBar();
+        renderWaState();
+        renderStatsAndLogs();
+        renderReadinessAndFunnel();
+        renderProactiveQueueStatus();
+        renderCrmBoard();
+      }
+    } catch {}
+  })().finally(() => {
+    liveRefreshInFlight = null;
+  });
+  return liveRefreshInFlight;
+}
+
 function startCloudPoller() {
   if (cloudPollTimer) clearTimeout(cloudPollTimer);
   checkClientSideDueFollowUps(true);
   const tick = async () => {
-    try {
-      if (!document.getElementById('cloudLoginScreen')?.classList.contains('open')) {
-        const prevHumanIds = new Set(
-          (state.contacts || []).filter((c) => c.stage === 'aguardando_humano' && c.unreadAlert).map((c) => c.chatId)
-        );
-        const snap = await api('/api/cloud/poll');
-        if (snap.appVersion) state.appVersion = snap.appVersion;
-        state.waState = snap.waState || state.waState;
-        state.proactiveQueueState = snap.proactiveQueueState || state.proactiveQueueState;
-        state.contacts = snap.contacts || state.contacts;
-        state.stats = snap.stats || state.stats;
-        state.logs = snap.logs || state.logs;
-
-        const newHumans = (state.contacts || []).filter(
-          (c) => c.stage === 'aguardando_humano' && c.unreadAlert && !prevHumanIds.has(c.chatId)
-        );
-        if (newHumans.length > 0) {
-          playHandoffChime();
-          const first = newHumans[0];
-          const msg = `${first.name || 'Cliente'} aguarda atendimento humano no CRM!`;
-          showToast(msg);
-          fireDesktopNotification('ZAP-IA • Passagem Humana', msg, first.chatId);
-        }
-        checkClientSideDueFollowUps(false);
-
-        if (!document.hidden) {
-          renderCloudHeaderBar();
-          renderWaState();
-          renderStatsAndLogs();
-          renderReadinessAndFunnel();
-          renderProactiveQueueStatus();
-          renderCrmBoard();
-        }
-      }
-    } catch {}
+    await refreshLiveStateOnly();
     const fast = state.waState?.status === 'qr_ready' || state.waState?.status === 'connecting';
     const interval = document.hidden ? 12000 : (fast ? 2200 : 4200);
     cloudPollTimer = setTimeout(tick, interval);
@@ -726,8 +737,8 @@ function startCloudPoller() {
 let wsInstance = null;
 function connectWebSocket() {
   if (state.runtimeMode === 'vercel_cloud') return;
-  if (wsInstance) {
-    try { wsInstance.close(); } catch {}
+  if (wsInstance && (wsInstance.readyState === WebSocket.OPEN || wsInstance.readyState === WebSocket.CONNECTING)) {
+    return;
   }
   const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const pinQs = state.sessionPin ? `?pin=${encodeURIComponent(state.sessionPin)}` : '';
@@ -751,20 +762,21 @@ function connectWebSocket() {
         const msg = `${payload?.contactName || 'Cliente'} aguarda você no CRM!`;
         showToast(`Passagem humana: ${msg}`);
         fireDesktopNotification('ZAP-IA • Passagem Humana', msg, payload?.chatId || null);
-        loadBootstrap();
+        refreshLiveStateOnly();
       } else if (event === 'followup_due') {
         playHandoffChime();
         const msg = `Hora do retorno agendado (S19) com ${payload?.contactName || 'Cliente'}!`;
         showToast(msg);
         fireDesktopNotification('ZAP-IA • Retorno Agendado (S19)', msg, payload?.chatId || null);
-        loadBootstrap();
+        refreshLiveStateOnly();
       } else if (event === 'crm_updated' || event === 'logs_updated') {
-        loadBootstrap();
+        refreshLiveStateOnly();
       }
     } catch {}
   };
 
   ws.onclose = (ev) => {
+    if (wsInstance === ws) wsInstance = null;
     if (ev.code === 4001 || state.runtimeMode === 'vercel_cloud') return;
     setTimeout(connectWebSocket, 3500);
   };
@@ -2424,9 +2436,10 @@ function renderActiveInboxConversation() {
     const showAny = voices.length > 0 || catalog.length > 0;
     voiceRow.style.display = showAny ? 'flex' : 'none';
     if (voiceSel && voiceBtn) {
+      const prevVoiceVal = voiceSel.value;
       voiceSel.style.display = voices.length ? '' : 'none';
       voiceBtn.style.display = voices.length ? '' : 'none';
-      if (voices.length) {
+      if (voices.length && document.activeElement !== voiceSel) {
         const sentIds = new Set(c.sentVoiceIds || []);
         voiceSel.innerHTML =
           `<option value="">🎤 Áudio Biblioteca (${voices.length})...</option>` +
@@ -2436,58 +2449,78 @@ function renderActiveInboxConversation() {
                 `<option value="${escapeHtml(v.id)}">${escapeHtml(v.name)} (${v.durationSec || 1}s)${sentIds.has(v.id) ? ' • enviado' : ''}</option>`
             )
             .join('');
+        if (prevVoiceVal && Array.from(voiceSel.options).some((o) => o.value === prevVoiceVal)) {
+          voiceSel.value = prevVoiceVal;
+        }
       }
     }
     if (catSel && catBtn) {
+      const prevCatVal = catSel.value;
       catSel.style.display = catalog.length ? '' : 'none';
       catBtn.style.display = catalog.length ? '' : 'none';
-      if (catalog.length) {
+      if (catalog.length && document.activeElement !== catSel) {
         catSel.innerHTML =
           `<option value="">🛍️ Catálogo (${catalog.length} itens)...</option>` +
           catalog
             .map((it) => `<option value="${escapeHtml(it.id)}">${escapeHtml(it.name)}${it.price ? ` — R$ ${escapeHtml(it.price)}` : ''}</option>`)
             .join('');
+        if (prevCatVal && Array.from(catSel.options).some((o) => o.value === prevCatVal)) {
+          catSel.value = prevCatVal;
+        }
       }
     }
   }
 
-  // Renderizar histórico completo de mensagens + Notas Internas Amarelas
+  // Renderizar histórico completo de mensagens + Notas Internas Amarelas (com proteção anti-flicker p/ players de áudio/vídeo)
   const msgBox = document.getElementById('crmInboxMessages');
   const msgs = c.messages || [];
   const encChatId = encodeURIComponent(c.chatId);
-  if (!msgs.length) {
-    msgBox.innerHTML = `<div class="empty-state" style="margin:auto;">Nenhuma mensagem trocada ainda nesta conversa.</div>`;
-  } else {
-    msgBox.innerHTML = msgs
-      .map((m) => {
-        const time = m.timestamp
-          ? new Date(m.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-          : '';
+  const lastM = msgs[msgs.length - 1] || null;
+  const msgFp = `${c.chatId}::${msgs.length}::${lastM?.id || ''}::${lastM?.timestamp || ''}::${lastM?.mediaUrl || ''}::${String(lastM?.text || '').length}`;
+  const chatChanged = msgBox.dataset.renderedChatId !== c.chatId;
+  const mediaPlaying = !chatChanged && Array.from(msgBox.querySelectorAll('audio, video')).some((el) => !el.paused && !el.ended);
 
-        if (m.role === 'internal_note') {
-          return `
-            <div class="wa-bubble internal_note">
-              <div class="internal-note-head">
-                <span>🔒 Nota Interna • ${escapeHtml(m.author || 'Equipe')} • ${escapeHtml(time)}</span>
-                <button type="button" style="background:none; border:none; color:inherit; cursor:pointer; font-size:13px; padding:0 4px;" title="Remover nota interna" onclick="removeInboxInternalNote('${encChatId}', '${escapeJsArg(m.id || '')}')">×</button>
+  if (chatChanged || (msgBox.dataset.renderedFp !== msgFp && !mediaPlaying)) {
+    const wasNearBottom = chatChanged || (msgBox.scrollHeight - msgBox.scrollTop - msgBox.clientHeight < 140);
+    msgBox.dataset.renderedChatId = c.chatId;
+    msgBox.dataset.renderedFp = msgFp;
+
+    if (!msgs.length) {
+      msgBox.innerHTML = `<div class="empty-state" style="margin:auto;">Nenhuma mensagem trocada ainda nesta conversa.</div>`;
+    } else {
+      msgBox.innerHTML = msgs
+        .map((m) => {
+          const time = m.timestamp
+            ? new Date(m.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+            : '';
+
+          if (m.role === 'internal_note') {
+            return `
+              <div class="wa-bubble internal_note">
+                <div class="internal-note-head">
+                  <span>🔒 Nota Interna • ${escapeHtml(m.author || 'Equipe')} • ${escapeHtml(time)}</span>
+                  <button type="button" style="background:none; border:none; color:inherit; cursor:pointer; font-size:13px; padding:0 4px;" title="Remover nota interna" onclick="removeInboxInternalNote('${encChatId}', '${escapeJsArg(m.id || '')}')">×</button>
+                </div>
+                <div class="wa-text">${formatWaText(m.text)}</div>
               </div>
+            `;
+          }
+
+          const who = m.role === 'user' ? c.name || 'Cliente' : m.role === 'owner' ? 'Você (Manual)' : 'Equipe (IA)';
+          const mediaExtra = renderBubbleMediaHtml(m);
+          return `
+            <div class="wa-bubble ${m.role}">
+              ${mediaExtra}
               <div class="wa-text">${formatWaText(m.text)}</div>
+              <div class="wa-meta">${escapeHtml(who)} • ${escapeHtml(time)}</div>
             </div>
           `;
-        }
-
-        const who = m.role === 'user' ? c.name || 'Cliente' : m.role === 'owner' ? 'Você (Manual)' : 'Equipe (IA)';
-        const mediaExtra = renderBubbleMediaHtml(m);
-        return `
-          <div class="wa-bubble ${m.role}">
-            ${mediaExtra}
-            <div class="wa-text">${formatWaText(m.text)}</div>
-            <div class="wa-meta">${escapeHtml(who)} • ${escapeHtml(time)}</div>
-          </div>
-        `;
-      })
-      .join('');
-    msgBox.scrollTop = msgBox.scrollHeight;
+        })
+        .join('');
+      if (wasNearBottom) {
+        msgBox.scrollTop = msgBox.scrollHeight;
+      }
+    }
   }
 }
 
@@ -2671,7 +2704,7 @@ window.quickSetInspectorFollowup = async function quickSetInspectorFollowup(mode
       method: 'PUT',
       body: JSON.stringify({ followUpAt: isoLocal })
     });
-    await loadBootstrap();
+    await refreshLiveStateOnly();
     showToast(isoLocal ? '⏰ Retorno S19 agendado!' : 'Retorno S19 removido.');
   } catch (err) {
     showToast(err.message, true);
@@ -2682,7 +2715,7 @@ window.removeInboxInternalNote = async function removeInboxInternalNote(encodedC
   if (!noteId) return;
   try {
     await api(`/api/crm/${encodedChatId}/internal-note/${encodeURIComponent(noteId)}`, { method: 'DELETE' });
-    await loadBootstrap();
+    await refreshLiveStateOnly();
     showToast('Nota interna removida.');
   } catch (err) {
     showToast(err.message, true);
@@ -3412,22 +3445,35 @@ function bindEvents() {
     }
   });
 
-  // Conexão WhatsApp
-  document.getElementById('btnConnectQr').addEventListener('click', async () => {
+  // Conexão WhatsApp (com trava anti-clique duplo)
+  document.getElementById('btnConnectQr').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    if (btn.disabled) return;
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.textContent = 'Gerando QR Code...';
     try {
       const res = await api('/api/wa/connect', { method: 'POST', body: JSON.stringify({}) });
       state.waState = res.waState;
       renderWaState();
     } catch (err) {
       showToast(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = orig;
     }
   });
 
-  document.getElementById('btnConnectCode').addEventListener('click', async () => {
+  document.getElementById('btnConnectCode').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    if (btn.disabled) return;
     const phone = document.getElementById('pairingPhoneInput').value.trim();
     if (phone.replace(/\D/g, '').length < 10) {
       return showToast('Digite o número completo com 55 + DDD (ex: 5586999998888).', true);
     }
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.textContent = 'Gerando código...';
     try {
       const res = await api('/api/wa/connect', {
         method: 'POST',
@@ -3438,11 +3484,19 @@ function bindEvents() {
       showToast('Código de 8 dígitos gerado!');
     } catch (err) {
       showToast(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = orig;
     }
   });
 
-  document.getElementById('btnDisconnectWa').addEventListener('click', async () => {
+  document.getElementById('btnDisconnectWa').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    if (btn.disabled) return;
     if (!confirm('Deseja desconectar a sessão atual do WhatsApp?')) return;
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.textContent = 'Desconectando...';
     try {
       const res = await api('/api/wa/disconnect', { method: 'POST', body: JSON.stringify({ clearSession: true }) });
       state.waState = res.waState;
@@ -3450,6 +3504,9 @@ function bindEvents() {
       showToast('WhatsApp desconectado.');
     } catch (err) {
       showToast(err.message, true);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = orig;
     }
   });
 
@@ -4039,7 +4096,7 @@ function bindEvents() {
     if (!chatId) return;
     try {
       const res = await api(`/api/crm/${encodeURIComponent(chatId)}/pin`, { method: 'POST', body: JSON.stringify({}) });
-      await loadBootstrap();
+      await refreshLiveStateOnly();
       showToast(res.contact?.pinned ? '📌 Conversa fixada no topo!' : 'Conversa desafixada.');
     } catch (err) {
       showToast(err.message, true);
@@ -4051,7 +4108,7 @@ function bindEvents() {
     if (!chatId) return;
     try {
       const res = await api(`/api/crm/${encodeURIComponent(chatId)}/archive`, { method: 'POST', body: JSON.stringify({}) });
-      await loadBootstrap();
+      await refreshLiveStateOnly();
       showToast(res.contact?.archived ? '📥 Conversa arquivada!' : '📤 Conversa reativada na fila principal!');
     } catch (err) {
       showToast(err.message, true);
@@ -4066,7 +4123,7 @@ function bindEvents() {
         method: 'PUT',
         body: JSON.stringify({ stage: e.target.value })
       });
-      await loadBootstrap();
+      await refreshLiveStateOnly();
       showToast('Etapa da conversa atualizada!');
     } catch (err) {
       showToast(err.message, true);
@@ -4081,7 +4138,7 @@ function bindEvents() {
         method: 'PUT',
         body: JSON.stringify({ followUpAt: e.target.value || null })
       });
-      await loadBootstrap();
+      await refreshLiveStateOnly();
       showToast(e.target.value ? '⏰ Retorno S19 agendado!' : 'Retorno S19 removido.');
     } catch (err) {
       showToast(err.message, true);
@@ -4097,7 +4154,7 @@ function bindEvents() {
         method: 'PUT',
         body: JSON.stringify({ notes })
       });
-      await loadBootstrap();
+      await refreshLiveStateOnly();
       showToast('📝 Observações fixas salvas!');
     } catch (err) {
       showToast(err.message, true);
@@ -4110,7 +4167,7 @@ function bindEvents() {
     try {
       await api(`/api/crm/${encodeURIComponent(chatId)}`, { method: 'DELETE' });
       state.selectedInboxChatId = null;
-      await loadBootstrap();
+      await refreshLiveStateOnly();
       showToast('Conversa excluída.');
     } catch (err) {
       showToast(err.message, true);
@@ -4127,7 +4184,7 @@ function bindEvents() {
         method: 'POST',
         body: JSON.stringify({})
       });
-      await loadBootstrap();
+      await refreshLiveStateOnly();
       showToast(paused ? '▶️ Atendimento automático retomado!' : '✋ Conversa assumida por você!');
     } catch (err) {
       showToast(err.message, true);
@@ -4305,7 +4362,7 @@ function bindEvents() {
           try {
             showToast('Convertendo e enviando Nota de Voz OGG/Opus...');
             const res = await api(`/api/crm/${encodeURIComponent(chatId)}/send-audio`, { method: 'POST', body: fd });
-            await loadBootstrap();
+            await refreshLiveStateOnly();
             showToast(res.sentRealWhatsApp ? '🎤 Nota de Voz enviada no WhatsApp!' : '🎤 Nota de Voz registrada na conversa.');
           } catch (err) {
             showToast(err.message, true);
@@ -4330,7 +4387,7 @@ function bindEvents() {
         method: 'POST',
         body: JSON.stringify({})
       });
-      await loadBootstrap();
+      await refreshLiveStateOnly();
       showToast(res.sentRealWhatsApp ? '💠 QR Code PIX + Copia e Cola enviados!' : '💠 PIX registrado na conversa.');
     } catch (err) {
       showToast(err.message, true);
@@ -4352,7 +4409,7 @@ function bindEvents() {
         body: JSON.stringify({ itemId })
       });
       if (sel) sel.value = '';
-      await loadBootstrap();
+      await refreshLiveStateOnly();
       showToast(res.sentRealWhatsApp ? '🛍️ Item e mídias enviados no WhatsApp!' : '🛍️ Item registrado na conversa.');
     } catch (err) {
       showToast(err.message, true);
@@ -4378,7 +4435,7 @@ function bindEvents() {
           body: JSON.stringify({ text })
         });
         input.value = '';
-        await loadBootstrap();
+        await refreshLiveStateOnly();
         showToast('🔒 Nota interna privada registrada!');
       } else {
         const res = await api(`/api/crm/${encodeURIComponent(chatId)}/send`, {
@@ -4386,7 +4443,7 @@ function bindEvents() {
           body: JSON.stringify({ text })
         });
         input.value = '';
-        await loadBootstrap();
+        await refreshLiveStateOnly();
         showToast(res.sentRealWhatsApp ? 'Mensagem enviada no WhatsApp!' : 'Mensagem registrada na conversa.');
       }
     } catch (err) {
@@ -4409,7 +4466,7 @@ function bindEvents() {
         method: 'POST',
         body: JSON.stringify({ voiceId })
       });
-      await loadBootstrap();
+      await refreshLiveStateOnly();
       showToast('Nota de voz enviada no WhatsApp!');
     } catch (err) {
       showToast(err.message, true);

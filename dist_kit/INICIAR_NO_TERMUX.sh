@@ -67,8 +67,12 @@ if [ ! -f ".env" ] && [ -f ".env.example" ]; then
 fi
 
 echo "=============================================================="
-echo "  ZAP-IA STUDIO v5.0 -- MOTOR 24H ATIVO NO ANDROID (TERMUX)"
+echo "  ZAP-IA STUDIO v5.0.1 -- MOTOR 24H ATIVO NO ANDROID (TERMUX)"
 echo "=============================================================="
+
+# Garante que nenhuma outra aba antiga do Termux fique disputando a conexao do WhatsApp (erro 440)
+pkill -f "src/server.js" 2>/dev/null || true
+sleep 1
 
 if command -v termux-wake-lock >/dev/null 2>&1; then
   termux-wake-lock
@@ -90,7 +94,13 @@ if [ -f "data/cloud_session.json" ] && command -v termux-open-url >/dev/null 2>&
 fi
 
 while true; do
+  set +e
   node src/server.js
-  echo "[AVISO] Motor encerrado. Reiniciando em 4 segundos (Ctrl+C para parar)..."
+  EXIT_CODE=$?
+  set -e
+  if [ "$EXIT_CODE" -eq 0 ] || [ "$EXIT_CODE" -eq 130 ] || [ "$EXIT_CODE" -eq 143 ]; then
+    break
+  fi
+  echo "[AVISO] Motor encerrado (codigo $EXIT_CODE). Reiniciando em 4 segundos (Ctrl+C para parar)..."
   sleep 4
 done

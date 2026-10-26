@@ -105,6 +105,12 @@ class WhatsAppManager {
     this.offHoursNotified = new Map(); // chatId -> timestamp
     this.reconnectTimer = null;
     this.reconnectAttempts = 0;
+    this.socketSeq = 0;
+    this.conflictTimestamps = [];
+    this.lastConnectedUser = null;
+    this.lastConnectedLogAt = 0;
+    this.lastConnectedLogPhone = '';
+    this.connectionWaiters = new Set();
 
     // Fila Segura Anti-Ban de Abordagem Ativa (M01–M13) — persistida em disco contra reinícios
     this.proactiveQueue = Array.isArray(storage.data.proactiveQueue) ? [...storage.data.proactiveQueue] : [];
@@ -145,19 +151,38 @@ class WhatsAppManager {
     try {
       const dir = this.authDir || AUTH_DIR;
       if (!fs.existsSync(dir)) return;
+
+      const applyLidEntry = (fileKey, val) => {
+        if (typeof val !== 'string' || !fileKey.startsWith('lid-mapping-')) return;
+        const key = fileKey.replace('lid-mapping-', '').replace(/\.json$/i, '');
+        if (key.includes('_reverse')) {
+          const lidNum = key.replace('_reverse', '');
+          this.lidToPhoneMap.set(`${lidNum}@lid`, normalizePhoneDigits(val));
+        } else {
+          this.lidToPhoneMap.set(`${normalizePhoneDigits(val)}@lid`, normalizePhoneDigits(key));
+        }
+      };
+
+      // 1. Cofre Compacto Atômico (store_lid-mapping.json)
+      const compactPath = path.join(dir, 'store_lid-mapping.json');
+      if (fs.existsSync(compactPath)) {
+        try {
+          const bucket = JSON.parse(fs.readFileSync(compactPath, 'utf-8'));
+          if (bucket && typeof bucket === 'object') {
+            for (const [k, v] of Object.entries(bucket)) {
+              applyLidEntry(k, v);
+            }
+          }
+        } catch {}
+      }
+
+      // 2. Compatibilidade com arquivos legados individuais (lid-mapping-*.json)
       const files = fs.readdirSync(dir).filter(f => f.startsWith('lid-mapping-') && f.endsWith('.json'));
       for (const file of files) {
-        const raw = fs.readFileSync(path.join(dir, file), 'utf-8');
-        const val = JSON.parse(raw);
-        if (typeof val === 'string') {
-          const key = file.replace('lid-mapping-', '').replace('.json', '');
-          if (key.includes('_reverse')) {
-            const lidNum = key.replace('_reverse', '');
-            this.lidToPhoneMap.set(`${lidNum}@lid`, normalizePhoneDigits(val));
-          } else {
-            this.lidToPhoneMap.set(`${normalizePhoneDigits(val)}@lid`, normalizePhoneDigits(key));
-          }
-        }
+        try {
+          const raw = fs.readFileSync(path.join(dir, file), 'utf-8');
+          applyLidEntry(file, JSON.parse(raw));
+        } catch {}
       }
     } catch {
       // Silencioso caso ainda não existam mapeamentos LID
@@ -240,24 +265,73 @@ class WhatsAppManager {
     }
   }
 
-  async connect(pairingPhone = null) {
-    if (this.sock && this.status === 'connected') {
-      return this.getPublicState();
-    }
+  destroySocketSilently(sock) {
+    if (!sock) return;
+    try {
+      sock.ev?.removeAllListeners?.('connection.update');
+      sock.ev?.removeAllListeners?.('creds.update');
+      sock.ev?.removeAllListeners?.('contacts.upsert');
+      sock.ev?.removeAllListeners?.('contacts.update');
+      sock.ev?.removeAllListeners?.('messages.upsert');
+    } catch {}
+    try {
+      sock.end(undefined);
+    } catch {}
+    try {
+      sock.ws?.close?.();
+    } catch {}
+  }
 
-    // Se já havia um socket pendente (ex: QR aberto ou tentativa anterior) e uma nova conexão foi pedida, encerra limpo
-    if (this.sock && (pairingPhone || this.status === 'qr_ready')) {
-      try {
-        this.sock.end(undefined);
-      } catch {}
-      this.sock = null;
-    } else if (this.sock && this.status === 'connecting' && !pairingPhone) {
+  resolveConnectionWaiters(ok) {
+    if (!this.connectionWaiters.size) return;
+    for (const waiter of Array.from(this.connectionWaiters)) {
+      this.connectionWaiters.delete(waiter);
+      clearTimeout(waiter.timer);
+      waiter.resolve(Boolean(ok));
+    }
+  }
+
+  async waitUntilConnected(timeoutMs = 6500) {
+    if (this.sock && this.status === 'connected') return true;
+    // Se não há sessão salva nem reconexão em andamento, retorna falso imediatamente
+    if (this.status === 'disconnected' && !this.reconnectTimer) return false;
+    return new Promise((resolve) => {
+      const waiter = {
+        resolve,
+        timer: setTimeout(() => {
+          this.connectionWaiters.delete(waiter);
+          resolve(Boolean(this.sock && this.status === 'connected'));
+        }, timeoutMs)
+      };
+      this.connectionWaiters.add(waiter);
+    });
+  }
+
+  async connect(pairingPhone = null) {
+    if (this.sock && this.status === 'connected' && !pairingPhone) {
       return this.getPublicState();
     }
 
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
+    }
+
+    // Se já havia um socket conectando sem novo pedido de código, reutiliza sem duplicar sockets!
+    if (this.sock && this.status === 'connecting' && !pairingPhone) {
+      return this.getPublicState();
+    }
+
+    // Encerra qualquer socket anterior removendo TODOS os listeners antes de criar outro (zero socket zumbi!)
+    if (this.sock) {
+      const prev = this.sock;
+      this.sock = null;
+      this.destroySocketSilently(prev);
+    }
+
+    const mySeq = ++this.socketSeq;
+    if (pairingPhone) {
+      this.conflictTimestamps = [];
     }
 
     // Se for novo pareamento por código de 8 dígitos e a sessão atual ainda não estiver registrada, limpa rascunho antigo
@@ -277,7 +351,10 @@ class WhatsAppManager {
 
     this.status = 'connecting';
     this.lastError = null;
-    if (pairingPhone) this.pairingCode = null;
+    if (pairingPhone) {
+      this.pairingCode = null;
+      this.qrDataUrl = null;
+    }
     this.emitState();
 
     let rawDigits = pairingPhone ? normalizePhoneDigits(pairingPhone) : '';
@@ -296,12 +373,22 @@ class WhatsAppManager {
 
     try {
       const { state, saveCreds } = await useCompactWaAuthState(this.authDir || AUTH_DIR);
+      if (mySeq !== this.socketSeq) {
+        if (resolvePairingWait) resolvePairingWait();
+        return this.getPublicState();
+      }
+
       let version = [2, 3000, 1023223821];
       try {
         const latest = await fetchLatestBaileysVersion();
         if (latest?.version) version = latest.version;
       } catch {
         // Mantém versão fallback caso offline
+      }
+
+      if (mySeq !== this.socketSeq) {
+        if (resolvePairingWait) resolvePairingWait();
+        return this.getPublicState();
       }
 
       const sock = makeWASocket({
@@ -316,9 +403,13 @@ class WhatsAppManager {
       this.sock = sock;
       let pairingRequested = false;
 
-      sock.ev.on('creds.update', saveCreds);
+      sock.ev.on('creds.update', () => {
+        if (mySeq !== this.socketSeq) return;
+        saveCreds().catch(() => {});
+      });
 
       const ingestContactMappings = (contacts = []) => {
+        if (mySeq !== this.socketSeq) return;
         for (const c of contacts) {
           const lid = c?.lid || (c?.id?.endsWith('@lid') ? c.id : '');
           const pn = c?.phoneNumber || (c?.id?.endsWith('@s.whatsapp.net') ? c.id : '');
@@ -332,6 +423,7 @@ class WhatsAppManager {
       sock.ev.on('contacts.update', ingestContactMappings);
 
       sock.ev.on('connection.update', async update => {
+        if (mySeq !== this.socketSeq || this.sock !== sock) return;
         const { connection, lastDisconnect, qr } = update;
 
         if (qr) {
@@ -340,21 +432,27 @@ class WhatsAppManager {
             pairingRequested = true;
             try {
               const rawCode = await sock.requestPairingCode(cleanPairingDigits);
+              if (mySeq !== this.socketSeq) return;
               const formatted = rawCode?.length === 8 ? `${rawCode.slice(0, 4)}-${rawCode.slice(4)}` : rawCode;
               this.pairingCode = formatted;
               this.qrDataUrl = null;
               this.status = 'qr_ready';
+              this.connectedUser = null;
               this.emitState();
               storage.addLog('whatsapp', `Código de pareamento gerado para +${cleanPairingDigits}: ${formatted}`);
               if (resolvePairingWait) resolvePairingWait();
             } catch (err) {
+              if (mySeq !== this.socketSeq) return;
               this.lastError = `Erro ao gerar código de 8 dígitos: ${err.message}`;
               this.emitState();
               if (resolvePairingWait) resolvePairingWait();
             }
           } else if (!this.pairingCode) {
-            this.qrDataUrl = await QRCode.toDataURL(qr, { margin: 2, width: 300 });
+            const qrImg = await QRCode.toDataURL(qr, { margin: 2, width: 300 });
+            if (mySeq !== this.socketSeq) return;
+            this.qrDataUrl = qrImg;
             this.status = 'qr_ready';
+            this.connectedUser = null;
             this.emitState();
           }
         }
@@ -371,45 +469,89 @@ class WhatsAppManager {
             phone: normalizePhoneDigits(sock.user?.id || ''),
             name: sock.user?.name || 'WhatsApp Conectado'
           };
-          storage.addLog('whatsapp', `WhatsApp conectado com sucesso! (${this.connectedUser.phone})`);
+          this.lastConnectedUser = this.connectedUser;
+          const nowMs = Date.now();
+          if (
+            this.lastConnectedLogPhone !== this.connectedUser.phone ||
+            nowMs - this.lastConnectedLogAt > 90_000
+          ) {
+            this.lastConnectedLogPhone = this.connectedUser.phone;
+            this.lastConnectedLogAt = nowMs;
+            storage.addLog('whatsapp', `WhatsApp conectado com sucesso! (${this.connectedUser.phone})`);
+          }
+          this.resolveConnectionWaiters(true);
           this.emitState();
         }
 
         if (connection === 'close') {
           const statusCode = lastDisconnect?.error?.output?.statusCode;
+          const errMsg = String(lastDisconnect?.error?.message || '');
           const loggedOut = statusCode === DisconnectReason.loggedOut;
+          const isConflict =
+            statusCode === DisconnectReason.connectionReplaced ||
+            statusCode === 440 ||
+            /conflict|replaced/i.test(errMsg);
           const isRestartRequired = statusCode === DisconnectReason.restartRequired || statusCode === 515;
 
+          this.destroySocketSilently(sock);
           this.sock = null;
           this.qrDataUrl = null;
-          this.connectedUser = null;
 
           if (loggedOut) {
             this.status = 'disconnected';
             this.pairingCode = null;
+            this.connectedUser = null;
+            this.lastConnectedUser = null;
             this.lastError = 'Sessão desconectada pelo celular. Clique em Conectar WhatsApp para gerar um novo QR Code.';
             this.clearAuthFolder();
+            this.resolveConnectionWaiters(false);
             storage.addLog('alert', 'Sessão encerrada pelo aparelho celular.');
             this.emitState();
+          } else if (isConflict) {
+            const nowMs = Date.now();
+            this.conflictTimestamps = (this.conflictTimestamps || []).filter(ts => nowMs - ts < 45_000);
+            this.conflictTimestamps.push(nowMs);
+
+            if (this.conflictTimestamps.length >= 2) {
+              // Duas instâncias abertas ao mesmo tempo: para de disputar a sessão para não derrubar em loop!
+              this.status = 'disconnected';
+              this.connectedUser = null;
+              this.lastError =
+                'Outra janela do motor assumiu esta sessão do WhatsApp. Feche a janela duplicada no Termux/PC ou clique em Conectar.';
+              this.resolveConnectionWaiters(false);
+              storage.addLog('alert', 'Conflito de sessão detectado (2 motores abertos na mesma conta). Reconexão pausada para evitar quedas.');
+              this.emitState();
+            } else {
+              this.status = 'connecting';
+              this.connectedUser = this.lastConnectedUser;
+              this.lastError = 'Sincronizando sessão ativa do WhatsApp...';
+              this.emitState();
+              this.reconnectTimer = setTimeout(() => {
+                if (mySeq === this.socketSeq) this.connect().catch(() => {});
+              }, 6000);
+            }
           } else {
             this.status = 'connecting';
+            // Preserva connectedUser durante micro-oscilações de rede 4G/Wi-Fi para o painel não piscar "Desconectado"
+            this.connectedUser = this.lastConnectedUser;
             this.lastError = isRestartRequired
               ? 'Finalizando pareamento seguro com o aparelho...'
               : 'Reconectando ao WhatsApp...';
             this.emitState();
-            // Reconexão imediata (450ms) após código 515 de pareamento; caso contrário, backoff exponencial seguro (3.5s -> máx 45s)
+            // Reconexão imediata (450ms) após código 515 de pareamento; caso contrário, backoff exponencial seguro (2.5s -> máx 35s)
             this.reconnectAttempts = isRestartRequired ? 0 : Math.min(8, (this.reconnectAttempts || 0) + 1);
             const delayMs = isRestartRequired
               ? 450
-              : Math.min(45000, Math.round(3500 * Math.pow(1.65, this.reconnectAttempts - 1)));
+              : Math.min(35000, Math.round(2500 * Math.pow(1.6, this.reconnectAttempts - 1)));
             this.reconnectTimer = setTimeout(() => {
-              this.connect().catch(() => {});
+              if (mySeq === this.socketSeq) this.connect().catch(() => {});
             }, delayMs);
           }
         }
       });
 
       sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        if (mySeq !== this.socketSeq || this.sock !== sock) return;
         if (type !== 'notify') return;
         for (const msg of messages) {
           this.handleIncomingRawMessage(msg).catch(err => {
@@ -419,8 +561,10 @@ class WhatsAppManager {
         }
       });
     } catch (err) {
+      if (mySeq !== this.socketSeq) return this.getPublicState();
       this.status = 'disconnected';
       this.lastError = err.message;
+      this.resolveConnectionWaiters(false);
       storage.addLog('error', `Falha ao iniciar WhatsApp: ${err.message}`);
       this.emitState();
       if (resolvePairingWait) resolvePairingWait();
@@ -446,24 +590,31 @@ class WhatsAppManager {
   }
 
   async disconnect(clearSession = true) {
+    this.socketSeq++;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    const prev = this.sock;
+    this.sock = null;
     try {
-      if (this.sock) {
+      if (prev) {
         if (clearSession) {
-          await this.sock.logout().catch(() => {});
-        } else {
-          this.sock.end(undefined);
+          try {
+            prev.ev?.removeAllListeners?.('connection.update');
+          } catch {}
+          await prev.logout().catch(() => {});
         }
+        this.destroySocketSilently(prev);
       }
     } catch {}
-    this.sock = null;
     this.status = 'disconnected';
     this.qrDataUrl = null;
     this.pairingCode = null;
     this.connectedUser = null;
+    this.lastConnectedUser = null;
+    this.conflictTimestamps = [];
+    this.resolveConnectionWaiters(false);
     if (clearSession) {
       this.clearAuthFolder();
     }
@@ -764,7 +915,10 @@ class WhatsAppManager {
   }
 
   async processConsolidatedTurn(chatId, batch) {
-    if (!this.sock || this.status !== 'connected') return;
+    if (!this.sock || this.status !== 'connected') {
+      const reconnected = await this.waitUntilConnected(8000);
+      if (!reconnected || !this.sock) return;
+    }
     if (!storage.data.settings.botEnabled || storage.isContactPaused(chatId, batch.phone)) return;
     if (!this.checkRateLimit(chatId)) {
       storage.addLog('alert', `Limite anti-loop atingido para ${batch.contactName}. Ignorando excesso.`);
@@ -979,7 +1133,11 @@ class WhatsAppManager {
   }
 
   async sendCatalogMediaFile(chatId, item, senderRole = 'assistant') {
-    if (!this.sock || !item) return;
+    if (!item) return;
+    if (!this.sock || this.status !== 'connected') {
+      const ok = await this.waitUntilConnected(7000);
+      if (!ok || !this.sock) throw new Error('O WhatsApp não está conectado no momento.');
+    }
     const files = Array.isArray(item.mediaFiles) && item.mediaFiles.length > 0
       ? item.mediaFiles
       : (item.mediaFile?.filename ? [item.mediaFile] : []);
@@ -1051,7 +1209,11 @@ class WhatsAppManager {
   }
 
   async sendPixPayloadToChat(chatId, profile, requestedAmount = null, senderRole = 'assistant', contactLabel = '') {
-    if (!this.sock || !profile?.pix?.enabled || !profile?.pix?.key) return null;
+    if (!profile?.pix?.enabled || !profile?.pix?.key) return null;
+    if (!this.sock || this.status !== 'connected') {
+      const ok = await this.waitUntilConnected(7000);
+      if (!ok || !this.sock) throw new Error('O WhatsApp não está conectado no momento.');
+    }
     const pixPayload = await formatPixMessageWithQr(profile.pix, requestedAmount);
     if (!pixPayload) return null;
 
@@ -1191,7 +1353,10 @@ class WhatsAppManager {
 
   async sendManualOwnerMessage(chatId, text, pauseAi = true) {
     if (!this.sock || this.status !== 'connected') {
-      throw new Error('O WhatsApp não está conectado no momento.');
+      const ok = await this.waitUntilConnected(7000);
+      if (!ok || !this.sock) {
+        throw new Error('O WhatsApp não está conectado no momento.');
+      }
     }
     const sent = await this.sock.sendMessage(chatId, { text });
     this.rememberBotMessage(sent);
@@ -1215,7 +1380,10 @@ class WhatsAppManager {
    */
   async sendManualAttachment({ chatId, buffer, mimeType = 'image/jpeg', fileName = 'anexo', caption = '', mediaUrl = '', pauseAi = true }) {
     if (!this.sock || this.status !== 'connected') {
-      throw new Error('O WhatsApp não está conectado no momento.');
+      const ok = await this.waitUntilConnected(7000);
+      if (!ok || !this.sock) {
+        throw new Error('O WhatsApp não está conectado no momento.');
+      }
     }
     const isImage = /^image\//i.test(mimeType) && !/svg/i.test(mimeType);
     const isVideo = /^video\//i.test(mimeType);
@@ -1267,7 +1435,10 @@ class WhatsAppManager {
    */
   async sendCanonicalVoiceNote({ chatId, oggBuffer, durationSec = 5, waveform = null, keysToRead = [] }) {
     if (!this.sock || this.status !== 'connected') {
-      throw new Error('O WhatsApp não está conectado no momento.');
+      const ok = await this.waitUntilConnected(7000);
+      if (!ok || !this.sock) {
+        throw new Error('O WhatsApp não está conectado no momento.');
+      }
     }
     const antiBan = storage.data.settings.antiBan || {};
     if (keysToRead.length > 0) {
@@ -1373,7 +1544,10 @@ class WhatsAppManager {
 
   async sendVoiceNoteToChat(chatId, buffer, originalName = 'nota-voz.ogg', senderRole = 'owner', pauseAi = true) {
     if (!this.sock || this.status !== 'connected') {
-      throw new Error('O WhatsApp não está conectado no momento.');
+      const ok = await this.waitUntilConnected(7000);
+      if (!ok || !this.sock) {
+        throw new Error('O WhatsApp não está conectado no momento.');
+      }
     }
 
     // Converte SEMPRE para OGG/Opus nativo + extrai duração e 64 barras reais antes de enviar!
@@ -1488,7 +1662,10 @@ class WhatsAppManager {
 
   async sendTestAlertToOwner(ownerPhoneInput) {
     if (!this.sock || this.status !== 'connected') {
-      throw new Error('Conecte o WhatsApp primeiro na aba Conexão QR para testar o envio real.');
+      const ok = await this.waitUntilConnected(7000);
+      if (!ok || !this.sock) {
+        throw new Error('Conecte o WhatsApp primeiro na aba Conexão QR para testar o envio real.');
+      }
     }
     const digits = normalizePhoneDigits(ownerPhoneInput || storage.data.settings.humanHandoff?.ownerPersonalWhatsapp);
     if (digits.length < 10) {
@@ -1515,7 +1692,10 @@ class WhatsAppManager {
 
   async sendProactiveAiOpening(phoneInput, text, leadName = 'Lead Teste', voiceId = '') {
     if (!this.sock || this.status !== 'connected') {
-      throw new Error('O WhatsApp ainda não está conectado.');
+      const ok = await this.waitUntilConnected(7000);
+      if (!ok || !this.sock) {
+        throw new Error('O WhatsApp ainda não está conectado.');
+      }
     }
     let digits = normalizePhoneDigits(phoneInput);
     if (digits.length === 10 || digits.length === 11) {

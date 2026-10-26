@@ -1,6 +1,6 @@
 {
   "name": "zap-ia-studio",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "description": "ZAP-IA Studio v5.0 Institutional Edition — Portable Windows, Linux & Android Termux Motor, Universal Customer Media/File Player & Downloader, Vercel + Supabase RLS",
   "type": "module",
   "main": "src/server.js",

@@ -45,9 +45,17 @@ if [ -f "data/cloud_session.json" ] && command -v termux-open-url >/dev/null 2>&
   (sleep 3 && termux-open-url "http://localhost:3000") &
 fi
 
+# Garante instancia unica (evita conflito 440 caso outra aba antiga estivesse aberta)
+pkill -f "src/server.js" 2>/dev/null || true
+sleep 1
+
 # Loop de auto-recuperacao caso o processo reinicie
 while true; do
   node src/server.js
-  echo "[AVISO] Processo encerrado. Reiniciando em 4 segundos (Ctrl+C para parar)..."
+  EXIT_CODE=$?
+  if [ "$EXIT_CODE" -eq 0 ] || [ "$EXIT_CODE" -eq 130 ] || [ "$EXIT_CODE" -eq 143 ]; then
+    break
+  fi
+  echo "[AVISO] Processo encerrado (codigo $EXIT_CODE). Reiniciando em 4 segundos (Ctrl+C para parar)..."
   sleep 4
 done

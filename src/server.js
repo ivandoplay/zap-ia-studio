@@ -1601,42 +1601,53 @@ app.post(['/api/crm/:chatId/send', '/api/crm/:chatId/reply'], async (req, res) =
   try {
     if (usesCloudBridge(req) && !chatId.startsWith('demo_')) {
       const waState = getEffectiveWaState(req);
-      if (waState.workerOnline && waState.status === 'connected') {
-        const out = await dispatchCommandToWorker(
-          req.cloudAuth.client,
-          req.cloudAuth.authUser.id,
-          'send_crm_reply',
-          { chatId, text }
-        );
-        storage.markContactRead(chatId);
-        return res.json({
-          ok: true,
-          contact: out.contact || storage.data.contacts[chatId],
-          sentRealWhatsApp: true
+      if (!waState.workerOnline) {
+        return res.status(503).json({
+          ok: false,
+          workerOffline: true,
+          error: 'Seu Motor WhatsApp (Termux / PC) está offline. Ligue o motor no seu aparelho para enviar mensagens reais no WhatsApp.'
         });
       }
-      return res.status(503).json({
-        ok: false,
-        workerOffline: !waState.workerOnline,
-        error: !waState.workerOnline
-          ? 'Seu Motor WhatsApp (Termux / PC) está offline. Ligue o motor no seu aparelho para enviar mensagens reais no WhatsApp.'
-          : 'O WhatsApp da sua conta não está conectado no momento. Conecte na aba WhatsApp.'
+      const out = await dispatchCommandToWorker(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        'send_crm_reply',
+        { chatId, text }
+      );
+      storage.markContactRead(chatId);
+      return res.json({
+        ok: true,
+        contact: out.contact || storage.data.contacts[chatId],
+        sentRealWhatsApp: true
       });
     }
 
     const cleanTargetJid = chatId.replace(/^demo_/, '');
-    if (!usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
+    if (!usesCloudBridge(req) && !chatId.startsWith('demo_')) {
+      const ready = await whatsappManager.waitUntilConnected(7000);
+      if (!ready) {
+        return res.status(503).json({
+          ok: false,
+          error: 'O WhatsApp não está conectado neste motor. Conecte na aba Início & Conexão antes de enviar.'
+        });
+      }
       await whatsappManager.sendManualOwnerMessage(cleanTargetJid, text, true);
       storage.markContactRead(chatId);
-    } else {
-      storage.appendContactMessage(chatId, { role: 'owner', text });
-      storage.pauseContact(chatId, 60, 'Mensagem registrada localmente no painel');
+      const key = storage.findSiblingContactKey(chatId) || chatId;
+      return res.json({
+        ok: true,
+        contact: storage.data.contacts[key],
+        sentRealWhatsApp: true
+      });
     }
+
+    storage.appendContactMessage(chatId, { role: 'owner', text });
+    storage.pauseContact(chatId, 60, 'Mensagem simulada na conversa demo');
     const key = storage.findSiblingContactKey(chatId) || chatId;
     res.json({
       ok: true,
       contact: storage.data.contacts[key],
-      sentRealWhatsApp: !usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')
+      sentRealWhatsApp: false
     });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
@@ -1661,7 +1672,14 @@ app.post('/api/crm/:chatId/send-item', async (req, res) => {
       return res.json({ ok: true, contact: out.contact || storage.data.contacts[chatId], sentRealWhatsApp: true });
     }
 
-    if (!usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
+    if (!usesCloudBridge(req) && !chatId.startsWith('demo_')) {
+      const ready = await whatsappManager.waitUntilConnected(7000);
+      if (!ready) {
+        return res.status(503).json({
+          ok: false,
+          error: 'O WhatsApp não está conectado neste motor. Conecte na aba Início & Conexão antes de enviar itens.'
+        });
+      }
       if ((item.mediaFiles && item.mediaFiles.length > 0) || item.mediaFile?.filename) {
         await whatsappManager.sendCatalogMediaFile(chatId, item, 'owner');
       } else {
@@ -1669,11 +1687,13 @@ app.post('/api/crm/:chatId/send-item', async (req, res) => {
         await whatsappManager.sendManualOwnerMessage(chatId, txt, true);
       }
       storage.pauseContact(chatId, biz.lockUntilManualResume ? 'forever' : 60, 'Item enviado manualmente no CRM');
-    } else {
-      storage.appendContactMessage(chatId, { role: 'owner', text: `[Item enviado no painel: ${item.name}]` });
+      const key = storage.findSiblingContactKey(chatId) || chatId;
+      return res.json({ ok: true, contact: storage.data.contacts[key], sentRealWhatsApp: true });
     }
+
+    storage.appendContactMessage(chatId, { role: 'owner', text: `[Item enviado na conversa demo: ${item.name}]` });
     const key = storage.findSiblingContactKey(chatId) || chatId;
-    res.json({ ok: true, contact: storage.data.contacts[key], sentRealWhatsApp: !usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_') });
+    res.json({ ok: true, contact: storage.data.contacts[key], sentRealWhatsApp: false });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
   }
@@ -1696,15 +1716,24 @@ app.post('/api/crm/:chatId/send-pix', async (req, res) => {
       return res.json({ ok: true, contact: out.contact || storage.data.contacts[chatId], sentRealWhatsApp: true });
     }
 
-    if (!usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
+    if (!usesCloudBridge(req) && !chatId.startsWith('demo_')) {
+      const ready = await whatsappManager.waitUntilConnected(7000);
+      if (!ready) {
+        return res.status(503).json({
+          ok: false,
+          error: 'O WhatsApp não está conectado neste motor. Conecte na aba Início & Conexão antes de enviar o PIX.'
+        });
+      }
       await whatsappManager.sendPixPayloadToChat(chatId, biz, req.body?.amount || null, 'owner', chatId);
       storage.pauseContact(chatId, biz.lockUntilManualResume ? 'forever' : 60, 'PIX enviado manualmente no CRM');
-    } else {
-      const preview = await formatPixMessageWithQr(biz.pix, req.body?.amount || null);
-      storage.appendContactMessage(chatId, { role: 'owner', text: preview?.summaryText || '[PIX]' });
+      const key = storage.findSiblingContactKey(chatId) || chatId;
+      return res.json({ ok: true, contact: storage.data.contacts[key], sentRealWhatsApp: true });
     }
+
+    const preview = await formatPixMessageWithQr(biz.pix, req.body?.amount || null);
+    storage.appendContactMessage(chatId, { role: 'owner', text: preview?.summaryText || '[PIX]' });
     const key = storage.findSiblingContactKey(chatId) || chatId;
-    res.json({ ok: true, contact: storage.data.contacts[key], sentRealWhatsApp: !usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_') });
+    res.json({ ok: true, contact: storage.data.contacts[key], sentRealWhatsApp: false });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
   }
@@ -1799,13 +1828,11 @@ app.post('/api/crm/:chatId/send-attachment', memUpload.single('file'), async (re
 
       if (!chatId.startsWith('demo_')) {
         const waState = getEffectiveWaState(req);
-        if (!waState.workerOnline || waState.status !== 'connected') {
+        if (!waState.workerOnline) {
           return res.status(503).json({
             ok: false,
-            workerOffline: !waState.workerOnline,
-            error: !waState.workerOnline
-              ? 'Seu Motor WhatsApp (Termux / PC) está offline. Ligue o motor para enviar arquivos reais no WhatsApp.'
-              : 'O WhatsApp da sua conta não está conectado no momento.'
+            workerOffline: true,
+            error: 'Seu Motor WhatsApp (Termux / PC) está offline. Ligue o motor para enviar arquivos reais no WhatsApp.'
           });
         }
         const out = await dispatchCommandToWorker(
@@ -1834,7 +1861,14 @@ app.post('/api/crm/:chatId/send-attachment', memUpload.single('file'), async (re
     }
 
     const cleanTargetJid = chatId.replace(/^demo_/, '');
-    if (!usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
+    if (!usesCloudBridge(req) && !chatId.startsWith('demo_')) {
+      const ready = await whatsappManager.waitUntilConnected(7000);
+      if (!ready) {
+        return res.status(503).json({
+          ok: false,
+          error: 'O WhatsApp não está conectado neste motor. Conecte na aba Início & Conexão antes de enviar arquivos.'
+        });
+      }
       await whatsappManager.sendManualAttachment({
         chatId: cleanTargetJid,
         buffer: req.file.buffer,
@@ -1845,23 +1879,29 @@ app.post('/api/crm/:chatId/send-attachment', memUpload.single('file'), async (re
         pauseAi: true
       });
       storage.markContactRead(chatId);
-    } else {
-      storage.appendContactMessage(chatId, {
-        role: 'owner',
-        text: caption || (isImage ? '[Imagem enviada]' : isVideo ? `[Vídeo enviado: ${displayFileName}]` : `[Arquivo enviado: ${displayFileName}]`),
-        mediaUrl,
-        mediaName: displayFileName,
-        mediaMime: resolvedMime,
-        mediaSize: req.file.buffer.length
+      const key = storage.findSiblingContactKey(chatId) || chatId;
+      return res.json({
+        ok: true,
+        contact: storage.data.contacts[key],
+        sentRealWhatsApp: true
       });
-      storage.pauseContact(chatId, 60, 'Anexo registrado no painel');
     }
+
+    storage.appendContactMessage(chatId, {
+      role: 'owner',
+      text: caption || (isImage ? '[Imagem enviada]' : isVideo ? `[Vídeo enviado: ${displayFileName}]` : `[Arquivo enviado: ${displayFileName}]`),
+      mediaUrl,
+      mediaName: displayFileName,
+      mediaMime: resolvedMime,
+      mediaSize: req.file.buffer.length
+    });
+    storage.pauseContact(chatId, 60, 'Anexo simulado na conversa demo');
 
     const key = storage.findSiblingContactKey(chatId) || chatId;
     res.json({
       ok: true,
       contact: storage.data.contacts[key],
-      sentRealWhatsApp: !usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')
+      sentRealWhatsApp: false
     });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
@@ -2058,28 +2098,42 @@ app.post('/api/crm/:chatId/send-library-voice', async (req, res) => {
       });
     }
 
-    if (!usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
+    if (!usesCloudBridge(req) && !chatId.startsWith('demo_')) {
+      const ready = await whatsappManager.waitUntilConnected(7000);
+      if (!ready) {
+        return res.status(503).json({
+          ok: false,
+          error: 'O WhatsApp não está conectado neste motor. Conecte na aba Início & Conexão antes de enviar notas de voz.'
+        });
+      }
       await whatsappManager.sendLibraryVoiceToChat(chatId, voiceId, {
         senderRole: 'owner',
         pauseAi: true
       });
-    } else {
-      storage.recordVoiceSentToContact(chatId, voiceId);
-      storage.appendContactMessage(chatId, {
-        role: 'owner',
-        text: `🎤 [Nota de voz: ${vItem.name} (${vItem.durationSec}s)]`,
-        mediaUrl: vItem.url,
-        durationSec: vItem.durationSec,
-        waveform: vItem.waveform
+      const key = storage.findSiblingContactKey(chatId) || chatId;
+      return res.json({
+        ok: true,
+        contact: storage.data.contacts[key],
+        business: storage.getBusiness(),
+        sentRealWhatsApp: true
       });
-      storage.pauseContact(chatId, biz.lockUntilManualResume ? 'forever' : 60, `Áudio "${vItem.name}" enviado no CRM`);
     }
+
+    storage.recordVoiceSentToContact(chatId, voiceId);
+    storage.appendContactMessage(chatId, {
+      role: 'owner',
+      text: `🎤 [Nota de voz: ${vItem.name} (${vItem.durationSec}s)]`,
+      mediaUrl: vItem.url,
+      durationSec: vItem.durationSec,
+      waveform: vItem.waveform
+    });
+    storage.pauseContact(chatId, biz.lockUntilManualResume ? 'forever' : 60, `Áudio "${vItem.name}" simulado na conversa demo`);
     const key = storage.findSiblingContactKey(chatId) || chatId;
     res.json({
       ok: true,
       contact: storage.data.contacts[key],
       business: storage.getBusiness(),
-      sentRealWhatsApp: !usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')
+      sentRealWhatsApp: false
     });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
@@ -2123,32 +2177,45 @@ app.post('/api/crm/:chatId/send-audio', memUpload.single('audio'), async (req, r
       });
     }
 
-    if (!usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')) {
-      await whatsappManager.sendVoiceNoteToChat(chatId, req.file.buffer, req.file.originalname || 'nota-voz.ogg', 'owner', true);
-    } else {
-      const canonical = await convertToCanonicalWhatsAppVoice(req.file.buffer, req.file.originalname || 'nota-voz.ogg');
-      const savedFn = `${Date.now()}_${uid('crmvoz')}.ogg`;
-      fs.writeFileSync(path.join(UPLOADS_DIR, savedFn), canonical.buffer);
-      let mediaUrl = `/uploads/${savedFn}`;
-      const { client, userId } = getActiveCloudClientAndUser(req);
-      if (client && userId) {
-        const pub = await uploadMediaBufferToCloud(client, userId, savedFn, canonical.buffer, 'audio/ogg');
-        if (pub) mediaUrl = pub;
+    if (!usesCloudBridge(req) && !chatId.startsWith('demo_')) {
+      const ready = await whatsappManager.waitUntilConnected(7000);
+      if (!ready) {
+        return res.status(503).json({
+          ok: false,
+          error: 'O WhatsApp não está conectado neste motor. Conecte na aba Início & Conexão antes de enviar áudios.'
+        });
       }
-      storage.appendContactMessage(chatId, {
-        role: 'owner',
-        text: `🎤 [Nota de voz gravada/enviada (${canonical.durationSec}s)]`,
-        mediaUrl,
-        durationSec: canonical.durationSec,
-        waveform: canonical.waveform
+      await whatsappManager.sendVoiceNoteToChat(chatId, req.file.buffer, req.file.originalname || 'nota-voz.ogg', 'owner', true);
+      const key = storage.findSiblingContactKey(chatId) || chatId;
+      return res.json({
+        ok: true,
+        contact: storage.data.contacts[key],
+        sentRealWhatsApp: true
       });
-      storage.pauseContact(chatId, biz.lockUntilManualResume ? 'forever' : 60, 'Nota de voz registrada no CRM');
     }
+
+    const canonical = await convertToCanonicalWhatsAppVoice(req.file.buffer, req.file.originalname || 'nota-voz.ogg');
+    const savedFn = `${Date.now()}_${uid('crmvoz')}.ogg`;
+    fs.writeFileSync(path.join(UPLOADS_DIR, savedFn), canonical.buffer);
+    let mediaUrl = `/uploads/${savedFn}`;
+    const { client, userId } = getActiveCloudClientAndUser(req);
+    if (client && userId) {
+      const pub = await uploadMediaBufferToCloud(client, userId, savedFn, canonical.buffer, 'audio/ogg');
+      if (pub) mediaUrl = pub;
+    }
+    storage.appendContactMessage(chatId, {
+      role: 'owner',
+      text: `🎤 [Nota de voz gravada/enviada (${canonical.durationSec}s)]`,
+      mediaUrl,
+      durationSec: canonical.durationSec,
+      waveform: canonical.waveform
+    });
+    storage.pauseContact(chatId, biz.lockUntilManualResume ? 'forever' : 60, 'Nota de voz simulada na conversa demo');
     const key = storage.findSiblingContactKey(chatId) || chatId;
     res.json({
       ok: true,
       contact: storage.data.contacts[key],
-      sentRealWhatsApp: !usesCloudBridge(req) && whatsappManager.status === 'connected' && !chatId.startsWith('demo_')
+      sentRealWhatsApp: false
     });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
@@ -2397,6 +2464,12 @@ app.post('/api/simulator/reset', (_req, res) => {
 
 if (!IS_VERCEL && server) {
   const PORT = Number(process.env.PORT) || 3000;
+  server.on('error', (err) => {
+    if (err?.code === 'EADDRINUSE') {
+      console.error(`\n[!] Ja existe um Motor ZAP-IA Studio ativo na porta ${PORT}. Feche a outra janela antes de abrir uma nova.\n`);
+      process.exit(1);
+    }
+  });
   server.listen(PORT, '0.0.0.0', async () => {
     console.log(`\n======================================================`);
     console.log(`🚀 ${storage.data.settings.branding?.appName || 'ZAP-IA Studio'} rodando na porta ${PORT}`);
@@ -2417,18 +2490,27 @@ if (!IS_VERCEL && server) {
   });
 
   // Garante gravação atômica de dados pendentes ao fechar janela .BAT ou encerrar Termux (SIGINT / SIGTERM)
-  function gracefulFlushAndExit() {
+  let shuttingDown = false;
+  async function gracefulFlushAndExit() {
+    if (shuttingDown) return;
+    shuttingDown = true;
     try {
       if (storage.saveTimer) {
         clearTimeout(storage.saveTimer);
         storage.saveTimer = null;
         storage.writeNow();
       }
+      if (isCloudConfigured()) {
+        await Promise.race([
+          cloudWorker.markWorkerOfflineNow(),
+          new Promise((r) => setTimeout(r, 1200))
+        ]);
+      }
     } catch {}
     process.exit(0);
   }
-  process.on('SIGINT', () => gracefulFlushAndExit());
-  process.on('SIGTERM', () => gracefulFlushAndExit());
+  process.on('SIGINT', () => { gracefulFlushAndExit(); });
+  process.on('SIGTERM', () => { gracefulFlushAndExit(); });
 }
 
 export default app;

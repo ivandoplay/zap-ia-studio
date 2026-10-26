@@ -2,6 +2,45 @@
 
 const PRESET_CRM_TAGS = ['Quente', 'Lojista', 'Pediu Valor', 'Retorno Autorizado', 'VIP'];
 
+const AVATAR_TINTS = [
+  'background:rgba(16,185,129,0.14); color:var(--accent-bright); border-color:rgba(16,185,129,0.28);',
+  'background:rgba(59,130,246,0.14); color:#60a5fa; border-color:rgba(59,130,246,0.28);',
+  'background:rgba(168,85,247,0.14); color:#c084fc; border-color:rgba(168,85,247,0.28);',
+  'background:rgba(245,158,11,0.14); color:var(--warning-bright); border-color:rgba(245,158,11,0.28);',
+  'background:rgba(20,184,166,0.14); color:#2dd4bf; border-color:rgba(20,184,166,0.28);',
+  'background:rgba(244,63,94,0.13); color:#fb7185; border-color:rgba(244,63,94,0.26);'
+];
+
+function getSafeInitials(raw, fallback = 'C') {
+  const clean = String(raw || '').trim();
+  if (!clean) return fallback;
+  const alnumWords = clean
+    .split(/\s+/)
+    .map((w) => {
+      const m = w.match(/[\p{L}\p{N}]/u);
+      return m ? m[0].toUpperCase() : '';
+    })
+    .filter(Boolean);
+  if (alnumWords.length >= 2) {
+    return alnumWords[0] + alnumWords[alnumWords.length - 1];
+  }
+  if (alnumWords.length === 1) {
+    const letters = Array.from(clean.replace(/[^\p{L}\p{N}]/gu, '')).slice(0, 2).join('').toUpperCase();
+    return letters || alnumWords[0];
+  }
+  const codePoints = Array.from(clean);
+  return codePoints[0] || fallback;
+}
+
+function getAvatarTintStyle(seedStr) {
+  const s = String(seedStr || '');
+  let hash = 0;
+  for (let i = 0; i < s.length; i++) {
+    hash = (hash * 31 + s.charCodeAt(i)) >>> 0;
+  }
+  return AVATAR_TINTS[hash % AVATAR_TINTS.length];
+}
+
 function loadSavedCloudSession() {
   try {
     const raw = localStorage.getItem('zapia_cloud_auth');
@@ -597,11 +636,7 @@ function renderCloudHeaderBar() {
   const displayName = state.currentUser?.displayName || state.currentUser?.username || 'Minha Conta';
   const username = state.currentUser?.username || '';
   if (avatarInitials) {
-    const parts = String(displayName).trim().split(/\s+/).filter(Boolean);
-    const initials = parts.length >= 2
-      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-      : String(displayName).slice(0, 2).toUpperCase();
-    avatarInitials.textContent = initials || 'ZA';
+    avatarInitials.textContent = getSafeInitials(displayName, 'ZA');
   }
 
   if (username) {
@@ -2039,33 +2074,29 @@ function renderCrmInbox(filteredList) {
         const timeStr = c.lastMessageAt
           ? new Date(c.lastMessageAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
           : '';
-        const initials = String(c.name || 'C')
-          .trim()
-          .split(/\s+/)
-          .slice(0, 2)
-          .map((w) => w[0]?.toUpperCase() || '')
-          .join('') || 'C';
+        const initials = getSafeInitials(c.name || c.phone || 'C', 'C');
+        const avatarTint = getAvatarTintStyle(c.chatId || c.phone || c.name);
         const paused = isContactCurrentlyPaused(c);
         const unread = Math.max(0, Number(c.unreadCount) || 0);
         const encId = encodeURIComponent(c.chatId);
 
         return `
           <button type="button" class="crm-inbox-item ${isSelected ? 'active' : ''} ${unread > 0 ? 'unread' : ''}" onclick="selectInboxChat('${encId}')">
-            <div class="crm-inbox-avatar">${escapeHtml(initials)}</div>
+            <div class="crm-inbox-avatar" style="${avatarTint}">${escapeHtml(initials)}</div>
             <div class="crm-inbox-item-body">
               <div class="crm-inbox-item-top">
-                <span class="crm-inbox-item-name">${c.pinned ? '📌 ' : ''}${escapeHtml(c.name || 'Contato')}</span>
+                <span class="crm-inbox-item-name">${c.pinned ? '<span style="color:var(--accent-bright);margin-right:4px;" title="Fixada">★</span>' : ''}${escapeHtml(c.name || 'Contato')}</span>
                 <div style="display:flex; align-items:center; gap:5px; flex-shrink:0;">
                   <span class="crm-inbox-item-time">${escapeHtml(timeStr)}</span>
                   ${unread > 0 ? `<span class="inbox-unread-pill">${unread > 99 ? '99+' : unread}</span>` : ''}
                 </div>
               </div>
-              <div style="font-size:11px; color:var(--text-muted);">+${escapeHtml(c.phone || '')}</div>
+              <div style="font-size:11px; color:var(--text-muted); font-variant-numeric:tabular-nums;">+${escapeHtml(c.phone || '')}</div>
               <div class="crm-inbox-item-preview">${escapeHtml(preview)}</div>
               <div class="crm-inbox-item-badges">
                 <span class="tag ${c.stage === 'aguardando_humano' ? 'paused' : ''}" style="font-size:10.5px; padding:1px 6px;">${escapeHtml(stageLabels[c.stage] || c.stage)}</span>
-                ${paused ? '<span class="tag paused" style="font-size:10.5px; padding:1px 6px;">👤 Com Você</span>' : '<span class="tag" style="font-size:10.5px; padding:1px 6px;">🤖 IA Ativa</span>'}
-                ${c.archived ? '<span class="tag" style="font-size:10.5px; padding:1px 6px;">📥 Arquivada</span>' : ''}
+                ${paused ? '<span class="tag paused" style="font-size:10.5px; padding:1px 6px;">Humano</span>' : '<span class="tag" style="font-size:10.5px; padding:1px 6px;">IA Ativa</span>'}
+                ${c.archived ? '<span class="tag" style="font-size:10.5px; padding:1px 6px;">Arquivada</span>' : ''}
                 ${renderSentimentPillHtml(c.sentiment)}
               </div>
             </div>
@@ -4984,8 +5015,8 @@ function renderManagedUsers() {
           const isCurrentlyImpersonated = state.actAsUser?.userId === u.userId;
           const lastSeen = u.lastSeenAt ? new Date(u.lastSeenAt).toLocaleString('pt-BR') : 'Ainda não acessou';
           const workerBadge = u.workerOnline
-            ? `<span class="tag" style="background:rgba(37,211,102,0.16); color:var(--accent-bright);">🟢 Motor Online${u.connectedPhone ? ' (+' + escapeHtml(u.connectedPhone) + ')' : ''}</span>`
-            : `<span class="tag">⚪ Motor Offline</span>`;
+            ? `<span class="tag" style="background:rgba(16,185,129,0.14); color:var(--accent-bright);"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:5px;vertical-align:middle;"></span>Motor Online${u.connectedPhone ? ' (+' + escapeHtml(u.connectedPhone) + ')' : ''}</span>`
+            : `<span class="tag"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--text-muted);margin-right:5px;vertical-align:middle;"></span>Motor Offline</span>`;
           const statusBadge = u.isActive
             ? `<span class="tag" style="background:rgba(16,185,129,0.14); color:var(--accent-bright);">Ativa</span>`
             : `<span class="tag" style="background:rgba(239,68,68,0.15); color:var(--danger);">Bloqueada</span>`;
@@ -5001,25 +5032,25 @@ function renderManagedUsers() {
           return `
             <div class="saas-client-row" style="${isCurrentlyImpersonated ? 'border-color:rgba(245,158,11,0.7); background:rgba(245,158,11,0.06);' : ''}">
               <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
-                <div style="min-width:240px; flex:1;">
+                <div style="min-width:0; flex:1 1 240px;">
                   <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                     <strong style="font-size:15px; color:var(--text-main);">${escapeHtml(u.displayName)}</strong>
                     <code style="font-size:12px;">@${escapeHtml(u.username)}</code>
-                    ${isMaster ? `<span class="tag" style="background:rgba(245,158,11,0.18); color:var(--warning-bright); font-weight:700;">👑 Master</span>` : statusBadge}
+                    ${isMaster ? `<span class="tag" style="background:rgba(245,158,11,0.18); color:var(--warning-bright); font-weight:700;">Master</span>` : statusBadge}
                     ${workerBadge}
-                    ${u.awaitingHumanCount > 0 ? `<span class="tag paused">👤 ${u.awaitingHumanCount} aguardando humano</span>` : ''}
+                    ${u.awaitingHumanCount > 0 ? `<span class="tag paused">${u.awaitingHumanCount} aguardando humano</span>` : ''}
                   </div>
 
-                  <div style="font-size:12px; color:var(--text-muted); margin-top:6px; display:flex; gap:12px; flex-wrap:wrap;">
-                    <span>👥 CRM: <strong>${u.contactsCount || 0}</strong></span>
-                    <span>🤖 Respostas IA: <strong>${u.totalAiReplies || 0}</strong></span>
-                    ${u.customerPhone ? `<span>📱 WhatsApp dono: <strong>+${escapeHtml(u.customerPhone)}</strong></span>` : ''}
-                    <span>🕒 Acesso: ${escapeHtml(lastSeen)}</span>
+                  <div style="font-size:12px; color:var(--text-muted); margin-top:6px; display:flex; gap:12px; flex-wrap:wrap; font-variant-numeric:tabular-nums;">
+                    <span>CRM: <strong>${u.contactsCount || 0}</strong></span>
+                    <span>Respostas IA: <strong>${u.totalAiReplies || 0}</strong></span>
+                    ${u.customerPhone ? `<span>WhatsApp dono: <strong>+${escapeHtml(u.customerPhone)}</strong></span>` : ''}
+                    <span>Acesso: ${escapeHtml(lastSeen)}</span>
                   </div>
 
                   <div style="margin-top:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                     <div style="display:flex; align-items:center; gap:6px;">
-                      <span style="font-size:11px; font-weight:700; color:var(--text-secondary);">Setup ${score}/4</span>
+                      <span style="font-size:11px; font-weight:700; color:var(--text-secondary); font-variant-numeric:tabular-nums;">Setup ${score}/4</span>
                       <div class="setup-score-bar">
                         ${[1, 2, 3, 4].map((n) => `<span class="${score >= n ? 'on' : ''}"></span>`).join('')}
                       </div>
@@ -5029,7 +5060,7 @@ function renderManagedUsers() {
 
                   ${
                     u.adminNotes
-                      ? `<div style="margin-top:8px; font-size:12px; padding:6px 10px; border-radius:7px; background:rgba(245,158,11,0.08); border:1px dashed rgba(245,158,11,0.3); color:var(--text-secondary);">📝 <strong>Nota Master:</strong> ${escapeHtml(u.adminNotes)}</div>`
+                      ? `<div style="margin-top:8px; font-size:12px; padding:6px 10px; border-radius:7px; background:rgba(245,158,11,0.08); border:1px dashed rgba(245,158,11,0.3); color:var(--text-secondary);"><strong>Nota Master:</strong> ${escapeHtml(u.adminNotes)}</div>`
                       : ''
                   }
                 </div>
@@ -5039,28 +5070,28 @@ function renderManagedUsers() {
                     !isMaster
                       ? `
                     <button type="button" class="btn btn-primary btn-sm" onclick="enterClientSupportMode('${escapeJsArg(u.userId)}', '${escapeJsArg(u.username)}', '${escapeJsArg(u.displayName)}')">
-                      👁️ ${isCurrentlyImpersonated ? 'No Painel Agora' : 'Acessar Painel'}
+                      ${isCurrentlyImpersonated ? 'No Painel Agora' : 'Acessar Painel'}
                     </button>
                   `
                       : ''
                   }
                   <button type="button" class="btn btn-secondary btn-sm" onclick="copyClientWelcomeKit('${escapeJsArg(u.username)}', '${escapeJsArg(u.displayName)}')" title="Copiar instruções de acesso para enviar no WhatsApp do cliente">
-                    📋 Kit Boas-Vindas
+                    Kit Boas-Vindas
                   </button>
                   <button type="button" class="btn btn-secondary btn-sm" onclick="openEditManagedUserModal('${escapeJsArg(u.userId)}')">
-                    ✏️ Ficha
+                    Ficha
                   </button>
                   <button type="button" class="btn btn-secondary btn-sm" onclick="promptResetUserPass('${escapeJsArg(u.userId)}', '${escapeJsArg(u.username)}')">
-                    🔑 Senha
+                    Senha
                   </button>
                   ${
                     !isMaster
                       ? `
                     <button type="button" class="btn btn-secondary btn-sm" onclick="toggleManagedUserActive('${escapeJsArg(u.userId)}', ${u.isActive ? 'false' : 'true'})">
-                      ${u.isActive ? '⏸ Bloquear' : '▶ Ativar'}
+                      ${u.isActive ? 'Bloquear' : 'Ativar'}
                     </button>
-                    <button type="button" class="btn btn-danger btn-sm" onclick="removeManagedUser('${escapeJsArg(u.userId)}', '${escapeJsArg(u.username)}')">
-                      🗑
+                    <button type="button" class="btn btn-danger btn-sm" aria-label="Excluir conta @${escapeHtml(u.username)}" title="Excluir conta @${escapeHtml(u.username)}" onclick="removeManagedUser('${escapeJsArg(u.userId)}', '${escapeJsArg(u.username)}')">
+                      Excluir
                     </button>
                   `
                       : ''

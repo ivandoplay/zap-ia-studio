@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+  <a href="#mainContentArea" class="skip-link">Pular para o conteúdo principal</a>
   <!-- TELA DE LOGIN DA CONTA (SUPABASE RLS MULTI-CONTAS ISOLADAS — SEM CADASTRO PÚBLICO) -->
   <div id="cloudLoginScreen" class="pin-lock-overlay" role="dialog" aria-modal="true" aria-labelledby="cloudLoginTitle">
     <div class="panel saas-login-card">
@@ -72,7 +73,7 @@
       <h2 id="pinLockTitle" class="panel-title">Painel Protegido por PIN</h2>
       <p class="panel-desc" style="margin:6px auto 16px;">Digite seu PIN de segurança para acessar o painel.</p>
       <form id="pinUnlockForm" style="display:flex; flex-direction:column; gap:10px;">
-        <input type="password" id="pinUnlockInput" placeholder="Digite o PIN..." autocomplete="current-password" style="text-align:center; font-size:18px; letter-spacing:4px;" />
+        <input type="password" id="pinUnlockInput" placeholder="Digite o PIN..." autocomplete="current-password" style="text-align:center; font-size:18px; letter-spacing:4px;" / aria-label="PIN de desbloqueio do painel">
         <button type="submit" class="btn btn-primary" style="width:100%;">Desbloquear Painel</button>
       </form>
     </div>
@@ -246,7 +247,7 @@
       </div>
     </header>
 
-    <main class="content-area">
+    <main id="mainContentArea" class="content-area" tabindex="-1">
       <!-- SUB-NAVEGAÇÃO COMPARTILHADA DO HUB "CÉREBRO IA" -->
       <nav id="hubSubNavCerebro" class="hub-subnav" aria-label="Seções do Cérebro da IA">
         <button type="button" class="hub-subnav-btn" data-subtab="treinamento" onclick="switchTab('treinamento')">
@@ -451,7 +452,7 @@
                 <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
               </button>
 
-              <input type="text" id="simTextInput" placeholder="Digite ou clique no microfone para falar..." autocomplete="off" />
+              <input type="text" id="simTextInput" placeholder="Digite ou clique no microfone para falar..." autocomplete="off" / aria-label="Mensagem de teste para o simulador">
               <button type="submit" id="simSendBtn" class="btn btn-primary">Enviar</button>
             </form>
           </div>
@@ -529,7 +530,7 @@
                 <button type="button" class="studio-subtab" data-studiotab="humanization">Skills de Humanização (Hxx)</button>
               </div>
               <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                <input type="text" id="studioSearchInput" placeholder="Filtrar mensagem ou skill..." style="width:210px; min-height:36px;" />
+                <input type="text" id="studioSearchInput" placeholder="Filtrar mensagem ou skill..." style="width:210px; min-height:36px;" / aria-label="Filtrar mensagens aprovadas ou skills">
                 <button type="button" id="btnNewStudioItem" class="btn btn-primary btn-sm">+ Nova Mensagem / Skill</button>
               </div>
             </div>
@@ -617,7 +618,7 @@
             </div>
             <p class="panel-desc">Suba tabelas de preços, manuais ou políticas em texto para a IA consultar durante o atendimento.</p>
             <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
-              <input type="file" id="knowledgeFileInput" accept=".txt,.csv,.md,.json" style="flex:1;" />
+              <input type="file" id="knowledgeFileInput" accept=".txt,.csv,.md,.json" style="flex:1;" / aria-label="Selecionar arquivo PDF ou TXT de conhecimento">
               <button type="button" id="btnUploadKnowledge" class="btn btn-secondary">Anexar arquivo</button>
             </div>
             <div id="knowledgeDocsList"></div>
@@ -666,7 +667,7 @@
               <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">A IA escolhe automaticamente os áudios marcados como <strong>Uso pela IA: Ativo</strong> quando encaixam na conversa, e todos ficam disponíveis em 1 clique no CRM.</p>
             </div>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <input type="text" id="voiceSearchInput" placeholder="Buscar áudio ou transcrição..." style="width:230px; min-height:36px;" />
+              <input type="text" id="voiceSearchInput" placeholder="Buscar áudio ou transcrição..." style="width:230px; min-height:36px;" / aria-label="Buscar áudio ou transcrição na biblioteca de voz">
             </div>
           </div>
           <div id="voiceLibraryGrid" class="voice-grid" style="margin-top:14px;"></div>
@@ -760,8 +761,8 @@
               <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">Ideal para portfólio de assessoria, veículos com várias fotos, cardápios ou tabelas em PDF.</p>
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-              <input type="text" id="catalogSearchInput" placeholder="Buscar item..." style="width:190px; min-height:36px;" />
-              <select id="catalogCatFilter" style="width:auto; min-width:140px; min-height:36px;">
+              <input type="text" id="catalogSearchInput" placeholder="Buscar item..." style="width:190px; min-height:36px;" / aria-label="Buscar produto ou serviço no catálogo">
+              <select id="catalogCatFilter" style="width:auto; min-width:140px; min-height:36px;" aria-label="Filtrar catálogo por categoria">
                 <option value="">Todas as categorias</option>
               </select>
               <button type="button" id="btnOpenNewItemModal" class="btn btn-primary btn-sm">+ Adicionar item / Galeria</button>
@@ -1097,8 +1098,8 @@
             <p class="panel-desc">A IA nunca responderá nem enviará abordagem para os números abaixo.</p>
 
             <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
-              <input type="text" id="ignoreNameInput" placeholder="Nome (ex: Mãe)" style="flex:1; min-width:120px;" />
-              <input type="text" id="ignorePhoneInput" placeholder="DDD + Número (ex: 86999887766)" style="flex:1.2; min-width:150px;" />
+              <input type="text" id="ignoreNameInput" placeholder="Nome (ex: Mãe)" style="flex:1; min-width:120px;" / aria-label="Nome do contato ignorado na lista branca">
+              <input type="text" id="ignorePhoneInput" placeholder="DDD + Número (ex: 86999887766)" style="flex:1.2; min-width:150px;" / aria-label="Número de WhatsApp com DDD para lista branca">
               <button type="button" id="btnAddIgnored" class="btn btn-secondary">Bloquear IA</button>
             </div>
 
@@ -1130,7 +1131,7 @@
           <div class="crm-hub-actions">
             <div class="crm-search-wrap">
               <svg class="crm-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
-              <input type="text" id="crmSearchInput" placeholder="Buscar nome, número ou mensagem..." />
+              <input type="text" id="crmSearchInput" placeholder="Buscar nome, número ou mensagem..." / aria-label="Buscar conversa por nome, telefone ou mensagem">
             </div>
             <button type="button" id="btnOpenNewContactModal" class="btn btn-primary btn-sm">
               <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
@@ -1260,19 +1261,19 @@
                   </div>
 
                   <div class="crm-inbox-voice-quick" id="inboxVoiceQuickRow">
-                    <select id="inboxQuickVoiceSelect" style="flex:1; min-width:140px; font-size:12px; padding:5px 9px;">
+                    <select id="inboxQuickVoiceSelect" style="flex:1; min-width:140px; font-size:12px; padding:5px 9px;" aria-label="Selecionar áudio gravado para envio rápido">
                       <option value="">Áudio Estratégico...</option>
                     </select>
                     <button type="button" id="btnInboxSendQuickVoice" class="btn btn-secondary btn-sm">Enviar Áudio</button>
 
-                    <select id="inboxQuickCatalogSelect" style="flex:1; min-width:140px; font-size:12px; padding:5px 9px;">
+                    <select id="inboxQuickCatalogSelect" style="flex:1; min-width:140px; font-size:12px; padding:5px 9px;" aria-label="Selecionar item do catálogo para envio rápido">
                       <option value="">Item do Catálogo...</option>
                     </select>
                     <button type="button" id="btnInboxSendQuickCatalog" class="btn btn-secondary btn-sm">Enviar Item</button>
                   </div>
 
                   <form id="crmInboxReplyForm" style="display:flex; gap:8px; align-items:center;">
-                    <input type="text" id="crmInboxReplyInput" placeholder="Mensagem ou digite / para atalhos..." autocomplete="off" style="flex:1;" />
+                    <input type="text" id="crmInboxReplyInput" placeholder="Mensagem ou digite / para atalhos..." autocomplete="off" style="flex:1;" / aria-label="Escrever resposta ou nota interna no chat">
                     <button type="submit" id="btnInboxSendText" class="btn btn-primary">Enviar</button>
                   </form>
                 </div>
@@ -1312,7 +1313,7 @@
                 <!-- Agendamento S19 Rápido -->
                 <div class="inspector-section">
                   <div class="inspector-label">Retorno Combinado (S19)</div>
-                  <input type="datetime-local" id="inspFollowUpInput" style="width:100%; font-size:12.5px; padding:6px 8px; margin-bottom:6px;" />
+                  <input type="datetime-local" id="inspFollowUpInput" style="width:100%; font-size:12.5px; padding:6px 8px; margin-bottom:6px;" / aria-label="Data e hora do lembrete de retorno">
                   <div style="display:flex; gap:5px; flex-wrap:wrap;">
                     <button type="button" class="composer-tool-btn" onclick="quickSetInspectorFollowup(60)">+1 hora</button>
                     <button type="button" class="composer-tool-btn" onclick="quickSetInspectorFollowup('tomorrow9')">Amanhã 09h</button>
@@ -1329,7 +1330,7 @@
                 <!-- Resumo & Observações Fixas -->
                 <div class="inspector-section">
                   <div class="inspector-label">Observações Fixas do Lead</div>
-                  <textarea id="inspNotesInput" rows="3" placeholder="Ex: Loja c/ 35 carros, prefere contato à tarde..." style="font-size:12.5px;"></textarea>
+                  <textarea id="inspNotesInput" rows="3" placeholder="Ex: Loja c/ 35 carros, prefere contato à tarde..." style="font-size:12.5px;" aria-label="Anotações comerciais permanentes do lead"></textarea>
                   <button type="button" id="btnSaveInspectorNotes" class="btn btn-secondary btn-sm" style="width:100%; justify-content:center; margin-top:6px;">
                     Salvar Observações
                   </button>
@@ -1439,8 +1440,8 @@
               <p class="panel-desc" style="margin-bottom:0;">Entre em Modo Suporte em 1 clique, copie o Kit de Acesso, edite notas financeiras ou bloqueie/libere contas.</p>
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; width:100%; max-width:460px;">
-              <input type="text" id="masterUserSearchInput" placeholder="Buscar cliente, @usuario ou nota..." style="flex:1; min-width:160px;" />
-              <select id="masterUserFilterSelect" style="width:auto; min-width:145px; font-size:12.5px; padding:7px 10px;">
+              <input type="text" id="masterUserSearchInput" placeholder="Buscar cliente, @usuario ou nota..." style="flex:1; min-width:160px;" / aria-label="Buscar conta de cliente por nome, usuário ou nota">
+              <select id="masterUserFilterSelect" style="width:auto; min-width:145px; font-size:12.5px; padding:7px 10px;" aria-label="Filtrar contas de clientes por status">
                 <option value="all">Todas as contas</option>
                 <option value="active">Somente Ativas</option>
                 <option value="online">Motor Online Agora</option>
@@ -1679,7 +1680,7 @@
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('cmdPaletteModal')">ESC</button>
       </div>
       <div class="modal-body">
-        <input type="text" id="cmdSearchInput" placeholder="Busque um cliente do CRM, mensagem M01–M13, skill ou aba..." autocomplete="off" />
+        <input type="text" id="cmdSearchInput" placeholder="Busque um cliente do CRM, mensagem M01–M13, skill ou aba..." autocomplete="off" / aria-label="Busca rápida global de clientes, mensagens e abas">
         <div id="cmdResultsList" class="cmd-list"></div>
       </div>
     </div>
@@ -1941,7 +1942,7 @@
             </div>
 
             <form id="crmManualSendForm" class="wa-composer">
-              <input type="text" id="crmManualTextInput" placeholder="Enviar mensagem manual e pausar IA..." autocomplete="off" />
+              <input type="text" id="crmManualTextInput" placeholder="Enviar mensagem manual e pausar IA..." autocomplete="off" / aria-label="Enviar mensagem manual pelo detalhe do lead">
               <button type="submit" class="btn btn-primary btn-sm">Enviar</button>
             </form>
           </div>

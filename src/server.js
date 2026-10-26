@@ -59,19 +59,28 @@ app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Servir arquivos estáticos (incluindo manifest.json e sw.js livres de auth p/ Chrome PWA)
-app.use('/uploads', express.static(UPLOADS_DIR));
+app.use(
+  '/uploads',
+  (_req, res, next) => {
+    res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; media-src 'self'; style-src 'unsafe-inline'; sandbox");
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    next();
+  },
+  express.static(UPLOADS_DIR)
+);
 app.use(express.static(path.join(ROOT_DIR, 'public')));
 app.get('/', (_req, res) => {
   res.sendFile(path.join(ROOT_DIR, 'public', 'index.html'));
 });
 
-// Upload em disco para Catálogo (até 5 Fotos/PDFs por item)
+// Upload em disco para Catálogo (até 5 Fotos/PDFs por item — whitelist estrita anti-XSS)
+const ALLOWED_UPLOAD_EXTS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf', '.ogg', '.opus', '.mp3', '.m4a', '.wav', '.webm']);
 const diskUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
     filename: (_req, file, cb) => {
       const ext = path.extname(file.originalname || '').toLowerCase() || '.bin';
-      const safeExt = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf', '.ogg', '.opus', '.mp3', '.m4a', '.wav', '.webm'].includes(ext) ? ext : ext;
+      const safeExt = ALLOWED_UPLOAD_EXTS.has(ext) ? ext : '.bin';
       cb(null, `${Date.now()}_${Math.random().toString(36).slice(2, 8)}${safeExt}`);
     }
   }),

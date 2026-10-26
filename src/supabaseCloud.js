@@ -513,8 +513,13 @@ export async function flushTenantStoreToCloud(client, userId, tenantStore) {
       const c = tenantStore.data.contacts[cid];
       if (!c) continue;
       const remoteData = remoteMap.get(cid);
+      const effectiveClearedAt =
+        (c.historyClearedAt || '') >= (remoteData?.historyClearedAt || '')
+          ? (c.historyClearedAt || remoteData?.historyClearedAt || null)
+          : (remoteData?.historyClearedAt || null);
+      if (effectiveClearedAt) c.historyClearedAt = effectiveClearedAt;
       if (remoteData?.messages?.length) {
-        c.messages = mergeContactMessagesUnion(c.messages, remoteData.messages);
+        c.messages = mergeContactMessagesUnion(c.messages, remoteData.messages, effectiveClearedAt);
         const lastReal = [...(c.messages || [])].reverse().find((m) => m.role !== 'internal_note');
         if (lastReal?.timestamp && (!c.lastMessageAt || lastReal.timestamp > c.lastMessageAt)) {
           c.lastMessageAt = lastReal.timestamp;
@@ -1334,9 +1339,14 @@ class CloudWorkerBridge {
 
           const prevLocal = prevLocalContacts[row.chat_id];
           const cloudContact = { ...row.data };
+          const effectiveClearedAt =
+            (cloudContact.historyClearedAt || '') >= (prevLocal?.historyClearedAt || '')
+              ? (cloudContact.historyClearedAt || prevLocal?.historyClearedAt || null)
+              : (prevLocal?.historyClearedAt || null);
+          if (effectiveClearedAt) cloudContact.historyClearedAt = effectiveClearedAt;
           if (prevLocal?.messages?.length) {
             const beforeCount = Array.isArray(cloudContact.messages) ? cloudContact.messages.length : 0;
-            cloudContact.messages = mergeContactMessagesUnion(cloudContact.messages, prevLocal.messages);
+            cloudContact.messages = mergeContactMessagesUnion(cloudContact.messages, prevLocal.messages, effectiveClearedAt);
             if (cloudContact.messages.length > beforeCount) {
               healedIds.push(row.chat_id);
               const lastReal = [...cloudContact.messages].reverse().find((m) => m.role !== 'internal_note');
@@ -1389,6 +1399,16 @@ class CloudWorkerBridge {
             },
             this.user.role !== 'master'
           );
+          // Remove imediatamente do cache local do motor qualquer conversa apagada pelo painel na Vercel (tombstone)
+          for (const [cid, cObj] of Object.entries(localStorageInstance.data.contacts || {})) {
+            if (localStorageInstance.dirtyContactIds.has(cid)) continue;
+            const tombMs = localStorageInstance.getDeletedChatTombstoneMs(cid, cObj?.phone || '');
+            const lastMs = new Date(cObj?.lastMessageAt || 0).getTime() || 0;
+            if (tombMs > 0 && lastMs <= tombMs + 2000) {
+              delete localStorageInstance.data.contacts[cid];
+              if (this.broadcastFn) this.broadcastFn('crm_updated', {});
+            }
+          }
           localStorageInstance.workspaceDirty = false;
           if (initial) {
             localStorageInstance.dirtyContactIds.clear();
@@ -1847,6 +1867,20 @@ class CloudWorkerBridge {
           const out = await this.whatsappManager.sendProactiveAiOpening(p.phone, p.text, p.name, p.voiceId || '');
           await this.flushLocalToCloud();
           result = { ok: true, ...out, stats: localStorageInstance.data.stats };
+          break;
+        }
+        case 'crm_block_contact': {
+          await this.pullCloudIntoLocal(false);
+          const contact = await this.whatsappManager.setWhatsAppBlockStatus(p.chatId, Boolean(p.blocked));
+          await this.flushLocalToCloud();
+          result = { ok: true, contact };
+          break;
+        }
+        case 'crm_send_vcard': {
+          await this.pullCloudIntoLocal(false);
+          const contact = await this.whatsappManager.sendContactVCardOnWhatsApp(p.targetChatId, p.cardContact || {});
+          await this.flushLocalToCloud();
+          result = { ok: true, contact };
           break;
         }
         case 'queue_start': {

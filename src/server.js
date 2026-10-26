@@ -8,7 +8,7 @@ import cors from 'cors';
 import multer from 'multer';
 import { WebSocketServer } from 'ws';
 
-import { ROOT_DIR, UPLOADS_DIR, storage, tenantStorageContext, uid, normalizePhoneDigits, normalizeCatalogItem } from './storage.js';
+import { ROOT_DIR, UPLOADS_DIR, storage, tenantStorageContext, uid, normalizePhoneDigits, normalizeCatalogItem, buildContactVCard } from './storage.js';
 import { NICHE_TEMPLATES } from './templates.js';
 import { buildSystemPrompt, generateSmartReply, parseGeminiKeyPool, transcribeVoiceBufferWithAi, analyzeCrmFunnelCoach } from './aiEngine.js';
 import { formatPixMessageWithQr } from './pix.js';
@@ -1539,16 +1539,35 @@ app.post('/api/crm/new-contact', (req, res) => {
     return res.status(400).json({ ok: false, error: 'Informe um telefone válido com DDD (ex: 5586999887766).' });
   }
   const fullPhone = rawPhone.startsWith('55') || rawPhone.length >= 12 ? rawPhone : `55${rawPhone}`;
-  const chatId = `${fullPhone}@s.whatsapp.net`;
+  const existingKey = storage.findSiblingContactKey(`${fullPhone}@s.whatsapp.net`, fullPhone);
+  const chatId = existingKey || `${fullPhone}@s.whatsapp.net`;
   const contact = storage.upsertContact(chatId, {
     name,
+    forceName: true,
+    savedContact: true,
     phone: fullPhone,
-    stage: req.body?.stage || 'novo',
-    notes: String(req.body?.notes || '').trim(),
+    company: req.body?.company !== undefined ? String(req.body.company || '').trim() : undefined,
+    email: req.body?.email !== undefined ? String(req.body.email || '').trim() : undefined,
+    docNumber: req.body?.docNumber !== undefined ? String(req.body.docNumber || '').trim() : undefined,
+    city: req.body?.city !== undefined ? String(req.body.city || '').trim() : undefined,
+    leadSource: req.body?.leadSource !== undefined ? String(req.body.leadSource || '').trim() : undefined,
+    stage: req.body?.stage || storage.data.contacts?.[chatId]?.stage || 'novo',
+    notes: req.body?.notes !== undefined ? String(req.body.notes || '').trim() : undefined,
+    tags: Array.isArray(req.body?.tags) ? req.body.tags : undefined,
     archived: false
   });
+  storage.writeNow();
   broadcast('crm_updated', {});
   res.json({ ok: true, contact });
+});
+
+app.get('/api/crm/contacts.vcf', (req, res) => {
+  const savedOnly = req.query.savedOnly === '1';
+  const list = Object.values(storage.data.contacts || {}).filter((c) => !savedOnly || c.savedContact);
+  const vcfContent = list.map((c) => buildContactVCard(c)).join('\r\n');
+  res.setHeader('Content-Type', 'text/vcard; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="agenda_contatos_zapia.vcf"');
+  res.send(vcfContent || buildContactVCard({ name: 'ZAP-IA Agenda Vazia', phone: '' }));
 });
 
 app.put('/api/crm/:chatId', (req, res) => {
@@ -1634,6 +1653,15 @@ app.post('/api/crm/bulk-action', (req, res) => {
       case 'resume_ai':
         storage.resumeContact(key);
         break;
+      case 'save_contacts':
+        storage.upsertContact(key, { savedContact: true });
+        break;
+      case 'clear_messages':
+        storage.clearContactMessages(key);
+        break;
+      case 'delete_chats':
+        storage.deleteContact(key);
+        break;
       default:
         break;
     }
@@ -1645,10 +1673,173 @@ app.post('/api/crm/bulk-action', (req, res) => {
 
 app.delete('/api/crm/:chatId', (req, res) => {
   const chatId = decodeURIComponent(req.params.chatId);
-  const ok = storage.deleteContact(chatId);
-  if (!ok) return res.status(404).json({ ok: false, error: 'Conversa não encontrada.' });
+  const siblingKey = storage.findSiblingContactKey(chatId);
+  let deletedAny = false;
+  for (const key of new Set([chatId, siblingKey].filter(Boolean))) {
+    const contact = storage.data.contacts[key];
+    for (const m of contact?.messages || []) {
+      if (m.mediaUrl && m.mediaUrl.includes('_crmvoz_') && m.mediaUrl.startsWith('/uploads/')) {
+        const safeFn = path.basename(m.mediaUrl);
+        const fp = path.join(UPLOADS_DIR, safeFn);
+        if (fs.existsSync(fp)) {
+          try { fs.unlinkSync(fp); } catch {}
+        }
+      }
+    }
+    if (storage.deleteContact(key)) deletedAny = true;
+  }
+  if (!deletedAny) return res.status(404).json({ ok: false, error: 'Conversa não encontrada.' });
+  storage.writeNow();
   broadcast('crm_updated', {});
   res.json({ ok: true });
+});
+
+app.post('/api/crm/:chatId/clear-messages', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const contact = storage.clearContactMessages(chatId);
+  if (!contact) return res.status(404).json({ ok: false, error: 'Conversa não encontrada.' });
+  broadcast('crm_updated', { chatId: contact.chatId });
+  res.json({ ok: true, contact });
+});
+
+app.get('/api/crm/:chatId/vcard.vcf', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const key = storage.findSiblingContactKey(chatId) || chatId;
+  const contact = storage.data.contacts[key];
+  if (!contact) return res.status(404).json({ ok: false, error: 'Contato não encontrado.' });
+  const safeSlug = String(contact.name || contact.phone || 'contato')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .slice(0, 40) || 'contato';
+  res.setHeader('Content-Type', 'text/vcard; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${safeSlug}.vcf"`);
+  res.send(buildContactVCard(contact));
+});
+
+app.get('/api/crm/:chatId/export.txt', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const key = storage.findSiblingContactKey(chatId) || chatId;
+  const contact = storage.data.contacts[key];
+  if (!contact) return res.status(404).json({ ok: false, error: 'Conversa não encontrada.' });
+  const bizName = storage.getBusiness()?.attendantName || storage.getBusiness()?.name || 'Atendimento';
+  const header = [
+    `Histórico de Conversa — ZAP-IA Studio`,
+    `Contato: ${contact.name || 'Cliente'} (+${contact.phone || 'N/D'})`,
+    contact.company ? `Empresa: ${contact.company}` : null,
+    `Exportado em: ${new Date().toLocaleString('pt-BR')}`,
+    `------------------------------------------------------------`,
+    ''
+  ].filter((x) => x !== null);
+
+  const lines = (contact.messages || []).map((m) => {
+    const dt = m.timestamp ? new Date(m.timestamp).toLocaleString('pt-BR') : '--';
+    const who =
+      m.role === 'user'
+        ? (contact.name || 'Cliente')
+        : m.role === 'internal_note'
+          ? `[NOTA INTERNA - ${m.author || 'Equipe'}]`
+          : `${bizName} (${m.role === 'assistant' ? 'Automático' : 'Você'})`;
+    return `[${dt}] ${who}: ${String(m.text || '').replace(/\r?\n/g, ' ')}`;
+  });
+
+  const safeSlug = String(contact.name || contact.phone || 'conversa')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .slice(0, 40) || 'conversa';
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="conversa_${safeSlug}.txt"`);
+  res.send('\uFEFF' + [...header, ...lines].join('\r\n'));
+});
+
+app.post('/api/crm/:chatId/block', async (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const key = storage.findSiblingContactKey(chatId) || chatId;
+  const existing = storage.data.contacts[key];
+  if (!existing) return res.status(404).json({ ok: false, error: 'Contato não encontrado.' });
+  const nextBlocked = req.body?.blocked !== undefined ? Boolean(req.body.blocked) : !existing.waBlocked;
+
+  try {
+    if (usesCloudBridge(req) && !key.startsWith('demo_') && getEffectiveWaState(req).workerOnline) {
+      try {
+        const out = await dispatchCommandToWorker(
+          req.cloudAuth.client,
+          req.cloudAuth.authUser.id,
+          'crm_block_contact',
+          { chatId: key, blocked: nextBlocked }
+        );
+        storage.workspaceDirty = false;
+        storage.dirtyContactIds.clear();
+        return res.json({ ok: true, contact: out.contact || storage.data.contacts[key], syncedWhatsApp: true });
+      } catch (bridgeErr) {
+        if (!/desconhecida/i.test(bridgeErr.message || '')) throw bridgeErr;
+      }
+    } else if (!usesCloudBridge(req) && !key.startsWith('demo_') && whatsappManager?.status === 'connected') {
+      const updated = await whatsappManager.setWhatsAppBlockStatus(key, nextBlocked);
+      return res.json({ ok: true, contact: updated, syncedWhatsApp: true });
+    }
+
+    const updated = storage.upsertContact(key, {
+      waBlocked: nextBlocked,
+      aiIgnored: nextBlocked ? true : Boolean(existing.aiIgnored)
+    });
+    storage.writeNow();
+    broadcast('crm_updated', { chatId: key });
+    res.json({ ok: true, contact: updated, syncedWhatsApp: false });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/crm/:chatId/send-vcard', async (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const targetKey = storage.findSiblingContactKey(chatId) || chatId;
+  if (!storage.data.contacts[targetKey]) {
+    return res.status(404).json({ ok: false, error: 'Conversa de destino não encontrada.' });
+  }
+
+  let cardContact = req.body?.cardContact || null;
+  if (!cardContact && req.body?.sourceChatId) {
+    const srcKey = storage.findSiblingContactKey(req.body.sourceChatId) || req.body.sourceChatId;
+    cardContact = storage.data.contacts[srcKey] || null;
+  }
+  if (!cardContact || (!cardContact.name && !cardContact.phone)) {
+    return res.status(400).json({ ok: false, error: 'Informe os dados do cartão de contato a enviar.' });
+  }
+
+  try {
+    if (usesCloudBridge(req) && !targetKey.startsWith('demo_') && getEffectiveWaState(req).workerOnline) {
+      try {
+        const out = await dispatchCommandToWorker(
+          req.cloudAuth.client,
+          req.cloudAuth.authUser.id,
+          'crm_send_vcard',
+          { targetChatId: targetKey, cardContact }
+        );
+        storage.workspaceDirty = false;
+        storage.dirtyContactIds.clear();
+        return res.json({ ok: true, contact: out.contact || storage.data.contacts[targetKey], syncedWhatsApp: true });
+      } catch (bridgeErr) {
+        if (!/desconhecida/i.test(bridgeErr.message || '')) throw bridgeErr;
+      }
+    } else if (!usesCloudBridge(req) && !targetKey.startsWith('demo_') && whatsappManager?.status === 'connected') {
+      const updated = await whatsappManager.sendContactVCardOnWhatsApp(targetKey, cardContact);
+      return res.json({ ok: true, contact: updated, syncedWhatsApp: true });
+    }
+
+    const displayName = String(cardContact.name || cardContact.phone || 'Contato').trim();
+    const phoneLabel = cardContact.phone ? ` (+${normalizePhoneDigits(cardContact.phone)})` : '';
+    const updated = storage.appendContactMessage(targetKey, {
+      role: 'owner',
+      text: `🪪 Cartão de contato enviado: *${displayName}*${phoneLabel}`
+    });
+    storage.writeNow();
+    broadcast('crm_updated', { chatId: targetKey });
+    res.json({ ok: true, contact: updated, syncedWhatsApp: false });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ ok: false, error: err.message });
+  }
 });
 
 app.post('/api/crm/:chatId/mark-read', (req, res) => {
@@ -2696,26 +2887,7 @@ app.post('/api/crm/funnel-coach', async (_req, res) => {
   }
 });
 
-app.delete('/api/crm/:chatId', (req, res) => {
-  const chatId = decodeURIComponent(req.params.chatId);
-  const siblingKey = storage.findSiblingContactKey(chatId);
-  for (const key of new Set([chatId, siblingKey].filter(Boolean))) {
-    const contact = storage.data.contacts[key];
-    // Limpa áudios avulsos gravados manualmente na ficha para não acumular disco
-    for (const m of contact?.messages || []) {
-      if (m.mediaUrl && m.mediaUrl.includes('_crmvoz_') && m.mediaUrl.startsWith('/uploads/')) {
-        const safeFn = path.basename(m.mediaUrl);
-        const fp = path.join(UPLOADS_DIR, safeFn);
-        if (fs.existsSync(fp)) {
-          try { fs.unlinkSync(fp); } catch {}
-        }
-      }
-    }
-    storage.deleteContact(key);
-  }
-  storage.writeNow();
-  res.json({ ok: true });
-});
+// (DELETE /api/crm/:chatId unificado acima com limpeza de mídia e trava anti-ressurreição)
 
 // ======================== SIMULADOR INTERATIVO + ENSINAR EM 1 CLIQUE ========================
 

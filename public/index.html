@@ -1153,6 +1153,11 @@
               <span>Conversas</span>
               <span class="tag" id="crmInboxTotalCount" style="padding:1px 6px; font-size:10.5px;">0</span>
             </button>
+            <button type="button" class="crm-subtab-btn" data-crmview="contacts" id="btnCrmViewContacts">
+              <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              <span>Contatos</span>
+              <span class="tag" id="crmContactsSavedCount" style="padding:1px 6px; font-size:10.5px;">0</span>
+            </button>
             <button type="button" class="crm-subtab-btn" data-crmview="kanban" id="btnCrmViewKanban">
               <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="18" rx="1"></rect><rect x="10" y="3" width="5" height="12" rx="1"></rect><rect x="17" y="3" width="4" height="15" rx="1"></rect></svg>
               <span>Kanban</span>
@@ -1229,7 +1234,10 @@
             </select>
             <button type="button" class="btn btn-secondary btn-sm" onclick="runCrmBulkAction('pause_ai')">Pausar IA</button>
             <button type="button" class="btn btn-secondary btn-sm" onclick="runCrmBulkAction('resume_ai')">Ativar IA</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="runCrmBulkAction('save_contacts')">Salvar Contatos</button>
             <button type="button" class="btn btn-secondary btn-sm" onclick="runCrmBulkAction('archive')">Arquivar</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="confirmBulkClearMessages()">Limpar Msgs</button>
+            <button type="button" class="btn btn-danger btn-sm" onclick="confirmBulkDeleteChats()">Apagar</button>
             <button type="button" class="btn btn-secondary btn-sm" onclick="toggleCrmBulkMode(false)">Concluir</button>
           </div>
         </div>
@@ -1275,9 +1283,10 @@
                         <span id="inboxAiStatusBadge" class="tag">Ativo</span>
                         <span id="inboxDealBadge" class="tag" style="display:none;"></span>
                       </div>
-                      <div style="display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--text-secondary); font-variant-numeric:tabular-nums;">
+                      <div style="display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--text-secondary); font-variant-numeric:tabular-nums; flex-wrap:wrap;">
                         <span id="inboxContactPhone">+55...</span>
                         <button type="button" id="btnCopyInboxPhone" style="background:none; border:none; color:var(--accent-bright); font-size:11px; font-weight:600; cursor:pointer; padding:0;">Copiar</button>
+                        <button type="button" id="btnQuickSaveContactPill" onclick="openSaveContactModalForActive()" style="background:rgba(16,185,129,0.14); border:1px solid rgba(16,185,129,0.35); color:var(--accent-bright); border-radius:999px; font-size:10.5px; font-weight:700; cursor:pointer; padding:1px 8px;">+ Salvar Contato</button>
                       </div>
                     </div>
                   </div>
@@ -1319,6 +1328,24 @@
                       <svg class="icon-svg" style="width:14px; height:14px;" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"></rect><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"></path><path d="M10 12h4"></path></svg>
                     </button>
                     <button type="button" id="btnToggleInspectorCol" class="btn btn-secondary btn-sm" title="Abrir Ficha 360º do Contato">360º</button>
+                    <div style="position:relative; display:inline-flex;">
+                      <button type="button" id="btnInboxChatMoreMenu" class="btn btn-secondary btn-sm btn-icon-only" onclick="toggleInboxChatMoreMenu(event)" title="Opções do contato e conversa (Salvar, Limpar, Apagar, Bloquear, Exportar)" aria-label="Mais opções da conversa" style="font-size:16px; font-weight:700; line-height:1;">⋮</button>
+                      <div id="inboxChatMorePopover" class="crm-mini-popover" style="display:none; right:0; top:38px; min-width:238px; z-index:95;">
+                        <button type="button" class="crm-popover-opt" onclick="closeAllCrmPopovers(); openSaveContactModalForActive()">👤 Salvar / Editar Contato</button>
+                        <button type="button" class="crm-popover-opt" onclick="closeAllCrmPopovers(); downloadActiveContactVcf()">📲 Salvar na Agenda do Celular (.vcf)</button>
+                        <button type="button" class="crm-popover-opt" onclick="closeAllCrmPopovers(); openSendContactCardModal('active')">🪪 Enviar Cartão de Contato...</button>
+                        <button type="button" class="crm-popover-opt" onclick="closeAllCrmPopovers(); exportActiveChatTxt()">📄 Exportar Conversa (.txt)</button>
+                        <hr style="border:none; border-top:1px solid var(--border); margin:4px 0;" />
+                        <button type="button" class="crm-popover-opt" onclick="closeAllCrmPopovers(); markActiveChatUnread()">● Marcar como Não Lida</button>
+                        <button type="button" class="crm-popover-opt" id="menuOptPinChat" onclick="closeAllCrmPopovers(); document.getElementById('btnInboxTogglePin')?.click()">📌 Fixar / Desafixar Conversa</button>
+                        <button type="button" class="crm-popover-opt" id="menuOptArchiveChat" onclick="closeAllCrmPopovers(); document.getElementById('btnInboxToggleArchive')?.click()">📦 Arquivar / Desarquivar</button>
+                        <button type="button" class="crm-popover-opt" id="menuOptIgnoreAi" onclick="closeAllCrmPopovers(); toggleIgnoreActiveContact()">🔕 Ignorar IA neste número</button>
+                        <button type="button" class="crm-popover-opt" id="menuOptBlockWa" onclick="closeAllCrmPopovers(); toggleBlockActiveContact()">🚫 Bloquear no WhatsApp</button>
+                        <hr style="border:none; border-top:1px solid var(--border); margin:4px 0;" />
+                        <button type="button" class="crm-popover-opt" onclick="closeAllCrmPopovers(); clearActiveChatMessages()">🧹 Limpar Mensagens (Manter Contato)</button>
+                        <button type="button" class="crm-popover-opt" style="color:var(--danger);" onclick="closeAllCrmPopovers(); deleteActiveChatWithConfirm()">🗑️ Apagar Conversa</button>
+                      </div>
+                    </div>
                     <button type="button" id="btnInboxOpenFullModal" class="btn btn-secondary btn-sm btn-icon-only hide-mob-chat" title="Expandir janela completa" aria-label="Expandir ficha completa">
                       <svg class="icon-svg" style="width:14px; height:14px;" viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
                     </button>
@@ -1379,6 +1406,9 @@
                       </button>
                       <button type="button" id="btnInboxQuickPix" class="composer-tool-btn" title="Enviar chave PIX + QR Code agora">
                         PIX
+                      </button>
+                      <button type="button" class="composer-tool-btn" onclick="openSendContactCardModal('into_chat')" title="Enviar cartão de contato (vCard) nesta conversa">
+                        🪪 Contato
                       </button>
                       <button type="button" id="btnToggleComposerMediaTray" class="composer-tool-btn" title="Enviar Áudio Estratégico ou Item do Catálogo">
                         + Mídia
@@ -1571,17 +1601,63 @@
 
                 <!-- Ações de Controle Pessoal & Limpeza -->
                 <div class="inspector-section" style="display:flex; gap:6px; flex-direction:column;">
+                  <button type="button" class="btn btn-primary btn-sm" style="width:100%; justify-content:center;" onclick="openSaveContactModalForActive()">
+                    👤 Salvar / Editar Contato
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm" style="width:100%; justify-content:center;" onclick="downloadActiveContactVcf()">
+                    📲 Salvar no Celular (.vcf)
+                  </button>
                   <button type="button" id="btnInspectorIgnoreAi" class="btn btn-secondary btn-sm" style="width:100%; justify-content:center;" onclick="toggleIgnoreActiveContact()">
                     🔕 Ignorar IA neste número
                   </button>
+                  <button type="button" id="btnInspectorBlockWa" class="btn btn-secondary btn-sm" style="width:100%; justify-content:center;" onclick="toggleBlockActiveContact()">
+                    🚫 Bloquear no WhatsApp
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-sm" style="width:100%; justify-content:center;" onclick="clearActiveChatMessages()">
+                    🧹 Limpar Mensagens
+                  </button>
                   <button type="button" id="btnInspectorDeleteChat" class="btn btn-danger btn-sm" style="width:100%; justify-content:center;">
-                    Excluir Conversa
+                    🗑️ Apagar Conversa
                   </button>
                 </div>
               </div>
             </aside>
           </div>
           <div id="inspectorMobileBackdrop" class="inspector-mob-backdrop" onclick="closeMobileInspectorSheet()"></div>
+        </div>
+
+        <!-- SUB-VISÃO AGENDA DE CONTATOS COMPLETA (SALVAR SEM PRECISAR MANDAR MSG + EXPORTAR .VCF) -->
+        <div id="crmSubView-contacts" class="crm-subview" style="display:none;">
+          <div class="panel" style="margin-bottom:14px;">
+            <div class="panel-header" style="flex-wrap:wrap; gap:10px;">
+              <div>
+                <h2 class="panel-title">📇 Agenda de Contatos do CRM</h2>
+                <p style="font-size:12.5px; color:var(--text-secondary); margin-top:3px;">
+                  Salve clientes na agenda sem precisar mandar mensagem agora, edite dados, abra conversas ou baixe no celular (<code>.vcf</code>).
+                </p>
+              </div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="downloadAllContactsVcf()">
+                  📲 Baixar Agenda p/ Celular (.vcf)
+                </button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="openSaveContactModalNew()">
+                  + Salvar Novo Contato
+                </button>
+              </div>
+            </div>
+
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px;">
+              <input type="text" id="contactsBookSearchInput" placeholder="Buscar por nome, número, empresa, cidade ou observação..." oninput="renderContactsAgendaView()" style="flex:1; min-width:210px;" aria-label="Buscar na agenda de contatos" />
+              <select id="contactsBookFilterSelect" onchange="renderContactsAgendaView()" style="width:auto; min-width:170px;" aria-label="Filtrar agenda de contatos">
+                <option value="all">Todos os Contatos</option>
+                <option value="saved">⭐ Salvos na Agenda</option>
+                <option value="unsaved">Ainda Não Salvos</option>
+                <option value="blocked">🚫 Bloqueados no WhatsApp</option>
+              </select>
+            </div>
+
+            <div id="contactsBookGrid" class="contacts-book-grid" style="margin-top:14px;"></div>
+          </div>
         </div>
 
         <!-- SUB-VISÃO 2: QUADRO KANBAN COMPLETO (5 ETAPAS + SOMA EM R$ + DRAG & DROP) -->
@@ -2491,6 +2567,115 @@
         <div id="fwdMsgPreviewBox" style="background:var(--bg-card-subtle); border-left:3px solid var(--accent); padding:8px 10px; border-radius:6px; font-size:12px; color:var(--text-secondary); margin-bottom:12px; max-height:70px; overflow:hidden;"></div>
         <input type="text" id="fwdSearchContactInput" placeholder="Buscar contato na lista ou digitar DDD+Número..." oninput="renderForwardContactsList(this.value)" style="margin-bottom:10px;" aria-label="Buscar contato para encaminhar" />
         <div id="fwdContactsList" style="display:flex; flex-direction:column; gap:6px; max-height:280px; overflow-y:auto;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MENU FLUTUANTE ⋮ PARA QUALQUER CONVERSA DA LISTA -->
+  <div id="crmRowActionPopover" class="crm-mini-popover" style="display:none; position:fixed; z-index:999; min-width:220px;"></div>
+
+  <!-- MODAL: SALVAR / EDITAR CONTATO NA AGENDA (+ BAIXAR .VCF NO CELULAR) -->
+  <div id="saveContactModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="saveContactModalTitle">
+    <div class="modal-dialog" style="max-width:510px;">
+      <div class="modal-head">
+        <h3 id="saveContactModalTitle" class="panel-title">👤 Salvar Contato na Agenda</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('saveContactModal')">Fechar</button>
+      </div>
+      <form id="saveContactModalForm" onsubmit="submitSaveContactModal(event)" class="modal-body">
+        <input type="hidden" id="saveContactChatId" value="" />
+        <div class="grid-equal" style="gap:10px;">
+          <div class="form-group">
+            <label class="form-label" for="saveContactName">Nome Completo / Identificação *</label>
+            <input type="text" id="saveContactName" required placeholder="Ex: João Silva — Loja Centro" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="saveContactPhone">WhatsApp com DDD *</label>
+            <input type="text" id="saveContactPhone" required inputmode="tel" autocomplete="tel" placeholder="Ex: 5586999887766" />
+          </div>
+        </div>
+        <div class="grid-equal" style="gap:10px;">
+          <div class="form-group">
+            <label class="form-label" for="saveContactCompany">Empresa / Loja</label>
+            <input type="text" id="saveContactCompany" placeholder="Ex: Auto Peças Silva" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="saveContactLeadSource">Origem do Contato</label>
+            <select id="saveContactLeadSource">
+              <option value="">Selecionar origem...</option>
+              <option value="WhatsApp Orgânico">WhatsApp Orgânico</option>
+              <option value="Instagram">Instagram</option>
+              <option value="Anúncio / Tráfego Pago">Anúncio / Tráfego Pago</option>
+              <option value="Google / Site">Google / Site</option>
+              <option value="Indicação">Indicação</option>
+              <option value="Prospecção Ativa">Prospecção Ativa</option>
+              <option value="Contato Pessoal / Fornecedor">Contato Pessoal / Fornecedor</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid-equal" style="gap:10px;">
+          <div class="form-group">
+            <label class="form-label" for="saveContactEmail">E-mail</label>
+            <input type="email" id="saveContactEmail" placeholder="cliente@email.com" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="saveContactCity">Cidade / UF</label>
+            <input type="text" id="saveContactCity" placeholder="Ex: Parnaíba - PI" />
+          </div>
+        </div>
+        <div class="grid-equal" style="gap:10px;">
+          <div class="form-group">
+            <label class="form-label" for="saveContactDoc">CPF / CNPJ</label>
+            <input type="text" id="saveContactDoc" placeholder="Opcional" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="saveContactStage">Etapa Inicial no Funil</label>
+            <select id="saveContactStage">
+              <option value="novo">Novo Contato</option>
+              <option value="qualificando">Qualificando</option>
+              <option value="em_atendimento">Em Atendimento</option>
+              <option value="aguardando_humano">Aguardando Você</option>
+              <option value="concluido">Concluído</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="saveContactNotes">Observações Fixas</label>
+          <textarea id="saveContactNotes" rows="2" placeholder="Anotações úteis sobre o cliente..."></textarea>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-top:4px;">
+          <button type="button" id="btnSaveContactModalVcf" class="btn btn-secondary btn-sm" onclick="downloadContactModalVcf()">
+            📲 Baixar p/ Celular (.vcf)
+          </button>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('saveContactModal')">Cancelar</button>
+            <button type="submit" class="btn btn-primary">💾 Salvar Contato</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ENVIAR CARTÃO DE CONTATO (VCARD) NO WHATSAPP -->
+  <div id="sendContactCardModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="sendVcardModalTitle">
+    <div class="modal-dialog" style="max-width:480px;">
+      <div class="modal-head">
+        <h3 id="sendVcardModalTitle" class="panel-title">🪪 Enviar Cartão de Contato no WhatsApp</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('sendContactCardModal')">Fechar</button>
+      </div>
+      <div class="modal-body">
+        <p id="sendVcardModalSubtitle" class="panel-desc" style="margin-top:0;">
+          Escolha um contato salvo abaixo ou preencha nome e telefone para enviar como cartão clicável no WhatsApp.
+        </p>
+        <input type="text" id="sendVcardSearchInput" placeholder="Filtrar contato ou destinatário..." oninput="renderSendContactCardList(this.value)" style="margin-bottom:10px;" aria-label="Buscar contato para cartão" />
+        <div id="sendVcardContactsList" style="display:flex; flex-direction:column; gap:6px; max-height:220px; overflow-y:auto; margin-bottom:12px;"></div>
+        <details id="customVcardDetailsBox">
+          <summary style="font-size:12px; font-weight:700; color:var(--accent-bright); cursor:pointer; margin-bottom:8px;">+ Enviar número avulso como cartão</summary>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <input type="text" id="customVcardName" placeholder="Nome no cartão" style="flex:1; min-width:130px; font-size:12px;" />
+            <input type="text" id="customVcardPhone" placeholder="DDD + Número" inputmode="tel" style="flex:1; min-width:130px; font-size:12px;" />
+            <button type="button" class="btn btn-primary btn-sm" onclick="sendCustomTypedVcardNow()">Enviar</button>
+          </div>
+        </details>
       </div>
     </div>
   </div>

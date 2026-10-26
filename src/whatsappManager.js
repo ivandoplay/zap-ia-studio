@@ -12,7 +12,7 @@ import {
   proto
 } from '@whiskeysockets/baileys';
 import { useCompactWaAuthState } from './waCompactAuth.js';
-import { AUTH_DIR, UPLOADS_DIR, storage, normalizePhoneDigits, extractPhoneFromJidIfPn, isLikelyRealPhone, uid } from './storage.js';
+import { AUTH_DIR, UPLOADS_DIR, storage, normalizePhoneDigits, extractPhoneFromJidIfPn, isLikelyRealPhone, uid, buildContactVCard } from './storage.js';
 import { generateSmartReply, buildExecutiveHandoffDossier } from './aiEngine.js';
 import { formatPixMessageWithQr } from './pix.js';
 import { convertToCanonicalWhatsAppVoice, WHATSAPP_VOICE_MIMETYPE, isNativeOggOpus } from './audioProcessor.js';
@@ -467,6 +467,12 @@ class WhatsAppManager {
         continue;
       }
 
+      // Trava Anti-Ressurreição: se o usuário apagou explicitamente esta conversa no CRM, não recria a partir do histórico antigo
+      const tombstoneMs = storage.getDeletedChatTombstoneMs(chatId, phone);
+      if (tombstoneMs > 0 && !alreadyExists && (!rawTsMs || rawTsMs <= tombstoneMs + 2000)) {
+        continue;
+      }
+
       const defaultHistoricalIso = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
       const patch = {
         ...(isLikelyRealPhone(phone) ? { phone } : {}),
@@ -567,6 +573,13 @@ class WhatsAppManager {
               : textContent;
 
       const tsMs = toEpochMs(msg.messageTimestamp) || Date.now();
+      const tombMs = storage.getDeletedChatTombstoneMs(remoteJid, bestPhone);
+      if (tombMs > 0 && tsMs <= tombMs + 2000) continue;
+
+      const existingChatKey = storage.findSiblingContactKey(remoteJid, bestPhone) || remoteJid;
+      const clearedAtIso = storage.data.contacts?.[existingChatKey]?.historyClearedAt;
+      if (clearedAtIso && tsMs <= (new Date(clearedAtIso).getTime() || 0)) continue;
+
       const contactName =
         this.lookupBestContactName(remoteJid, bestPhone) ||
         (!fromMe && msg.pushName && !storage.isGenericContactName(msg.pushName, ownerSelfName) ? msg.pushName : '');
@@ -2942,6 +2955,60 @@ class WhatsAppManager {
     }
     this.emitProactiveQueueState();
     return this.getProactiveQueueState();
+  }
+
+  async setWhatsAppBlockStatus(chatId, blocked = true) {
+    const key = storage.findSiblingContactKey(chatId) || chatId;
+    const contact = storage.data.contacts[key];
+    let targetJid = key;
+    if (this.sock && this.status === 'connected' && !String(key).startsWith('demo_')) {
+      if (String(key).endsWith('@lid') && contact?.phone) {
+        const digits = normalizePhoneDigits(contact.phone);
+        if (digits.length >= 10) {
+          targetJid = `${digits.startsWith('55') ? digits : `55${digits}`}@s.whatsapp.net`;
+        }
+      }
+      await this.sock.updateBlockStatus(targetJid, blocked ? 'block' : 'unblock');
+    }
+    const updated = storage.upsertContact(key, {
+      waBlocked: Boolean(blocked),
+      aiIgnored: blocked ? true : Boolean(contact?.aiIgnored)
+    });
+    storage.writeNow();
+    this.broadcastFn('crm_updated', { chatId: key });
+    return updated;
+  }
+
+  async sendContactVCardOnWhatsApp(targetChatId, cardContact = {}) {
+    const targetKey = storage.findSiblingContactKey(targetChatId) || targetChatId;
+    const displayName = String(cardContact.name || cardContact.phone || 'Contato').trim();
+    const vcard = buildContactVCard(cardContact);
+    let sentKey = null;
+
+    if (this.sock && this.status === 'connected' && !String(targetKey).startsWith('demo_')) {
+      const sent = await this.sock.sendMessage(targetKey, {
+        contacts: {
+          displayName,
+          contacts: [{ vcard }]
+        }
+      });
+      this.rememberBotMessage(sent);
+      sentKey = sent?.key || null;
+    }
+
+    const phoneLabel = cardContact.phone ? ` (+${normalizePhoneDigits(cardContact.phone)})` : '';
+    const updated = storage.appendContactMessage(targetKey, {
+      role: 'owner',
+      text: `🪪 Cartão de contato enviado: *${displayName}*${phoneLabel}`,
+      waMsgId: sentKey?.id || undefined,
+      waMsgKey: sentKey
+        ? { id: sentKey.id, remoteJid: sentKey.remoteJid || targetKey, fromMe: true }
+        : undefined,
+      ack: 1
+    });
+    storage.writeNow();
+    this.broadcastFn('crm_updated', { chatId: targetKey });
+    return updated;
   }
 
   clearProactiveQueue() {

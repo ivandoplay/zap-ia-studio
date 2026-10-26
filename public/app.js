@@ -2435,6 +2435,7 @@ function renderCrmBoard() {
   });
 
   renderCrmInbox(filtered);
+  renderContactsAgendaView();
 }
 
 window.switchCrmSubView = function switchCrmSubView(viewName) {
@@ -2442,12 +2443,13 @@ window.switchCrmSubView = function switchCrmSubView(viewName) {
   document.querySelectorAll('.crm-subtab-btn').forEach((b) => {
     b.classList.toggle('active', b.dataset.crmview === viewName);
   });
-  ['inbox', 'kanban', 'coach'].forEach((v) => {
+  ['inbox', 'contacts', 'kanban', 'coach'].forEach((v) => {
     const el = document.getElementById(`crmSubView-${v}`);
     if (el) el.style.display = v === viewName ? '' : 'none';
   });
   const filterBar = document.getElementById('crmFilterBar');
-  if (filterBar) filterBar.style.display = viewName === 'coach' ? 'none' : '';
+  if (filterBar) filterBar.style.display = (viewName === 'coach' || viewName === 'contacts') ? 'none' : '';
+  if (viewName === 'contacts') renderContactsAgendaView();
 };
 
 function renderCrmInbox(filteredList) {
@@ -2467,6 +2469,8 @@ function renderCrmInbox(filteredList) {
   if (countAllEl) countAllEl.textContent = String(allActiveCount);
   const inboxTotalEl = document.getElementById('crmInboxTotalCount');
   if (inboxTotalEl) inboxTotalEl.textContent = String(allActiveCount);
+  const savedTotalEl = document.getElementById('crmContactsSavedCount');
+  if (savedTotalEl) savedTotalEl.textContent = String((state.contacts || []).length);
 
   if (!list.length) {
     listEl.innerHTML = `<div class="empty-state" style="padding:28px 14px;">Nenhuma conversa encontrada neste filtro.</div>`;
@@ -2523,17 +2527,18 @@ function renderCrmInbox(filteredList) {
               <div class="crm-inbox-avatar" style="${avatarTint}">${renderContactAvatarContent(c)}</div>
               <div class="crm-inbox-item-body">
                 <div class="crm-inbox-item-top">
-                  <span class="crm-inbox-item-name">${c.pinned ? '<span style="color:var(--accent-bright);margin-right:4px;" title="Fixada">★</span>' : ''}${escapeHtml(c.name || 'Contato')}</span>
-                  <div style="display:flex; align-items:center; gap:5px; flex-shrink:0;">
+                  <span class="crm-inbox-item-name">${c.pinned ? '<span style="color:var(--accent-bright);margin-right:4px;" title="Fixada">★</span>' : ''}${c.savedContact ? '<span style="color:var(--accent-bright);margin-right:3px;font-size:11px;" title="Salvo na Agenda">📇</span>' : ''}${escapeHtml(c.name || 'Contato')}</span>
+                  <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
                     <span class="crm-inbox-item-time">${escapeHtml(timeStr)}</span>
                     ${unread > 0 ? `<span class="inbox-unread-pill">${unread > 99 ? '99+' : unread}</span>` : ''}
+                    <span role="button" tabindex="0" class="inbox-row-kebab" title="Opções da conversa" aria-label="Opções da conversa" onclick="event.stopPropagation(); openListRowMenu('${encId}', event)">⋮</span>
                   </div>
                 </div>
                 <div style="font-size:11px; color:var(--text-muted); font-variant-numeric:tabular-nums;">${escapeHtml(subPhone)}${c.company ? ` • ${escapeHtml(c.company)}` : ''}</div>
                 <div class="crm-inbox-item-preview">${escapeHtml(preview)}</div>
                 <div class="crm-inbox-item-badges">
                   <span class="tag ${c.stage === 'aguardando_humano' ? 'paused' : ''}" style="font-size:10.5px; padding:1px 6px;">${escapeHtml(prettyStage)}</span>
-                  ${c.aiIgnored ? '<span class="tag paused" style="font-size:10.5px; padding:1px 6px;">🔕 Ignorado</span>' : paused ? '<span class="tag paused" style="font-size:10.5px; padding:1px 6px;">Humano</span>' : '<span class="tag" style="font-size:10.5px; padding:1px 6px;">IA Ativa</span>'}
+                  ${c.waBlocked ? '<span class="deal-pill lost">🚫 Bloqueado</span>' : c.aiIgnored ? '<span class="tag paused" style="font-size:10.5px; padding:1px 6px;">🔕 Ignorado</span>' : paused ? '<span class="tag paused" style="font-size:10.5px; padding:1px 6px;">Humano</span>' : '<span class="tag" style="font-size:10.5px; padding:1px 6px;">IA Ativa</span>'}
                   ${dealBadge}${statusDealBadge}${customTagsMini}
                   ${c.archived ? '<span class="tag" style="font-size:10.5px; padding:1px 6px;">Arquivada</span>' : ''}
                   ${renderSentimentPillHtml(c.sentiment)}
@@ -2627,9 +2632,29 @@ function renderActiveInboxConversation() {
 
   const paused = isContactCurrentlyPaused(c);
   const statusBadge = document.getElementById('inboxAiStatusBadge');
-  statusBadge.textContent = c.aiIgnored ? '🔕 IA Ignorada' : paused ? 'Com Você' : 'IA Ativa';
-  statusBadge.className = `tag ${paused || c.aiIgnored ? 'paused' : ''}`;
+  statusBadge.textContent = c.waBlocked
+    ? '🚫 Bloqueado'
+    : c.aiIgnored
+      ? '🔕 IA Ignorada'
+      : paused
+        ? 'Com Você'
+        : 'IA Ativa';
+  statusBadge.className = `tag ${paused || c.aiIgnored || c.waBlocked ? 'paused' : ''}`;
   document.getElementById('btnInboxTogglePause').textContent = paused ? 'Retomar IA' : 'Assumir';
+
+  const quickSavePill = document.getElementById('btnQuickSaveContactPill');
+  if (quickSavePill) {
+    quickSavePill.textContent = c.savedContact ? '✓ Salvo · Editar' : '+ Salvar Contato';
+    quickSavePill.style.opacity = c.savedContact ? '0.85' : '1';
+  }
+  const menuPin = document.getElementById('menuOptPinChat');
+  if (menuPin) menuPin.textContent = c.pinned ? '📌 Desafixar Conversa' : '📌 Fixar Conversa no Topo';
+  const menuArch = document.getElementById('menuOptArchiveChat');
+  if (menuArch) menuArch.textContent = c.archived ? '📦 Reativar na Fila Principal' : '📦 Arquivar Conversa';
+  const menuIgn = document.getElementById('menuOptIgnoreAi');
+  if (menuIgn) menuIgn.textContent = c.aiIgnored ? '🔔 Voltar a Atender com IA' : '🔕 Ignorar IA neste número';
+  const menuBlk = document.getElementById('menuOptBlockWa');
+  if (menuBlk) menuBlk.textContent = c.waBlocked ? '🔓 Desbloquear no WhatsApp' : '🚫 Bloquear no WhatsApp';
 
   const pinBtn = document.getElementById('btnInboxTogglePin');
   if (pinBtn) {
@@ -3045,6 +3070,11 @@ function renderInboxInspector360(c) {
   if (ignBtn) {
     ignBtn.textContent = c.aiIgnored ? '🔔 Voltar a Atender com IA' : '🔕 Ignorar IA neste número';
     ignBtn.style.borderColor = c.aiIgnored ? 'var(--accent-bright)' : '';
+  }
+  const blkBtn = document.getElementById('btnInspectorBlockWa');
+  if (blkBtn) {
+    blkBtn.textContent = c.waBlocked ? '🔓 Desbloquear no WhatsApp' : '🚫 Bloquear no WhatsApp';
+    blkBtn.style.borderColor = c.waBlocked ? 'var(--danger)' : '';
   }
 
   const tagsBox = document.getElementById('inspTagsBox');
@@ -3778,6 +3808,495 @@ window.runCrmBulkAction = async function runCrmBulkAction(action, extra = {}) {
   } catch (err) {
     showToast(err.message, true);
   }
+};
+
+window.confirmBulkClearMessages = async function confirmBulkClearMessages() {
+  const cnt = state.crmBulkSelected ? state.crmBulkSelected.size : 0;
+  if (!cnt) return showToast('Marque pelo menos uma conversa primeiro.', true);
+  if (!confirm(`Limpar todas as mensagens de ${cnt} conversa(s), mantendo os contatos salvos?`)) return;
+  await window.runCrmBulkAction('clear_messages');
+};
+
+window.confirmBulkDeleteChats = async function confirmBulkDeleteChats() {
+  const cnt = state.crmBulkSelected ? state.crmBulkSelected.size : 0;
+  if (!cnt) return showToast('Marque pelo menos uma conversa primeiro.', true);
+  if (!confirm(`Apagar permanentemente ${cnt} conversa(s) selecionada(s)?`)) return;
+  if (state.selectedInboxChatId && state.crmBulkSelected.has(state.selectedInboxChatId)) {
+    state.selectedInboxChatId = null;
+  }
+  await window.runCrmBulkAction('delete_chats');
+};
+
+// ==================== AGENDA DE CONTATOS, MENU ⋮, LIMPAR / APAGAR / BLOQUEAR / VCARD (v5.3) ====================
+
+window.closeAllCrmPopovers = function closeAllCrmPopovers() {
+  document.getElementById('inboxChatMorePopover')?.style && (document.getElementById('inboxChatMorePopover').style.display = 'none');
+  document.getElementById('timedPausePopover')?.style && (document.getElementById('timedPausePopover').style.display = 'none');
+  document.getElementById('composerEmojiPopover')?.style && (document.getElementById('composerEmojiPopover').style.display = 'none');
+  const rowPop = document.getElementById('crmRowActionPopover');
+  if (rowPop) rowPop.style.display = 'none';
+};
+
+document.addEventListener('click', (ev) => {
+  if (
+    !ev.target.closest('#inboxChatMorePopover') &&
+    !ev.target.closest('#btnInboxChatMoreMenu') &&
+    !ev.target.closest('#crmRowActionPopover') &&
+    !ev.target.closest('.inbox-row-kebab')
+  ) {
+    const m1 = document.getElementById('inboxChatMorePopover');
+    if (m1) m1.style.display = 'none';
+    const m2 = document.getElementById('crmRowActionPopover');
+    if (m2) m2.style.display = 'none';
+  }
+});
+
+window.toggleInboxChatMoreMenu = function toggleInboxChatMoreMenu(ev) {
+  if (ev) ev.stopPropagation();
+  const pop = document.getElementById('inboxChatMorePopover');
+  if (!pop) return;
+  const open = pop.style.display !== 'none';
+  window.closeAllCrmPopovers();
+  pop.style.display = open ? 'none' : 'block';
+};
+
+window.openListRowMenu = function openListRowMenu(encodedChatId, ev) {
+  if (ev) ev.stopPropagation();
+  const chatId = decodeURIComponent(encodedChatId);
+  const c = (state.contacts || []).find((x) => x.chatId === chatId);
+  const pop = document.getElementById('crmRowActionPopover');
+  if (!c || !pop) return;
+
+  window.closeAllCrmPopovers();
+  const enc = encodeURIComponent(chatId);
+  const unread = Math.max(0, Number(c.unreadCount) || 0) > 0;
+
+  pop.innerHTML = `
+    <div style="font-size:11px; font-weight:700; color:var(--text-muted); padding:4px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(c.name || c.phone || 'Conversa')}</div>
+    <button type="button" class="crm-popover-opt" onclick="closeAllCrmPopovers(); openSaveContactModalById('${enc}')">👤 ${c.savedContact ? 'Editar Contato Salvo' : 'Salvar Contato na Agenda'}</button>
+    <button type="button" class="crm-popover-opt" onclick="closeAllCrmPopovers(); downloadSingleContactVcf('${enc}')">📲 Salvar no Celular (.vcf)</button>
+    <button type="button" class="crm-popover-opt" onclick="closeAllCrmPopovers(); toggleRowReadStatus('${enc}', ${unread ? 'true' : 'false'})">● Marcar como ${unread ? 'Lida' : 'Não Lida'}</button>
+    <button type="button" class="crm-popover-opt" onclick="closeAllCrmPopovers(); toggleRowPin('${enc}')">📌 ${c.pinned ? 'Desafixar' : 'Fixar no Topo'}</button>
+    <button type="button" class="crm-popover-opt" onclick="closeAllCrmPopovers(); toggleRowArchive('${enc}')">📦 ${c.archived ? 'Desarquivar' : 'Arquivar'}</button>
+    <button type="button" class="crm-popover-opt" onclick="closeAllCrmPopovers(); toggleBlockContactById('${enc}')">${c.waBlocked ? '🔓 Desbloquear Número' : '🚫 Bloquear no WhatsApp'}</button>
+    <hr style="border:none; border-top:1px solid var(--border); margin:4px 0;" />
+    <button type="button" class="crm-popover-opt" onclick="closeAllCrmPopovers(); clearChatMessagesById('${enc}')">🧹 Limpar Mensagens</button>
+    <button type="button" class="crm-popover-opt" style="color:var(--danger);" onclick="closeAllCrmPopovers(); deleteChatByIdWithConfirm('${enc}')">🗑️ Apagar Conversa</button>
+  `;
+
+  pop.style.display = 'block';
+  const rect = ev?.currentTarget?.getBoundingClientRect?.() || { left: 120, bottom: 120, right: 160 };
+  const popWidth = 228;
+  const popHeight = 310;
+  const left = Math.max(8, Math.min(window.innerWidth - popWidth - 8, rect.right - popWidth));
+  const top = rect.bottom + popHeight > window.innerHeight
+    ? Math.max(8, rect.top - popHeight + 16)
+    : rect.bottom + 4;
+  pop.style.left = `${left}px`;
+  pop.style.top = `${top}px`;
+};
+
+window.toggleRowReadStatus = async function toggleRowReadStatus(encodedChatId, isCurrentlyUnread) {
+  const chatId = decodeURIComponent(encodedChatId);
+  try {
+    const endpoint = isCurrentlyUnread ? 'mark-read' : 'mark-unread';
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}/${endpoint}`, { method: 'POST', body: JSON.stringify({}) });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    updateInboxFilterCounters();
+    renderCrmBoard();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.toggleRowPin = async function toggleRowPin(encodedChatId) {
+  const chatId = decodeURIComponent(encodedChatId);
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}/pin`, { method: 'POST', body: JSON.stringify({}) });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    await refreshLiveStateOnly();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.toggleRowArchive = async function toggleRowArchive(encodedChatId) {
+  const chatId = decodeURIComponent(encodedChatId);
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}/archive`, { method: 'POST', body: JSON.stringify({}) });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    await refreshLiveStateOnly();
+    showToast(res.contact?.archived ? '📦 Conversa arquivada.' : 'Conversa reativada na fila!');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.openSaveContactModalNew = function openSaveContactModalNew() {
+  document.getElementById('saveContactModalForm')?.reset();
+  document.getElementById('saveContactChatId').value = '';
+  document.getElementById('saveContactModalTitle').textContent = '👤 Salvar Novo Contato na Agenda';
+  document.getElementById('saveContactPhone').readOnly = false;
+  const vcfBtn = document.getElementById('btnSaveContactModalVcf');
+  if (vcfBtn) vcfBtn.style.display = 'none';
+  document.getElementById('saveContactModal')?.classList.add('open');
+  setTimeout(() => document.getElementById('saveContactName')?.focus(), 50);
+};
+
+window.openSaveContactModalForActive = function openSaveContactModalForActive() {
+  if (!state.selectedInboxChatId) return window.openSaveContactModalNew();
+  window.openSaveContactModalById(encodeURIComponent(state.selectedInboxChatId));
+};
+
+window.openSaveContactModalById = function openSaveContactModalById(encodedChatId) {
+  const chatId = decodeURIComponent(encodedChatId);
+  const c = (state.contacts || []).find((x) => x.chatId === chatId);
+  if (!c) return window.openSaveContactModalNew();
+
+  document.getElementById('saveContactChatId').value = c.chatId;
+  document.getElementById('saveContactModalTitle').textContent = c.savedContact ? '✏️ Editar Contato Salvo' : '👤 Salvar Contato na Agenda';
+  const cleanName = /^\+?\d{8,}$/.test(String(c.name || '').trim()) ? '' : (c.name || '');
+  document.getElementById('saveContactName').value = cleanName;
+  document.getElementById('saveContactPhone').value = c.phone || String(c.chatId || '').replace(/@.+$/, '');
+  document.getElementById('saveContactCompany').value = c.company || '';
+  document.getElementById('saveContactLeadSource').value = c.leadSource || '';
+  document.getElementById('saveContactEmail').value = c.email || '';
+  document.getElementById('saveContactCity').value = c.city || '';
+  document.getElementById('saveContactDoc').value = c.docNumber || '';
+  document.getElementById('saveContactStage').value = c.stage || 'novo';
+  document.getElementById('saveContactNotes').value = c.notes || '';
+  const vcfBtn = document.getElementById('btnSaveContactModalVcf');
+  if (vcfBtn) vcfBtn.style.display = '';
+  document.getElementById('saveContactModal')?.classList.add('open');
+  setTimeout(() => document.getElementById('saveContactName')?.focus(), 50);
+};
+
+window.submitSaveContactModal = async function submitSaveContactModal(ev) {
+  ev.preventDefault();
+  const existingChatId = document.getElementById('saveContactChatId')?.value || '';
+  const payload = {
+    name: document.getElementById('saveContactName')?.value?.trim() || '',
+    phone: document.getElementById('saveContactPhone')?.value?.trim() || '',
+    company: document.getElementById('saveContactCompany')?.value?.trim() || '',
+    leadSource: document.getElementById('saveContactLeadSource')?.value || '',
+    email: document.getElementById('saveContactEmail')?.value?.trim() || '',
+    city: document.getElementById('saveContactCity')?.value?.trim() || '',
+    docNumber: document.getElementById('saveContactDoc')?.value?.trim() || '',
+    stage: document.getElementById('saveContactStage')?.value || 'novo',
+    notes: document.getElementById('saveContactNotes')?.value || '',
+    savedContact: true
+  };
+  if (!payload.name) return showToast('Informe o nome do contato.', true);
+
+  try {
+    let savedContactObj = null;
+    if (existingChatId) {
+      const res = await api(`/api/crm/${encodeURIComponent(existingChatId)}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload)
+      });
+      savedContactObj = res.contact;
+      if (savedContactObj) applyReturnedContactToState(savedContactObj, existingChatId);
+    } else {
+      const res = await api('/api/crm/new-contact', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      savedContactObj = res.contact;
+      await refreshLiveStateOnly();
+      if (savedContactObj?.chatId) state.selectedInboxChatId = savedContactObj.chatId;
+    }
+    closeModal('saveContactModal');
+    renderCrmBoard();
+    showToast('📇 Contato salvo na Agenda!');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.downloadContactModalVcf = function downloadContactModalVcf() {
+  const cid = document.getElementById('saveContactChatId')?.value || '';
+  if (!cid) return;
+  window.downloadSingleContactVcf(encodeURIComponent(cid));
+};
+
+window.downloadActiveContactVcf = function downloadActiveContactVcf() {
+  if (!state.selectedInboxChatId) return;
+  window.downloadSingleContactVcf(encodeURIComponent(state.selectedInboxChatId));
+};
+
+window.downloadSingleContactVcf = async function downloadSingleContactVcf(encodedChatId) {
+  const chatId = decodeURIComponent(encodedChatId);
+  const c = (state.contacts || []).find((x) => x.chatId === chatId);
+  const slug = String(c?.name || c?.phone || 'contato').replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 36) || 'contato';
+  try {
+    await apiBlobDownload(`/api/crm/${encodeURIComponent(chatId)}/vcard.vcf`, `${slug}.vcf`);
+    showToast('📲 Cartão .VCF baixado! Abra para salvar na agenda do celular.');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.downloadAllContactsVcf = async function downloadAllContactsVcf() {
+  try {
+    await apiBlobDownload('/api/crm/contacts.vcf', 'agenda_contatos_zapia.vcf');
+    showToast('📲 Agenda completa (.VCF) baixada!');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.exportActiveChatTxt = function exportActiveChatTxt() {
+  if (!state.selectedInboxChatId) return;
+  window.exportChatTxtById(encodeURIComponent(state.selectedInboxChatId));
+};
+
+window.exportChatTxtById = async function exportChatTxtById(encodedChatId) {
+  const chatId = decodeURIComponent(encodedChatId);
+  const c = (state.contacts || []).find((x) => x.chatId === chatId);
+  const slug = String(c?.name || c?.phone || 'conversa').replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 36) || 'conversa';
+  try {
+    await apiBlobDownload(`/api/crm/${encodeURIComponent(chatId)}/export.txt`, `conversa_${slug}.txt`);
+    showToast('📄 Histórico da conversa exportado em .TXT!');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.clearActiveChatMessages = function clearActiveChatMessages() {
+  if (!state.selectedInboxChatId) return;
+  window.clearChatMessagesById(encodeURIComponent(state.selectedInboxChatId));
+};
+
+window.clearChatMessagesById = async function clearChatMessagesById(encodedChatId) {
+  const chatId = decodeURIComponent(encodedChatId);
+  const c = (state.contacts || []).find((x) => x.chatId === chatId);
+  if (!confirm(`Limpar todas as mensagens de "${c?.name || chatId}"?\n(O contato, notas, valor R$ e etiquetas continuarão salvos na Agenda.)`)) return;
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}/clear-messages`, {
+      method: 'POST',
+      body: JSON.stringify({})
+    });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    renderCrmBoard();
+    showToast('🧹 Mensagens limpas! Contato mantido na Agenda.');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.deleteActiveChatWithConfirm = function deleteActiveChatWithConfirm() {
+  if (!state.selectedInboxChatId) return;
+  window.deleteChatByIdWithConfirm(encodeURIComponent(state.selectedInboxChatId));
+};
+
+window.deleteChatByIdWithConfirm = async function deleteChatByIdWithConfirm(encodedChatId) {
+  const chatId = decodeURIComponent(encodedChatId);
+  const c = (state.contacts || []).find((x) => x.chatId === chatId);
+  if (!confirm(`Apagar permanentemente a conversa e o contato "${c?.name || chatId}" do CRM?`)) return;
+  try {
+    await api(`/api/crm/${encodeURIComponent(chatId)}`, { method: 'DELETE' });
+    state.contacts = (state.contacts || []).filter((x) => x.chatId !== chatId);
+    if (state.selectedInboxChatId === chatId) {
+      state.selectedInboxChatId = null;
+      document.getElementById('crmInboxLayout')?.classList.remove('mob-chat-open');
+      document.getElementById('crmInboxLayout')?.classList.remove('mob-inspector-open');
+    }
+    updateInboxFilterCounters();
+    renderCrmBoard();
+    showToast('🗑️ Conversa apagada com sucesso!');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.toggleBlockActiveContact = function toggleBlockActiveContact() {
+  if (!state.selectedInboxChatId) return;
+  window.toggleBlockContactById(encodeURIComponent(state.selectedInboxChatId));
+};
+
+window.toggleBlockContactById = async function toggleBlockContactById(encodedChatId) {
+  const chatId = decodeURIComponent(encodedChatId);
+  const c = (state.contacts || []).find((x) => x.chatId === chatId);
+  if (!c) return;
+  const nextBlocked = !c.waBlocked;
+  if (nextBlocked && !confirm(`Bloquear "${c.name || c.phone || chatId}" no WhatsApp e silenciar a IA?`)) return;
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}/block`, {
+      method: 'POST',
+      body: JSON.stringify({ blocked: nextBlocked })
+    });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    renderCrmBoard();
+    showToast(nextBlocked ? '🚫 Contato bloqueado!' : '🔓 Contato desbloqueado!');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+// Enviar Cartão de Contato (vCard) no WhatsApp
+window.openSendContactCardModal = function openSendContactCardModal(mode = 'into_chat', encodedSourceId = '') {
+  state.vcardModalMode = mode; // 'into_chat' = escolhe qual cartão enviar na conversa aberta | 'active' ou 'from_agenda' = escolhe para quem enviar o cartão deste contato
+  state.vcardModalSourceChatId = encodedSourceId
+    ? decodeURIComponent(encodedSourceId)
+    : (mode === 'active' ? state.selectedInboxChatId : '');
+  const sub = document.getElementById('sendVcardModalSubtitle');
+  const srcContact = (state.contacts || []).find((x) => x.chatId === state.vcardModalSourceChatId);
+  if (sub) {
+    sub.textContent = mode === 'into_chat'
+      ? 'Escolha qual cartão de contato enviar nesta conversa aberta:'
+      : `Escolha para qual conversa enviar o cartão de "${srcContact?.name || 'Contato'}":`;
+  }
+  const customBox = document.getElementById('customVcardDetailsBox');
+  if (customBox) customBox.style.display = mode === 'into_chat' ? '' : 'none';
+  const searchInp = document.getElementById('sendVcardSearchInput');
+  if (searchInp) searchInp.value = '';
+  renderSendContactCardList('');
+  document.getElementById('sendContactCardModal')?.classList.add('open');
+};
+
+window.renderSendContactCardList = function renderSendContactCardList(query = '') {
+  const box = document.getElementById('sendVcardContactsList');
+  if (!box) return;
+  const q = String(query || '').trim().toLowerCase();
+  const mode = state.vcardModalMode || 'into_chat';
+  const list = (state.contacts || []).filter((c) => {
+    if (mode !== 'into_chat' && c.chatId === state.vcardModalSourceChatId) return false;
+    if (!q) return true;
+    return `${c.name || ''} ${c.phone || ''} ${c.company || ''}`.toLowerCase().includes(q);
+  });
+
+  if (!list.length) {
+    box.innerHTML = `<div style="font-size:12px; color:var(--text-muted); padding:10px;">Nenhum contato encontrado.</div>`;
+    return;
+  }
+
+  box.innerHTML = list
+    .slice(0, 40)
+    .map((c) => {
+      const enc = encodeURIComponent(c.chatId);
+      const targetEnc = mode === 'into_chat' ? encodeURIComponent(state.selectedInboxChatId || '') : enc;
+      const srcEnc = mode === 'into_chat' ? enc : encodeURIComponent(state.vcardModalSourceChatId || '');
+      return `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-card-subtle);">
+          <div style="min-width:0;">
+            <strong style="font-size:12.5px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(c.name || 'Contato')}</strong>
+            <span style="font-size:11px; color:var(--text-secondary);">${escapeHtml(formatContactSubtitle(c))}</span>
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" onclick="dispatchSendContactCard('${targetEnc}', '${srcEnc}')">Enviar 🪪</button>
+        </div>
+      `;
+    })
+    .join('');
+};
+
+window.dispatchSendContactCard = async function dispatchSendContactCard(encodedTargetChatId, encodedSourceChatId) {
+  const targetChatId = decodeURIComponent(encodedTargetChatId || '');
+  const sourceChatId = decodeURIComponent(encodedSourceChatId || '');
+  if (!targetChatId || !sourceChatId) return;
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(targetChatId)}/send-vcard`, {
+      method: 'POST',
+      body: JSON.stringify({ sourceChatId })
+    });
+    if (res.contact) applyReturnedContactToState(res.contact, targetChatId);
+    closeModal('sendContactCardModal');
+    renderCrmBoard();
+    showToast('🪪 Cartão de contato enviado!');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.sendCustomTypedVcardNow = async function sendCustomTypedVcardNow() {
+  const targetChatId = state.selectedInboxChatId;
+  if (!targetChatId) return;
+  const name = document.getElementById('customVcardName')?.value?.trim() || '';
+  const phone = document.getElementById('customVcardPhone')?.value?.trim() || '';
+  if (!name || !phone) return showToast('Preencha o nome e o telefone do cartão.', true);
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(targetChatId)}/send-vcard`, {
+      method: 'POST',
+      body: JSON.stringify({ cardContact: { name, phone } })
+    });
+    if (res.contact) applyReturnedContactToState(res.contact, targetChatId);
+    closeModal('sendContactCardModal');
+    renderCrmBoard();
+    showToast('🪪 Cartão avulso enviado!');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.renderContactsAgendaView = function renderContactsAgendaView() {
+  const grid = document.getElementById('contactsBookGrid');
+  if (!grid) return;
+  const q = String(document.getElementById('contactsBookSearchInput')?.value || '').trim().toLowerCase();
+  const mode = document.getElementById('contactsBookFilterSelect')?.value || 'all';
+
+  let list = [...(state.contacts || [])];
+  if (mode === 'saved') list = list.filter((c) => c.savedContact);
+  else if (mode === 'unsaved') list = list.filter((c) => !c.savedContact);
+  else if (mode === 'blocked') list = list.filter((c) => c.waBlocked);
+
+  if (q) {
+    list = list.filter((c) =>
+      `${c.name || ''} ${c.phone || ''} ${c.company || ''} ${c.city || ''} ${c.email || ''} ${c.notes || ''}`
+        .toLowerCase()
+        .includes(q)
+    );
+  }
+
+  list.sort((a, b) => {
+    if (Boolean(a.savedContact) !== Boolean(b.savedContact)) return a.savedContact ? -1 : 1;
+    return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR');
+  });
+
+  if (!list.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1 / -1;">Nenhum contato neste filtro. Clique em <strong>"+ Salvar Novo Contato"</strong> acima para cadastrar na agenda.</div>`;
+    return;
+  }
+
+  grid.innerHTML = list
+    .map((c) => {
+      const enc = encodeURIComponent(c.chatId);
+      const avatarTint = getAvatarTintStyle(c.chatId || c.phone || c.name);
+      return `
+        <div class="contact-book-card">
+          <div class="contact-book-card-head">
+            <div class="crm-inbox-avatar" style="width:40px; height:40px; font-size:13px; flex-shrink:0; ${avatarTint}">${renderContactAvatarContent(c)}</div>
+            <div style="min-width:0; flex:1;">
+              <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
+                <strong style="font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(c.name || 'Contato')}</strong>
+                ${c.savedContact ? '<span class="deal-pill won">📇 Salvo</span>' : ''}
+                ${c.waBlocked ? '<span class="deal-pill lost">🚫 Bloqueado</span>' : ''}
+              </div>
+              <div style="font-size:12px; color:var(--text-secondary); font-variant-numeric:tabular-nums;">${escapeHtml(formatContactSubtitle(c))}</div>
+            </div>
+          </div>
+          <div style="font-size:11.5px; color:var(--text-secondary); display:flex; flex-direction:column; gap:2px;">
+            ${c.company ? `<span>🏢 ${escapeHtml(c.company)}</span>` : ''}
+            ${c.city ? `<span>📍 ${escapeHtml(c.city)}</span>` : ''}
+            ${c.email ? `<span>✉️ ${escapeHtml(c.email)}</span>` : ''}
+            ${c.leadSource ? `<span>🎯 Origem: ${escapeHtml(c.leadSource)}</span>` : ''}
+            ${Number(c.dealValue) > 0 ? `<span>💰 Negócio: <strong>${escapeHtml(formatBrlShort(c.dealValue))}</strong></span>` : ''}
+          </div>
+          <div class="contact-book-actions">
+            <button type="button" class="btn btn-primary btn-sm" onclick="openChatFromContactsAgenda('${enc}')">💬 Conversar</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="openSaveContactModalById('${enc}')">✏️ Editar</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="downloadSingleContactVcf('${enc}')" title="Baixar para salvar na agenda do celular">📲 .VCF</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="openSendContactCardModal('from_agenda', '${enc}')" title="Enviar cartão deste contato">🪪</button>
+            <button type="button" class="btn btn-danger btn-sm" onclick="deleteChatByIdWithConfirm('${enc}')" title="Apagar contato e conversa">🗑️</button>
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+};
+
+window.openChatFromContactsAgenda = function openChatFromContactsAgenda(encodedChatId) {
+  window.switchCrmSubView('inbox');
+  window.selectInboxChat(encodedChatId);
 };
 
 window.setInboxComposerMode = function setInboxComposerMode(mode = 'reply') {
@@ -5219,17 +5738,8 @@ function bindEvents() {
     }
   });
 
-  document.getElementById('btnInspectorDeleteChat')?.addEventListener('click', async () => {
-    const chatId = state.selectedInboxChatId;
-    if (!chatId || !confirm('Excluir esta conversa do CRM permanentemente?')) return;
-    try {
-      await api(`/api/crm/${encodeURIComponent(chatId)}`, { method: 'DELETE' });
-      state.selectedInboxChatId = null;
-      await refreshLiveStateOnly();
-      showToast('Conversa excluída.');
-    } catch (err) {
-      showToast(err.message, true);
-    }
+  document.getElementById('btnInspectorDeleteChat')?.addEventListener('click', () => {
+    window.deleteActiveChatWithConfirm();
   });
 
   document.getElementById('btnInboxTogglePause')?.addEventListener('click', async () => {

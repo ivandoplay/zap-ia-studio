@@ -324,12 +324,24 @@ function deduplicateContactsMap(rawContacts = {}) {
     };
     const bestName = pickName(prev.name) ? prev.name : (pickName(item.name) ? item.name : (prev.name || item.name));
 
+    const latestClearedAt =
+      (item.historyClearedAt || '') >= (prev.historyClearedAt || '')
+        ? (item.historyClearedAt || prev.historyClearedAt || null)
+        : (prev.historyClearedAt || null);
+    const clearedMs = latestClearedAt ? new Date(latestClearedAt).getTime() || 0 : 0;
+    const filteredDeduped = clearedMs
+      ? dedupedMsgs.filter((m) => (new Date(m?.timestamp || 0).getTime() || 0) > clearedMs)
+      : dedupedMsgs;
+
     mergedByKey[existingIdx] = {
       ...prev,
       ...item,
       chatId: canonicalJid,
       phone: isLikelyRealPhone(item.phone) ? item.phone : prev.phone,
-      name: bestName,
+      name: prev.savedContact ? (prev.name || bestName) : (item.savedContact ? (item.name || bestName) : bestName),
+      savedContact: Boolean(prev.savedContact || item.savedContact),
+      waBlocked: Boolean(prev.waBlocked || item.waBlocked),
+      historyClearedAt: latestClearedAt,
       avatarUrl: item.avatarUrl || prev.avatarUrl || '',
       company: item.company || prev.company || '',
       email: item.email || prev.email || '',
@@ -351,7 +363,7 @@ function deduplicateContactsMap(rawContacts = {}) {
       summary: item.summary || prev.summary || '',
       notes: [prev.notes, item.notes].filter(Boolean).join('\n').trim(),
       unreadAlert: Boolean(prev.unreadAlert || item.unreadAlert),
-      messages: dedupedMsgs.slice(-120),
+      messages: filteredDeduped.slice(-120),
       lastMessageAt:
         new Date(item.lastMessageAt || 0).getTime() >= new Date(prev.lastMessageAt || 0).getTime()
           ? item.lastMessageAt
@@ -421,7 +433,8 @@ function createDefaultDatabase() {
         timezone: 'America/Fortaleza',
         offHoursReplyMessage: 'Olá! Nosso atendimento funciona de Segunda a Sábado, das 08h às 18h. Assim que abrirmos já te respondemos!'
       },
-      ignoredContacts: []
+      ignoredContacts: [],
+      deletedChatTombstones: {}
     },
     business: defaultBusiness,
     contacts: {},
@@ -1009,17 +1022,23 @@ export class Storage {
     const followUpChanged = patch.followUpAt !== undefined && nextFollowUpAt !== (existing.followUpAt || null);
     const ownerSelfName = opts.ownerSelfName || '';
 
-    // Escolha inteligente do nome: preserva nome real salvo na agenda / perfil e substitui rótulos genéricos ou nome acidental do próprio dono
-    let chosenName = existing.name;
-    if (patch.forceName && String(patch.name || '').trim()) {
-      chosenName = String(patch.name).trim();
-    } else if (patch.name && !this.isGenericContactName(patch.name, ownerSelfName)) {
-      if (this.isGenericContactName(existing.name, ownerSelfName) || opts.preferAddressBookName) {
-        chosenName = String(patch.name).trim();
+    const chosenName = (() => {
+      if (patch.forceName && String(patch.name || '').trim()) {
+        return String(patch.name).trim();
       }
-    } else if (this.isGenericContactName(existing.name, ownerSelfName) && candidatePhone) {
-      chosenName = `+${candidatePhone}`;
-    }
+      // Se o contato já foi salvo manualmente pelo dono, preserva o nome salvo!
+      if (existing.savedContact && !this.isGenericContactName(existing.name, ownerSelfName)) {
+        return existing.name;
+      }
+      if (patch.name && !this.isGenericContactName(patch.name, ownerSelfName)) {
+        if (this.isGenericContactName(existing.name, ownerSelfName) || opts.preferAddressBookName) {
+          return String(patch.name).trim();
+        }
+      } else if (this.isGenericContactName(existing.name, ownerSelfName) && candidatePhone) {
+        return `+${candidatePhone}`;
+      }
+      return existing.name;
+    })();
 
     // Protege lastMessageAt para nunca regredir caso chegue um evento antigo de histórico
     let chosenLastMessageAt = existing.lastMessageAt;
@@ -1032,11 +1051,21 @@ export class Storage {
     }
 
     const { forceName: _fn, forceLastMessageAt: _fl, ...cleanPatch } = patch;
+    const nextSavedContact = patch.savedContact !== undefined
+      ? Boolean(patch.savedContact)
+      : (Boolean(existing.savedContact) || Boolean(patch.forceName));
+
+    if (patch.forceName || patch.savedContact) {
+      this.clearDeletedChatTombstone(targetKey, candidatePhone || existing.phone || '');
+    }
 
     const updated = {
       ...existing,
       ...cleanPatch,
       chatId: targetKey,
+      savedContact: nextSavedContact,
+      waBlocked: patch.waBlocked !== undefined ? Boolean(patch.waBlocked) : Boolean(existing.waBlocked),
+      historyClearedAt: patch.historyClearedAt !== undefined ? patch.historyClearedAt : (existing.historyClearedAt || null),
       avatarUrl: patch.avatarUrl !== undefined ? String(patch.avatarUrl || '') : (existing.avatarUrl || ''),
       company: patch.company !== undefined ? String(patch.company || '').trim() : (existing.company || ''),
       email: patch.email !== undefined ? String(patch.email || '').trim() : (existing.email || ''),
@@ -1079,9 +1108,72 @@ export class Storage {
     return updated;
   }
 
-  deleteContact(chatId) {
+  recordDeletedChatTombstone(chatId = '', phone = '') {
+    if (!this.data.settings) this.data.settings = {};
+    if (!this.data.settings.deletedChatTombstones || typeof this.data.settings.deletedChatTombstones !== 'object') {
+      this.data.settings.deletedChatTombstones = {};
+    }
+    const ts = new Date().toISOString();
+    const map = this.data.settings.deletedChatTombstones;
+    if (chatId) map[chatId] = ts;
+    const digits = normalizePhoneDigits(phone || extractPhoneFromJidIfPn(chatId));
+    if (digits && digits.length >= 8) map[`tel:${digits}`] = ts;
+    const keys = Object.keys(map);
+    if (keys.length > 600) {
+      for (const oldKey of keys.slice(0, keys.length - 500)) delete map[oldKey];
+    }
+    this.workspaceDirty = true;
+  }
+
+  clearDeletedChatTombstone(chatId = '', phone = '') {
+    const map = this.data.settings?.deletedChatTombstones;
+    if (!map || typeof map !== 'object') return;
+    let changed = false;
+    if (chatId && map[chatId]) {
+      delete map[chatId];
+      changed = true;
+    }
+    const digits = normalizePhoneDigits(phone || extractPhoneFromJidIfPn(chatId));
+    if (digits && map[`tel:${digits}`]) {
+      delete map[`tel:${digits}`];
+      changed = true;
+    }
+    if (changed) this.workspaceDirty = true;
+  }
+
+  getDeletedChatTombstoneMs(chatId = '', phone = '') {
+    const map = this.data.settings?.deletedChatTombstones;
+    if (!map || typeof map !== 'object') return 0;
+    const t1 = chatId && map[chatId] ? new Date(map[chatId]).getTime() || 0 : 0;
+    const digits = normalizePhoneDigits(phone || extractPhoneFromJidIfPn(chatId));
+    const t2 = digits && map[`tel:${digits}`] ? new Date(map[`tel:${digits}`]).getTime() || 0 : 0;
+    return Math.max(t1, t2);
+  }
+
+  clearContactMessages(chatId) {
     const key = this.findSiblingContactKey(chatId) || chatId;
-    if (!this.data.contacts[key]) return false;
+    const existing = this.data.contacts[key];
+    if (!existing) return null;
+    const nowIso = new Date().toISOString();
+    existing.messages = [];
+    existing.unreadCount = 0;
+    existing.unreadAlert = false;
+    existing.historyClearedAt = nowIso;
+    existing.savedContact = true;
+    this.dirtyContactIds.add(key);
+    this.deletedContactIds.delete(key);
+    this.writeNow();
+    return existing;
+  }
+
+  deleteContact(chatId, opts = {}) {
+    const key = this.findSiblingContactKey(chatId) || chatId;
+    const existing = this.data.contacts[key];
+    if (!existing) return false;
+    if (opts.recordTombstone !== false) {
+      this.recordDeletedChatTombstone(key, existing.phone || '');
+      if (chatId && chatId !== key) this.recordDeletedChatTombstone(chatId, existing.phone || '');
+    }
     delete this.data.contacts[key];
     this.dirtyContactIds.delete(key);
     this.deletedContactIds.add(key);
@@ -1510,9 +1602,41 @@ export class Storage {
   }
 }
 
-export function mergeContactMessagesUnion(authoritativeMsgs = [], rescueMsgs = []) {
-  const authArr = Array.isArray(authoritativeMsgs) ? authoritativeMsgs.filter(Boolean) : [];
-  const rescArr = Array.isArray(rescueMsgs) ? rescueMsgs.filter(Boolean) : [];
+export function buildContactVCard(contact = {}) {
+  const esc = (v = '') => String(v || '').replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/;/g, '\\;').replace(/,/g, '\\,').trim();
+  const fullName = String(contact.name || contact.phone || 'Contato WhatsApp').trim();
+  const digits = normalizePhoneDigits(contact.phone || extractPhoneFromJidIfPn(contact.chatId || ''));
+  const lines = [
+    'BEGIN:VCARD',
+    'VERSION:3.0',
+    `FN:${esc(fullName)}`,
+    `N:${esc(fullName)};;;;`
+  ];
+  if (digits) {
+    lines.push(`TEL;TYPE=CELL;waid=${digits}:+${digits}`);
+  }
+  if (contact.company) lines.push(`ORG:${esc(contact.company)}`);
+  if (contact.email) lines.push(`EMAIL;TYPE=INTERNET:${esc(contact.email)}`);
+  if (contact.city) lines.push(`ADR;TYPE=WORK:;;;${esc(contact.city)};;;Brasil`);
+  const noteParts = [
+    contact.leadSource ? `Origem: ${contact.leadSource}` : '',
+    contact.docNumber ? `Doc: ${contact.docNumber}` : '',
+    contact.notes ? String(contact.notes).trim() : ''
+  ].filter(Boolean);
+  if (noteParts.length) lines.push(`NOTE:${esc(noteParts.join(' | '))}`);
+  lines.push('END:VCARD');
+  return lines.join('\r\n');
+}
+
+export function mergeContactMessagesUnion(authoritativeMsgs = [], rescueMsgs = [], historyClearedAt = null) {
+  const clearedMs = historyClearedAt ? new Date(historyClearedAt).getTime() || 0 : 0;
+  const keepAfterClear = (m) => {
+    if (!clearedMs) return true;
+    const ts = new Date(m?.timestamp || 0).getTime() || 0;
+    return ts > clearedMs;
+  };
+  const authArr = (Array.isArray(authoritativeMsgs) ? authoritativeMsgs.filter(Boolean) : []).filter(keepAfterClear);
+  const rescArr = (Array.isArray(rescueMsgs) ? rescueMsgs.filter(Boolean) : []).filter(keepAfterClear);
   if (rescArr.length === 0) return authArr.slice(-120);
 
   const merged = authArr.map((m) => ({ ...m }));

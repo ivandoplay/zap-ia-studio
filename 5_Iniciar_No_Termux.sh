@@ -39,17 +39,29 @@ echo "use a opcao 'Codigo de 8 digitos' na aba Conexao & Painel!"
 echo "=============================================================="
 echo ""
 
-# Garante instancia unica REAL (encerra qualquer loop antigo de outra aba + node antigo)
+# Garante instancia unica REAL (encerra qualquer loop antigo de outra aba + node antigo sem pkill -f)
 trap '' HUP
 mkdir -p data
 if [ -f "data/.wrapper.pid" ]; then
   OLD_WPID=$(cat "data/.wrapper.pid" 2>/dev/null || echo "")
-  if [ -n "$OLD_WPID" ] && [ "$OLD_WPID" != "$$" ]; then
+  if [ -n "$OLD_WPID" ] && [ "$OLD_WPID" != "$$" ] && [ "$OLD_WPID" != "$PPID" ]; then
     kill -9 "$OLD_WPID" 2>/dev/null || true
   fi
 fi
 echo "$$" > "data/.wrapper.pid"
-pkill -f "src/server.js" 2>/dev/null || true
+node -e '
+const fs = require("fs");
+for (const d of (fs.existsSync("/proc") ? fs.readdirSync("/proc") : [])) {
+  const pid = Number(d);
+  if (!pid || pid === process.pid || pid === process.ppid) continue;
+  try {
+    const cmd = fs.readFileSync("/proc/" + pid + "/cmdline", "utf8").replace(/\0/g, " ");
+    if ((cmd.startsWith("node ") || cmd.includes("/node ")) && cmd.includes("src/server.js")) {
+      process.kill(pid, "SIGKILL");
+    }
+  } catch {}
+}
+' 2>/dev/null || true
 sleep 1
 
 # Loop de auto-recuperacao blindado 24/7

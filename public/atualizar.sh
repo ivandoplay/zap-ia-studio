@@ -54,15 +54,26 @@ done
 echo "[1/3] Baixando versao mais recente do Motor em $BASE_URL..."
 curl -fsSL "$BASE_URL/api/public/motor-update.zip" -o "$TMP_ZIP"
 
-# Pausa qualquer instancia anterior antes de substituir os arquivos
+# Pausa qualquer instancia anterior de forma 100% cirurgica (sem tocar no shell atual!)
 if [ -f "$TARGET_APP/data/.wrapper.pid" ]; then
   OLD_PID=$(cat "$TARGET_APP/data/.wrapper.pid" 2>/dev/null || echo "")
-  if [ -n "$OLD_PID" ]; then
+  if [ -n "$OLD_PID" ] && [ "$OLD_PID" != "$$" ] && [ "$OLD_PID" != "$PPID" ]; then
     kill -9 "$OLD_PID" 2>/dev/null || true
   fi
 fi
-pkill -f "INICIAR_NO_TERMUX.sh" 2>/dev/null || true
-pkill -f "src/server.js" 2>/dev/null || true
+node -e '
+const fs = require("fs");
+for (const d of (fs.existsSync("/proc") ? fs.readdirSync("/proc") : [])) {
+  const pid = Number(d);
+  if (!pid || pid === process.pid || pid === process.ppid) continue;
+  try {
+    const cmd = fs.readFileSync("/proc/" + pid + "/cmdline", "utf8").replace(/\0/g, " ");
+    if ((cmd.startsWith("node ") || cmd.includes("/node ")) && cmd.includes("src/server.js")) {
+      process.kill(pid, "SIGKILL");
+    }
+  } catch {}
+}
+' 2>/dev/null || true
 sleep 1
 
 echo "[2/3] Atualizando arquivos do sistema (preservando seu WhatsApp e sua conta)..."

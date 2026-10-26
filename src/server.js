@@ -1557,9 +1557,90 @@ app.put('/api/crm/:chatId', (req, res) => {
   if (!storage.data.contacts[key]) {
     return res.status(404).json({ ok: false, error: 'Contato não encontrado.' });
   }
-  const updated = storage.upsertContact(key, req.body || {});
+  const body = req.body || {};
+  const patch = {
+    ...body,
+    ...(typeof body.name === 'string' && body.name.trim() ? { name: body.name.trim(), forceName: true } : {})
+  };
+  const updated = storage.upsertContact(key, patch);
   broadcast('crm_updated', {});
   res.json({ ok: true, contact: updated });
+});
+
+app.get('/api/crm/tags', (_req, res) => {
+  res.json({ ok: true, tags: storage.getCustomTags() });
+});
+
+app.post('/api/crm/tags', (req, res) => {
+  const name = String(req.body?.name || '').trim();
+  if (!name) return res.status(400).json({ ok: false, error: 'Informe o nome da etiqueta.' });
+  const saved = storage.saveCustomTag({
+    id: req.body?.id,
+    name,
+    color: req.body?.color || '#10b981'
+  });
+  broadcast('crm_updated', {});
+  res.json({ ok: true, tag: saved, tags: storage.getCustomTags(), business: storage.getBusiness() });
+});
+
+app.delete('/api/crm/tags/:tagId', (req, res) => {
+  const removed = storage.deleteCustomTag(decodeURIComponent(req.params.tagId));
+  if (!removed) return res.status(404).json({ ok: false, error: 'Etiqueta não encontrada.' });
+  broadcast('crm_updated', {});
+  res.json({ ok: true, removed, tags: storage.getCustomTags(), business: storage.getBusiness() });
+});
+
+app.post('/api/crm/bulk-action', (req, res) => {
+  const { chatIds = [], action = '', stage = '', tag = '', minutes = 60 } = req.body || {};
+  if (!Array.isArray(chatIds) || chatIds.length === 0) {
+    return res.status(400).json({ ok: false, error: 'Selecione pelo menos uma conversa.' });
+  }
+  let affected = 0;
+  for (const rawId of chatIds) {
+    const key = storage.findSiblingContactKey(rawId) || rawId;
+    const c = storage.data.contacts[key];
+    if (!c) continue;
+    affected += 1;
+    switch (action) {
+      case 'mark_read':
+        storage.markContactRead(key);
+        break;
+      case 'mark_unread':
+        storage.markContactUnread(key);
+        break;
+      case 'archive':
+        storage.upsertContact(key, { archived: true, unreadCount: 0 });
+        break;
+      case 'unarchive':
+        storage.upsertContact(key, { archived: false });
+        break;
+      case 'set_stage':
+        if (stage) storage.upsertContact(key, { stage });
+        break;
+      case 'add_tag':
+        if (tag) {
+          const nextTags = Array.from(new Set([...(c.tags || []), tag]));
+          storage.upsertContact(key, { tags: nextTags });
+        }
+        break;
+      case 'remove_tag':
+        if (tag) {
+          storage.upsertContact(key, { tags: (c.tags || []).filter((t) => t !== tag) });
+        }
+        break;
+      case 'pause_ai':
+        storage.pauseContact(key, minutes || 60, 'Pausado em massa no CRM');
+        break;
+      case 'resume_ai':
+        storage.resumeContact(key);
+        break;
+      default:
+        break;
+    }
+  }
+  storage.writeNow();
+  broadcast('crm_updated', {});
+  res.json({ ok: true, affected, contacts: sortContactsForInbox(storage.data.contacts) });
 });
 
 app.delete('/api/crm/:chatId', (req, res) => {
@@ -1574,6 +1655,97 @@ app.post('/api/crm/:chatId/mark-read', (req, res) => {
   const chatId = decodeURIComponent(req.params.chatId);
   const contact = storage.markContactRead(chatId);
   if (!contact) return res.status(404).json({ ok: false, error: 'Conversa não encontrada.' });
+  res.json({ ok: true, contact });
+});
+
+app.post('/api/crm/:chatId/mark-unread', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const contact = storage.markContactUnread(chatId);
+  if (!contact) return res.status(404).json({ ok: false, error: 'Conversa não encontrada.' });
+  broadcast('crm_updated', {});
+  res.json({ ok: true, contact });
+});
+
+app.post('/api/crm/:chatId/toggle-ignore', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const key = storage.findSiblingContactKey(chatId) || chatId;
+  const existing = storage.data.contacts[key];
+  if (!existing) return res.status(404).json({ ok: false, error: 'Conversa não encontrada.' });
+  const nextIgnored = req.body?.ignored !== undefined ? Boolean(req.body.ignored) : !existing.aiIgnored;
+  const contact = storage.upsertContact(key, { aiIgnored: nextIgnored });
+
+  // Mantém a Lista Pessoal/Ignorados da aba Segurança sincronizada caso o contato tenha telefone real
+  const digits = String(contact.phone || '').replace(/\D/g, '');
+  if (digits.length >= 8) {
+    storage.data.settings.ignoredContacts = Array.isArray(storage.data.settings.ignoredContacts)
+      ? storage.data.settings.ignoredContacts
+      : [];
+    const idx = storage.data.settings.ignoredContacts.findIndex(
+      (i) => String(i.phone || '').replace(/\D/g, '') === digits
+    );
+    if (nextIgnored && idx === -1) {
+      storage.data.settings.ignoredContacts.push({
+        id: uid('ign'),
+        name: contact.name || `+${digits}`,
+        phone: digits,
+        reason: 'Ignorado em 1 clique no CRM'
+      });
+    } else if (!nextIgnored && idx >= 0) {
+      storage.data.settings.ignoredContacts.splice(idx, 1);
+    }
+    storage.writeNow();
+  }
+  broadcast('crm_updated', {});
+  res.json({ ok: true, contact, ignoredContacts: storage.data.settings.ignoredContacts || [] });
+});
+
+app.post('/api/crm/:chatId/tasks', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const text = String(req.body?.text || '').trim();
+  if (!text) return res.status(400).json({ ok: false, error: 'Digite a descrição da tarefa.' });
+  const contact = storage.addContactTask(chatId, text);
+  if (!contact) return res.status(404).json({ ok: false, error: 'Contato não encontrado.' });
+  broadcast('crm_updated', {});
+  res.json({ ok: true, contact });
+});
+
+app.patch('/api/crm/:chatId/tasks/:taskId', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const contact = storage.toggleContactTask(chatId, req.params.taskId, req.body?.done);
+  if (!contact) return res.status(404).json({ ok: false, error: 'Contato não encontrado.' });
+  broadcast('crm_updated', {});
+  res.json({ ok: true, contact });
+});
+
+app.delete('/api/crm/:chatId/tasks/:taskId', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const contact = storage.deleteContactTask(chatId, req.params.taskId);
+  if (!contact) return res.status(404).json({ ok: false, error: 'Contato não encontrado.' });
+  broadcast('crm_updated', {});
+  res.json({ ok: true, contact });
+});
+
+app.post('/api/crm/:chatId/schedule-message', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const text = String(req.body?.text || '').trim();
+  const sendAt = String(req.body?.sendAt || '').trim();
+  if (!text || !sendAt) {
+    return res.status(400).json({ ok: false, error: 'Informe a mensagem e a data/hora programada.' });
+  }
+  if (new Date(sendAt).getTime() <= Date.now() - 30_000) {
+    return res.status(400).json({ ok: false, error: 'Escolha um horário futuro para programar o envio.' });
+  }
+  const contact = storage.addScheduledMessage(chatId, { text, sendAt });
+  if (!contact) return res.status(404).json({ ok: false, error: 'Contato não encontrado.' });
+  broadcast('crm_updated', {});
+  res.json({ ok: true, contact });
+});
+
+app.delete('/api/crm/:chatId/schedule-message/:schedId', (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const contact = storage.cancelScheduledMessage(chatId, req.params.schedId);
+  if (!contact) return res.status(404).json({ ok: false, error: 'Contato não encontrado.' });
+  broadcast('crm_updated', {});
   res.json({ ok: true, contact });
 });
 
@@ -1662,6 +1834,7 @@ app.post('/api/crm/:chatId/resume', (req, res) => {
 app.post(['/api/crm/:chatId/send', '/api/crm/:chatId/reply'], async (req, res) => {
   const chatId = decodeURIComponent(req.params.chatId);
   const text = (req.body?.text || '').trim();
+  const quotedMsgId = String(req.body?.quotedMsgId || '').trim();
   if (!text) return res.status(400).json({ ok: false, error: 'Digite uma mensagem.' });
 
   try {
@@ -1678,7 +1851,7 @@ app.post(['/api/crm/:chatId/send', '/api/crm/:chatId/reply'], async (req, res) =
         req.cloudAuth.client,
         req.cloudAuth.authUser.id,
         'send_crm_reply',
-        { chatId, text }
+        { chatId, text, quotedMsgId }
       );
       // CRÍTICO: NUNCA sujar o snapshot pré-comando da Vercel após o Motor já ter salvo a mensagem nova no Supabase!
       storage.workspaceDirty = false;
@@ -1699,7 +1872,7 @@ app.post(['/api/crm/:chatId/send', '/api/crm/:chatId/reply'], async (req, res) =
           error: 'O WhatsApp não está conectado neste motor. Conecte na aba Início & Conexão antes de enviar.'
         });
       }
-      await whatsappManager.sendManualOwnerMessage(cleanTargetJid, text, true);
+      await whatsappManager.sendManualOwnerMessage(cleanTargetJid, text, true, { quotedMsgId });
       storage.markContactRead(chatId);
       const key = storage.findSiblingContactKey(chatId) || chatId;
       return res.json({
@@ -1709,7 +1882,16 @@ app.post(['/api/crm/:chatId/send', '/api/crm/:chatId/reply'], async (req, res) =
       });
     }
 
-    storage.appendContactMessage(chatId, { role: 'owner', text });
+    let quotedStub = undefined;
+    if (quotedMsgId) {
+      const { msg: qm } = storage.findMessageInContact(chatId, quotedMsgId);
+      if (qm) quotedStub = { id: qm.id, text: String(qm.text || '').slice(0, 180), role: qm.role || 'user' };
+    }
+    storage.appendContactMessage(chatId, {
+      role: 'owner',
+      text,
+      ...(quotedStub ? { quoted: quotedStub } : {})
+    });
     storage.pauseContact(chatId, 60, 'Mensagem simulada na conversa demo');
     const key = storage.findSiblingContactKey(chatId) || chatId;
     res.json({
@@ -1719,6 +1901,137 @@ app.post(['/api/crm/:chatId/send', '/api/crm/:chatId/reply'], async (req, res) =
     });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/crm/:chatId/messages/:msgId/react', async (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const msgId = decodeURIComponent(req.params.msgId);
+  const emoji = String(req.body?.emoji || '').trim();
+  try {
+    if (usesCloudBridge(req) && !chatId.startsWith('demo_') && getEffectiveWaState(req).workerOnline) {
+      try {
+        const out = await dispatchCommandToWorker(
+          req.cloudAuth.client,
+          req.cloudAuth.authUser.id,
+          'crm_react_message',
+          { chatId, msgId, emoji }
+        );
+        storage.workspaceDirty = false;
+        storage.dirtyContactIds.clear();
+        return res.json({ ok: true, contact: out.contact || storage.data.contacts[chatId], syncedWhatsApp: true });
+      } catch (bridgeErr) {
+        if (!/desconhecida/i.test(bridgeErr.message || '')) throw bridgeErr;
+      }
+    } else if (!usesCloudBridge(req) && !chatId.startsWith('demo_') && whatsappManager?.status === 'connected') {
+      const updated = await whatsappManager.reactToWhatsappMessage(chatId, msgId, emoji);
+      return res.json({ ok: true, contact: updated, syncedWhatsApp: true });
+    }
+    const updated = storage.applyMessageReaction(chatId, msgId, emoji, 'owner');
+    if (!updated) return res.status(404).json({ ok: false, error: 'Mensagem não encontrada.' });
+    broadcast('crm_updated', { chatId });
+    res.json({ ok: true, contact: updated, syncedWhatsApp: false });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ ok: false, error: err.message });
+  }
+});
+
+app.put('/api/crm/:chatId/messages/:msgId', async (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const msgId = decodeURIComponent(req.params.msgId);
+  const text = String(req.body?.text || '').trim();
+  if (!text) return res.status(400).json({ ok: false, error: 'Informe o novo texto da mensagem.' });
+  try {
+    if (usesCloudBridge(req) && !chatId.startsWith('demo_') && getEffectiveWaState(req).workerOnline) {
+      try {
+        const out = await dispatchCommandToWorker(
+          req.cloudAuth.client,
+          req.cloudAuth.authUser.id,
+          'crm_edit_message',
+          { chatId, msgId, text }
+        );
+        storage.workspaceDirty = false;
+        storage.dirtyContactIds.clear();
+        return res.json({ ok: true, contact: out.contact || storage.data.contacts[chatId], syncedWhatsApp: true });
+      } catch (bridgeErr) {
+        if (!/desconhecida/i.test(bridgeErr.message || '')) throw bridgeErr;
+      }
+    } else if (!usesCloudBridge(req) && !chatId.startsWith('demo_') && whatsappManager?.status === 'connected') {
+      const updated = await whatsappManager.editWhatsappMessage(chatId, msgId, text);
+      return res.json({ ok: true, contact: updated, syncedWhatsApp: true });
+    }
+    const updated = storage.applyMessageEdit(chatId, msgId, text);
+    if (!updated) return res.status(404).json({ ok: false, error: 'Mensagem não encontrada.' });
+    broadcast('crm_updated', { chatId });
+    res.json({ ok: true, contact: updated, syncedWhatsApp: false });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ ok: false, error: err.message });
+  }
+});
+
+app.delete('/api/crm/:chatId/messages/:msgId', async (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const msgId = decodeURIComponent(req.params.msgId);
+  try {
+    if (usesCloudBridge(req) && !chatId.startsWith('demo_') && getEffectiveWaState(req).workerOnline) {
+      try {
+        const out = await dispatchCommandToWorker(
+          req.cloudAuth.client,
+          req.cloudAuth.authUser.id,
+          'crm_delete_message',
+          { chatId, msgId }
+        );
+        storage.workspaceDirty = false;
+        storage.dirtyContactIds.clear();
+        return res.json({ ok: true, contact: out.contact || storage.data.contacts[chatId], syncedWhatsApp: true });
+      } catch (bridgeErr) {
+        if (!/desconhecida/i.test(bridgeErr.message || '')) throw bridgeErr;
+      }
+    } else if (!usesCloudBridge(req) && !chatId.startsWith('demo_') && whatsappManager?.status === 'connected') {
+      const updated = await whatsappManager.deleteWhatsappMessageForEveryone(chatId, msgId);
+      return res.json({ ok: true, contact: updated, syncedWhatsApp: true });
+    }
+    const updated = storage.applyMessageDelete(chatId, msgId);
+    if (!updated) return res.status(404).json({ ok: false, error: 'Mensagem não encontrada.' });
+    broadcast('crm_updated', { chatId });
+    res.json({ ok: true, contact: updated, syncedWhatsApp: false });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/crm/:chatId/messages/:msgId/forward', async (req, res) => {
+  const chatId = decodeURIComponent(req.params.chatId);
+  const msgId = decodeURIComponent(req.params.msgId);
+  const toChatId = String(req.body?.toChatId || '').trim();
+  if (!toChatId) return res.status(400).json({ ok: false, error: 'Selecione o contato de destino.' });
+  try {
+    if (usesCloudBridge(req) && !toChatId.startsWith('demo_') && getEffectiveWaState(req).workerOnline) {
+      const out = await dispatchCommandToWorker(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        'crm_forward_message',
+        { fromChatId: chatId, msgId, toChatId }
+      );
+      storage.workspaceDirty = false;
+      storage.dirtyContactIds.clear();
+      return res.json({ ok: true, targetContact: out.targetContact, sentRealWhatsApp: true });
+    }
+    if (!usesCloudBridge(req) && !toChatId.startsWith('demo_') && whatsappManager?.status === 'connected') {
+      const targetContact = await whatsappManager.forwardCrmMessage(chatId, msgId, toChatId);
+      return res.json({ ok: true, targetContact, sentRealWhatsApp: true });
+    }
+    const { msg } = storage.findMessageInContact(chatId, msgId);
+    if (!msg) return res.status(404).json({ ok: false, error: 'Mensagem não encontrada.' });
+    const targetContact = storage.appendContactMessage(toChatId, {
+      role: 'owner',
+      text: msg.text || '[Mensagem encaminhada]',
+      ...(msg.mediaUrl ? { mediaUrl: msg.mediaUrl, mediaName: msg.mediaName, mediaMime: msg.mediaMime } : {})
+    });
+    broadcast('crm_updated', {});
+    res.json({ ok: true, targetContact, sentRealWhatsApp: false });
+  } catch (err) {
+    res.status(err.statusCode || 400).json({ ok: false, error: err.message });
   }
 });
 

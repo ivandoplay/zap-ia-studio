@@ -154,6 +154,28 @@ export function createDefaultQuickReplies() {
   ];
 }
 
+export function normalizeCustomTagItem(raw = {}) {
+  const name = String(raw.name || '').trim().slice(0, 32) || 'Etiqueta';
+  const colorRaw = String(raw.color || '#10b981').trim();
+  const color = /^#[0-9a-fA-F]{6}$/.test(colorRaw) ? colorRaw.toLowerCase() : '#10b981';
+  return {
+    id: raw.id || `tag_${name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '_').slice(0, 20) || uid('t')}`,
+    name,
+    color
+  };
+}
+
+export function createDefaultCustomTags() {
+  return [
+    { id: 'tag_quente', name: 'Quente', color: '#ef4444' },
+    { id: 'tag_orcamento', name: 'Orçamento', color: '#f59e0b' },
+    { id: 'tag_vip', name: 'VIP', color: '#8b5cf6' },
+    { id: 'tag_retorno', name: 'Retorno', color: '#3b82f6' },
+    { id: 'tag_fechado', name: 'Fechado', color: '#10b981' },
+    { id: 'tag_duvida', name: 'Dúvida', color: '#06b6d4' }
+  ];
+}
+
 export function createBusinessFromTemplate(tpl = NICHE_TEMPLATES[0]) {
   const p = tpl.profile;
   return {
@@ -174,6 +196,7 @@ export function createBusinessFromTemplate(tpl = NICHE_TEMPLATES[0]) {
     knowledgeDocs: [],
     voiceLibrary: [],
     quickReplies: createDefaultQuickReplies(),
+    customTags: createDefaultCustomTags(),
     catalog: (p.sampleCatalog || []).map(item => normalizeCatalogItem({
       id: uid('item'),
       name: item.name,
@@ -219,6 +242,9 @@ function normalizeBusinessObject(raw = {}, fallback = createBusinessFromTemplate
     quickReplies: Array.isArray(raw.quickReplies) && raw.quickReplies.length > 0
       ? raw.quickReplies.filter(Boolean).map(normalizeQuickReplyItem)
       : (fallback.quickReplies || createDefaultQuickReplies()),
+    customTags: Array.isArray(raw.customTags) && raw.customTags.length > 0
+      ? raw.customTags.filter(Boolean).map(normalizeCustomTagItem)
+      : (fallback.customTags || createDefaultCustomTags()),
     catalog: Array.isArray(raw.catalog) ? raw.catalog.map(normalizeCatalogItem) : fallback.catalog,
     updatedAt: raw.updatedAt || new Date().toISOString()
   };
@@ -271,10 +297,17 @@ function deduplicateContactsMap(rawContacts = {}) {
       if (!dup) dedupedMsgs.push(m);
     }
 
-    const stageRank = { novo: 0, em_atendimento: 1, concluido: 2, aguardando_humano: 3 };
+    const stageRank = { novo: 0, qualificando: 1, em_atendimento: 2, concluido: 3, aguardando_humano: 4 };
     const bestStage = (stageRank[item.stage] || 0) >= (stageRank[prev.stage] || 0) ? item.stage : prev.stage;
     const mergedTags = Array.from(new Set([...(prev.tags || []), ...(item.tags || [])]));
     const mergedSentVoiceIds = Array.from(new Set([...(prev.sentVoiceIds || []), ...(item.sentVoiceIds || [])]));
+    const mergeById = (a = [], b = []) => {
+      const m = new Map();
+      for (const x of [...a, ...b]) if (x?.id) m.set(x.id, x);
+      return Array.from(m.values());
+    };
+    const mergedTasks = mergeById(prev.tasks, item.tasks);
+    const mergedSched = mergeById(prev.scheduledMessages, item.scheduledMessages);
     const bestPausedUntil = prev.pausedUntil === 'forever' || item.pausedUntil === 'forever'
       ? 'forever'
       : (item.pausedUntil || prev.pausedUntil || null);
@@ -297,6 +330,18 @@ function deduplicateContactsMap(rawContacts = {}) {
       chatId: canonicalJid,
       phone: isLikelyRealPhone(item.phone) ? item.phone : prev.phone,
       name: bestName,
+      avatarUrl: item.avatarUrl || prev.avatarUrl || '',
+      company: item.company || prev.company || '',
+      email: item.email || prev.email || '',
+      docNumber: item.docNumber || prev.docNumber || '',
+      city: item.city || prev.city || '',
+      leadSource: item.leadSource || prev.leadSource || '',
+      dealValue: Number(item.dealValue) || Number(prev.dealValue) || 0,
+      dealStatus: item.dealStatus && item.dealStatus !== 'open' ? item.dealStatus : (prev.dealStatus || 'open'),
+      lostReason: item.lostReason || prev.lostReason || '',
+      aiIgnored: Boolean(prev.aiIgnored || item.aiIgnored),
+      tasks: mergedTasks,
+      scheduledMessages: mergedSched,
       stage: bestStage,
       tags: mergedTags,
       sentVoiceIds: mergedSentVoiceIds,
@@ -725,6 +770,57 @@ export class Storage {
     return removed;
   }
 
+  getCustomTags() {
+    const biz = this.getBusiness();
+    if (!Array.isArray(biz.customTags) || biz.customTags.length === 0) {
+      biz.customTags = createDefaultCustomTags();
+    }
+    return biz.customTags;
+  }
+
+  saveCustomTag(rawTag = {}) {
+    const biz = this.getBusiness();
+    biz.customTags = this.getCustomTags();
+    const normalized = normalizeCustomTagItem(rawTag);
+    const idx = biz.customTags.findIndex(
+      (t) => t.id === normalized.id || t.name.toLowerCase() === normalized.name.toLowerCase()
+    );
+    if (idx >= 0) {
+      const oldName = biz.customTags[idx].name;
+      biz.customTags[idx] = { ...biz.customTags[idx], ...normalized, id: biz.customTags[idx].id };
+      if (oldName !== normalized.name) {
+        for (const c of Object.values(this.data.contacts || {})) {
+          if (Array.isArray(c.tags) && c.tags.includes(oldName)) {
+            c.tags = c.tags.map((t) => (t === oldName ? normalized.name : t));
+            this.dirtyContactIds.add(c.chatId);
+          }
+        }
+      }
+    } else {
+      biz.customTags.push(normalized);
+    }
+    biz.updatedAt = new Date().toISOString();
+    this.writeNow();
+    return normalized;
+  }
+
+  deleteCustomTag(idOrName) {
+    const biz = this.getBusiness();
+    biz.customTags = this.getCustomTags();
+    const idx = biz.customTags.findIndex((t) => t.id === idOrName || t.name === idOrName);
+    if (idx === -1) return null;
+    const [removed] = biz.customTags.splice(idx, 1);
+    for (const c of Object.values(this.data.contacts || {})) {
+      if (Array.isArray(c.tags) && c.tags.includes(removed.name)) {
+        c.tags = c.tags.filter((t) => t !== removed.name);
+        this.dirtyContactIds.add(c.chatId);
+      }
+    }
+    biz.updatedAt = new Date().toISOString();
+    this.writeNow();
+    return removed;
+  }
+
   getVoiceLibrary() {
     const biz = this.getBusiness();
     biz.voiceLibrary = Array.isArray(biz.voiceLibrary) ? biz.voiceLibrary : [];
@@ -782,6 +878,10 @@ export class Storage {
   }
 
   isContactIgnored(phoneOrJid = '') {
+    const raw = String(phoneOrJid || '');
+    if (raw && this.data.contacts?.[raw]?.aiIgnored) return true;
+    const sibKey = raw ? this.findSiblingContactKey(raw) : null;
+    if (sibKey && this.data.contacts?.[sibKey]?.aiIgnored) return true;
     const digits = normalizePhoneDigits(phoneOrJid);
     if (!digits) return false;
     const list = this.data.settings.ignoredContacts || [];
@@ -874,6 +974,18 @@ export class Storage {
       chatId: targetKey,
       phone: candidatePhone || '',
       name: patch.name || fallbackPhoneLabel,
+      avatarUrl: patch.avatarUrl || '',
+      company: '',
+      email: '',
+      docNumber: '',
+      city: '',
+      leadSource: '',
+      dealValue: 0,
+      dealStatus: 'open',
+      lostReason: '',
+      aiIgnored: false,
+      tasks: [],
+      scheduledMessages: [],
       stage: 'novo',
       pausedUntil: null,
       pauseReason: '',
@@ -925,6 +1037,20 @@ export class Storage {
       ...existing,
       ...cleanPatch,
       chatId: targetKey,
+      avatarUrl: patch.avatarUrl !== undefined ? String(patch.avatarUrl || '') : (existing.avatarUrl || ''),
+      company: patch.company !== undefined ? String(patch.company || '').trim() : (existing.company || ''),
+      email: patch.email !== undefined ? String(patch.email || '').trim() : (existing.email || ''),
+      docNumber: patch.docNumber !== undefined ? String(patch.docNumber || '').trim() : (existing.docNumber || ''),
+      city: patch.city !== undefined ? String(patch.city || '').trim() : (existing.city || ''),
+      leadSource: patch.leadSource !== undefined ? String(patch.leadSource || '').trim() : (existing.leadSource || ''),
+      dealValue: patch.dealValue !== undefined ? Math.max(0, Number(patch.dealValue) || 0) : Math.max(0, Number(existing.dealValue) || 0),
+      dealStatus: patch.dealStatus !== undefined
+        ? (['open', 'won', 'lost'].includes(patch.dealStatus) ? patch.dealStatus : 'open')
+        : (existing.dealStatus || 'open'),
+      lostReason: patch.lostReason !== undefined ? String(patch.lostReason || '').trim() : (existing.lostReason || ''),
+      aiIgnored: patch.aiIgnored !== undefined ? Boolean(patch.aiIgnored) : Boolean(existing.aiIgnored),
+      tasks: Array.isArray(patch.tasks) ? patch.tasks : (existing.tasks || []),
+      scheduledMessages: Array.isArray(patch.scheduledMessages) ? patch.scheduledMessages : (existing.scheduledMessages || []),
       tags: Array.isArray(patch.tags) ? patch.tags : (existing.tags || []),
       sentVoiceIds: Array.isArray(patch.sentVoiceIds) ? patch.sentVoiceIds : (existing.sentVoiceIds || []),
       internalNotesList: Array.isArray(patch.internalNotesList)
@@ -974,6 +1100,148 @@ export class Storage {
       unreadCount: 0,
       unreadAlert: false
     });
+  }
+
+  markContactUnread(chatId) {
+    const key = this.findSiblingContactKey(chatId) || chatId;
+    const existing = this.data.contacts[key];
+    if (!existing) return null;
+    return this.upsertContact(key, {
+      unreadCount: Math.max(1, Number(existing.unreadCount) || 0),
+      archived: false
+    });
+  }
+
+  findMessageInContact(chatId, msgIdOrWaId) {
+    const key = this.findSiblingContactKey(chatId) || chatId;
+    const contact = this.data.contacts[key];
+    if (!contact || !Array.isArray(contact.messages)) return { contact: null, msg: null };
+    const msg = contact.messages.find(
+      (m) => (m.id && m.id === msgIdOrWaId) || (m.waMsgId && m.waMsgId === msgIdOrWaId)
+    );
+    return { contact, msg: msg || null };
+  }
+
+  applyMessageReaction(chatId, msgIdOrWaId, emoji = '', actor = 'owner') {
+    const { contact, msg } = this.findMessageInContact(chatId, msgIdOrWaId);
+    if (!contact || !msg) return null;
+    const cleanEmoji = String(emoji || '').trim();
+    const reactions = typeof msg.reactions === 'object' && msg.reactions && !Array.isArray(msg.reactions)
+      ? { ...msg.reactions }
+      : {};
+    if (!cleanEmoji || reactions[actor] === cleanEmoji) {
+      delete reactions[actor];
+    } else {
+      reactions[actor] = cleanEmoji;
+    }
+    msg.reactions = reactions;
+    this.dirtyContactIds.add(contact.chatId);
+    this.saveSoon();
+    return contact;
+  }
+
+  applyMessageEdit(chatId, msgIdOrWaId, newText = '') {
+    const { contact, msg } = this.findMessageInContact(chatId, msgIdOrWaId);
+    if (!contact || !msg) return null;
+    const clean = String(newText || '').trim();
+    if (!clean) return contact;
+    msg.text = clean;
+    msg.editedAt = new Date().toISOString();
+    this.dirtyContactIds.add(contact.chatId);
+    this.saveSoon();
+    return contact;
+  }
+
+  applyMessageDelete(chatId, msgIdOrWaId) {
+    const { contact, msg } = this.findMessageInContact(chatId, msgIdOrWaId);
+    if (!contact || !msg) return null;
+    msg.deletedForEveryone = true;
+    msg.deletedAt = new Date().toISOString();
+    msg.text = '🚫 Mensagem apagada';
+    delete msg.mediaUrl;
+    this.dirtyContactIds.add(contact.chatId);
+    this.saveSoon();
+    return contact;
+  }
+
+  applyMessageAck(chatId, waMsgId, ackLevel = 1) {
+    const { contact, msg } = this.findMessageInContact(chatId, waMsgId);
+    if (!contact || !msg) return null;
+    const nextAck = Math.max(Number(msg.ack) || 0, Number(ackLevel) || 0);
+    if (nextAck === (Number(msg.ack) || 0)) return contact;
+    msg.ack = nextAck;
+    this.dirtyContactIds.add(contact.chatId);
+    this.saveSoon();
+    return contact;
+  }
+
+  addContactTask(chatId, text = '') {
+    const clean = String(text || '').trim();
+    if (!clean) return null;
+    const key = this.findSiblingContactKey(chatId) || chatId;
+    const existing = this.upsertContact(key, {}, { deferSave: true });
+    const nextTasks = [
+      ...(existing.tasks || []),
+      { id: uid('task'), text: clean.slice(0, 180), done: false, createdAt: new Date().toISOString() }
+    ].slice(-50);
+    return this.upsertContact(key, { tasks: nextTasks });
+  }
+
+  toggleContactTask(chatId, taskId, done) {
+    const key = this.findSiblingContactKey(chatId) || chatId;
+    const existing = this.data.contacts[key];
+    if (!existing) return null;
+    const nextTasks = (existing.tasks || []).map((t) =>
+      t.id === taskId ? { ...t, done: done !== undefined ? Boolean(done) : !t.done } : t
+    );
+    return this.upsertContact(key, { tasks: nextTasks });
+  }
+
+  deleteContactTask(chatId, taskId) {
+    const key = this.findSiblingContactKey(chatId) || chatId;
+    const existing = this.data.contacts[key];
+    if (!existing) return null;
+    const nextTasks = (existing.tasks || []).filter((t) => t.id !== taskId);
+    return this.upsertContact(key, { tasks: nextTasks });
+  }
+
+  addScheduledMessage(chatId, { text = '', sendAt = '' } = {}) {
+    const cleanText = String(text || '').trim();
+    const dt = new Date(sendAt);
+    if (!cleanText || Number.isNaN(dt.getTime())) return null;
+    const key = this.findSiblingContactKey(chatId) || chatId;
+    const existing = this.upsertContact(key, {}, { deferSave: true });
+    const entry = {
+      id: uid('sched'),
+      text: cleanText,
+      sendAt: dt.toISOString(),
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+    const nextSched = [...(existing.scheduledMessages || []), entry]
+      .sort((a, b) => new Date(a.sendAt).getTime() - new Date(b.sendAt).getTime())
+      .slice(-40);
+    return this.upsertContact(key, { scheduledMessages: nextSched });
+  }
+
+  cancelScheduledMessage(chatId, schedId) {
+    const key = this.findSiblingContactKey(chatId) || chatId;
+    const existing = this.data.contacts[key];
+    if (!existing) return null;
+    const nextSched = (existing.scheduledMessages || []).filter((s) => s.id !== schedId);
+    return this.upsertContact(key, { scheduledMessages: nextSched });
+  }
+
+  markScheduledMessageResult(chatId, schedId, { status = 'sent', error = '' } = {}) {
+    const key = this.findSiblingContactKey(chatId) || chatId;
+    const existing = this.data.contacts[key];
+    if (!existing) return null;
+    const nextSched = (existing.scheduledMessages || []).map((s) =>
+      s.id === schedId
+        ? { ...s, status, sentAt: new Date().toISOString(), error: error || '' }
+        : s
+    );
+    return this.upsertContact(key, { scheduledMessages: nextSched });
   }
 
   addInternalNote(chatId, { text = '', author = 'Equipe' } = {}) {
@@ -1275,7 +1543,31 @@ export function mergeContactMessagesUnion(authoritativeMsgs = [], rescueMsgs = [
 
     if (existing) {
       if (r.waMsgId && !existing.waMsgId) existing.waMsgId = r.waMsgId;
-      if (r.mediaUrl && /^https?:\/\//i.test(r.mediaUrl) && (!existing.mediaUrl || existing.mediaUrl.startsWith('/uploads/'))) {
+      if (r.waMsgKey && !existing.waMsgKey) existing.waMsgKey = r.waMsgKey;
+      if (r.quoted && !existing.quoted) existing.quoted = r.quoted;
+      if (r.ack && (!existing.ack || Number(r.ack) > Number(existing.ack))) existing.ack = Number(r.ack);
+      if (r.reactions && typeof r.reactions === 'object') {
+        existing.reactions = { ...(r.reactions || {}), ...(existing.reactions || {}) };
+      }
+      if (r.deletedForEveryone && !existing.deletedForEveryone) {
+        existing.deletedForEveryone = true;
+        existing.deletedAt = r.deletedAt || new Date().toISOString();
+        existing.text = '🚫 Mensagem apagada';
+        delete existing.mediaUrl;
+      } else if (
+        r.editedAt &&
+        (!existing.editedAt || new Date(r.editedAt).getTime() > new Date(existing.editedAt).getTime()) &&
+        !existing.deletedForEveryone
+      ) {
+        existing.text = r.text;
+        existing.editedAt = r.editedAt;
+      }
+      if (
+        !existing.deletedForEveryone &&
+        r.mediaUrl &&
+        /^https?:\/\//i.test(r.mediaUrl) &&
+        (!existing.mediaUrl || existing.mediaUrl.startsWith('/uploads/'))
+      ) {
         existing.mediaUrl = r.mediaUrl;
       }
       continue;

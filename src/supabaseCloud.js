@@ -1708,11 +1708,41 @@ class CloudWorkerBridge {
         case 'send_crm_reply': {
           await this.pullCloudIntoLocal(false);
           const cleanJid = String(p.chatId || '').replace(/^demo_/, '');
-          await this.whatsappManager.sendManualOwnerMessage(cleanJid, p.text, true);
+          await this.whatsappManager.sendManualOwnerMessage(cleanJid, p.text, true, {
+            quotedMsgId: p.quotedMsgId || ''
+          });
           localStorageInstance.markContactRead(cleanJid);
           await this.flushLocalToCloud();
           const key = localStorageInstance.findSiblingContactKey(cleanJid) || cleanJid;
           result = { ok: true, sentRealWhatsApp: true, contact: localStorageInstance.data.contacts[key] };
+          break;
+        }
+        case 'crm_react_message': {
+          await this.pullCloudIntoLocal(false);
+          const updated = await this.whatsappManager.reactToWhatsappMessage(p.chatId, p.msgId, p.emoji || '');
+          await this.flushLocalToCloud();
+          result = { ok: true, contact: updated };
+          break;
+        }
+        case 'crm_edit_message': {
+          await this.pullCloudIntoLocal(false);
+          const updated = await this.whatsappManager.editWhatsappMessage(p.chatId, p.msgId, p.text || '');
+          await this.flushLocalToCloud();
+          result = { ok: true, contact: updated };
+          break;
+        }
+        case 'crm_delete_message': {
+          await this.pullCloudIntoLocal(false);
+          const updated = await this.whatsappManager.deleteWhatsappMessageForEveryone(p.chatId, p.msgId);
+          await this.flushLocalToCloud();
+          result = { ok: true, contact: updated };
+          break;
+        }
+        case 'crm_forward_message': {
+          await this.pullCloudIntoLocal(false);
+          const updatedDest = await this.whatsappManager.forwardCrmMessage(p.fromChatId, p.msgId, p.toChatId);
+          await this.flushLocalToCloud();
+          result = { ok: true, targetContact: updatedDest };
           break;
         }
         case 'send_crm_catalog': {

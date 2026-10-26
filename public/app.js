@@ -2247,12 +2247,17 @@ function updateInboxFilterCounters() {
 }
 
 function getFilteredCrmContacts() {
+  syncCrmTagDropdowns();
   const q = (document.getElementById('crmSearchInput')?.value || '').toLowerCase().trim();
+  const stageFilter = document.getElementById('crmFilterStageSelect')?.value || '';
+  const tagFilter = document.getElementById('crmFilterTagSelect')?.value || '';
+  const dealFilter = document.getElementById('crmFilterDealSelect')?.value || '';
   const out = [];
   for (const c of state.contacts || []) {
     const tagsStr = (c.tags || []).join(' ');
-    const msgsBlob = (c.messages || []).slice(-8).map((m) => m.text || '').join(' ');
-    if (q && !`${c.name} ${c.phone} ${c.summary || ''} ${c.notes || ''} ${tagsStr} ${msgsBlob}`.toLowerCase().includes(q)) continue;
+    const msgsBlob = (c.messages || []).slice(-12).map((m) => m.text || '').join(' ');
+    const profileBlob = `${c.name || ''} ${c.phone || ''} ${c.company || ''} ${c.email || ''} ${c.docNumber || ''} ${c.city || ''} ${c.leadSource || ''}`;
+    if (q && !`${profileBlob} ${c.summary || ''} ${c.notes || ''} ${tagsStr} ${msgsBlob}`.toLowerCase().includes(q)) continue;
 
     if (state.activeCrmFilter === 'archived') {
       if (!c.archived) continue;
@@ -2264,12 +2269,82 @@ function getFilteredCrmContacts() {
     if (state.activeCrmFilter === 'human' && c.stage !== 'aguardando_humano') continue;
     if (state.activeCrmFilter === 'followup' && !c.followUpAt) continue;
     if (state.activeCrmFilter === 'hot') {
-      const hasHot = (c.tags || []).some((t) => /quente|valor/i.test(t)) || c.sentiment?.code === 'hot';
+      const hasHot = (c.tags || []).some((t) => /quente|valor|vip/i.test(t)) || c.sentiment?.code === 'hot';
       if (!hasHot) continue;
     }
+
+    if (stageFilter && (c.stage || 'novo') !== stageFilter) continue;
+    if (tagFilter && !(c.tags || []).includes(tagFilter)) continue;
+    if (dealFilter === 'won' && c.dealStatus !== 'won') continue;
+    if (dealFilter === 'lost' && c.dealStatus !== 'lost') continue;
+    if (dealFilter === 'with_value' && !(Number(c.dealValue) > 0)) continue;
+
     out.push(c);
   }
   return out;
+}
+
+function formatBrlShort(val) {
+  const num = Number(val) || 0;
+  return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: num % 1 === 0 ? 0 : 2 });
+}
+
+function getAllCustomTagsList() {
+  const custom = Array.isArray(getActiveProfile()?.customTags) ? getActiveProfile().customTags : [];
+  const byName = new Map();
+  for (const ct of custom) {
+    if (ct?.name) byName.set(ct.name, { id: ct.id || ct.name, name: ct.name, color: ct.color || '#10b981' });
+  }
+  for (const preset of PRESET_CRM_TAGS) {
+    if (!byName.has(preset)) {
+      const defColor = /quente/i.test(preset)
+        ? '#ef4444'
+        : /or[çc]amento|valor/i.test(preset)
+          ? '#f59e0b'
+          : /vip/i.test(preset)
+            ? '#8b5cf6'
+            : /retorno/i.test(preset)
+              ? '#3b82f6'
+              : '#10b981';
+      byName.set(preset, { id: `preset_${preset}`, name: preset, color: defColor });
+    }
+  }
+  return Array.from(byName.values());
+}
+
+function getCustomTagColor(tagName) {
+  const found = getAllCustomTagsList().find((t) => t.name.toLowerCase() === String(tagName || '').toLowerCase());
+  return found?.color || '#10b981';
+}
+
+function renderColoredTagPill(tagName) {
+  const hex = getCustomTagColor(tagName);
+  return `<span class="lead-tag" style="background:${hex}22; color:${hex}; border:1px solid ${hex}55;">${escapeHtml(tagName)}</span>`;
+}
+
+function syncCrmTagDropdowns() {
+  const allTags = getAllCustomTagsList();
+  for (const selId of ['crmFilterTagSelect', 'crmBulkTagSelect']) {
+    const sel = document.getElementById(selId);
+    if (!sel || document.activeElement === sel) continue;
+    const prev = sel.value;
+    const firstLabel = selId === 'crmFilterTagSelect' ? 'Etiqueta: Todas' : '+ Etiqueta...';
+    const sig = allTags.map((t) => t.name).join('|');
+    if (sel.dataset.tagsSig === sig) continue;
+    sel.dataset.tagsSig = sig;
+    sel.innerHTML =
+      `<option value="">${firstLabel}</option>` +
+      allTags.map((t) => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)}</option>`).join('');
+    if (prev && Array.from(sel.options).some((o) => o.value === prev)) sel.value = prev;
+  }
+}
+
+function renderContactAvatarContent(c) {
+  const initials = getSafeInitials(c?.name || c?.phone || 'C', 'C');
+  if (c?.avatarUrl && /^https?:\/\//i.test(c.avatarUrl)) {
+    return `<img src="${escapeHtml(c.avatarUrl)}" alt="" loading="lazy" onerror="this.replaceWith(document.createTextNode('${escapeJsArg(initials)}'))" />`;
+  }
+  return escapeHtml(initials);
 }
 
 function renderSentimentPillHtml(sentiment) {
@@ -2285,6 +2360,7 @@ function renderCrmBoard() {
 
   const cols = {
     novo: [],
+    qualificando: [],
     em_atendimento: [],
     aguardando_humano: [],
     concluido: []
@@ -2298,6 +2374,11 @@ function renderCrmBoard() {
   Object.entries(cols).forEach(([stage, list]) => {
     const cntEl = document.getElementById(`count-${stage}`);
     if (cntEl) cntEl.textContent = list.length;
+    const sumEl = document.getElementById(`sum-${stage}`);
+    if (sumEl) {
+      const colTotal = list.reduce((acc, item) => acc + (Number(item.dealValue) || 0), 0);
+      sumEl.textContent = formatBrlShort(colTotal);
+    }
     const container = document.getElementById(`col-${stage}`);
     if (!container) return;
     if (!list.length) {
@@ -2310,8 +2391,14 @@ function renderCrmBoard() {
         const realMsgs = (c.messages || []).filter((m) => m.role !== 'internal_note');
         const lastMsg = realMsgs[realMsgs.length - 1]?.text || c.summary || 'Sem mensagens';
         const sentHtml = renderSentimentPillHtml(c.sentiment);
-        const tagsHtml = (c.tags || []).length || sentHtml
-          ? `<div class="lead-tags-row">${sentHtml}${(c.tags || []).map((t) => `<span class="lead-tag ${getTagClass(t)}">${escapeHtml(t)}</span>`).join('')}</div>`
+        const dealValHtml = Number(c.dealValue) > 0 ? `<span class="deal-pill value">${escapeHtml(formatBrlShort(c.dealValue))}</span>` : '';
+        const dealStHtml = c.dealStatus === 'won'
+          ? '<span class="deal-pill won">✅ Ganho</span>'
+          : c.dealStatus === 'lost'
+            ? '<span class="deal-pill lost">❌ Perdido</span>'
+            : '';
+        const tagsHtml = (c.tags || []).length || sentHtml || dealValHtml || dealStHtml
+          ? `<div class="lead-tags-row">${dealValHtml}${dealStHtml}${sentHtml}${(c.tags || []).map((t) => renderColoredTagPill(t)).join('')}</div>`
           : '';
 
         let followHtml = '';
@@ -2335,9 +2422,9 @@ function renderCrmBoard() {
           >
             <div class="lead-title-row">
               <span>${c.pinned ? '📌 ' : ''}${escapeHtml(c.name)}</span>
-              ${paused ? '<span class="tag paused">Pausado</span>' : '<span class="tag">Ativo</span>'}
+              ${c.aiIgnored ? '<span class="tag paused">🔕 Ignorado</span>' : paused ? '<span class="tag paused">Pausado</span>' : '<span class="tag">Ativo</span>'}
             </div>
-            <div class="lead-phone">+${escapeHtml(c.phone || '')}</div>
+            <div class="lead-phone">${escapeHtml(formatContactSubtitle(c))}${c.company ? ` • ${escapeHtml(c.company)}` : ''}</div>
             ${tagsHtml}
             ${followHtml}
             <div class="lead-summary">${escapeHtml(c.handoffDossier?.trigger || c.summary || lastMsg)}</div>
@@ -2410,17 +2497,30 @@ function renderCrmInbox(filteredList) {
           const timeStr = c.lastMessageAt
             ? new Date(c.lastMessageAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
             : '';
-          const initials = getSafeInitials(c.name || c.phone || 'C', 'C');
           const avatarTint = getAvatarTintStyle(c.chatId || c.phone || c.name);
           const paused = isContactCurrentlyPaused(c) || c.stage === 'aguardando_humano';
           const unread = Math.max(0, Number(c.unreadCount) || 0);
           const encId = encodeURIComponent(c.chatId);
           const prettyStage = stageLabels[c.stage] || String(c.stage || 'Novo').replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
           const subPhone = formatContactSubtitle(c);
+          const bulkChecked = state.crmBulkSelected instanceof Set && state.crmBulkSelected.has(c.chatId);
+          const dealBadge = Number(c.dealValue) > 0
+            ? `<span class="deal-pill value">${escapeHtml(formatBrlShort(c.dealValue))}</span>`
+            : '';
+          const statusDealBadge = c.dealStatus === 'won'
+            ? '<span class="deal-pill won">Ganho</span>'
+            : c.dealStatus === 'lost'
+              ? '<span class="deal-pill lost">Perdido</span>'
+              : '';
+          const customTagsMini = (c.tags || [])
+            .slice(0, 2)
+            .map((t) => renderColoredTagPill(t))
+            .join('');
 
           return `
-            <button type="button" class="crm-inbox-item ${isSelected ? 'active' : ''} ${unread > 0 ? 'unread' : ''}" onclick="selectInboxChat('${encId}')">
-              <div class="crm-inbox-avatar" style="${avatarTint}">${escapeHtml(initials)}</div>
+            <button type="button" class="crm-inbox-item ${isSelected ? 'active' : ''} ${unread > 0 ? 'unread' : ''}" onclick="${state.crmBulkMode ? `toggleBulkChatItem('${encId}', event)` : `selectInboxChat('${encId}')`}">
+              ${state.crmBulkMode ? `<input type="checkbox" ${bulkChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleBulkChatItem('${encId}', event)" style="width:16px; height:16px; flex-shrink:0; accent-color:var(--accent);" aria-label="Selecionar conversa" />` : ''}
+              <div class="crm-inbox-avatar" style="${avatarTint}">${renderContactAvatarContent(c)}</div>
               <div class="crm-inbox-item-body">
                 <div class="crm-inbox-item-top">
                   <span class="crm-inbox-item-name">${c.pinned ? '<span style="color:var(--accent-bright);margin-right:4px;" title="Fixada">★</span>' : ''}${escapeHtml(c.name || 'Contato')}</span>
@@ -2429,11 +2529,12 @@ function renderCrmInbox(filteredList) {
                     ${unread > 0 ? `<span class="inbox-unread-pill">${unread > 99 ? '99+' : unread}</span>` : ''}
                   </div>
                 </div>
-                <div style="font-size:11px; color:var(--text-muted); font-variant-numeric:tabular-nums;">${escapeHtml(subPhone)}</div>
+                <div style="font-size:11px; color:var(--text-muted); font-variant-numeric:tabular-nums;">${escapeHtml(subPhone)}${c.company ? ` • ${escapeHtml(c.company)}` : ''}</div>
                 <div class="crm-inbox-item-preview">${escapeHtml(preview)}</div>
                 <div class="crm-inbox-item-badges">
                   <span class="tag ${c.stage === 'aguardando_humano' ? 'paused' : ''}" style="font-size:10.5px; padding:1px 6px;">${escapeHtml(prettyStage)}</span>
-                  ${paused ? '<span class="tag paused" style="font-size:10.5px; padding:1px 6px;">Humano</span>' : '<span class="tag" style="font-size:10.5px; padding:1px 6px;">IA Ativa</span>'}
+                  ${c.aiIgnored ? '<span class="tag paused" style="font-size:10.5px; padding:1px 6px;">🔕 Ignorado</span>' : paused ? '<span class="tag paused" style="font-size:10.5px; padding:1px 6px;">Humano</span>' : '<span class="tag" style="font-size:10.5px; padding:1px 6px;">IA Ativa</span>'}
+                  ${dealBadge}${statusDealBadge}${customTagsMini}
                   ${c.archived ? '<span class="tag" style="font-size:10.5px; padding:1px 6px;">Arquivada</span>' : ''}
                   ${renderSentimentPillHtml(c.sentiment)}
                 </div>
@@ -2489,6 +2590,30 @@ function renderActiveInboxConversation() {
 
   document.getElementById('inboxContactName').textContent = c.name || 'Cliente';
   document.getElementById('inboxContactPhone').textContent = formatContactSubtitle(c);
+  const headAvatar = document.getElementById('inboxHeadAvatar');
+  if (headAvatar) {
+    headAvatar.setAttribute('style', `width:34px; height:34px; font-size:12px; flex-shrink:0; ${getAvatarTintStyle(c.chatId || c.phone || c.name)}`);
+    headAvatar.innerHTML = renderContactAvatarContent(c);
+  }
+  const dealHeadBadge = document.getElementById('inboxDealBadge');
+  if (dealHeadBadge) {
+    if (Number(c.dealValue) > 0 || (c.dealStatus && c.dealStatus !== 'open')) {
+      dealHeadBadge.style.display = 'inline-flex';
+      const stTxt = c.dealStatus === 'won' ? '✅ Ganho' : c.dealStatus === 'lost' ? '❌ Perdido' : '';
+      const valTxt = Number(c.dealValue) > 0 ? formatBrlShort(c.dealValue) : '';
+      dealHeadBadge.textContent = [valTxt, stTxt].filter(Boolean).join(' • ');
+    } else {
+      dealHeadBadge.style.display = 'none';
+    }
+  }
+  const ignBtn = document.getElementById('btnInboxToggleIgnore');
+  if (ignBtn) {
+    ignBtn.style.borderColor = c.aiIgnored ? 'var(--danger)' : '';
+    ignBtn.style.color = c.aiIgnored ? 'var(--danger)' : '';
+    ignBtn.title = c.aiIgnored
+      ? 'IA ignorada neste número (clique para voltar a atender)'
+      : 'Ignorar IA neste número (Família / Fornecedor)';
+  }
   const stageSel = document.getElementById('inboxStageQuickSelect');
   if (stageSel) {
     stageSel.value = c.stage || 'em_atendimento';
@@ -2502,8 +2627,8 @@ function renderActiveInboxConversation() {
 
   const paused = isContactCurrentlyPaused(c);
   const statusBadge = document.getElementById('inboxAiStatusBadge');
-  statusBadge.textContent = paused ? 'Com Você' : 'IA Ativa';
-  statusBadge.className = `tag ${paused ? 'paused' : ''}`;
+  statusBadge.textContent = c.aiIgnored ? '🔕 IA Ignorada' : paused ? 'Com Você' : 'IA Ativa';
+  statusBadge.className = `tag ${paused || c.aiIgnored ? 'paused' : ''}`;
   document.getElementById('btnInboxTogglePause').textContent = paused ? 'Retomar IA' : 'Assumir';
 
   const pinBtn = document.getElementById('btnInboxTogglePin');
@@ -2594,10 +2719,19 @@ function renderActiveInboxConversation() {
   const msgBox = document.getElementById('crmInboxMessages');
   const msgs = c.messages || [];
   const encChatId = encodeURIComponent(c.chatId);
+  const searchQ = String(state.inChatSearchQuery || '').trim().toLowerCase();
+  const mutSig = msgs
+    .slice(-30)
+    .map((x) => `${x.id || x.waMsgId || ''}:${x.editedAt || ''}:${x.deletedForEveryone ? 1 : 0}:${x.ack || 0}:${JSON.stringify(x.reactions || {})}`)
+    .join('|');
   const lastM = msgs[msgs.length - 1] || null;
-  const msgFp = `${c.chatId}::${msgs.length}::${lastM?.id || ''}::${lastM?.timestamp || ''}::${lastM?.mediaUrl || ''}::${String(lastM?.text || '').length}`;
+  const msgFp = `${c.chatId}::${msgs.length}::${lastM?.timestamp || ''}::${lastM?.mediaUrl || ''}::${mutSig}::${searchQ}::${state.openReactionMsgId || ''}`;
   const chatChanged = msgBox.dataset.renderedChatId !== c.chatId;
   const mediaPlaying = !chatChanged && Array.from(msgBox.querySelectorAll('audio, video')).some((el) => !el.paused && !el.ended);
+
+  if (chatChanged) {
+    clearComposerQuote();
+  }
 
   if (chatChanged || (msgBox.dataset.renderedFp !== msgFp && !mediaPlaying)) {
     const wasNearBottom = chatChanged || (msgBox.scrollHeight - msgBox.scrollTop - msgBox.clientHeight < 140);
@@ -2608,6 +2742,16 @@ function renderActiveInboxConversation() {
     const fetchOlderBtnHtml = canFetchOlder
       ? `<button type="button" class="btn-fetch-older-history" onclick="fetchOlderChatMessages('${encChatId}', this)">📥 Carregar mensagens anteriores do WhatsApp</button>`
       : '';
+
+    const highlightSearchInHtml = (formattedHtml) => {
+      if (!searchQ) return formattedHtml;
+      const escRx = searchQ.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const rx = new RegExp(`(${escRx})`, 'gi');
+      return formattedHtml.replace(/(<[^>]+>)|([^<]+)/g, (full, tag, txt) => {
+        if (tag) return tag;
+        return txt.replace(rx, '<mark class="chat-search-hit">$1</mark>');
+      });
+    };
 
     if (!msgs.length) {
       msgBox.innerHTML = `
@@ -2624,31 +2768,80 @@ function renderActiveInboxConversation() {
           const time = m.timestamp
             ? new Date(m.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
             : '';
+          const msgIdent = m.id || m.waMsgId || '';
+          const jsMsgId = escapeJsArg(msgIdent);
 
           if (m.role === 'internal_note') {
             return `
               <div class="wa-bubble internal_note">
                 <div class="internal-note-head">
                   <span>🔒 Nota Interna • ${escapeHtml(m.author || 'Equipe')} • ${escapeHtml(time)}</span>
-                  <button type="button" style="background:none; border:none; color:inherit; cursor:pointer; font-size:13px; padding:0 4px;" title="Remover nota interna" onclick="removeInboxInternalNote('${encChatId}', '${escapeJsArg(m.id || '')}')">×</button>
+                  <button type="button" style="background:none; border:none; color:inherit; cursor:pointer; font-size:13px; padding:0 4px;" title="Remover nota interna" onclick="removeInboxInternalNote('${encChatId}', '${jsMsgId}')">×</button>
                 </div>
-                <div class="wa-text">${formatWaText(m.text)}</div>
+                <div class="wa-text">${highlightSearchInHtml(formatWaText(m.text))}</div>
               </div>
             `;
           }
 
           const who = m.role === 'user' ? c.name || 'Cliente' : m.role === 'owner' ? 'Você (Manual)' : 'Equipe (IA)';
-          const mediaExtra = renderBubbleMediaHtml(m);
+          const mediaExtra = m.deletedForEveryone ? '' : renderBubbleMediaHtml(m);
+          const quotedHtml = m.quoted?.text
+            ? `<div class="wa-quoted-box"><strong>${m.quoted.role === 'user' ? escapeHtml(c.name || 'Cliente') : 'Você'}</strong><div>${escapeHtml(m.quoted.text)}</div></div>`
+            : '';
+
+          const ackNum = Number(m.ack) || (m.role !== 'user' ? 1 : 0);
+          const ackHtml = m.role !== 'user' && !m.deletedForEveryone
+            ? `<span class="wa-ack-checks ${ackNum >= 3 ? 'read' : ''}" title="${ackNum >= 3 ? 'Lida' : ackNum === 2 ? 'Entregue' : 'Enviada'}">${ackNum >= 2 ? '✓✓' : '✓'}</span>`
+            : '';
+          const editedLabel = m.editedAt && !m.deletedForEveryone ? ' • <em>(editada)</em>' : '';
+
+          const reactionsEntries = m.reactions && typeof m.reactions === 'object'
+            ? Object.entries(m.reactions).filter(([, em]) => Boolean(em))
+            : [];
+          const reactionsHtml = reactionsEntries.length
+            ? `<div class="wa-reactions-row">${reactionsEntries
+                .map(
+                  ([actor, em]) =>
+                    `<button type="button" class="wa-reaction-pill" onclick="reactToInboxMessage('${jsMsgId}', '${escapeJsArg(em)}')" title="${actor === 'owner' ? 'Sua reação (clique para remover)' : 'Reação do cliente'}">${escapeHtml(em)}</button>`
+                )
+                .join('')}</div>`
+            : '';
+
+          const isReactMenuOpen = state.openReactionMsgId && state.openReactionMsgId === msgIdent;
+          const quickReactBar = isReactMenuOpen
+            ? `<div class="wa-quick-react-bar">${['👍', '❤️', '😂', '🔥', '🙏', '✅']
+                .map((em) => `<button type="button" onclick="reactToInboxMessage('${jsMsgId}', '${em}')">${em}</button>`)
+                .join('')}</div>`
+            : '';
+
+          const canEditOrDelete = m.role !== 'user' && !m.deletedForEveryone && msgIdent;
+          const actionsBar = !m.deletedForEveryone && msgIdent
+            ? `<div class="wa-msg-actions">
+                <button type="button" class="wa-msg-act-btn" onclick="quoteInboxMessage('${jsMsgId}')" title="Responder marcando esta mensagem">↩ Responder</button>
+                <button type="button" class="wa-msg-act-btn" onclick="toggleBubbleReactMenu('${jsMsgId}')" title="Reagir com emoji">😊</button>
+                <button type="button" class="wa-msg-act-btn" onclick="openForwardMessageModal('${jsMsgId}')" title="Encaminhar mensagem">↪</button>
+                ${canEditOrDelete ? `<button type="button" class="wa-msg-act-btn" onclick="editInboxMessagePrompt('${jsMsgId}')" title="Editar mensagem no WhatsApp">✏️</button>` : ''}
+                ${canEditOrDelete ? `<button type="button" class="wa-msg-act-btn" onclick="deleteInboxMessageConfirm('${jsMsgId}')" title="Apagar mensagem para todos">🗑️</button>` : ''}
+              </div>`
+            : '';
+
           return `
-            <div class="wa-bubble ${m.role}">
+            <div class="wa-bubble ${m.role}" data-msgid="${escapeHtml(msgIdent)}">
+              ${quotedHtml}
               ${mediaExtra}
-              <div class="wa-text">${formatWaText(m.text)}</div>
-              <div class="wa-meta">${escapeHtml(who)} • ${escapeHtml(time)}</div>
+              <div class="wa-text ${m.deletedForEveryone ? 'wa-deleted-text' : ''}">${highlightSearchInHtml(formatWaText(m.text))}</div>
+              ${reactionsHtml}
+              ${quickReactBar}
+              ${actionsBar}
+              <div class="wa-meta">${escapeHtml(who)} • ${escapeHtml(time)}${editedLabel}${ackHtml}</div>
             </div>
           `;
         })
         .join('');
-      if (wasNearBottom) {
+
+      if (searchQ) {
+        updateInChatSearchHighlights();
+      } else if (wasNearBottom) {
         msgBox.scrollTop = msgBox.scrollHeight;
       }
     }
@@ -2757,11 +2950,81 @@ function renderInboxInspector360(c) {
     return;
   }
 
+  emptyBox.style.display = '';
   emptyBox.style.display = 'none';
   activeBox.style.display = 'flex';
 
   const nameEl = document.getElementById('inspNameTitle');
   if (nameEl) nameEl.textContent = c.name || 'Cliente';
+
+  // Valor da Negociação (R$) & Status Ganho/Perdido
+  const dealValInp = document.getElementById('inspDealValueInput');
+  if (dealValInp && document.activeElement !== dealValInp) {
+    dealValInp.value = Number(c.dealValue) > 0 ? String(c.dealValue) : '';
+  }
+  const dSt = c.dealStatus || 'open';
+  document.getElementById('btnDealOpen')?.classList.toggle('active-pill', dSt === 'open');
+  document.getElementById('btnDealWon')?.classList.toggle('active-pill', dSt === 'won');
+  document.getElementById('btnDealLost')?.classList.toggle('active-pill', dSt === 'lost');
+  const lostInp = document.getElementById('inspLostReasonInput');
+  if (lostInp) {
+    lostInp.style.display = dSt === 'lost' ? '' : 'none';
+    if (document.activeElement !== lostInp) lostInp.value = c.lostReason || '';
+  }
+
+  // Dados cadastrais completos do lead
+  const setIfUnfocused = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && document.activeElement !== el) el.value = val || '';
+  };
+  setIfUnfocused('inspEditName', c.name || '');
+  setIfUnfocused('inspEditCompany', c.company || '');
+  setIfUnfocused('inspEditLeadSource', c.leadSource || '');
+  setIfUnfocused('inspEditEmail', c.email || '');
+  setIfUnfocused('inspEditDoc', c.docNumber || '');
+  setIfUnfocused('inspEditCity', c.city || '');
+
+  // Checklist de Tarefas
+  const tasks = Array.isArray(c.tasks) ? c.tasks : [];
+  const doneCnt = tasks.filter((t) => t.done).length;
+  const tasksCntEl = document.getElementById('inspTasksCounter');
+  if (tasksCntEl) tasksCntEl.textContent = `${doneCnt}/${tasks.length}`;
+  const tasksListEl = document.getElementById('inspTasksList');
+  if (tasksListEl) {
+    tasksListEl.innerHTML = tasks.length
+      ? tasks
+          .map(
+            (t) => `
+          <div class="task-item-row ${t.done ? 'done' : ''}">
+            <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleLeadTaskItem('${escapeJsArg(t.id)}', this.checked)" style="width:15px; height:15px; accent-color:var(--accent);" />
+            <span style="flex:1; min-width:0; word-break:break-word;">${escapeHtml(t.text)}</span>
+            <button type="button" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:14px; padding:0 3px;" onclick="removeLeadTaskItem('${escapeJsArg(t.id)}')" title="Excluir tarefa">×</button>
+          </div>`
+          )
+          .join('')
+      : `<div style="font-size:11.5px; color:var(--text-muted);">Nenhuma tarefa pendente.</div>`;
+  }
+
+  // Envios Agendados no Contato
+  const pendingSched = (Array.isArray(c.scheduledMessages) ? c.scheduledMessages : []).filter((s) => s.status === 'pending');
+  const schedListEl = document.getElementById('inspScheduledList');
+  if (schedListEl) {
+    schedListEl.innerHTML = pendingSched.length
+      ? pendingSched
+          .map((s) => {
+            const dtStr = new Date(s.sendAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+            return `
+            <div style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:7px; padding:6px 8px; display:flex; justify-content:space-between; gap:6px; align-items:flex-start;">
+              <div style="min-width:0;">
+                <strong style="color:var(--accent-bright); font-size:11px; display:block;">🕒 ${escapeHtml(dtStr)}</strong>
+                <span style="font-size:11.5px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(s.text)}</span>
+              </div>
+              <button type="button" style="background:none; border:none; color:var(--danger); cursor:pointer; font-size:14px; padding:0 4px;" onclick="cancelInboxScheduledMsg('${escapeJsArg(s.id)}')" title="Cancelar envio programado">×</button>
+            </div>`;
+          })
+          .join('')
+      : `<div style="font-size:11.5px; color:var(--text-muted);">Nenhum disparo programado.</div>`;
+  }
 
   const followEl = document.getElementById('inspFollowUpInput');
   if (followEl && document.activeElement !== followEl) {
@@ -2778,17 +3041,28 @@ function renderInboxInspector360(c) {
     sumEl.textContent = c.handoffDossier?.trigger || c.summary || 'Sem resumo de fechamento registrado ainda.';
   }
 
+  const ignBtn = document.getElementById('btnInspectorIgnoreAi');
+  if (ignBtn) {
+    ignBtn.textContent = c.aiIgnored ? '🔔 Voltar a Atender com IA' : '🔕 Ignorar IA neste número';
+    ignBtn.style.borderColor = c.aiIgnored ? 'var(--accent-bright)' : '';
+  }
+
   const tagsBox = document.getElementById('inspTagsBox');
   if (tagsBox) {
     const currentTags = Array.isArray(c.tags) ? c.tags : [];
-    const allChoices = Array.from(new Set([...PRESET_CRM_TAGS, ...currentTags]));
+    const customList = getAllCustomTagsList();
+    const allTagNames = Array.from(new Set([...customList.map((t) => t.name), ...currentTags]));
     tagsBox.innerHTML =
-      allChoices
+      allTagNames
         .map((tag) => {
           const sel = currentTags.includes(tag);
-          return `<button type="button" class="tag-toggle-chip ${sel ? 'selected' : ''}" onclick="toggleInspectorTag('${escapeJsArg(tag)}')">${escapeHtml(tag)}</button>`;
+          const hex = getCustomTagColor(tag);
+          const st = sel
+            ? `background:${hex}28; border-color:${hex}; color:${hex}; font-weight:700;`
+            : `border-left:3px solid ${hex};`;
+          return `<button type="button" class="tag-toggle-chip ${sel ? 'selected' : ''}" style="${st}" onclick="toggleInspectorTag('${escapeJsArg(tag)}')">${escapeHtml(tag)}</button>`;
         })
-        .join('') + `<button type="button" class="tag-toggle-chip" onclick="addCustomInspectorTag()">+ Tag</button>`;
+        .join('') + `<button type="button" class="tag-toggle-chip" onclick="openCustomTagsModal()">+ Nova Tag</button>`;
   }
 }
 
@@ -2848,6 +3122,659 @@ window.removeInboxInternalNote = async function removeInboxInternalNote(encodedC
     await api(`/api/crm/${encodedChatId}/internal-note/${encodeURIComponent(noteId)}`, { method: 'DELETE' });
     await refreshLiveStateOnly();
     showToast('Nota interna removida.');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+// ==================== CONTROLADORES CRM PRO v5.2 (BLOCOS 1, 2 & 3) ====================
+
+const POPULAR_CHAT_EMOJIS = [
+  '👍', '❤️', '😂', '🔥', '🙏', '✅', '👏', '🤝', '🚀', '✨',
+  '😊', '😉', '😍', '🤩', '😎', '🤔', '😅', '🙌', '💪', '🎯',
+  '💰', '💎', '📌', '⚡', '⏰', '📦', '📲', '💬', '🎉', '🏆'
+];
+
+window.toggleComposerEmojiPopover = function toggleComposerEmojiPopover(ev) {
+  if (ev) ev.stopPropagation();
+  const box = document.getElementById('composerEmojiPopover');
+  if (!box) return;
+  const open = box.style.display !== 'none';
+  if (open) {
+    box.style.display = 'none';
+    return;
+  }
+  if (!box.dataset.filled) {
+    box.dataset.filled = '1';
+    box.innerHTML = POPULAR_CHAT_EMOJIS.map(
+      (em) => `<button type="button" class="emoji-pick-btn" onclick="insertComposerEmoji('${em}')">${em}</button>`
+    ).join('');
+  }
+  box.style.display = 'flex';
+};
+
+window.insertComposerEmoji = function insertComposerEmoji(emoji) {
+  const inp = document.getElementById('crmInboxReplyInput');
+  if (!inp) return;
+  const start = inp.selectionStart ?? inp.value.length;
+  const end = inp.selectionEnd ?? inp.value.length;
+  inp.value = inp.value.slice(0, start) + emoji + inp.value.slice(end);
+  inp.focus();
+  const pos = start + emoji.length;
+  try { inp.setSelectionRange(pos, pos); } catch {}
+};
+
+window.quoteInboxMessage = function quoteInboxMessage(msgId) {
+  const chatId = state.selectedInboxChatId;
+  const c = (state.contacts || []).find((x) => x.chatId === chatId);
+  if (!c) return;
+  const m = (c.messages || []).find((x) => (x.id || x.waMsgId) === msgId);
+  if (!m) return;
+  state.inboxQuotedMsg = {
+    id: m.id || m.waMsgId,
+    text: String(m.text || '').slice(0, 160),
+    role: m.role
+  };
+  const banner = document.getElementById('composerQuoteBanner');
+  if (banner) {
+    banner.style.display = 'flex';
+    document.getElementById('composerQuoteSender').textContent =
+      m.role === 'user' ? `Respondendo a ${c.name || 'Cliente'}` : 'Respondendo à sua mensagem';
+    document.getElementById('composerQuoteText').textContent = state.inboxQuotedMsg.text;
+  }
+  window.setInboxComposerMode('reply');
+  document.getElementById('crmInboxReplyInput')?.focus();
+};
+
+window.clearComposerQuote = function clearComposerQuote() {
+  state.inboxQuotedMsg = null;
+  const banner = document.getElementById('composerQuoteBanner');
+  if (banner) banner.style.display = 'none';
+};
+
+window.toggleBubbleReactMenu = function toggleBubbleReactMenu(msgId) {
+  state.openReactionMsgId = state.openReactionMsgId === msgId ? '' : msgId;
+  renderActiveInboxConversation();
+};
+
+window.reactToInboxMessage = async function reactToInboxMessage(msgId, emoji) {
+  const chatId = state.selectedInboxChatId;
+  if (!chatId || !msgId) return;
+  state.openReactionMsgId = '';
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(msgId)}/react`, {
+      method: 'POST',
+      body: JSON.stringify({ emoji })
+    });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    renderActiveInboxConversation();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.editInboxMessagePrompt = async function editInboxMessagePrompt(msgId) {
+  const chatId = state.selectedInboxChatId;
+  const c = (state.contacts || []).find((x) => x.chatId === chatId);
+  const m = (c?.messages || []).find((x) => (x.id || x.waMsgId) === msgId);
+  if (!chatId || !m) return;
+  const nextTxt = prompt('Editar texto da mensagem enviada:', m.text || '');
+  if (nextTxt === null || !nextTxt.trim() || nextTxt.trim() === m.text) return;
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(msgId)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ text: nextTxt.trim() })
+    });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    renderCrmBoard();
+    showToast(res.syncedWhatsApp ? '✏️ Mensagem editada no WhatsApp!' : '✏️ Mensagem editada no histórico.');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.deleteInboxMessageConfirm = async function deleteInboxMessageConfirm(msgId) {
+  const chatId = state.selectedInboxChatId;
+  if (!chatId || !msgId) return;
+  if (!confirm('Apagar esta mensagem para todos na conversa?')) return;
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(msgId)}`, {
+      method: 'DELETE'
+    });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    renderCrmBoard();
+    showToast(res.syncedWhatsApp ? '🗑️ Mensagem apagada para todos no WhatsApp!' : '🗑️ Mensagem apagada do painel.');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.openForwardMessageModal = function openForwardMessageModal(msgId) {
+  const chatId = state.selectedInboxChatId;
+  const c = (state.contacts || []).find((x) => x.chatId === chatId);
+  const m = (c?.messages || []).find((x) => (x.id || x.waMsgId) === msgId);
+  if (!chatId || !m) return;
+  state.forwardSource = { chatId, msgId, text: m.text || '[Mídia]' };
+  const prev = document.getElementById('fwdMsgPreviewBox');
+  if (prev) prev.textContent = state.forwardSource.text;
+  const sInp = document.getElementById('fwdSearchContactInput');
+  if (sInp) sInp.value = '';
+  renderForwardContactsList('');
+  document.getElementById('forwardMessageModal')?.classList.add('open');
+};
+
+window.renderForwardContactsList = function renderForwardContactsList(query = '') {
+  const box = document.getElementById('fwdContactsList');
+  if (!box) return;
+  const q = String(query || '').trim().toLowerCase();
+  const digitsOnly = q.replace(/\D/g, '');
+  const list = (state.contacts || []).filter((c) => {
+    if (!q) return true;
+    return `${c.name || ''} ${c.phone || ''} ${c.company || ''}`.toLowerCase().includes(q);
+  });
+  let html = list
+    .slice(0, 30)
+    .map(
+      (c) => `
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-card-subtle);">
+        <div style="min-width:0;">
+          <strong style="font-size:12.5px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(c.name || 'Contato')}</strong>
+          <span style="font-size:11px; color:var(--text-secondary);">${escapeHtml(formatContactSubtitle(c))}</span>
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" onclick="confirmForwardMessage('${escapeJsArg(c.chatId)}')">Enviar ↪</button>
+      </div>`
+    )
+    .join('');
+
+  if (digitsOnly.length >= 10) {
+    html =
+      `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 10px; border:1px dashed var(--accent); border-radius:8px; margin-bottom:4px;">
+        <span style="font-size:12px;">Encaminhar para número <strong>+${escapeHtml(digitsOnly)}</strong></span>
+        <button type="button" class="btn btn-primary btn-sm" onclick="confirmForwardMessage('${escapeJsArg(digitsOnly)}')">Enviar ↪</button>
+      </div>` + html;
+  }
+  box.innerHTML = html || `<div class="empty-state" style="padding:14px;">Nenhum contato encontrado.</div>`;
+};
+
+window.confirmForwardMessage = async function confirmForwardMessage(toChatId) {
+  if (!state.forwardSource || !toChatId) return;
+  const { chatId, msgId } = state.forwardSource;
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}/messages/${encodeURIComponent(msgId)}/forward`, {
+      method: 'POST',
+      body: JSON.stringify({ toChatId })
+    });
+    closeModal('forwardMessageModal');
+    if (res.targetContact) applyReturnedContactToState(res.targetContact, res.targetContact.chatId);
+    await refreshLiveStateOnly();
+    showToast(res.sentRealWhatsApp ? '↪ Mensagem encaminhada no WhatsApp!' : '↪ Mensagem encaminhada na conversa!');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+// Print Colado (Ctrl+V) no Compositor
+window.clearPastedClipboardImage = function clearPastedClipboardImage() {
+  state.pastedClipboardFile = null;
+  const banner = document.getElementById('composerPasteBanner');
+  if (banner) banner.style.display = 'none';
+};
+
+window.sendPastedClipboardImage = async function sendPastedClipboardImage() {
+  const file = state.pastedClipboardFile;
+  const chatId = state.selectedInboxChatId;
+  if (!file || !chatId) return;
+  const inp = document.getElementById('crmInboxReplyInput');
+  const caption = inp?.value?.trim() || '';
+  const fd = new FormData();
+  fd.append('file', file, file.name || `print_${Date.now()}.png`);
+  if (caption) fd.append('caption', caption);
+  try {
+    showToast('Enviando print...');
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}/send-attachment`, {
+      method: 'POST',
+      body: fd
+    });
+    if (inp) inp.value = '';
+    clearPastedClipboardImage();
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    await refreshLiveStateOnly();
+    showToast(res.sentRealWhatsApp ? '📸 Print enviado no WhatsApp!' : '📸 Print anexado na conversa!');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+// Busca de Palavra Dentro da Conversa
+window.toggleInChatSearchBar = function toggleInChatSearchBar(force) {
+  const bar = document.getElementById('inboxInChatSearchBar');
+  const inp = document.getElementById('inboxInChatSearchInput');
+  if (!bar) return;
+  const nextShow = force !== undefined ? Boolean(force) : bar.style.display === 'none';
+  bar.style.display = nextShow ? 'flex' : 'none';
+  if (nextShow) {
+    inp?.focus();
+  } else {
+    state.inChatSearchQuery = '';
+    state.inChatSearchIdx = 0;
+    if (inp) inp.value = '';
+    renderActiveInboxConversation();
+  }
+};
+
+function updateInChatSearchHighlights() {
+  const marks = Array.from(document.querySelectorAll('#crmInboxMessages mark.chat-search-hit'));
+  const cntEl = document.getElementById('inboxInChatSearchCount');
+  if (cntEl) cntEl.textContent = `${marks.length} resultado${marks.length === 1 ? '' : 's'}`;
+  if (!marks.length) return;
+  const idx = ((state.inChatSearchIdx || 0) % marks.length + marks.length) % marks.length;
+  marks.forEach((m, i) => m.classList.toggle('current', i === idx));
+  marks[idx]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+window.applyInChatSearch = function applyInChatSearch(val = '') {
+  state.inChatSearchQuery = String(val || '').trim();
+  state.inChatSearchIdx = 0;
+  renderActiveInboxConversation();
+  if (!state.inChatSearchQuery) {
+    const cntEl = document.getElementById('inboxInChatSearchCount');
+    if (cntEl) cntEl.textContent = '0 resultados';
+  }
+};
+
+window.stepInChatSearch = function stepInChatSearch(dir = 1) {
+  state.inChatSearchIdx = (state.inChatSearchIdx || 0) + dir;
+  updateInChatSearchHighlights();
+};
+
+// Agendamento de Mensagem Futura
+window.openScheduleMessageModal = function openScheduleMessageModal() {
+  if (!state.selectedInboxChatId) return showToast('Selecione uma conversa primeiro.', true);
+  const replyDraft = document.getElementById('crmInboxReplyInput')?.value?.trim() || '';
+  const txtEl = document.getElementById('schedMsgTextInput');
+  if (txtEl && replyDraft) txtEl.value = replyDraft;
+  window.presetScheduleInput(60);
+  document.getElementById('scheduleMessageModal')?.classList.add('open');
+};
+
+window.presetScheduleInput = function presetScheduleInput(mode) {
+  const el = document.getElementById('schedMsgDateTimeInput');
+  if (!el) return;
+  let d = new Date();
+  if (mode === 'tomorrow9') {
+    d.setDate(d.getDate() + 1);
+    d.setHours(9, 0, 0, 0);
+  } else {
+    d = new Date(Date.now() + (Number(mode) || 60) * 60 * 1000);
+  }
+  const localIso = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  el.value = localIso;
+};
+
+window.submitScheduleMessageForm = async function submitScheduleMessageForm(ev) {
+  ev.preventDefault();
+  const chatId = state.selectedInboxChatId;
+  const text = document.getElementById('schedMsgTextInput')?.value?.trim() || '';
+  const rawDt = document.getElementById('schedMsgDateTimeInput')?.value || '';
+  if (!chatId || !text || !rawDt) return;
+  try {
+    const sendAt = new Date(rawDt).toISOString();
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}/schedule-message`, {
+      method: 'POST',
+      body: JSON.stringify({ text, sendAt })
+    });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    document.getElementById('schedMsgTextInput').value = '';
+    closeModal('scheduleMessageModal');
+    renderCrmBoard();
+    showToast('🕒 Envio programado com sucesso! O motor enviará automaticamente no horário.');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.cancelInboxScheduledMsg = async function cancelInboxScheduledMsg(schedId) {
+  const chatId = state.selectedInboxChatId;
+  if (!chatId || !schedId) return;
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}/schedule-message/${encodeURIComponent(schedId)}`, {
+      method: 'DELETE'
+    });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    renderCrmBoard();
+    showToast('Envio programado cancelado.');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+// Pausa Temporizada, Marcar Não Lida, Ignorar 1-Clique e Renomear Rápido
+window.toggleTimedPausePopover = function toggleTimedPausePopover(ev) {
+  if (ev) ev.stopPropagation();
+  const pop = document.getElementById('timedPausePopover');
+  if (!pop) return;
+  pop.style.display = pop.style.display === 'none' ? 'block' : 'none';
+};
+
+window.applyTimedPause = async function applyTimedPause(minutes) {
+  const pop = document.getElementById('timedPausePopover');
+  if (pop) pop.style.display = 'none';
+  const chatId = state.selectedInboxChatId;
+  if (!chatId) return;
+  try {
+    const res = minutes === 0
+      ? await api(`/api/crm/${encodeURIComponent(chatId)}/resume`, { method: 'POST', body: '{}' })
+      : await api(`/api/crm/${encodeURIComponent(chatId)}/pause`, {
+          method: 'POST',
+          body: JSON.stringify({ minutes })
+        });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    renderCrmBoard();
+    showToast(
+      minutes === 0
+        ? '▶ IA reativada nesta conversa!'
+        : minutes === 'forever'
+          ? '⏸ IA pausada até você religar manualmente.'
+          : `⏸ IA pausada por ${minutes >= 60 ? `${minutes / 60}h` : `${minutes} min`}!`
+    );
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.markActiveChatUnread = async function markActiveChatUnread() {
+  const chatId = state.selectedInboxChatId;
+  if (!chatId) return;
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}/mark-unread`, { method: 'POST', body: '{}' });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    updateInboxFilterCounters();
+    renderCrmBoard();
+    showToast('📩 Conversa marcada como Não Lida!');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.toggleIgnoreActiveContact = async function toggleIgnoreActiveContact() {
+  const chatId = state.selectedInboxChatId;
+  if (!chatId) return;
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}/toggle-ignore`, { method: 'POST', body: '{}' });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    if (Array.isArray(res.ignoredContacts) && state.settings) {
+      state.settings.ignoredContacts = res.ignoredContacts;
+    }
+    renderCrmBoard();
+    showToast(
+      res.contact?.aiIgnored
+        ? '🔕 IA desativada permanentemente para este contato (Lista Ignorados)!'
+        : '🔔 IA liberada novamente para atender este contato!'
+    );
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.quickRenameActiveContact = async function quickRenameActiveContact() {
+  const chatId = state.selectedInboxChatId;
+  const c = (state.contacts || []).find((x) => x.chatId === chatId);
+  if (!chatId || !c) return;
+  const nextName = prompt('Editar nome do contato:', c.name || '');
+  if (!nextName || !nextName.trim()) return;
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ name: nextName.trim() })
+    });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    renderCrmBoard();
+    showToast('✏️ Nome do contato atualizado!');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+// Negociação (R$), Dados Cadastrais, Checklist de Tarefas & Etiquetas Coloridas
+window.saveInspectorDealFields = async function saveInspectorDealFields() {
+  const chatId = state.selectedInboxChatId;
+  if (!chatId) return;
+  const dealValue = Math.max(0, Number(document.getElementById('inspDealValueInput')?.value) || 0);
+  const lostReason = document.getElementById('inspLostReasonInput')?.value?.trim() || '';
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ dealValue, lostReason })
+    });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    renderCrmBoard();
+    showToast('💰 Valor da negociação atualizado!');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.setInspectorDealStatus = async function setInspectorDealStatus(dealStatus) {
+  const chatId = state.selectedInboxChatId;
+  if (!chatId) return;
+  const dealValue = Math.max(0, Number(document.getElementById('inspDealValueInput')?.value) || 0);
+  let lostReason = document.getElementById('inspLostReasonInput')?.value?.trim() || '';
+  if (dealStatus === 'lost' && !lostReason) {
+    lostReason = prompt('Qual o motivo da perda? (Ex: Preço, Fechou com concorrente, Sem retorno)', '') || '';
+  }
+  const patch = {
+    dealStatus,
+    dealValue,
+    lostReason,
+    ...(dealStatus === 'won' ? { stage: 'concluido' } : {})
+  };
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(patch)
+    });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    renderCrmBoard();
+    showToast(
+      dealStatus === 'won'
+        ? '🏆 Negócio marcado como GANHO!'
+        : dealStatus === 'lost'
+          ? 'Negócio registrado como Perdido.'
+          : 'Negócio reaberto!'
+    );
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.saveInspectorContactProfile = async function saveInspectorContactProfile() {
+  const chatId = state.selectedInboxChatId;
+  if (!chatId) return;
+  const payload = {
+    name: document.getElementById('inspEditName')?.value?.trim() || '',
+    company: document.getElementById('inspEditCompany')?.value?.trim() || '',
+    leadSource: document.getElementById('inspEditLeadSource')?.value || '',
+    email: document.getElementById('inspEditEmail')?.value?.trim() || '',
+    docNumber: document.getElementById('inspEditDoc')?.value?.trim() || '',
+    city: document.getElementById('inspEditCity')?.value?.trim() || ''
+  };
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    renderCrmBoard();
+    showToast('✅ Cadastro do contato salvo!');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.submitInspectorTask = async function submitInspectorTask(ev) {
+  ev.preventDefault();
+  const chatId = state.selectedInboxChatId;
+  const inp = document.getElementById('inspNewTaskInput');
+  const text = inp?.value?.trim() || '';
+  if (!chatId || !text) return;
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify({ text })
+    });
+    if (inp) inp.value = '';
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    renderCrmBoard();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.toggleLeadTaskItem = async function toggleLeadTaskItem(taskId, done) {
+  const chatId = state.selectedInboxChatId;
+  if (!chatId || !taskId) return;
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}/tasks/${encodeURIComponent(taskId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ done })
+    });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    renderCrmBoard();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.removeLeadTaskItem = async function removeLeadTaskItem(taskId) {
+  const chatId = state.selectedInboxChatId;
+  if (!chatId || !taskId) return;
+  try {
+    const res = await api(`/api/crm/${encodeURIComponent(chatId)}/tasks/${encodeURIComponent(taskId)}`, {
+      method: 'DELETE'
+    });
+    if (res.contact) applyReturnedContactToState(res.contact, chatId);
+    renderCrmBoard();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.openCustomTagsModal = function openCustomTagsModal() {
+  renderCustomTagsManagerList();
+  document.getElementById('customTagsModal')?.classList.add('open');
+};
+
+function renderCustomTagsManagerList() {
+  const box = document.getElementById('customTagsManagerList');
+  if (!box) return;
+  const list = getAllCustomTagsList();
+  box.innerHTML = list
+    .map(
+      (t) => `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:7px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-card-subtle);">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="width:14px; height:14px; border-radius:50%; background:${escapeHtml(t.color)}; display:inline-block;"></span>
+          <strong style="font-size:12.5px;">${escapeHtml(t.name)}</strong>
+        </div>
+        <button type="button" class="btn btn-danger btn-sm" style="padding:2px 8px;" onclick="deleteCustomTagItem('${escapeJsArg(t.id || t.name)}')">Excluir</button>
+      </div>`
+    )
+    .join('');
+}
+
+window.submitCustomTagForm = async function submitCustomTagForm(ev) {
+  ev.preventDefault();
+  const name = document.getElementById('newCustomTagName')?.value?.trim() || '';
+  const color = document.getElementById('newCustomTagColor')?.value || '#10b981';
+  if (!name) return;
+  try {
+    const res = await api('/api/crm/tags', {
+      method: 'POST',
+      body: JSON.stringify({ name, color })
+    });
+    if (res.business) state.business = res.business;
+    document.getElementById('newCustomTagName').value = '';
+    renderCustomTagsManagerList();
+    renderCrmBoard();
+    if (state.selectedInboxChatId) {
+      await window.toggleInspectorTag(res.tag?.name || name);
+    }
+    showToast('🏷️ Etiqueta salva!');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.deleteCustomTagItem = async function deleteCustomTagItem(tagId) {
+  try {
+    const res = await api(`/api/crm/tags/${encodeURIComponent(tagId)}`, { method: 'DELETE' });
+    if (res.business) state.business = res.business;
+    renderCustomTagsManagerList();
+    renderCrmBoard();
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+// Seleção Múltipla / Ações em Massa na Lista de Conversas
+window.toggleCrmBulkMode = function toggleCrmBulkMode(force) {
+  state.crmBulkMode = force !== undefined ? Boolean(force) : !state.crmBulkMode;
+  if (!state.crmBulkSelected) state.crmBulkSelected = new Set();
+  if (!state.crmBulkMode) state.crmBulkSelected.clear();
+  const bar = document.getElementById('crmBulkActionBar');
+  if (bar) bar.style.display = state.crmBulkMode ? '' : 'none';
+  const btn = document.getElementById('btnToggleBulkMode');
+  if (btn) btn.classList.toggle('active-pill', state.crmBulkMode);
+  updateBulkCountLabel();
+  renderCrmInbox();
+};
+
+function updateBulkCountLabel() {
+  const lbl = document.getElementById('crmBulkSelectedCount');
+  const cnt = state.crmBulkSelected ? state.crmBulkSelected.size : 0;
+  if (lbl) lbl.textContent = `${cnt} selecionada${cnt === 1 ? '' : 's'}`;
+}
+
+window.toggleBulkChatItem = function toggleBulkChatItem(encodedChatId, ev) {
+  if (ev) ev.stopPropagation();
+  const chatId = decodeURIComponent(encodedChatId);
+  if (!state.crmBulkSelected) state.crmBulkSelected = new Set();
+  if (state.crmBulkSelected.has(chatId)) state.crmBulkSelected.delete(chatId);
+  else state.crmBulkSelected.add(chatId);
+  updateBulkCountLabel();
+  renderCrmInbox();
+};
+
+window.bulkSelectVisibleChats = function bulkSelectVisibleChats() {
+  if (!state.crmBulkSelected) state.crmBulkSelected = new Set();
+  const visible = getFilteredCrmContacts();
+  const allChecked = visible.length > 0 && visible.every((c) => state.crmBulkSelected.has(c.chatId));
+  if (allChecked) {
+    visible.forEach((c) => state.crmBulkSelected.delete(c.chatId));
+  } else {
+    visible.forEach((c) => state.crmBulkSelected.add(c.chatId));
+  }
+  updateBulkCountLabel();
+  renderCrmInbox();
+};
+
+window.runCrmBulkAction = async function runCrmBulkAction(action, extra = {}) {
+  const chatIds = state.crmBulkSelected ? Array.from(state.crmBulkSelected) : [];
+  if (!chatIds.length) return showToast('Marque pelo menos uma conversa na lista primeiro.', true);
+  try {
+    const res = await api('/api/crm/bulk-action', {
+      method: 'POST',
+      body: JSON.stringify({ chatIds, action, ...extra })
+    });
+    if (Array.isArray(res.contacts)) {
+      state.contacts = res.contacts;
+    } else {
+      await refreshLiveStateOnly();
+    }
+    state.crmBulkSelected.clear();
+    updateBulkCountLabel();
+    renderCrmBoard();
+    showToast(`✅ Ação aplicada em ${res.affected || chatIds.length} conversa(s)!`);
   } catch (err) {
     showToast(err.message, true);
   }
@@ -4573,11 +5500,13 @@ function bindEvents() {
         await refreshLiveStateOnly();
         showToast('🔒 Nota interna privada registrada!');
       } else {
+        const quotedMsgId = state.inboxQuotedMsg?.id || '';
         const res = await api(`/api/crm/${encodeURIComponent(chatId)}/send`, {
           method: 'POST',
-          body: JSON.stringify({ text })
+          body: JSON.stringify({ text, ...(quotedMsgId ? { quotedMsgId } : {}) })
         });
         input.value = '';
+        clearComposerQuote();
         if (res.contact) applyReturnedContactToState(res.contact, chatId);
         await refreshLiveStateOnly();
         showToast(res.sentRealWhatsApp ? 'Mensagem enviada no WhatsApp!' : 'Mensagem registrada na conversa.');
@@ -4678,6 +5607,40 @@ function bindEvents() {
   });
 
   document.getElementById('crmSearchInput').addEventListener('input', renderCrmBoard);
+  document.getElementById('crmFilterStageSelect')?.addEventListener('change', renderCrmBoard);
+  document.getElementById('crmFilterTagSelect')?.addEventListener('change', renderCrmBoard);
+  document.getElementById('crmFilterDealSelect')?.addEventListener('change', renderCrmBoard);
+
+  // Colar Print (Ctrl+V) direto na conversa ativa
+  document.getElementById('crmInboxActivePane')?.addEventListener('paste', (e) => {
+    if (!state.selectedInboxChatId) return;
+    const items = Array.from(e.clipboardData?.items || []);
+    const imgItem = items.find((it) => it.type && it.type.startsWith('image/'));
+    if (!imgItem) return;
+    const file = imgItem.getAsFile();
+    if (!file) return;
+    e.preventDefault();
+    state.pastedClipboardFile = file;
+    const banner = document.getElementById('composerPasteBanner');
+    const thumb = document.getElementById('composerPasteThumb');
+    const meta = document.getElementById('composerPasteMeta');
+    if (thumb) thumb.src = URL.createObjectURL(file);
+    if (meta) meta.textContent = `Imagem (${Math.max(1, Math.round(file.size / 1024))} KB) — digite legenda opcional e envie`;
+    if (banner) banner.style.display = 'flex';
+    document.getElementById('crmInboxReplyInput')?.focus();
+  });
+
+  // Fechar popovers rápidos ao clicar fora
+  document.addEventListener('click', (ev) => {
+    const pPop = document.getElementById('timedPausePopover');
+    if (pPop && pPop.style.display !== 'none' && !pPop.contains(ev.target) && ev.target.id !== 'btnInboxTimedPauseMenu') {
+      pPop.style.display = 'none';
+    }
+    const ePop = document.getElementById('composerEmojiPopover');
+    if (ePop && ePop.style.display !== 'none' && !ePop.contains(ev.target) && ev.target.id !== 'btnInboxEmojiPicker') {
+      ePop.style.display = 'none';
+    }
+  });
 
   document.querySelectorAll('#crmFilterBar .filter-pill').forEach((pill) => {
     pill.addEventListener('click', () => {

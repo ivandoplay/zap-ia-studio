@@ -1190,6 +1190,48 @@
           <button type="button" class="filter-pill" data-crmfilter="hot">Quentes <span id="fltCntHot" style="opacity:0.75;"></span></button>
           <button type="button" class="filter-pill" data-crmfilter="followup">Retorno S19 <span id="fltCntFollowup" style="opacity:0.75;"></span></button>
           <button type="button" class="filter-pill" data-crmfilter="archived">Arquivadas <span id="fltCntArchived" style="opacity:0.75;"></span></button>
+          <select id="crmFilterStageSelect" class="crm-inline-filter-select" aria-label="Filtrar por etapa do funil">
+            <option value="">Etapa: Todas</option>
+            <option value="novo">Novo Contato</option>
+            <option value="qualificando">Qualificando</option>
+            <option value="em_atendimento">Em Atendimento</option>
+            <option value="aguardando_humano">Aguardando Você</option>
+            <option value="concluido">Concluído</option>
+          </select>
+          <select id="crmFilterTagSelect" class="crm-inline-filter-select" aria-label="Filtrar por etiqueta">
+            <option value="">Etiqueta: Todas</option>
+          </select>
+          <select id="crmFilterDealSelect" class="crm-inline-filter-select" aria-label="Filtrar por resultado comercial">
+            <option value="">Negócio: Todos</option>
+            <option value="won">✅ Ganhos</option>
+            <option value="lost">❌ Perdidos</option>
+            <option value="with_value">💰 Com Valor R$</option>
+          </select>
+        </div>
+
+        <!-- Barra de Seleção Múltipla / Ações em Massa na Lista -->
+        <div id="crmBulkActionBar" class="crm-bulk-bar" style="display:none;">
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <strong id="crmBulkSelectedCount" style="font-size:12.5px;">0 selecionadas</strong>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="bulkSelectVisibleChats()">Marcar visíveis</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="runCrmBulkAction('mark_read')">Lidas</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="runCrmBulkAction('mark_unread')">Não Lidas</button>
+            <select id="crmBulkStageSelect" class="crm-inline-filter-select" onchange="if(this.value){runCrmBulkAction('set_stage',{stage:this.value});this.value='';}" aria-label="Mudar etapa em massa">
+              <option value="">Mover Etapa...</option>
+              <option value="novo">Novo Contato</option>
+              <option value="qualificando">Qualificando</option>
+              <option value="em_atendimento">Em Atendimento</option>
+              <option value="aguardando_humano">Aguardando Você</option>
+              <option value="concluido">Concluído</option>
+            </select>
+            <select id="crmBulkTagSelect" class="crm-inline-filter-select" onchange="if(this.value){runCrmBulkAction('add_tag',{tag:this.value});this.value='';}" aria-label="Aplicar etiqueta em massa">
+              <option value="">+ Etiqueta...</option>
+            </select>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="runCrmBulkAction('pause_ai')">Pausar IA</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="runCrmBulkAction('resume_ai')">Ativar IA</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="runCrmBulkAction('archive')">Arquivar</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="toggleCrmBulkMode(false)">Concluir</button>
+          </div>
         </div>
 
         <!-- SUB-VISÃO 1: CENTRAL DE CONVERSAS PRO (3 COLUNAS DESKTOP / TELA CHEIA NATIVA MOBILE) -->
@@ -1198,8 +1240,13 @@
             <!-- COLUNA 1: FILA DE CONVERSAS -->
             <aside class="crm-inbox-sidebar" aria-label="Lista de todas as conversas">
               <div class="crm-inbox-sidebar-head">
-                <strong>Fila de Atendimento</strong>
-                <span style="font-size:11.5px; color:var(--text-secondary);" id="crmInboxFilteredLabel">0 conversas</span>
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <strong>Fila de Atendimento</strong>
+                  <span style="font-size:11.5px; color:var(--text-secondary);" id="crmInboxFilteredLabel">0 conversas</span>
+                </div>
+                <button type="button" id="btnToggleBulkMode" class="composer-tool-btn" onclick="toggleCrmBulkMode()" title="Selecionar várias conversas para ações em massa">
+                  Selecionar
+                </button>
               </div>
               <div id="crmInboxList" class="crm-inbox-list"></div>
             </aside>
@@ -1219,11 +1266,14 @@
                     <button type="button" class="btn btn-secondary btn-sm btn-icon-only crm-inbox-back-mob" id="btnInboxBackMobile" aria-label="Voltar para a lista de conversas" title="Voltar para a lista">
                       <svg class="icon-svg" style="width:17px; height:17px;" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></svg>
                     </button>
+                    <div id="inboxHeadAvatar" class="crm-inbox-avatar" style="width:34px; height:34px; font-size:12px; flex-shrink:0;">C</div>
                     <div style="min-width:0; flex:1;">
                       <div style="display:flex; align-items:center; gap:6px; min-width:0;">
                         <strong id="inboxContactName" style="font-size:14.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Cliente</strong>
+                        <button type="button" id="btnQuickRenameContact" onclick="quickRenameActiveContact()" style="background:none; border:none; color:var(--text-muted); cursor:pointer; padding:0 2px; font-size:12px;" title="Editar nome do contato" aria-label="Editar nome do contato">✏️</button>
                         <span id="inboxSentimentBadge" class="sentiment-pill" style="display:none;"></span>
                         <span id="inboxAiStatusBadge" class="tag">Ativo</span>
+                        <span id="inboxDealBadge" class="tag" style="display:none;"></span>
                       </div>
                       <div style="display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--text-secondary); font-variant-numeric:tabular-nums;">
                         <span id="inboxContactPhone">+55...</span>
@@ -1232,7 +1282,7 @@
                     </div>
                   </div>
 
-                  <div class="crm-chat-head-right">
+                  <div class="crm-chat-head-right" style="position:relative;">
                     <select id="inboxStageQuickSelect" class="hide-mob-chat" aria-label="Etapa do contato no funil" style="width:auto; min-height:32px; padding:4px 8px; font-size:12px;">
                       <option value="novo">Novo Contato</option>
                       <option value="qualificando">Qualificando</option>
@@ -1240,7 +1290,28 @@
                       <option value="aguardando_humano">Aguardando Você</option>
                       <option value="concluido">Concluído</option>
                     </select>
-                    <button type="button" id="btnInboxTogglePause" class="btn btn-secondary btn-sm">Assumir</button>
+                    <div style="position:relative; display:inline-flex; align-items:center; gap:2px;">
+                      <button type="button" id="btnInboxTogglePause" class="btn btn-secondary btn-sm">Assumir</button>
+                      <button type="button" id="btnInboxTimedPauseMenu" class="btn btn-secondary btn-sm btn-icon-only hide-mob-chat" onclick="toggleTimedPausePopover(event)" title="Escolher duração da pausa da IA (30m, 2h, 24h ou permanente)" aria-label="Opções de pausa com tempo">▾</button>
+                      <div id="timedPausePopover" class="crm-mini-popover" style="display:none; right:0; top:38px;">
+                        <div style="font-size:11px; font-weight:700; color:var(--text-muted); padding:4px 8px;">Pausar IA por:</div>
+                        <button type="button" class="crm-popover-opt" onclick="applyTimedPause(30)">30 minutos</button>
+                        <button type="button" class="crm-popover-opt" onclick="applyTimedPause(120)">2 horas</button>
+                        <button type="button" class="crm-popover-opt" onclick="applyTimedPause(1440)">24 horas</button>
+                        <button type="button" class="crm-popover-opt" onclick="applyTimedPause('forever')">Até eu religar manualmente</button>
+                        <hr style="border:none; border-top:1px solid var(--border); margin:4px 0;" />
+                        <button type="button" class="crm-popover-opt" style="color:var(--accent-bright);" onclick="applyTimedPause(0)">▶ Reativar IA agora</button>
+                      </div>
+                    </div>
+                    <button type="button" id="btnToggleInChatSearch" class="btn btn-secondary btn-sm btn-icon-only" onclick="toggleInChatSearchBar()" title="Buscar palavra dentro desta conversa" aria-label="Buscar na conversa">
+                      <svg class="icon-svg" style="width:14px; height:14px;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+                    </button>
+                    <button type="button" id="btnInboxMarkUnread" class="btn btn-secondary btn-sm btn-icon-only hide-mob-chat" onclick="markActiveChatUnread()" title="Marcar conversa como Não Lida" aria-label="Marcar como não lida">
+                      <svg class="icon-svg" style="width:14px; height:14px;" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"></rect><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path></svg>
+                    </button>
+                    <button type="button" id="btnInboxToggleIgnore" class="btn btn-secondary btn-sm btn-icon-only hide-mob-chat" onclick="toggleIgnoreActiveContact()" title="Ignorar IA neste número (Família / Fornecedor)" aria-label="Ignorar IA neste número">
+                      <svg class="icon-svg" style="width:14px; height:14px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line></svg>
+                    </button>
                     <button type="button" id="btnInboxTogglePin" class="btn btn-secondary btn-sm btn-icon-only hide-mob-chat" title="Fixar conversa no topo" aria-label="Fixar conversa">
                       <svg class="icon-svg" style="width:14px; height:14px;" viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"></line><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path></svg>
                     </button>
@@ -1252,6 +1323,15 @@
                       <svg class="icon-svg" style="width:14px; height:14px;" viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
                     </button>
                   </div>
+                </div>
+
+                <!-- Barra de Busca de Palavra dentro da Conversa -->
+                <div id="inboxInChatSearchBar" class="in-chat-search-bar" style="display:none;">
+                  <input type="text" id="inboxInChatSearchInput" placeholder="Buscar palavra ou trecho nesta conversa..." oninput="applyInChatSearch(this.value)" aria-label="Buscar texto dentro da conversa" />
+                  <span id="inboxInChatSearchCount" style="font-size:11.5px; color:var(--text-secondary); white-space:nowrap;">0 resultados</span>
+                  <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; min-height:26px;" onclick="stepInChatSearch(-1)" title="Anterior">↑</button>
+                  <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; min-height:26px;" onclick="stepInChatSearch(1)" title="Próxima">↓</button>
+                  <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px; min-height:26px;" onclick="toggleInChatSearchBar(false)">×</button>
                 </div>
 
                 <!-- Dossiê Executivo de 3 Linhas (Skill #2) -->
@@ -1288,6 +1368,12 @@
                       <button type="button" id="btnInboxSlashTrigger" class="composer-tool-btn" title="Inserir resposta rápida (atalho /)">
                         / Rápidas
                       </button>
+                      <button type="button" id="btnInboxEmojiPicker" class="composer-tool-btn" onclick="toggleComposerEmojiPopover(event)" title="Inserir emoji">
+                        😊
+                      </button>
+                      <button type="button" id="btnInboxScheduleMsg" class="composer-tool-btn" onclick="openScheduleMessageModal()" title="Programar envio de mensagem para data/hora futura">
+                        🕒 Agendar
+                      </button>
                       <button type="button" id="btnInboxRecordVoice" class="composer-tool-btn" title="Gravar e enviar nota de voz pelo microfone">
                         Voz
                       </button>
@@ -1298,6 +1384,29 @@
                         + Mídia
                       </button>
                     </div>
+                  </div>
+
+                  <!-- Seletor Rápido de Emojis no Compositor -->
+                  <div id="composerEmojiPopover" class="composer-emoji-popover" style="display:none;"></div>
+
+                  <!-- Faixa de Resposta Citada (Quote / Reply Estilo WhatsApp) -->
+                  <div id="composerQuoteBanner" class="composer-quote-banner" style="display:none;">
+                    <div style="min-width:0; flex:1;">
+                      <strong id="composerQuoteSender" style="font-size:11.5px; color:var(--accent-bright); display:block;">Respondendo mensagem</strong>
+                      <span id="composerQuoteText" style="font-size:12px; color:var(--text-secondary); display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></span>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 7px; min-height:24px;" onclick="clearComposerQuote()" aria-label="Cancelar citação">×</button>
+                  </div>
+
+                  <!-- Faixa de Print Colado da Área de Transferência (Ctrl+V) -->
+                  <div id="composerPasteBanner" class="composer-paste-banner" style="display:none;">
+                    <img id="composerPasteThumb" src="" alt="Print colado" style="width:42px; height:42px; object-fit:cover; border-radius:6px; border:1px solid var(--border);" />
+                    <div style="min-width:0; flex:1;">
+                      <strong style="font-size:12px; display:block;">📋 Print pronto para enviar</strong>
+                      <span id="composerPasteMeta" style="font-size:11px; color:var(--text-secondary);">Digite uma legenda abaixo (opcional) e clique em Enviar Print</span>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="sendPastedClipboardImage()">Enviar Print</button>
+                    <button type="button" class="btn btn-secondary btn-sm" style="padding:2px 8px;" onclick="clearPastedClipboardImage()">×</button>
                   </div>
 
                   <div class="crm-inbox-voice-quick" id="inboxVoiceQuickRow">
@@ -1339,7 +1448,7 @@
                   <button type="button" class="btn btn-secondary btn-sm crm-inbox-back-mob" onclick="closeMobileInspectorSheet()">Fechar</button>
                 </div>
 
-                <!-- Ações Rápidas Mobile (Etapa, Fixar, Arquivar) -->
+                <!-- Ações Rápidas Mobile (Etapa, Não Lida, Ignorar, Fixar, Arquivar) -->
                 <div class="inspector-section crm-inbox-back-mob" style="flex-direction:column; gap:8px; width:100%;">
                   <div class="inspector-label" style="margin:0;">Etapa &amp; Fila</div>
                   <div style="display:flex; gap:6px; width:100%; flex-wrap:wrap;">
@@ -1350,9 +1459,86 @@
                       <option value="aguardando_humano">Aguardando Você</option>
                       <option value="concluido">Concluído</option>
                     </select>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="markActiveChatUnread()">Não Lida</button>
                     <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('btnInboxTogglePin')?.click()">Fixar</button>
                     <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('btnInboxToggleArchive')?.click()">Arquivar</button>
                   </div>
+                </div>
+
+                <!-- Valor da Negociação (R$) & Resultado Ganho/Perdido -->
+                <div class="inspector-section">
+                  <div class="inspector-label">Negociação &amp; Fechamento (R$)</div>
+                  <div style="display:flex; gap:6px; align-items:center; margin-bottom:7px;">
+                    <span style="font-size:12px; font-weight:700; color:var(--text-secondary);">R$</span>
+                    <input type="number" id="inspDealValueInput" min="0" step="0.01" placeholder="0,00" style="flex:1; font-size:12.5px; padding:6px 8px;" aria-label="Valor da negociação em reais" />
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="saveInspectorDealFields()">Salvar R$</button>
+                  </div>
+                  <div style="display:flex; gap:5px; flex-wrap:wrap;">
+                    <button type="button" id="btnDealOpen" class="composer-tool-btn" onclick="setInspectorDealStatus('open')">Em Aberto</button>
+                    <button type="button" id="btnDealWon" class="composer-tool-btn" onclick="setInspectorDealStatus('won')">✅ Ganho</button>
+                    <button type="button" id="btnDealLost" class="composer-tool-btn" onclick="setInspectorDealStatus('lost')">❌ Perdido</button>
+                  </div>
+                  <input type="text" id="inspLostReasonInput" placeholder="Motivo da perda (ex: preço, sem retorno)..." style="display:none; width:100%; font-size:12px; padding:6px 8px; margin-top:6px;" onchange="saveInspectorDealFields()" aria-label="Motivo de perda do negócio" />
+                </div>
+
+                <!-- Dados Cadastrais do Contato & Origem do Lead -->
+                <div class="inspector-section">
+                  <details id="inspContactDetailsAccordion">
+                    <summary class="inspector-label" style="cursor:pointer; user-select:none; margin:0; display:flex; justify-content:space-between; align-items:center;">
+                      <span>Dados do Contato &amp; Origem</span>
+                      <span style="font-size:11px; color:var(--accent-bright);">Editar ▾</span>
+                    </summary>
+                    <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px;">
+                      <input type="text" id="inspEditName" placeholder="Nome do cliente" style="font-size:12px; padding:6px 8px;" aria-label="Nome do contato" />
+                      <input type="text" id="inspEditCompany" placeholder="Empresa / Loja" style="font-size:12px; padding:6px 8px;" aria-label="Empresa do contato" />
+                      <select id="inspEditLeadSource" style="font-size:12px; padding:6px 8px;" aria-label="Origem do lead">
+                        <option value="">Origem do Lead...</option>
+                        <option value="WhatsApp Orgânico">WhatsApp Orgânico</option>
+                        <option value="Instagram">Instagram</option>
+                        <option value="Anúncio / Tráfego Pago">Anúncio / Tráfego Pago</option>
+                        <option value="Google / Site">Google / Site</option>
+                        <option value="Indicação">Indicação</option>
+                        <option value="Prospecção Ativa">Prospecção Ativa</option>
+                      </select>
+                      <input type="email" id="inspEditEmail" placeholder="E-mail" style="font-size:12px; padding:6px 8px;" aria-label="E-mail do contato" />
+                      <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+                        <input type="text" id="inspEditDoc" placeholder="CPF / CNPJ" style="font-size:12px; padding:6px 8px;" aria-label="CPF ou CNPJ" />
+                        <input type="text" id="inspEditCity" placeholder="Cidade / UF" style="font-size:12px; padding:6px 8px;" aria-label="Cidade" />
+                      </div>
+                      <button type="button" class="btn btn-primary btn-sm" style="width:100%; justify-content:center;" onclick="saveInspectorContactProfile()">Salvar Cadastro</button>
+                    </div>
+                  </details>
+                </div>
+
+                <!-- Etiquetas Coloridas em 1 Clique -->
+                <div class="inspector-section">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <div class="inspector-label" style="margin:0;">Etiquetas Coloridas</div>
+                    <button type="button" style="background:none; border:none; color:var(--accent-bright); font-size:11px; font-weight:600; cursor:pointer; padding:0;" onclick="openCustomTagsModal()">Gerenciar</button>
+                  </div>
+                  <div id="inspTagsBox" class="tags-picker-wrap" style="display:flex; flex-wrap:wrap; gap:5px;"></div>
+                </div>
+
+                <!-- Checklist de Tarefas do Lead -->
+                <div class="inspector-section">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <div class="inspector-label" style="margin:0;">Checklist de Tarefas</div>
+                    <span id="inspTasksCounter" style="font-size:11px; color:var(--text-secondary);">0/0</span>
+                  </div>
+                  <div id="inspTasksList" style="display:flex; flex-direction:column; gap:5px; margin-bottom:6px;"></div>
+                  <form id="inspAddTaskForm" onsubmit="submitInspectorTask(event)" style="display:flex; gap:5px;">
+                    <input type="text" id="inspNewTaskInput" placeholder="Nova tarefa (ex: Enviar contrato)..." style="flex:1; font-size:12px; padding:5px 8px;" aria-label="Nova tarefa do lead" />
+                    <button type="submit" class="btn btn-secondary btn-sm" style="padding:0 10px;">+</button>
+                  </form>
+                </div>
+
+                <!-- Mensagens Programadas neste Contato -->
+                <div class="inspector-section" id="inspScheduledSection">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <div class="inspector-label" style="margin:0;">Envios Agendados (🕒)</div>
+                    <button type="button" style="background:none; border:none; color:var(--accent-bright); font-size:11px; font-weight:600; cursor:pointer; padding:0;" onclick="openScheduleMessageModal()">+ Agendar</button>
+                  </div>
+                  <div id="inspScheduledList" style="display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--text-secondary);"></div>
                 </div>
 
                 <!-- Agendamento S19 Rápido -->
@@ -1364,12 +1550,6 @@
                     <button type="button" class="composer-tool-btn" onclick="quickSetInspectorFollowup('tomorrow9')">Amanhã 09h</button>
                     <button type="button" class="composer-tool-btn" onclick="quickSetInspectorFollowup(null)">Limpar</button>
                   </div>
-                </div>
-
-                <!-- Etiquetas em 1 Clique -->
-                <div class="inspector-section">
-                  <div class="inspector-label">Etiquetas do Funil</div>
-                  <div id="inspTagsBox" class="tags-picker-wrap" style="display:flex; flex-wrap:wrap; gap:5px;"></div>
                 </div>
 
                 <!-- Resumo & Observações Fixas -->
@@ -1389,8 +1569,11 @@
                   </div>
                 </div>
 
-                <!-- Ações de Limpeza -->
-                <div class="inspector-section" style="display:flex; gap:6px; flex-wrap:wrap;">
+                <!-- Ações de Controle Pessoal & Limpeza -->
+                <div class="inspector-section" style="display:flex; gap:6px; flex-direction:column;">
+                  <button type="button" id="btnInspectorIgnoreAi" class="btn btn-secondary btn-sm" style="width:100%; justify-content:center;" onclick="toggleIgnoreActiveContact()">
+                    🔕 Ignorar IA neste número
+                  </button>
                   <button type="button" id="btnInspectorDeleteChat" class="btn btn-danger btn-sm" style="width:100%; justify-content:center;">
                     Excluir Conversa
                   </button>
@@ -1401,23 +1584,57 @@
           <div id="inspectorMobileBackdrop" class="inspector-mob-backdrop" onclick="closeMobileInspectorSheet()"></div>
         </div>
 
-        <!-- SUB-VISÃO 2: QUADRO KANBAN (ETAPAS DO FUNIL) -->
+        <!-- SUB-VISÃO 2: QUADRO KANBAN COMPLETO (5 ETAPAS + SOMA EM R$ + DRAG & DROP) -->
         <div id="crmSubView-kanban" class="crm-subview" style="display:none;">
           <div class="kanban-board">
             <div class="kanban-col" data-stage="novo">
-              <div class="kanban-col-head"><span>Novos Contatos</span><span class="tag" id="count-novo">0</span></div>
+              <div class="kanban-col-head">
+                <div>
+                  <span>Novos Contatos</span>
+                  <div id="sum-novo" class="kanban-col-sum">R$ 0</div>
+                </div>
+                <span class="tag" id="count-novo">0</span>
+              </div>
               <div id="col-novo" style="flex:1;"></div>
             </div>
+            <div class="kanban-col" data-stage="qualificando">
+              <div class="kanban-col-head">
+                <div>
+                  <span>Qualificando</span>
+                  <div id="sum-qualificando" class="kanban-col-sum">R$ 0</div>
+                </div>
+                <span class="tag" id="count-qualificando">0</span>
+              </div>
+              <div id="col-qualificando" style="flex:1;"></div>
+            </div>
             <div class="kanban-col" data-stage="em_atendimento">
-              <div class="kanban-col-head"><span>Em Atendimento</span><span class="tag" id="count-em_atendimento">0</span></div>
+              <div class="kanban-col-head">
+                <div>
+                  <span>Em Atendimento</span>
+                  <div id="sum-em_atendimento" class="kanban-col-sum">R$ 0</div>
+                </div>
+                <span class="tag" id="count-em_atendimento">0</span>
+              </div>
               <div id="col-em_atendimento" style="flex:1;"></div>
             </div>
             <div class="kanban-col" data-stage="aguardando_humano">
-              <div class="kanban-col-head"><span style="color:var(--warning-bright);">Aguardando Você</span><span class="badge-count" id="count-aguardando_humano">0</span></div>
+              <div class="kanban-col-head">
+                <div>
+                  <span style="color:var(--warning-bright);">Aguardando Você</span>
+                  <div id="sum-aguardando_humano" class="kanban-col-sum">R$ 0</div>
+                </div>
+                <span class="badge-count" id="count-aguardando_humano">0</span>
+              </div>
               <div id="col-aguardando_humano" style="flex:1;"></div>
             </div>
             <div class="kanban-col" data-stage="concluido">
-              <div class="kanban-col-head"><span style="color:var(--accent-bright);">Pedido / Concluído</span><span class="tag" id="count-concluido">0</span></div>
+              <div class="kanban-col-head">
+                <div>
+                  <span style="color:var(--accent-bright);">Pedido / Concluído</span>
+                  <div id="sum-concluido" class="kanban-col-sum">R$ 0</div>
+                </div>
+                <span class="tag" id="count-concluido">0</span>
+              </div>
               <div id="col-concluido" style="flex:1;"></div>
             </div>
           </div>
@@ -2210,6 +2427,71 @@
           <button type="submit" id="btnSubmitChangeMyPass" class="btn btn-primary">Salvar Nova Senha</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL: GERENCIAR ETIQUETAS COLORIDAS PERSONALIZADAS -->
+  <div id="customTagsModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="customTagsModalTitle">
+    <div class="modal-dialog" style="max-width:480px;">
+      <div class="modal-head">
+        <h3 id="customTagsModalTitle" class="panel-title">Etiquetas Coloridas do Funil</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('customTagsModal')">Fechar</button>
+      </div>
+      <div class="modal-body">
+        <form id="customTagForm" onsubmit="submitCustomTagForm(event)" style="display:flex; gap:8px; align-items:center; margin-bottom:14px;">
+          <input type="color" id="newCustomTagColor" value="#10b981" style="width:42px; height:38px; padding:2px; border-radius:8px; cursor:pointer;" aria-label="Cor da etiqueta" />
+          <input type="text" id="newCustomTagName" required maxlength="30" placeholder="Nome da etiqueta (ex: Aguardando PIX)" style="flex:1;" aria-label="Nome da etiqueta" />
+          <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
+        </form>
+        <div id="customTagsManagerList" style="display:flex; flex-direction:column; gap:6px; max-height:300px; overflow-y:auto;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PROGRAMAR ENVIO DE MENSAGEM FUTURA NO WHATSAPP -->
+  <div id="scheduleMessageModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="schedMsgModalTitle">
+    <div class="modal-dialog" style="max-width:480px;">
+      <div class="modal-head">
+        <h3 id="schedMsgModalTitle" class="panel-title">🕒 Programar Envio no WhatsApp</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('scheduleMessageModal')">Fechar</button>
+      </div>
+      <form id="scheduleMessageForm" onsubmit="submitScheduleMessageForm(event)" class="modal-body">
+        <p class="panel-desc" style="margin-top:0;">
+          O motor enviará automaticamente esta mensagem no WhatsApp do cliente exatamente na data e hora escolhidas.
+        </p>
+        <div class="form-group">
+          <label class="form-label" for="schedMsgTextInput">Mensagem que será enviada *</label>
+          <textarea id="schedMsgTextInput" rows="3" required placeholder="Digite a mensagem para envio programado..."></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="schedMsgDateTimeInput">Data e Horário do Disparo *</label>
+          <input type="datetime-local" id="schedMsgDateTimeInput" required />
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+            <button type="button" class="composer-tool-btn" onclick="presetScheduleInput(30)">Daqui 30 min</button>
+            <button type="button" class="composer-tool-btn" onclick="presetScheduleInput(120)">Daqui 2 horas</button>
+            <button type="button" class="composer-tool-btn" onclick="presetScheduleInput('tomorrow9')">Amanhã às 09:00</button>
+          </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('scheduleMessageModal')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Agendar Envio</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ENCAMINHAR MENSAGEM PARA OUTRO CONTATO -->
+  <div id="forwardMessageModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="fwdMsgModalTitle">
+    <div class="modal-dialog" style="max-width:480px;">
+      <div class="modal-head">
+        <h3 id="fwdMsgModalTitle" class="panel-title">↪ Encaminhar Mensagem</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('forwardMessageModal')">Fechar</button>
+      </div>
+      <div class="modal-body">
+        <div id="fwdMsgPreviewBox" style="background:var(--bg-card-subtle); border-left:3px solid var(--accent); padding:8px 10px; border-radius:6px; font-size:12px; color:var(--text-secondary); margin-bottom:12px; max-height:70px; overflow:hidden;"></div>
+        <input type="text" id="fwdSearchContactInput" placeholder="Buscar contato na lista ou digitar DDD+Número..." oninput="renderForwardContactsList(this.value)" style="margin-bottom:10px;" aria-label="Buscar contato para encaminhar" />
+        <div id="fwdContactsList" style="display:flex; flex-direction:column; gap:6px; max-height:280px; overflow-y:auto;"></div>
+      </div>
     </div>
   </div>
 

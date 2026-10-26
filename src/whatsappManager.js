@@ -182,6 +182,8 @@ class WhatsAppManager {
     this.connectionWaiters = new Set();
     this.historySyncWaiters = new Set();
     this.syncInProgress = false;
+    this.avatarFetchCache = new Map(); // chatId -> ts
+    this.scheduledSendingLock = false;
 
     // Fila Segura Anti-Ban de Abordagem Ativa (M01–M13) — persistida em disco contra reinícios
     this.proactiveQueue = Array.isArray(storage.data.proactiveQueue) ? [...storage.data.proactiveQueue] : [];
@@ -198,6 +200,12 @@ class WhatsAppManager {
       this.checkDueFollowUpsNow().catch(() => {});
     }, 45_000);
     if (this.followUpTimer.unref) this.followUpTimer.unref();
+
+    // Disparador automático de Mensagens Programadas no Chat (a cada 15s quando WhatsApp conectado)
+    this.scheduledMsgTimer = setInterval(() => {
+      this.processDueScheduledMessages().catch(() => {});
+    }, 15_000);
+    if (this.scheduledMsgTimer.unref) this.scheduledMsgTimer.unref();
   }
 
   setAuthDir(dirPath) {
@@ -1030,6 +1038,31 @@ class WhatsAppManager {
           });
         }
       });
+
+      sock.ev.on('messages.update', (updates) => {
+        if (mySeq !== this.socketSeq || this.sock !== sock) return;
+        let changed = false;
+        for (const u of updates || []) {
+          const rJid = u?.key?.remoteJid;
+          const mId = u?.key?.id;
+          if (!rJid || !mId || !this.isValid1to1ChatJid(rJid)) continue;
+          const st = u?.update?.status;
+          if (typeof st === 'number' && st >= 2) {
+            const ackLevel = st >= 4 ? 3 : st === 3 ? 2 : 1;
+            storage.applyMessageAck(rJid, mId, ackLevel);
+            changed = true;
+          }
+          const edited = u?.update?.message?.editedMessage || u?.update?.message?.protocolMessage?.editedMessage;
+          if (edited) {
+            const newTxt = extractReadableTextFromUnwrapped(unwrapMessageContent(edited));
+            if (newTxt) {
+              storage.applyMessageEdit(rJid, mId, newTxt);
+              changed = true;
+            }
+          }
+        }
+        if (changed) this.broadcastFn('crm_updated', {});
+      });
     } catch (err) {
       if (mySeq !== this.socketSeq) return this.getPublicState();
       this.status = 'disconnected';
@@ -1309,8 +1342,57 @@ class WhatsAppManager {
     const unwrapped = unwrapMessageContent(msg.message);
     if (!unwrapped) return;
 
-    // Ignorar mensagens de protocolo/reação pura sem conteúdo
-    if (unwrapped.protocolMessage || unwrapped.reactionMessage) return;
+    // Processa reações reais e exclusões/edições de protocolo em tempo real no CRM
+    if (unwrapped.reactionMessage) {
+      const targetWaId = unwrapped.reactionMessage.key?.id;
+      if (targetWaId) {
+        const emoji = unwrapped.reactionMessage.text || '';
+        const actor = msg.key?.fromMe ? 'owner' : 'user';
+        storage.applyMessageReaction(remoteJid, targetWaId, emoji, actor);
+        this.broadcastFn('crm_updated', { chatId: remoteJid });
+      }
+      return;
+    }
+    if (unwrapped.protocolMessage) {
+      const pType = unwrapped.protocolMessage.type;
+      const targetWaId = unwrapped.protocolMessage.key?.id;
+      if (targetWaId && (pType === 0 || pType === 'REVOKE')) {
+        storage.applyMessageDelete(remoteJid, targetWaId);
+        this.broadcastFn('crm_updated', { chatId: remoteJid });
+      } else if (targetWaId && unwrapped.protocolMessage.editedMessage) {
+        const editedTxt = extractReadableTextFromUnwrapped(unwrapMessageContent(unwrapped.protocolMessage.editedMessage));
+        if (editedTxt) {
+          storage.applyMessageEdit(remoteJid, targetWaId, editedTxt);
+          this.broadcastFn('crm_updated', { chatId: remoteJid });
+        }
+      }
+      return;
+    }
+
+    const ctxInfo =
+      unwrapped.extendedTextMessage?.contextInfo ||
+      unwrapped.imageMessage?.contextInfo ||
+      unwrapped.videoMessage?.contextInfo ||
+      unwrapped.audioMessage?.contextInfo ||
+      unwrapped.documentMessage?.contextInfo ||
+      null;
+    let quotedInfo = undefined;
+    if (ctxInfo?.quotedMessage || ctxInfo?.stanzaId) {
+      const qTxt = extractReadableTextFromUnwrapped(unwrapMessageContent(ctxInfo.quotedMessage)) || '[Mensagem citada]';
+      quotedInfo = {
+        waMsgId: ctxInfo.stanzaId || '',
+        text: qTxt.slice(0, 180),
+        role: ctxInfo.participant && !String(ctxInfo.participant).includes(this.connectedUser?.phone || '___') ? 'user' : 'owner'
+      };
+    }
+    const cleanWaKey = msg.key?.id
+      ? {
+          id: msg.key.id,
+          remoteJid: msg.key.remoteJid,
+          fromMe: Boolean(msg.key.fromMe),
+          ...(msg.key.participant ? { participant: msg.key.participant } : {})
+        }
+      : undefined;
 
     const bestPhone = this.resolvePhoneFromMessage(msg);
     const ownerSelfName = this.getOwnerSelfName();
@@ -1400,6 +1482,9 @@ class WhatsAppManager {
           role: 'owner',
           text: ownerDisplayLabel,
           waMsgId: msg.key?.id || undefined,
+          ...(cleanWaKey ? { waMsgKey: cleanWaKey } : {}),
+          ...(quotedInfo ? { quoted: quotedInfo } : {}),
+          ack: 1,
           waFromMe: true,
           waTimestampMs: msgTsMs,
           timestamp: msgIso,
@@ -1411,6 +1496,9 @@ class WhatsAppManager {
         },
         { historical: isOldHistoricalMsg, ownerSelfName }
       );
+      if (!isOldHistoricalMsg) {
+        this.fetchContactAvatarIfNeeded(remoteJid).catch(() => {});
+      }
 
       // Só trava/loga pausa automática se a resposta manual no celular foi recente (não em mensagens antigas de semanas atrás!)
       if (!isOldHistoricalMsg && storage.data.settings.humanHandoff?.pauseOnOwnerReply) {
@@ -1556,6 +1644,8 @@ class WhatsAppManager {
         role: 'user',
         text: displayLabel,
         waMsgId: msg.key?.id || undefined,
+        ...(cleanWaKey ? { waMsgKey: cleanWaKey } : {}),
+        ...(quotedInfo ? { quoted: quotedInfo } : {}),
         waFromMe: false,
         waTimestampMs: msgTsMs,
         timestamp: msgIso,
@@ -1570,6 +1660,9 @@ class WhatsAppManager {
       },
       { historical: isOldHistoricalMsg, ownerSelfName }
     );
+    if (!isOldHistoricalMsg) {
+      this.fetchContactAvatarIfNeeded(remoteJid).catch(() => {});
+    }
     this.broadcastFn('crm_updated', { chatId: remoteJid });
 
     // Mensagens históricas/antigas sincronizadas nunca acionam resposta automática retroativa da IA!
@@ -2126,7 +2219,50 @@ class WhatsAppManager {
     }
   }
 
-  async sendManualOwnerMessage(chatId, text, pauseAi = true) {
+  async fetchContactAvatarIfNeeded(chatId) {
+    if (!this.sock || this.status !== 'connected') return '';
+    const key = storage.findSiblingContactKey(chatId) || chatId;
+    const contact = storage.data.contacts[key];
+    if (!contact) return '';
+    const lastTry = this.avatarFetchCache.get(key) || 0;
+    if (Date.now() - lastTry < 6 * 60 * 60 * 1000 && contact.avatarUrl) {
+      return contact.avatarUrl;
+    }
+    if (Date.now() - lastTry < 15 * 60 * 1000) return contact.avatarUrl || '';
+    this.avatarFetchCache.set(key, Date.now());
+    try {
+      const targetJid = String(contact.chatId || chatId);
+      const url = await this.sock.profilePictureUrl(targetJid, 'preview').catch(() => '');
+      if (url && /^https?:\/\//i.test(url) && url !== contact.avatarUrl) {
+        storage.upsertContact(key, { avatarUrl: url });
+        this.broadcastFn('crm_updated', { chatId: key });
+        return url;
+      }
+    } catch {}
+    return contact?.avatarUrl || '';
+  }
+
+  buildMsgKeyFromStored(chatId, msg) {
+    if (!msg) return null;
+    if (msg.waMsgKey?.id) {
+      return {
+        remoteJid: msg.waMsgKey.remoteJid || chatId,
+        fromMe: Boolean(msg.waMsgKey.fromMe ?? (msg.role !== 'user')),
+        id: msg.waMsgKey.id,
+        ...(msg.waMsgKey.participant ? { participant: msg.waMsgKey.participant } : {})
+      };
+    }
+    if (msg.waMsgId) {
+      return {
+        remoteJid: chatId,
+        fromMe: Boolean(msg.waFromMe ?? (msg.role !== 'user')),
+        id: msg.waMsgId
+      };
+    }
+    return null;
+  }
+
+  async sendManualOwnerMessage(chatId, text, pauseAi = true, opts = {}) {
     if (!this.sock || this.status !== 'connected') {
       const ok = await this.waitUntilConnected(7000);
       if (!ok || !this.sock) {
@@ -2136,12 +2272,42 @@ class WhatsAppManager {
     const targetJid = String(chatId || '').includes('@')
       ? String(chatId)
       : `${normalizePhoneDigits(chatId)}@s.whatsapp.net`;
-    const sent = await this.sock.sendMessage(targetJid, { text });
+
+    let sendOpts = undefined;
+    let storedQuoted = undefined;
+    if (opts?.quotedMsgId) {
+      const { contact: qContact, msg: qMsg } = storage.findMessageInContact(targetJid, opts.quotedMsgId);
+      if (qMsg) {
+        storedQuoted = {
+          id: qMsg.id,
+          waMsgId: qMsg.waMsgId || '',
+          text: String(qMsg.text || '').slice(0, 180),
+          role: qMsg.role || 'user'
+        };
+        const qKey = this.buildMsgKeyFromStored(qContact?.chatId || targetJid, qMsg);
+        if (qKey) {
+          sendOpts = {
+            quoted: {
+              key: qKey,
+              message: { conversation: String(qMsg.text || '').slice(0, 400) || 'Mensagem' }
+            }
+          };
+        }
+      }
+    }
+
+    const sent = await this.sock.sendMessage(targetJid, { text }, sendOpts);
     this.rememberBotMessage(sent);
+    const sentKey = sent?.key?.id
+      ? { id: sent.key.id, remoteJid: sent.key.remoteJid || targetJid, fromMe: true }
+      : undefined;
     storage.appendContactMessage(targetJid, {
       role: 'owner',
       text,
-      ...(sent?.key?.id ? { waMsgId: sent.key.id } : {})
+      ack: 1,
+      ...(sent?.key?.id ? { waMsgId: sent.key.id } : {}),
+      ...(sentKey ? { waMsgKey: sentKey } : {}),
+      ...(storedQuoted ? { quoted: storedQuoted } : {})
     });
     if (pauseAi) {
       const activeBiz = storage.getBusiness();
@@ -2151,8 +2317,116 @@ class WhatsAppManager {
       storage.pauseContact(targetJid, mins, 'Mensagem manual enviada pelo painel');
     }
     storage.markContactRead(targetJid);
+    this.fetchContactAvatarIfNeeded(targetJid).catch(() => {});
     this.broadcastFn('crm_updated', { chatId: targetJid });
     return true;
+  }
+
+  async reactToWhatsappMessage(chatId, msgId, emoji = '') {
+    const { contact, msg } = storage.findMessageInContact(chatId, msgId);
+    if (!contact || !msg) throw new Error('Mensagem não encontrada nesta conversa.');
+    const targetJid = contact.chatId;
+    const key = this.buildMsgKeyFromStored(targetJid, msg);
+    const currentReaction = msg.reactions?.owner || '';
+    const nextEmoji = currentReaction === emoji ? '' : String(emoji || '').trim();
+    if (key && this.sock && this.status === 'connected') {
+      await this.sock.sendMessage(targetJid, { react: { text: nextEmoji, key } });
+    }
+    const updated = storage.applyMessageReaction(targetJid, msg.id || msg.waMsgId, emoji, 'owner');
+    this.broadcastFn('crm_updated', { chatId: targetJid });
+    return updated;
+  }
+
+  async editWhatsappMessage(chatId, msgId, newText = '') {
+    const cleanText = String(newText || '').trim();
+    if (!cleanText) throw new Error('Informe o novo texto da mensagem.');
+    const { contact, msg } = storage.findMessageInContact(chatId, msgId);
+    if (!contact || !msg) throw new Error('Mensagem não encontrada.');
+    if (msg.role === 'user') throw new Error('Só é possível editar mensagens enviadas por você ou pelo atendente.');
+    const targetJid = contact.chatId;
+    const key = this.buildMsgKeyFromStored(targetJid, msg);
+    if (key && this.sock && this.status === 'connected') {
+      await this.sock.sendMessage(targetJid, { text: cleanText, edit: key });
+    }
+    const updated = storage.applyMessageEdit(targetJid, msg.id || msg.waMsgId, cleanText);
+    this.broadcastFn('crm_updated', { chatId: targetJid });
+    return updated;
+  }
+
+  async deleteWhatsappMessageForEveryone(chatId, msgId) {
+    const { contact, msg } = storage.findMessageInContact(chatId, msgId);
+    if (!contact || !msg) throw new Error('Mensagem não encontrada.');
+    const targetJid = contact.chatId;
+    const key = this.buildMsgKeyFromStored(targetJid, msg);
+    if (key && key.fromMe && this.sock && this.status === 'connected') {
+      await this.sock.sendMessage(targetJid, { delete: key });
+    }
+    const updated = storage.applyMessageDelete(targetJid, msg.id || msg.waMsgId);
+    this.broadcastFn('crm_updated', { chatId: targetJid });
+    return updated;
+  }
+
+  async forwardCrmMessage(fromChatId, msgId, toChatIdOrPhone) {
+    const { contact: srcContact, msg } = storage.findMessageInContact(fromChatId, msgId);
+    if (!srcContact || !msg) throw new Error('Mensagem de origem não encontrada.');
+    const rawDest = String(toChatIdOrPhone || '').trim();
+    if (!rawDest) throw new Error('Selecione o contato de destino.');
+    const destJid = rawDest.includes('@') ? rawDest : `${normalizePhoneDigits(rawDest)}@s.whatsapp.net`;
+    const cleanText = String(msg.text || '').trim();
+
+    if (msg.mediaUrl && this.sock && this.status === 'connected') {
+      let buf = null;
+      if (msg.mediaUrl.startsWith('/uploads/')) {
+        const fp = path.join(UPLOADS_DIR, path.basename(msg.mediaUrl));
+        if (fs.existsSync(fp)) buf = fs.readFileSync(fp);
+      } else if (/^https?:\/\//i.test(msg.mediaUrl)) {
+        const res = await fetch(msg.mediaUrl);
+        if (res.ok) buf = Buffer.from(await res.arrayBuffer());
+      }
+      if (buf) {
+        await this.sendManualAttachment({
+          chatId: destJid,
+          buffer: buf,
+          mimeType: msg.mediaMime || 'application/octet-stream',
+          fileName: msg.mediaName || 'encaminhado',
+          caption: cleanText.startsWith('[') ? '' : cleanText,
+          mediaUrl: msg.mediaUrl,
+          pauseAi: true
+        });
+        const destKey = storage.findSiblingContactKey(destJid) || destJid;
+        return storage.data.contacts[destKey];
+      }
+    }
+
+    await this.sendManualOwnerMessage(destJid, cleanText || '[Mensagem encaminhada]', true);
+    const destKey = storage.findSiblingContactKey(destJid) || destJid;
+    return storage.data.contacts[destKey];
+  }
+
+  async processDueScheduledMessages() {
+    if (this.scheduledSendingLock || !this.sock || this.status !== 'connected') return;
+    this.scheduledSendingLock = true;
+    try {
+      const nowMs = Date.now();
+      for (const contact of Object.values(storage.data.contacts || {})) {
+        if (!Array.isArray(contact.scheduledMessages) || contact.scheduledMessages.length === 0) continue;
+        for (const item of contact.scheduledMessages) {
+          if (item.status !== 'pending') continue;
+          const dueMs = new Date(item.sendAt).getTime();
+          if (Number.isNaN(dueMs) || dueMs > nowMs) continue;
+          try {
+            await this.sendManualOwnerMessage(contact.chatId, item.text, true);
+            storage.markScheduledMessageResult(contact.chatId, item.id, { status: 'sent' });
+            storage.addLog('whatsapp', `Mensagem agendada enviada automaticamente para ${contact.name}!`);
+          } catch (err) {
+            storage.markScheduledMessageResult(contact.chatId, item.id, { status: 'failed', error: err.message });
+            storage.addLog('error', `Falha no envio agendado para ${contact.name}: ${err.message}`);
+          }
+        }
+      }
+    } finally {
+      this.scheduledSendingLock = false;
+    }
   }
 
   /**

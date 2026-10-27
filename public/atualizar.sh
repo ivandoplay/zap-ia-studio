@@ -124,7 +124,7 @@ for (let i = 0; i < total && ptr < cdOffset + cdSize; i++) {
   const nameLen = buf.readUInt16LE(ptr + 28);
   const extraLen = buf.readUInt16LE(ptr + 30);
   const commentLen = buf.readUInt16LE(ptr + 32);
-  const localOff = buf.readUInt16LE(ptr + 42);
+  const localOff = buf.readUInt32LE(ptr + 42);
   const rawName = buf.subarray(ptr + 46, ptr + 46 + nameLen).toString('utf8');
   ptr += 46 + nameLen + extraLen + commentLen;
 

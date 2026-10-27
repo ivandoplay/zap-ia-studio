@@ -120,7 +120,7 @@ let extracted = 0;
 for (let i = 0; i < total && ptr < cdOffset + cdSize; i++) {
   if (buf.readUInt32LE(ptr) !== 0x02014b50) throw new Error('Cabecalho ZIP invalido.');
   const method = buf.readUInt16LE(ptr + 10);
-  const compSize = buf.readUInt16LE(ptr + 20);
+  const compSize = buf.readUInt32LE(ptr + 20);
   const nameLen = buf.readUInt16LE(ptr + 28);
   const extraLen = buf.readUInt16LE(ptr + 30);
   const commentLen = buf.readUInt16LE(ptr + 32);

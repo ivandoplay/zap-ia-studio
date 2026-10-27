@@ -1,6 +1,6 @@
 ==============================================================================
-  ZAP-IA STUDIO v5.0 -- EDICAO INSTITUCIONAL MULTI-CONTAS
-  Atendimento Humano com IA, Voz Nativa OGG/Opus & Central de Conversas 360
+  ZAP-IA STUDIO v5.6 -- EDICAO INSTITUCIONAL MULTI-CHIP & MULTI-CONTAS
+  Ate 3 WhatsApps Simultaneos, Voz Nativa OGG/Opus & Central 360 + Auto-Update
   Painel Oficial 24h: https://zap-ia-studio.vercel.app/
 ==============================================================================
 

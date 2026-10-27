@@ -3759,6 +3759,198 @@ mark.chat-search-hit.current {
   border-top: 1px solid var(--border);
 }
 
+/* ==================== MULTI-CHIP (ATÉ 3 NÚMEROS) & MULTI-APARELHO v5.6.0 ==================== */
+.wa-slots-tabbar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+@media (max-width: 520px) {
+  .wa-slots-tabbar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+  }
+}
+.wa-slot-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-card-subtle);
+  color: var(--text-main);
+  cursor: pointer;
+  text-align: left;
+  min-width: 0;
+  transition: border-color 140ms ease, background 140ms ease, transform 120ms ease;
+}
+.wa-slot-tab:hover:not(.locked) {
+  border-color: var(--border-strong);
+}
+.wa-slot-tab.active {
+  border-color: var(--accent);
+  background: rgba(16, 185, 129, 0.1);
+  box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25);
+}
+.wa-slot-tab.locked {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+.wa-slot-tab-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+}
+.wa-slot-tab-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.wa-slot-tab-sub {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+}
+.wa-slot-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-muted);
+}
+.wa-slot-dot.connected {
+  background: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.22);
+}
+.wa-slot-dot.qr_ready,
+.wa-slot-dot.connecting {
+  background: #f59e0b;
+}
+
+.wa-slot-config-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px 11px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+}
+.wa-slot-nick-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.wa-slot-nick-wrap input {
+  min-height: 32px;
+  padding: 5px 9px;
+  font-size: 12.5px;
+  flex: 1;
+  min-width: 0;
+}
+.wa-slot-ai-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+  cursor: pointer;
+  user-select: none;
+}
+.wa-slot-ai-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.wa-devices-box {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.wa-device-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.slot-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.slot-pill.slot_1 {
+  background: rgba(16, 185, 129, 0.14);
+  color: var(--accent-bright);
+  border: 1px solid rgba(16, 185, 129, 0.34);
+}
+.slot-pill.slot_2 {
+  background: rgba(14, 165, 233, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.36);
+}
+.slot-pill.slot_3 {
+  background: rgba(168, 85, 247, 0.16);
+  color: #c084fc;
+  border: 1px solid rgba(192, 132, 252, 0.36);
+}
+
+.device-choice-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-card-subtle);
+  color: var(--text-main);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.device-choice-card:hover {
+  border-color: var(--accent);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+
 
 
 

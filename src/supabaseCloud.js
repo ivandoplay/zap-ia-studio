@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -19,6 +20,10 @@ import {
   DATA_DIR,
   Storage,
   UPLOADS_DIR,
+  WA_SLOT_IDS,
+  normalizeSlotId,
+  parseContactChannelKey,
+  normalizeWaSlotsSettings,
   createCleanDatabaseForNewTenant,
   localStorageInstance,
   mergeContactMessagesUnion
@@ -26,15 +31,90 @@ import {
 import { calibrateTrueClock, trueNowIso, trueNowMs } from './trueClock.js';
 
 const CLOUD_SESSION_FILE = path.join(DATA_DIR, 'cloud_session.json');
+const DEVICE_IDENTITY_FILE = path.join(DATA_DIR, 'device_identity.json');
 const WORKER_HEARTBEAT_TTL_MS = 95_000;
 const APP_VERSION = (() => {
   try {
     const pkgPath = path.resolve(DATA_DIR, '..', 'package.json');
-    return JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version || '4.9.0';
+    return JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version || '5.6.0';
   } catch {
-    return '4.9.0';
+    return '5.6.0';
   }
 })();
+
+export function clampMaxWaSlots(val, role = 'user') {
+  if (role === 'master') return 3;
+  const n = Number(val);
+  if (n === 2 || n === 3) return n;
+  return 1;
+}
+
+function defaultDeviceLabel() {
+  const isAndroid = Boolean(process.env.PREFIX?.includes('com.termux')) || os.platform() === 'android';
+  const host = String(os.hostname() || 'aparelho').slice(0, 32);
+  if (isAndroid) return `Celular Android (${host})`;
+  if (os.platform() === 'win32') return `Computador Windows (${host})`;
+  if (os.platform() === 'darwin') return `Mac (${host})`;
+  return `Computador Linux (${host})`;
+}
+
+export function getOrCreateDeviceIdentity() {
+  if (IS_VERCEL) {
+    return {
+      deviceId: 'vercel_serverless',
+      deviceName: 'Painel Web Vercel',
+      platform: 'vercel'
+    };
+  }
+  try {
+    if (fs.existsSync(DEVICE_IDENTITY_FILE)) {
+      const parsed = JSON.parse(fs.readFileSync(DEVICE_IDENTITY_FILE, 'utf8'));
+      if (parsed?.deviceId && typeof parsed.deviceId === 'string') {
+        return {
+          deviceId: parsed.deviceId.slice(0, 64),
+          deviceName: String(parsed.deviceName || defaultDeviceLabel()).slice(0, 60),
+          platform: String(parsed.platform || os.platform()).slice(0, 32)
+        };
+      }
+    }
+  } catch {}
+
+  const identity = {
+    deviceId: `dev_${crypto.randomBytes(6).toString('hex')}`,
+    deviceName: defaultDeviceLabel(),
+    platform: Boolean(process.env.PREFIX?.includes('com.termux')) ? 'android-termux' : os.platform(),
+    createdAt: trueNowIso()
+  };
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(DEVICE_IDENTITY_FILE, JSON.stringify(identity, null, 2), 'utf8');
+  } catch {}
+  return identity;
+}
+
+export function renameLocalDeviceIdentity(newName = '') {
+  const clean = String(newName || '').trim().slice(0, 60);
+  if (!clean) throw new Error('Informe um nome válido para este aparelho.');
+  const current = getOrCreateDeviceIdentity();
+  const updated = { ...current, deviceName: clean, updatedAt: trueNowIso() };
+  if (!IS_VERCEL) {
+    fs.writeFileSync(DEVICE_IDENTITY_FILE, JSON.stringify(updated, null, 2), 'utf8');
+  }
+  return updated;
+}
+
+function computeWorkspaceConfigHash(storeData = {}) {
+  try {
+    return JSON.stringify({
+      b: storeData.business || null,
+      s: storeData.settings || null,
+      cp: storeData.customPacks || null,
+      sh: storeData.simulatorHistory || null
+    });
+  } catch {
+    return '';
+  }
+}
 
 export function createAnonClient(accessToken = null) {
   const headers = {};
@@ -123,6 +203,138 @@ export function mapCloudRuntimeToWaState(rt = null, botEnabled = true) {
     workerHeartbeatAt: rt?.worker_heartbeat_at || null,
     workerPlatform: rt?.worker_platform || null,
     workerVersion: verMatch ? verMatch[1] : null
+  };
+}
+
+export function buildCloudMultiSlotWaState({
+  rtRow = null,
+  slotRows = [],
+  deviceRows = [],
+  settings = {},
+  maxWaSlots = 1
+} = {}) {
+  const botEnabled = settings?.botEnabled !== false;
+  const slotsCfg = normalizeWaSlotsSettings(settings?.waSlots);
+
+  const devices = (deviceRows || []).map((d) => {
+    const online = Boolean(d?.online) && isWorkerHeartbeatFresh(d?.heartbeat_at);
+    return {
+      deviceId: d.device_id,
+      deviceName: d.device_label || d.platform || 'Aparelho',
+      platform: d.platform || '',
+      appVersion: d.version || '',
+      activeSlots: Array.isArray(d.active_slots) ? d.active_slots : [],
+      online,
+      heartbeatAt: d.heartbeat_at || null
+    };
+  });
+  const deviceMap = new Map(devices.map((d) => [d.deviceId, d]));
+  const slotRowMap = new Map((slotRows || []).map((r) => [normalizeSlotId(r.slot_id), r]));
+
+  const slots = {};
+  for (const id of WA_SLOT_IDS) {
+    const cfg = slotsCfg[id];
+    const row = slotRowMap.get(id);
+    if (row) {
+      const dev = row.device_id ? deviceMap.get(row.device_id) : null;
+      // Considera online tanto pelo heartbeat do slot quanto pelo dispositivo vinculado
+      const slotOnline =
+        (Boolean(row.worker_online) && isWorkerHeartbeatFresh(row.worker_heartbeat_at)) ||
+        Boolean(dev?.online && row.status !== 'disconnected');
+      const mapped = mapCloudRuntimeToWaState(
+        {
+          ...row,
+          worker_online: slotOnline,
+          worker_heartbeat_at: row.worker_heartbeat_at || dev?.heartbeatAt || null
+        },
+        botEnabled
+      );
+      slots[id] = {
+        ...mapped,
+        slotId: id,
+        label: cfg.label,
+        aiEnabled: cfg.aiEnabled !== false,
+        deviceId: row.device_id || null,
+        deviceName: dev?.deviceName || row.device_label || null
+      };
+    } else if (id === 'slot_1' && rtRow) {
+      // Retrocompatibilidade 100% transparente caso o motor ainda esteja em v5.5.x antes do update!
+      const mapped = mapCloudRuntimeToWaState(rtRow, botEnabled);
+      slots[id] = {
+        ...mapped,
+        slotId: 'slot_1',
+        label: cfg.label,
+        aiEnabled: cfg.aiEnabled !== false,
+        deviceId: devices[0]?.deviceId || null,
+        deviceName: devices[0]?.deviceName || (rtRow.worker_platform ? rtRow.worker_platform.split('·')[0].trim() : null)
+      };
+    } else {
+      slots[id] = {
+        slotId: id,
+        label: cfg.label,
+        aiEnabled: cfg.aiEnabled !== false,
+        status: 'disconnected',
+        rawStatus: 'disconnected',
+        reconnecting: false,
+        qrDataUrl: null,
+        pairingCode: null,
+        connectedUser: null,
+        lastKnownUser: null,
+        lastError: null,
+        botEnabled,
+        deviceId: null,
+        deviceName: null,
+        workerOnline: devices.some((d) => d.online),
+        workerHeartbeatAt: null,
+        workerPlatform: null,
+        workerVersion: null
+      };
+    }
+  }
+
+  // Se slot_1 veio desconectado de zapia_wa_slots legado do backfill, mas zapia_wa_runtime está online num motor 5.5.9 em transição, prioriza o vivo!
+  if (slots.slot_1.status === 'disconnected' && rtRow) {
+    const legacyMapped = mapCloudRuntimeToWaState(rtRow, botEnabled);
+    if (legacyMapped.workerOnline && legacyMapped.status !== 'disconnected') {
+      slots.slot_1 = {
+        ...slots.slot_1,
+        ...legacyMapped
+      };
+    }
+  }
+
+  const onlineDevices = devices.filter((d) => d.online);
+  const anyWorkerOnline =
+    onlineDevices.length > 0 ||
+    WA_SLOT_IDS.some((id) => slots[id].workerOnline) ||
+    (Boolean(rtRow?.worker_online) && isWorkerHeartbeatFresh(rtRow?.worker_heartbeat_at));
+
+  const primarySlot =
+    slots.slot_1.status === 'connected'
+      ? slots.slot_1
+      : (WA_SLOT_IDS.map((id) => slots[id]).find((s) => s.status === 'connected') || slots.slot_1);
+
+  return {
+    ...primarySlot,
+    workerOnline: anyWorkerOnline,
+    workerPlatform: primarySlot.workerPlatform || onlineDevices[0]?.platform || rtRow?.worker_platform || null,
+    workerHeartbeatAt: primarySlot.workerHeartbeatAt || onlineDevices[0]?.heartbeatAt || rtRow?.worker_heartbeat_at || null,
+    proactive: rtRow?.proactive_state || primarySlot.proactive || {
+      running: false,
+      paused: false,
+      channelMode: 'auto_rotate',
+      remaining: 0,
+      sentSession: 0,
+      nextRunAt: null,
+      dailySent: 0,
+      dailyLimit: 25,
+      preview: []
+    },
+    connectedCount: WA_SLOT_IDS.filter((id) => slots[id].status === 'connected').length,
+    maxWaSlots: Math.max(1, Math.min(3, Number(maxWaSlots) || 1)),
+    slots,
+    devices,
+    onlineDevicesCount: onlineDevices.length
   };
 }
 
@@ -234,6 +446,7 @@ export async function signInWithUsernamePassword(usernameInput, password) {
       username: profile.username,
       displayName: profile.display_name || profile.username,
       role: profile.role || 'user',
+      maxWaSlots: clampMaxWaSlots(profile.max_wa_slots, profile.role),
       isActive: profile.is_active !== false
     }
   };
@@ -299,6 +512,7 @@ export async function refreshCloudSession(refreshToken) {
       username: profile?.username || normalizeUsername(data.user.email || ''),
       displayName: profile?.display_name || profile?.username || 'Usuário',
       role: profile?.role || 'user',
+      maxWaSlots: clampMaxWaSlots(profile?.max_wa_slots, profile?.role),
       isActive: profile?.is_active !== false
     }
   };
@@ -379,10 +593,12 @@ export async function loadTenantContextFromCloud(client, authUser, profile) {
   const uid = authUser.id;
   const isMaster = profile?.role === 'master';
 
-  const [wsRes, contactsRes, rtRes] = await Promise.all([
+  const [wsRes, contactsRes, rtRes, slotsRes, devicesRes] = await Promise.all([
     client.from('zapia_workspaces').select('*').eq('user_id', uid).maybeSingle(),
     client.from('zapia_contacts').select('chat_id, data').eq('user_id', uid).order('last_message_at', { ascending: false }).limit(2000),
-    client.from('zapia_wa_runtime').select('*').eq('user_id', uid).maybeSingle()
+    client.from('zapia_wa_runtime').select('*').eq('user_id', uid).maybeSingle(),
+    client.from('zapia_wa_slots').select('*').eq('user_id', uid),
+    client.from('zapia_worker_devices').select('*').eq('user_id', uid).order('heartbeat_at', { ascending: false })
   ]);
 
   let ws = wsRes.data;
@@ -428,46 +644,99 @@ export async function loadTenantContextFromCloud(client, authUser, profile) {
     fallbackClean: !isMaster
   });
 
+  const maxWaSlots = clampMaxWaSlots(profile?.max_wa_slots, profile?.role);
   tenantStore.cloudClient = client;
-  tenantStore.waRuntime = mapCloudRuntimeToWaState(rtRes.data, tenantStore.data.settings?.botEnabled !== false);
+  tenantStore.maxWaSlots = maxWaSlots;
+  tenantStore.waRuntime = buildCloudMultiSlotWaState({
+    rtRow: rtRes.data,
+    slotRows: slotsRes?.data || [],
+    deviceRows: devicesRes?.data || [],
+    settings: tenantStore.data.settings,
+    maxWaSlots
+  });
+  tenantStore.workerDevices = tenantStore.waRuntime.devices || [];
 
   tenantStore.flushCloud = async () => {
-    await flushTenantStoreToCloud(client, uid, tenantStore);
+    await flushTenantStoreToCloud(client, uid, tenantStore, { isWorkerSync: false });
   };
 
   return tenantStore;
 }
 
-export async function flushTenantStoreToCloud(client, userId, tenantStore) {
+export async function flushTenantStoreToCloud(client, userId, tenantStore, opts = {}) {
   if (!client || !userId || !tenantStore) return;
+  const isWorkerSync = Boolean(opts?.isWorkerSync);
 
-  // Detecta contatos deletados diretamente via `delete storage.data.contacts[id]`
-  const currentKeys = new Set(Object.keys(tenantStore.data.contacts || {}));
-  for (const prevKey of tenantStore.initialContactKeys || []) {
-    if (!currentKeys.has(prevKey)) {
-      tenantStore.deletedContactIds.add(prevKey);
+  // Apenas requests de API Web inferem deleção por ausência de chave no mapa completo;
+  // Em workers Multi-Dispositivo (Furo #3), NUNCA inferimos DELETE implícito para um aparelho não apagar conversas de outro!
+  if (!isWorkerSync) {
+    const currentKeys = new Set(Object.keys(tenantStore.data.contacts || {}));
+    for (const prevKey of tenantStore.initialContactKeys || []) {
+      if (!currentKeys.has(prevKey)) {
+        tenantStore.deletedContactIds.add(prevKey);
+      }
     }
   }
 
   const tasks = [];
 
   if (tenantStore.workspaceDirty) {
-    tasks.push(
-      client.from('zapia_workspaces').upsert(
-        {
-          user_id: userId,
-          business: tenantStore.data.business,
-          settings: tenantStore.data.settings,
-          stats: tenantStore.data.stats,
-          logs: (tenantStore.data.logs || []).slice(0, 150),
-          simulator_history: (tenantStore.data.simulatorHistory || []).slice(-60),
-          proactive_queue: Array.isArray(tenantStore.data.proactiveQueue) ? tenantStore.data.proactiveQueue : [],
-          custom_pack: tenantStore.data.customPacks || {},
-          updated_at: trueNowIso()
-        },
-        { onConflict: 'user_id' }
-      )
-    );
+    const currentConfigHash = computeWorkspaceConfigHash(tenantStore.data);
+    const onlyTelemetryChanged =
+      isWorkerSync &&
+      Boolean(opts?.lastConfigHash) &&
+      currentConfigHash === opts.lastConfigHash;
+
+    if (onlyTelemetryChanged) {
+      // Atualização parcial atômica via RPC (Furo #4): preserva 100% business/settings/custom_pack editados na Vercel!
+      tasks.push(
+        client
+          .rpc('update_zapia_workspace_telemetry', {
+            p_stats: tenantStore.data.stats || {},
+            p_logs: (tenantStore.data.logs || []).slice(0, 150),
+            p_proactive_queue: Array.isArray(tenantStore.data.proactiveQueue) ? tenantStore.data.proactiveQueue : []
+          })
+          .then(({ error }) => {
+            if (error) {
+              // Fallback seguro caso RPC oscile
+              return client.from('zapia_workspaces').upsert(
+                {
+                  user_id: userId,
+                  business: tenantStore.data.business,
+                  settings: tenantStore.data.settings,
+                  stats: tenantStore.data.stats,
+                  logs: (tenantStore.data.logs || []).slice(0, 150),
+                  simulator_history: (tenantStore.data.simulatorHistory || []).slice(-60),
+                  proactive_queue: Array.isArray(tenantStore.data.proactiveQueue) ? tenantStore.data.proactiveQueue : [],
+                  custom_pack: tenantStore.data.customPacks || {},
+                  updated_at: trueNowIso()
+                },
+                { onConflict: 'user_id' }
+              );
+            }
+          })
+      );
+    } else {
+      tasks.push(
+        client.from('zapia_workspaces').upsert(
+          {
+            user_id: userId,
+            business: tenantStore.data.business,
+            settings: tenantStore.data.settings,
+            stats: tenantStore.data.stats,
+            logs: (tenantStore.data.logs || []).slice(0, 150),
+            simulator_history: (tenantStore.data.simulatorHistory || []).slice(-60),
+            proactive_queue: Array.isArray(tenantStore.data.proactiveQueue) ? tenantStore.data.proactiveQueue : [],
+            custom_pack: tenantStore.data.customPacks || {},
+            updated_at: trueNowIso()
+          },
+          { onConflict: 'user_id' }
+        )
+      );
+      if (typeof opts?.onConfigFlushed === 'function') {
+        opts.onConfigFlushed(currentConfigHash);
+      }
+    }
     tenantStore.workspaceDirty = false;
   }
 
@@ -490,22 +759,26 @@ export async function flushTenantStoreToCloud(client, userId, tenantStore) {
     const dirtyIds = Array.from(tenantStore.dirtyContactIds);
     tenantStore.dirtyContactIds.clear();
 
-    // Proteção Anti-Sobrescrita Multi-Dispositivo (Vercel <-> Termux):
-    // Ao salvar poucos contatos (ex.: marcar como lido, pausar IA, etapa Kanban ou nota interna na Vercel),
-    // faz união (CRDT) das mensagens já salvas no Supabase para NUNCA apagar mensagens recém-enviadas pelo motor!
-    let remoteMap = new Map();
-    if (dirtyIds.length <= 15) {
-      try {
-        const { data: remoteRows } = await client
-          .from('zapia_contacts')
-          .select('chat_id, data')
-          .eq('user_id', userId)
-          .in('chat_id', dirtyIds);
-        if (Array.isArray(remoteRows)) {
-          remoteMap = new Map(remoteRows.map((r) => [r.chat_id, r.data]));
+    // Proteção Anti-Sobrescrita Multi-Dispositivo (Vercel <-> Termux <-> PC):
+    // Faz união CRDT em blocos de até 80 conversas sujas (sem o limite antigo de 15 conversas!)
+    const remoteMap = new Map();
+    if (dirtyIds.length <= 240) {
+      for (let i = 0; i < dirtyIds.length; i += 80) {
+        const chunkIds = dirtyIds.slice(i, i + 80);
+        try {
+          const { data: remoteRows } = await client
+            .from('zapia_contacts')
+            .select('chat_id, data')
+            .eq('user_id', userId)
+            .in('chat_id', chunkIds);
+          if (Array.isArray(remoteRows)) {
+            for (const r of remoteRows) {
+              remoteMap.set(r.chat_id, r.data);
+            }
+          }
+        } catch {
+          // Segue normalmente caso falhe leitura auxiliar
         }
-      } catch {
-        // Segue normalmente caso falhe leitura auxiliar
       }
     }
 
@@ -595,7 +868,7 @@ export async function ensureLocalMediaCached(filename, remoteUrl = '') {
   if (!targetUrl) return null;
 
   try {
-    const resp = await fetch(targetUrl);
+    const resp = await fetch(targetUrl, { signal: AbortSignal.timeout(25_000) });
     if (!resp.ok) return null;
     const arr = await resp.arrayBuffer();
     fs.writeFileSync(localPath, Buffer.from(arr));
@@ -607,17 +880,26 @@ export async function ensureLocalMediaCached(filename, remoteUrl = '') {
 }
 
 /**
- * Despacha um comando ao vivo da Vercel para o Motor WhatsApp (Termux / PC) daquela conta e aguarda conclusão.
+ * Despacha um comando ao vivo da Vercel para o Motor WhatsApp (Termux / PC) daquela conta,
+ * roteando automaticamente para o dispositivo dono do Chip (`slot_id` / `target_device_id`)
+ * e exigindo escolha explícita quando 2+ aparelhos estão online no pareamento de um novo Chip!
  */
-export async function dispatchCommandToWorker(client, userId, action, payload = {}, timeoutMs = 8800) {
-  const { data: rt } = await client
-    .from('zapia_wa_runtime')
-    .select('*')
-    .eq('user_id', userId)
-    .maybeSingle();
+export async function dispatchCommandToWorker(client, userId, action, payload = {}, timeoutMs = 8800, opts = {}) {
+  const [rtRes, slotsRes, devicesRes, userRes] = await Promise.all([
+    client.from('zapia_wa_runtime').select('*').eq('user_id', userId).maybeSingle(),
+    client.from('zapia_wa_slots').select('*').eq('user_id', userId),
+    client.from('zapia_worker_devices').select('*').eq('user_id', userId),
+    client.from('zapia_users').select('role, max_wa_slots').eq('user_id', userId).maybeSingle()
+  ]);
 
-  const online = Boolean(rt?.worker_online) && isWorkerHeartbeatFresh(rt?.worker_heartbeat_at);
-  if (!online) {
+  const rt = rtRes.data;
+  const slotRows = slotsRes.data || [];
+  const onlineDevices = (devicesRes.data || []).filter(
+    (d) => Boolean(d?.online) && isWorkerHeartbeatFresh(d?.heartbeat_at)
+  );
+  const legacyOnline = Boolean(rt?.worker_online) && isWorkerHeartbeatFresh(rt?.worker_heartbeat_at);
+
+  if (onlineDevices.length === 0 && !legacyOnline) {
     const err = new Error(
       'Seu Motor WhatsApp (Termux no celular ou PC) está offline no momento. Inicie o motor na sua conta para conectar o WhatsApp ou disparar mensagens ao vivo.'
     );
@@ -626,13 +908,78 @@ export async function dispatchCommandToWorker(client, userId, action, payload = 
     throw err;
   }
 
-  const startedAtIso = new Date().toISOString();
+  // Determina qual slot (slot_1, slot_2, slot_3) este comando atinge
+  let resolvedSlotId = null;
+  if (opts?.slotId || payload?.slotId) {
+    resolvedSlotId = normalizeSlotId(opts?.slotId || payload?.slotId);
+  } else if (payload?.chatId || payload?.targetChatId) {
+    resolvedSlotId = parseContactChannelKey(payload.chatId || payload.targetChatId).slotId;
+  } else if (payload?.channelMode && WA_SLOT_IDS.includes(payload.channelMode)) {
+    resolvedSlotId = payload.channelMode;
+  } else if (action === 'wa_connect' || action === 'wa_disconnect') {
+    resolvedSlotId = 'slot_1';
+  }
+
+  // Validação Server-Side da Cota SaaS de Chips por Cliente (Furo #12)
+  if (action === 'wa_connect' && resolvedSlotId) {
+    const maxSlots = clampMaxWaSlots(userRes.data?.max_wa_slots, userRes.data?.role);
+    const slotNum = Number(resolvedSlotId.slice(-1)) || 1;
+    if (slotNum > maxSlots) {
+      const quotaErr = new Error(
+        `Seu plano atual permite até ${maxSlots} número(s) de WhatsApp conectado(s). Solicite ao administrador a liberação do Chip ${slotNum}.`
+      );
+      quotaErr.statusCode = 403;
+      throw quotaErr;
+    }
+  }
+
+  // Roteamento Inteligente por Dispositivo:
+  // 1) Se veio targetDeviceId explícito -> respeita.
+  // 2) Se o slot já pertence a um dispositivo online -> envia direto para ele.
+  // 3) Se for novo pareamento (wa_connect) e houver 2+ dispositivos online sem targetDeviceId -> pede escolha na UI!
+  // 4) Se houver exatamente 1 dispositivo online -> roteia automaticamente para ele sem burocracia!
+  let resolvedTargetDeviceId = opts?.targetDeviceId || payload?.targetDeviceId || null;
+  const existingSlotRow = resolvedSlotId
+    ? slotRows.find((s) => normalizeSlotId(s.slot_id) === resolvedSlotId)
+    : null;
+  const slotOwnerDevice = existingSlotRow?.device_id
+    ? onlineDevices.find((d) => d.device_id === existingSlotRow.device_id)
+    : null;
+
+  if (!resolvedTargetDeviceId && slotOwnerDevice && (existingSlotRow.status !== 'disconnected' || action !== 'wa_connect')) {
+    resolvedTargetDeviceId = slotOwnerDevice.device_id;
+  }
+
+  if (!resolvedTargetDeviceId && action === 'wa_connect' && onlineDevices.length > 1) {
+    return {
+      ok: true,
+      requiresDeviceChoice: true,
+      slotId: resolvedSlotId || 'slot_1',
+      devices: onlineDevices.map((d) => ({
+        deviceId: d.device_id,
+        deviceName: d.device_label || d.platform || 'Aparelho Online',
+        platform: d.platform || '',
+        appVersion: d.version || '',
+        activeSlots: Array.isArray(d.active_slots) ? d.active_slots : []
+      })),
+      message: 'Detectamos mais de um aparelho online nesta conta. Escolha em qual aparelho deseja conectar este Chip.'
+    };
+  }
+
+  if (!resolvedTargetDeviceId && onlineDevices.length === 1) {
+    resolvedTargetDeviceId = onlineDevices[0].device_id;
+  }
+
+  const startedAtIso = trueNowIso();
+  const cmdPayload = resolvedSlotId ? { ...payload, slotId: resolvedSlotId } : payload;
   const { data: cmd, error: insErr } = await client
     .from('zapia_commands')
     .insert({
       user_id: userId,
       action,
-      payload,
+      slot_id: resolvedSlotId,
+      target_device_id: resolvedTargetDeviceId,
+      payload: cmdPayload,
       status: 'pending'
     })
     .select('*')
@@ -658,19 +1005,50 @@ export async function dispatchCommandToWorker(client, userId, action, payload = 
       throw new Error(row.error_text || 'Falha ao executar ação no Motor WhatsApp.');
     }
 
-    // Para conexão de QR Code / Código de 8 dígitos, retorna assim que o código já tiver aparecido no runtime
+    // Para conexão de QR Code / Código de 8 dígitos em qualquer Chip (1, 2 ou 3), retorna assim que o código surgir!
     if (action === 'wa_connect') {
-      const { data: freshRt } = await client
-        .from('zapia_wa_runtime')
+      const targetSlot = resolvedSlotId || 'slot_1';
+      const { data: freshSlot } = await client
+        .from('zapia_wa_slots')
         .select('*')
         .eq('user_id', userId)
+        .eq('slot_id', targetSlot)
         .maybeSingle();
-      if (freshRt && freshRt.updated_at > startedAtIso) {
-        if (payload?.pairingPhone && freshRt.pairing_code) {
-          return { ok: true, pairingCode: freshRt.pairing_code, waState: mapCloudRuntimeToWaState(freshRt) };
+
+      const candidate = freshSlot && freshSlot.updated_at >= startedAtIso ? freshSlot : null;
+      if (candidate) {
+        if (payload?.pairingPhone && candidate.pairing_code) {
+          return {
+            ok: true,
+            slotId: targetSlot,
+            pairingCode: candidate.pairing_code,
+            slotState: mapCloudRuntimeToWaState(candidate)
+          };
         }
-        if (!payload?.pairingPhone && (freshRt.qr_data_url || freshRt.status === 'connected')) {
-          return { ok: true, qrDataUrl: freshRt.qr_data_url, waState: mapCloudRuntimeToWaState(freshRt) };
+        if (!payload?.pairingPhone && (candidate.qr_data_url || candidate.status === 'connected')) {
+          return {
+            ok: true,
+            slotId: targetSlot,
+            qrDataUrl: candidate.qr_data_url,
+            slotState: mapCloudRuntimeToWaState(candidate)
+          };
+        }
+      }
+
+      // Fallback para motor 5.5.x em slot_1 antes do auto-update
+      if (targetSlot === 'slot_1') {
+        const { data: freshRt } = await client
+          .from('zapia_wa_runtime')
+          .select('*')
+          .eq('user_id', userId)
+          .maybeSingle();
+        if (freshRt && freshRt.updated_at >= startedAtIso) {
+          if (payload?.pairingPhone && freshRt.pairing_code) {
+            return { ok: true, slotId: 'slot_1', pairingCode: freshRt.pairing_code, waState: mapCloudRuntimeToWaState(freshRt) };
+          }
+          if (!payload?.pairingPhone && (freshRt.qr_data_url || freshRt.status === 'connected')) {
+            return { ok: true, slotId: 'slot_1', qrDataUrl: freshRt.qr_data_url, waState: mapCloudRuntimeToWaState(freshRt) };
+          }
         }
       }
     }
@@ -679,6 +1057,8 @@ export async function dispatchCommandToWorker(client, userId, action, payload = 
   return {
     ok: true,
     queued: true,
+    slotId: resolvedSlotId,
+    targetDeviceId: resolvedTargetDeviceId,
     message: 'Comando enviado ao Motor WhatsApp e em processamento.'
   };
 }
@@ -689,9 +1069,11 @@ export async function dispatchCommandToWorker(client, userId, action, payload = 
 
 export async function listManagedUsers() {
   const admin = getAdminClient();
-  const [usersRes, rtRes, contactsRes, wsRes] = await Promise.all([
+  const [usersRes, rtRes, slotsRes, devicesRes, contactsRes, wsRes] = await Promise.all([
     admin.from('zapia_users').select('*').order('created_at', { ascending: true }),
     admin.from('zapia_wa_runtime').select('user_id, status, connected_user, worker_online, worker_heartbeat_at, worker_platform'),
+    admin.from('zapia_wa_slots').select('user_id, slot_id, device_id, device_label, status, connected_user, worker_online, worker_heartbeat_at'),
+    admin.from('zapia_worker_devices').select('user_id, device_id, device_label, platform, version, online, heartbeat_at'),
     admin.from('zapia_contacts').select('user_id, data'),
     admin.from('zapia_workspaces').select('user_id, business, settings, stats, updated_at')
   ]);
@@ -700,6 +1082,18 @@ export async function listManagedUsers() {
 
   const rtMap = new Map((rtRes.data || []).map((r) => [r.user_id, r]));
   const wsMap = new Map((wsRes.data || []).map((w) => [w.user_id, w]));
+  const slotsByUser = new Map();
+  for (const s of slotsRes.data || []) {
+    const arr = slotsByUser.get(s.user_id) || [];
+    arr.push(s);
+    slotsByUser.set(s.user_id, arr);
+  }
+  const devicesByUser = new Map();
+  for (const d of devicesRes.data || []) {
+    const arr = devicesByUser.get(d.user_id) || [];
+    arr.push(d);
+    devicesByUser.set(d.user_id, arr);
+  }
   const contactStats = new Map();
 
   for (const c of contactsRes.data || []) {
@@ -716,9 +1110,17 @@ export async function listManagedUsers() {
   return (usersRes.data || []).map((u) => {
     const rt = rtMap.get(u.user_id);
     const ws = wsMap.get(u.user_id);
+    const maxWaSlots = clampMaxWaSlots(u.max_wa_slots, u.role);
+    const multiWa = buildCloudMultiSlotWaState({
+      rtRow: rt,
+      slotRows: slotsByUser.get(u.user_id) || [],
+      deviceRows: devicesByUser.get(u.user_id) || [],
+      settings: ws?.settings || {},
+      maxWaSlots
+    });
     const cStat = contactStats.get(u.user_id) || { total: 0, awaitingHuman: 0, unread: 0, messages: 0 };
-    const workerOnline = Boolean(rt?.worker_online) && isWorkerHeartbeatFresh(rt?.worker_heartbeat_at);
-    const waConnected = workerOnline && rt?.status === 'connected';
+    const workerOnline = Boolean(multiWa.workerOnline);
+    const waConnected = multiWa.connectedCount > 0;
 
     const ai = ws?.settings?.ai || {};
     const hasAiKey = Boolean(
@@ -748,6 +1150,10 @@ export async function listManagedUsers() {
       whatsapp: waConnected
     };
     const setupScore = Object.values(setupSteps).filter(Boolean).length;
+    const connectedPhones = WA_SLOT_IDS
+      .map((id) => multiWa.slots[id])
+      .filter((s) => s.status === 'connected' && s.connectedUser?.phone)
+      .map((s) => s.connectedUser.phone);
 
     return {
       userId: u.user_id,
@@ -756,6 +1162,10 @@ export async function listManagedUsers() {
       customerPhone: u.customer_phone || '',
       adminNotes: u.admin_notes || '',
       role: u.role || 'user',
+      maxWaSlots,
+      connectedSlotsCount: multiWa.connectedCount,
+      connectedPhones,
+      onlineDevicesCount: multiWa.onlineDevicesCount,
       isActive: u.is_active !== false,
       createdAt: u.created_at,
       lastSeenAt: u.last_seen_at,
@@ -774,16 +1184,23 @@ export async function listManagedUsers() {
       totalMessagesCount: cStat.messages,
       totalAiReplies: Number(ws?.stats?.totalAiReplies) || 0,
       workerOnline,
-      workerPlatform: rt?.worker_platform || null,
-      waStatus: workerOnline ? (rt?.status || 'disconnected') : 'offline',
-      connectedPhone: rt?.connected_user?.id
+      workerPlatform: multiWa.workerPlatform || rt?.worker_platform || null,
+      waStatus: workerOnline ? (multiWa.status || 'disconnected') : 'offline',
+      connectedPhone: connectedPhones[0] || (rt?.connected_user?.id
         ? String(rt.connected_user.id).split(':')[0].split('@')[0]
-        : (rt?.connected_user?.phone || null)
+        : (rt?.connected_user?.phone || null))
     };
   });
 }
 
-export async function createManagedUser({ username, password, displayName, customerPhone = '', adminNotes = '' }) {
+export async function createManagedUser({
+  username,
+  password,
+  displayName,
+  customerPhone = '',
+  adminNotes = '',
+  maxWaSlots = 1
+}) {
   const admin = getAdminClient();
   const cleanUsername = normalizeUsername(username);
   if (!cleanUsername || cleanUsername.length < 3) {
@@ -807,6 +1224,7 @@ export async function createManagedUser({ username, password, displayName, custo
   const cleanDisplay = String(displayName || cleanUsername).trim();
   const cleanPhone = String(customerPhone || '').replace(/\D/g, '');
   const cleanNotes = String(adminNotes || '').trim();
+  const cleanMaxSlots = clampMaxWaSlots(maxWaSlots, 'user');
 
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
     email,
@@ -835,6 +1253,7 @@ export async function createManagedUser({ username, password, displayName, custo
       customer_phone: cleanPhone,
       admin_notes: cleanNotes,
       role: 'user',
+      max_wa_slots: cleanMaxSlots,
       is_active: true
     }, { onConflict: 'user_id' }),
     admin.from('zapia_workspaces').upsert({
@@ -869,11 +1288,15 @@ export async function createManagedUser({ username, password, displayName, custo
     customerPhone: cleanPhone,
     adminNotes: cleanNotes,
     role: 'user',
+    maxWaSlots: cleanMaxSlots,
     isActive: true
   };
 }
 
-export async function updateManagedUser(targetUserId, { password, displayName, isActive, customerPhone, adminNotes } = {}) {
+export async function updateManagedUser(
+  targetUserId,
+  { password, displayName, isActive, customerPhone, adminNotes, maxWaSlots } = {}
+) {
   const admin = getAdminClient();
   const { data: target } = await admin
     .from('zapia_users')
@@ -910,6 +1333,7 @@ export async function updateManagedUser(targetUserId, { password, displayName, i
   if (typeof isActive === 'boolean') dbPatch.is_active = isActive;
   if (customerPhone !== undefined) dbPatch.customer_phone = String(customerPhone || '').replace(/\D/g, '');
   if (adminNotes !== undefined) dbPatch.admin_notes = String(adminNotes || '').trim();
+  if (maxWaSlots !== undefined) dbPatch.max_wa_slots = clampMaxWaSlots(maxWaSlots, target.role);
 
   if (Object.keys(dbPatch).length > 0) {
     const { error: dbErr } = await admin.from('zapia_users').update(dbPatch).eq('user_id', targetUserId);
@@ -1002,6 +1426,7 @@ class FileSessionStorage {
 class CloudWorkerBridge {
   constructor() {
     this.sessionStore = new FileSessionStorage(CLOUD_SESSION_FILE);
+    this.deviceIdentity = getOrCreateDeviceIdentity();
     this.client = null;
     this.user = null;
     this.whatsappManager = null;
@@ -1013,6 +1438,8 @@ class CloudWorkerBridge {
     this.processingCommands = new Set();
     this.lastSyncedWorkspaceIso = '';
     this.lastSyncedContactsIso = '';
+    this.lastSyncedConfigHash = '';
+    this.peerSlotOwners = new Map(); // slot_id -> { deviceId, online, status, phone }
     this.syncInFlight = false;
     this.pendingFlush = false;
   }
@@ -1028,6 +1455,31 @@ class CloudWorkerBridge {
       });
     }
 
+    // Relay Multi-Dispositivo (Furo #7): se este aparelho gerar um alerta de fechamento no Chip 2/3,
+    // mas o Chip 1 Principal estiver conectado em OUTRO aparelho online da mesma conta, repassa via nuvem para sair pelo Chip 1!
+    if (whatsappManager?.setRemoteOwnerAlertRelay) {
+      whatsappManager.setRemoteOwnerAlertRelay(async ({ ownerPhoneDigits, alertText }) => {
+        if (!this.client || !this.user?.id) return false;
+        const slot1Peer = this.peerSlotOwners.get('slot_1');
+        if (!slot1Peer || !slot1Peer.online || slot1Peer.status !== 'connected' || slot1Peer.deviceId === this.deviceIdentity.deviceId) {
+          return false;
+        }
+        try {
+          const out = await dispatchCommandToWorker(
+            this.client,
+            this.user.id,
+            'relay_owner_alert',
+            { ownerPhoneDigits, alertText },
+            6000,
+            { slotId: 'slot_1', targetDeviceId: slot1Peer.deviceId }
+          );
+          return Boolean(out?.ok && !out?.queued);
+        } catch {
+          return false;
+        }
+      });
+    }
+
     // Toda mutação local (nova msg WhatsApp, estágio CRM, estatística) agenda sync imediato para o Supabase
     localStorageInstance.onMutate = () => {
       this.scheduleLocalToCloudSync();
@@ -1035,10 +1487,13 @@ class CloudWorkerBridge {
   }
 
   getStatus() {
+    this.deviceIdentity = getOrCreateDeviceIdentity();
     return {
       configured: isCloudConfigured(),
       loggedIn: Boolean(this.user?.id),
       user: this.user || null,
+      deviceId: this.deviceIdentity.deviceId,
+      deviceName: this.deviceIdentity.deviceName,
       platform: detectWorkerPlatformLabel()
     };
   }
@@ -1232,35 +1687,33 @@ class CloudWorkerBridge {
       return false;
     }
 
+    const maxWaSlots = clampMaxWaSlots(profile?.max_wa_slots, profile?.role);
     this.user = {
       id: authUser.id,
       username: profile?.username || normalizeUsername(authUser.email || ''),
       displayName: profile?.display_name || profile?.username || 'Usuário',
       role: profile?.role || 'user',
+      maxWaSlots,
       isActive: true
     };
 
     localStorageInstance.userId = this.user.id;
     localStorageInstance.username = this.user.username;
     localStorageInstance.userRole = this.user.role;
+    localStorageInstance.maxWaSlots = maxWaSlots;
 
-    // 1. Configura pasta isolada de autenticação Baileys para esta conta
-    const userAuthDir = this.ensurePerUserWhatsAppAuthDir(this.user.id, this.user.role);
+    // 1. Configura pastas isoladas de autenticação Baileys para os até 3 Chips desta conta
+    this.ensurePerUserWhatsAppAuthDir(this.user.id, this.user.role);
 
     // 2. Puxa os dados atuais dessa conta na nuvem (para que o celular/PC rode exatamente o cérebro desta conta!)
     await this.pullCloudIntoLocal(true);
 
-    // 3. Inicia Heartbeat, Realtime de Comandos e Auto-Restore do WhatsApp desta conta
+    // 3. Inicia Heartbeat Multi-Dispositivo, Realtime de Comandos e Auto-Restore de todos os Chips salvos neste aparelho
     this.startBackgroundLoops();
-    await this.pushRuntimeHeartbeat();
-
-    if (this.whatsappManager && fs.existsSync(path.join(userAuthDir, 'creds.json'))) {
-      if (this.whatsappManager.status !== 'connected' && this.whatsappManager.status !== 'connecting') {
-        this.whatsappManager.connect(null).catch((e) => {
-          console.error('[CloudWorker] Erro ao restaurar WhatsApp da conta:', e.message);
-        });
-      }
+    if (this.whatsappManager?.autoRestoreIfSessionExists) {
+      await this.whatsappManager.autoRestoreIfSessionExists(maxWaSlots);
     }
+    await this.pushRuntimeHeartbeat();
 
     if (this.broadcastFn) {
       this.broadcastFn('cloud_auth', this.getStatus());
@@ -1277,13 +1730,7 @@ class CloudWorkerBridge {
     }
     if (this.client && this.user?.id) {
       try {
-        await this.client
-          .from('zapia_wa_runtime')
-          .update({
-            worker_online: false,
-            updated_at: trueNowIso()
-          })
-          .eq('user_id', this.user.id);
+        await this.markDeviceAndOwnedSlotsOffline();
         await this.client.auth.signOut();
       } catch {}
     }
@@ -1294,18 +1741,45 @@ class CloudWorkerBridge {
     }
   }
 
+  async markDeviceAndOwnedSlotsOffline() {
+    if (!this.client || !this.user?.id) return;
+    const nowIso = trueNowIso();
+    const myDevId = this.deviceIdentity.deviceId;
+    await Promise.all([
+      this.client
+        .from('zapia_worker_devices')
+        .update({ online: false, updated_at: nowIso })
+        .eq('user_id', this.user.id)
+        .eq('device_id', myDevId),
+      this.client
+        .from('zapia_wa_slots')
+        .update({ worker_online: false, updated_at: nowIso })
+        .eq('user_id', this.user.id)
+        .eq('device_id', myDevId)
+    ]);
+
+    // Só marca zapia_wa_runtime legado como offline se NENHUM outro aparelho da conta continuar online!
+    const { data: otherDevs } = await this.client
+      .from('zapia_worker_devices')
+      .select('device_id, online, heartbeat_at')
+      .eq('user_id', this.user.id);
+    const stillOnline = (otherDevs || []).some(
+      (d) => d.device_id !== myDevId && Boolean(d.online) && isWorkerHeartbeatFresh(d.heartbeat_at)
+    );
+    if (!stillOnline) {
+      await this.client
+        .from('zapia_wa_runtime')
+        .update({ worker_online: false, updated_at: nowIso })
+        .eq('user_id', this.user.id);
+    }
+  }
+
   async markWorkerOfflineNow() {
     this.stopBackgroundLoops();
     if (!this.client || !this.user?.id) return;
     try {
       await this.flushLocalToCloud().catch(() => {});
-      await this.client
-        .from('zapia_wa_runtime')
-        .update({
-          worker_online: false,
-          updated_at: trueNowIso()
-        })
-        .eq('user_id', this.user.id);
+      await this.markDeviceAndOwnedSlotsOffline();
     } catch {}
   }
 
@@ -1430,6 +1904,7 @@ class CloudWorkerBridge {
           }
           localStorageInstance.writeNow();
           localStorageInstance.workspaceDirty = false;
+          this.lastSyncedConfigHash = computeWorkspaceConfigHash(localStorageInstance.data);
         } finally {
           localStorageInstance.onMutate = prevMutate;
         }
@@ -1546,7 +2021,13 @@ class CloudWorkerBridge {
             }
           }
 
-          await flushTenantStoreToCloud(this.client, this.user.id, localStorageInstance);
+          await flushTenantStoreToCloud(this.client, this.user.id, localStorageInstance, {
+            isWorkerSync: true,
+            lastConfigHash: this.lastSyncedConfigHash,
+            onConfigFlushed: (nextHash) => {
+              this.lastSyncedConfigHash = nextHash;
+            }
+          });
         } while (this.pendingFlush);
       } finally {
         this.syncInFlight = false;
@@ -1560,23 +2041,139 @@ class CloudWorkerBridge {
   async pushRuntimeHeartbeat() {
     if (!this.client || !this.user?.id || !this.whatsappManager) return;
     try {
+      this.deviceIdentity = getOrCreateDeviceIdentity();
+      const myDevId = this.deviceIdentity.deviceId;
+      const platformLabel = detectWorkerPlatformLabel();
+      const nowIso = trueNowIso();
       const st = this.whatsappManager.getPublicState();
-      await this.client.from('zapia_wa_runtime').upsert(
-        {
-          user_id: this.user.id,
-          status: st.status || 'disconnected',
-          qr_data_url: st.qrDataUrl || '',
-          pairing_code: st.pairingCode || '',
-          connected_user: st.connectedUser || null,
-          last_error: st.lastError || '',
-          proactive_state: st.proactive || { queueLength: 0, paused: false, processing: false },
-          worker_online: true,
-          worker_heartbeat_at: trueNowIso(),
-          worker_platform: detectWorkerPlatformLabel(),
-          updated_at: trueNowIso()
-        },
-        { onConflict: 'user_id' }
-      );
+      const localActiveSlots = this.whatsappManager.getActiveLocalSlotIds
+        ? this.whatsappManager.getActiveLocalSlotIds()
+        : (st.status !== 'disconnected' ? ['slot_1'] : []);
+
+      // 1. Registra/atualiza este aparelho em zapia_worker_devices e lê estado atual dos slots da conta
+      const [, slotsRes] = await Promise.all([
+        this.client.from('zapia_worker_devices').upsert(
+          {
+            user_id: this.user.id,
+            device_id: myDevId,
+            device_label: this.deviceIdentity.deviceName,
+            platform: platformLabel,
+            version: APP_VERSION,
+            active_slots: localActiveSlots,
+            online: true,
+            heartbeat_at: nowIso,
+            updated_at: nowIso
+          },
+          { onConflict: 'user_id,device_id' }
+        ),
+        this.client.from('zapia_wa_slots').select('*').eq('user_id', this.user.id)
+      ]);
+
+      const remoteSlotsMap = new Map((slotsRes.data || []).map((r) => [normalizeSlotId(r.slot_id), r]));
+      const peerPhones = [];
+      this.peerSlotOwners.clear();
+
+      for (const [sid, row] of remoteSlotsMap.entries()) {
+        const peerOnline = Boolean(row.worker_online) && isWorkerHeartbeatFresh(row.worker_heartbeat_at);
+        if (row.device_id && row.device_id !== myDevId) {
+          this.peerSlotOwners.set(sid, {
+            deviceId: row.device_id,
+            online: peerOnline,
+            status: row.status || 'disconnected',
+            phone: row.connected_user?.phone || ''
+          });
+          if (peerOnline && row.status === 'connected' && row.connected_user?.phone) {
+            peerPhones.push(row.connected_user.phone);
+          }
+        }
+      }
+      if (this.whatsappManager.setCloudPeerSlotPhones) {
+        this.whatsappManager.setCloudPeerSlotPhones(peerPhones);
+      }
+
+      // 2. Atualiza apenas os slots pertencentes a este aparelho (ou livres sem outro aparelho ativo), evitando Furo #2!
+      const slotUpserts = [];
+      for (const sid of WA_SLOT_IDS) {
+        const localSlot = st.slots?.[sid];
+        if (!localSlot) continue;
+        const remoteRow = remoteSlotsMap.get(sid);
+        const ownedByOtherOnlineDevice =
+          remoteRow?.device_id &&
+          remoteRow.device_id !== myDevId &&
+          Boolean(remoteRow.worker_online) &&
+          isWorkerHeartbeatFresh(remoteRow.worker_heartbeat_at) &&
+          remoteRow.status !== 'disconnected';
+
+        const locallyActive =
+          localSlot.status !== 'disconnected' ||
+          Boolean(localSlot.lastError) ||
+          this.whatsappManager.hasSavedSession?.(sid) ||
+          remoteRow?.device_id === myDevId;
+
+        if (locallyActive && !ownedByOtherOnlineDevice) {
+          slotUpserts.push({
+            user_id: this.user.id,
+            slot_id: sid,
+            device_id: localSlot.status === 'disconnected' && !this.whatsappManager.hasSavedSession?.(sid) ? null : myDevId,
+            device_label: this.deviceIdentity.deviceName,
+            label: localSlot.label || `Chip ${sid.slice(-1)}`,
+            ai_enabled: localSlot.aiEnabled !== false,
+            status: localSlot.status || 'disconnected',
+            qr_data_url: localSlot.qrDataUrl || '',
+            pairing_code: localSlot.pairingCode || '',
+            connected_user: localSlot.connectedUser || null,
+            last_error: localSlot.lastError || '',
+            worker_online: true,
+            worker_heartbeat_at: nowIso,
+            updated_at: nowIso
+          });
+        } else if (!remoteRow && sid === 'slot_1') {
+          slotUpserts.push({
+            user_id: this.user.id,
+            slot_id: 'slot_1',
+            device_id: myDevId,
+            device_label: this.deviceIdentity.deviceName,
+            label: localSlot.label || 'Chip 1',
+            ai_enabled: localSlot.aiEnabled !== false,
+            status: localSlot.status || 'disconnected',
+            qr_data_url: localSlot.qrDataUrl || '',
+            pairing_code: localSlot.pairingCode || '',
+            connected_user: localSlot.connectedUser || null,
+            last_error: localSlot.lastError || '',
+            worker_online: true,
+            worker_heartbeat_at: nowIso,
+            updated_at: nowIso
+          });
+        }
+      }
+
+      if (slotUpserts.length > 0) {
+        await this.client.from('zapia_wa_slots').upsert(slotUpserts, { onConflict: 'user_id,slot_id' });
+      }
+
+      // 3. Espelha zapia_wa_runtime legado APENAS se o slot_1 não estiver ativo em outro aparelho (evita Furo #2!)
+      const otherOwnsSlot1 =
+        this.peerSlotOwners.get('slot_1')?.online &&
+        this.peerSlotOwners.get('slot_1')?.status !== 'disconnected';
+
+      if (!otherOwnsSlot1) {
+        await this.client.from('zapia_wa_runtime').upsert(
+          {
+            user_id: this.user.id,
+            status: st.status || 'disconnected',
+            qr_data_url: st.qrDataUrl || '',
+            pairing_code: st.pairingCode || '',
+            connected_user: st.connectedUser || null,
+            last_error: st.lastError || '',
+            proactive_state: st.proactive || { queueLength: 0, paused: false, processing: false },
+            worker_online: true,
+            worker_heartbeat_at: nowIso,
+            worker_platform: platformLabel,
+            updated_at: nowIso
+          },
+          { onConflict: 'user_id' }
+        );
+      }
     } catch (err) {
       console.error('[CloudWorker] Erro no heartbeat:', err.message);
     }
@@ -1669,9 +2266,48 @@ class CloudWorkerBridge {
         .from('zapia_commands')
         .delete()
         .eq('user_id', this.user.id)
-        .in('status', ['done', 'failed'])
+        .in('status', ['done', 'error'])
         .lt('created_at', cutoffIso);
     } catch {}
+  }
+
+  shouldThisDeviceExecuteCommand(row) {
+    const myDevId = this.deviceIdentity.deviceId;
+    if (row.target_device_id && row.target_device_id !== myDevId) {
+      return false;
+    }
+    if (!row.target_device_id && row.slot_id) {
+      const sid = normalizeSlotId(row.slot_id);
+      const localSlot = this.whatsappManager?.getSlot?.(sid);
+      const localHasSlot =
+        localSlot &&
+        (localSlot.status === 'connected' ||
+          localSlot.status === 'connecting' ||
+          localSlot.status === 'qr_ready' ||
+          localSlot.hasSavedSession());
+      if (!localHasSlot) {
+        const peer = this.peerSlotOwners.get(sid);
+        if (peer?.online && peer.status !== 'disconnected') {
+          return false;
+        }
+      }
+    }
+    // Se for comando genérico (ex: send_proactive em auto_rotate) sem slot fixo e este aparelho não tiver nenhum chip conectado,
+    // mas outro aparelho tiver chip conectado, deixa o aparelho conectado reivindicar!
+    if (
+      !row.target_device_id &&
+      !row.slot_id &&
+      (row.action === 'send_proactive' || row.action === 'queue_start' || row.action === 'wa_test_owner_alert')
+    ) {
+      const localConnected = this.whatsappManager?.getConnectedSlots?.()?.length || 0;
+      const anyPeerConnected = Array.from(this.peerSlotOwners.values()).some(
+        (p) => p.online && p.status === 'connected'
+      );
+      if (localConnected === 0 && anyPeerConnected) {
+        return false;
+      }
+    }
+    return true;
   }
 
   stopBackgroundLoops() {
@@ -1708,37 +2344,103 @@ class CloudWorkerBridge {
 
   async executeCommandRow(row) {
     if (!row?.id || this.processingCommands.has(row.id) || !this.whatsappManager) return;
+    if (!this.shouldThisDeviceExecuteCommand(row)) return;
     this.processingCommands.add(row.id);
 
     try {
-      await this.client
-        .from('zapia_commands')
-        .update({ status: 'processing' })
-        .eq('id', row.id);
+      // Reivindicação Atômica (Furo #1 — SELECT FOR UPDATE SKIP LOCKED no PostgreSQL):
+      // Garante que apenas 1 aparelho execute o comando mesmo com 2+ dispositivos online!
+      const { data: claimedRows, error: claimErr } = await this.client.rpc('claim_zapia_command', {
+        p_command_id: row.id,
+        p_device_id: this.deviceIdentity.deviceId
+      });
+      if (claimErr || !Array.isArray(claimedRows) || claimedRows.length === 0) {
+        return;
+      }
 
       const p = row.payload || {};
+      const targetSlotId = normalizeSlotId(row.slot_id || p.slotId || 'slot_1');
       let result = { ok: true };
 
       switch (row.action) {
         case 'wa_connect': {
-          const st = await this.whatsappManager.connect(p.pairingPhone || null);
+          // Validação dupla da cota máxima de Chips por cliente (Furo #12)
+          const { data: uRow } = await this.client
+            .from('zapia_users')
+            .select('role, max_wa_slots')
+            .eq('user_id', this.user.id)
+            .maybeSingle();
+          const maxSlots = clampMaxWaSlots(uRow?.max_wa_slots ?? this.user?.maxWaSlots, uRow?.role || this.user?.role);
+          const slotNum = Number(targetSlotId.slice(-1)) || 1;
+          if (slotNum > maxSlots) {
+            throw new Error(`Plano limitado a ${maxSlots} Chip(s) WhatsApp.`);
+          }
+          const st = await this.whatsappManager.connect(p.pairingPhone || null, targetSlotId);
           await this.pushRuntimeHeartbeat();
-          result = { ok: true, waState: st };
+          result = {
+            ok: true,
+            slotId: targetSlotId,
+            slotState: st.slots?.[targetSlotId] || st,
+            waState: st
+          };
           break;
         }
         case 'wa_disconnect': {
-          const st = await this.whatsappManager.disconnect(p.clearSession !== false);
+          const st = await this.whatsappManager.disconnect(p.clearSession !== false, targetSlotId);
+          if (p.clearSession !== false && this.client && this.user?.id) {
+            await this.client
+              .from('zapia_wa_slots')
+              .upsert(
+                {
+                  user_id: this.user.id,
+                  slot_id: targetSlotId,
+                  device_id: null,
+                  device_label: '',
+                  status: 'disconnected',
+                  qr_data_url: '',
+                  pairing_code: '',
+                  connected_user: null,
+                  last_error: '',
+                  worker_online: true,
+                  worker_heartbeat_at: trueNowIso(),
+                  updated_at: trueNowIso()
+                },
+                { onConflict: 'user_id,slot_id' }
+              );
+          }
           await this.pushRuntimeHeartbeat();
-          result = { ok: true, waState: st };
+          result = {
+            ok: true,
+            slotId: targetSlotId,
+            slotState: st.slots?.[targetSlotId] || st,
+            waState: st
+          };
           break;
         }
         case 'wa_sync_history': {
           const out = await this.whatsappManager.syncAllConversationsFromPhone({
             force: true,
-            waitMs: Number(p.waitMs) || 6500
+            waitMs: Number(p.waitMs) || 6500,
+            slotId: p.slotId ? normalizeSlotId(p.slotId) : null
           });
           await this.flushLocalToCloud();
           result = { ok: true, ...out };
+          break;
+        }
+        case 'relay_owner_alert': {
+          const slot1 = this.whatsappManager.getSlot('slot_1');
+          if (!slot1 || slot1.status !== 'connected' || !slot1.sock) {
+            throw new Error('Chip 1 não está conectado neste aparelho para repassar o alerta.');
+          }
+          await slot1.sendDirectAlertText(p.ownerPhoneDigits, p.alertText);
+          await this.flushLocalToCloud();
+          result = { ok: true, sentViaSlot: 'slot_1' };
+          break;
+        }
+        case 'rename_worker_device': {
+          this.deviceIdentity = renameLocalDeviceIdentity(p.deviceName);
+          await this.pushRuntimeHeartbeat();
+          result = { ok: true, device: this.deviceIdentity };
           break;
         }
         case 'fetch_chat_history': {
@@ -1751,7 +2453,7 @@ class CloudWorkerBridge {
           break;
         }
         case 'wa_test_owner_alert': {
-          const out = await this.whatsappManager.sendTestAlertToOwner(p.phone);
+          const out = await this.whatsappManager.sendTestAlertToOwner(p.phone, targetSlotId);
           await this.flushLocalToCloud();
           result = { ok: true, ...out };
           break;
@@ -1760,7 +2462,8 @@ class CloudWorkerBridge {
           await this.pullCloudIntoLocal(false);
           const cleanJid = String(p.chatId || '').replace(/^demo_/, '');
           await this.whatsappManager.sendManualOwnerMessage(cleanJid, p.text, true, {
-            quotedMsgId: p.quotedMsgId || ''
+            quotedMsgId: p.quotedMsgId || '',
+            slotId: p.slotId || undefined
           });
           localStorageInstance.markContactRead(cleanJid);
           await this.flushLocalToCloud();
@@ -1895,7 +2598,13 @@ class CloudWorkerBridge {
         }
         case 'send_proactive': {
           await this.pullCloudIntoLocal(false);
-          const out = await this.whatsappManager.sendProactiveAiOpening(p.phone, p.text, p.name, p.voiceId || '');
+          const out = await this.whatsappManager.sendProactiveAiOpening(
+            p.phone,
+            p.text,
+            p.name,
+            p.voiceId || '',
+            p.channelMode || 'auto_rotate'
+          );
           await this.flushLocalToCloud();
           result = { ok: true, ...out, stats: localStorageInstance.data.stats };
           break;
@@ -1933,7 +2642,11 @@ class CloudWorkerBridge {
         }
         case 'queue_start': {
           await this.pullCloudIntoLocal(false);
-          const queue = this.whatsappManager.enqueueProactiveBatch(p.leads || [], p.text || '');
+          const queue = this.whatsappManager.enqueueProactiveBatch(
+            p.leads || [],
+            p.text || '',
+            p.channelMode || 'auto_rotate'
+          );
           await this.pushRuntimeHeartbeat();
           await this.flushLocalToCloud();
           result = { ok: true, queue };

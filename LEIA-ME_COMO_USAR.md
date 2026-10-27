@@ -1,6 +1,6 @@
-# ZAP-IA Studio v5.0 Institutional SaaS Edition — Plataforma Multi-Contas, Atendimento Humanizado & Inbox 360º
+# ZAP-IA Studio v5.6 Institutional SaaS Edition — Multi-Chip (Até 3 WhatsApps), Multi-Aparelho & Inbox 360º
 
-Plataforma comercial pronta para venda e operação diária de atendimento autônomo **100% humano** no WhatsApp, **Central de Conversas 360º em 3 Colunas** e CRM comercial, com **Arquitetura SaaS Multi-Contas (`Vercel Cloud` + `Supabase RLS Zero-Trust` + `Pacote Institucional Portátil para Windows PC, Linux Desktop/VPS e Android Termux`)**, construída com `@whiskeysockets/baileys` v7, `@supabase/supabase-js` e `@google/genai`.
+Plataforma comercial pronta para venda e operação diária de atendimento autônomo **100% humano** no WhatsApp, **Suporte Multi-Chip (até 3 números simultâneos por conta com Cérebro Único e Rodízio Anti-Ban)**, **Multi-Aparelho (1 ou vários dispositivos conectados à mesma conta)**, **Central de Conversas 360º em 3 Colunas** e CRM comercial, com **Arquitetura SaaS Multi-Contas (`Vercel Cloud` + `Supabase RLS Zero-Trust` + `Pacote Institucional Portátil para Windows PC, Linux Desktop/VPS e Android Termux`)**, construída com `@whiskeysockets/baileys` v7, `@supabase/supabase-js` e `@google/genai`.
 
 ---
 
@@ -68,9 +68,11 @@ ZAP-IA-Studio/
 
 ---
 
-## 3. Resumo dos Diferenciais Comerciais & Proteções Ativas
+## 3. Resumo dos Diferenciais Comerciais & Proteções Ativas (`v5.6.0`)
 
-- **Postura 100% Humana (`Skill #1 / H25`):** conversa sempre como uma pessoa real da equipe — **jamais revela ou insinua ser IA, robô, bot ou assistente virtual**.
+- **Conexão Multi-Chip (`Chip 1 Principal`, `Chip 2`, `Chip 3`) & Multi-Aparelho:** conecte até 3 números de WhatsApp simultâneos no mesmo aparelho (PC/Linux/Termux) ou distribua entre aparelhos diferentes (com seletor inteligente quando 2+ aparelhos estão online), pareamento remoto por QR Code ou Código de 8 Dígitos, chave de IA independente por chip, fila unificada por horário e **Rodízio Inteligente Anti-Ban**.
+- **Alertas Centralizados no `Chip 1 Principal`:** todo aviso de fechamento `[[CHAMAR_HUMANO]]` sai pelo `Chip 1` identificando por qual chip o cliente chamou (com contingência automática nos `Chips 2/3` se o `Chip 1` estiver offline).
+- **Postura 100% Humana (`Skill #1 / H25`):** conversa sempre como uma pessoa real (modo Equipe ou modo Especialista Solo em 1ª pessoa) — **jamais revela ou insinua ser IA, robô, bot ou assistente virtual**.
 - **Biblioteca de Voz Humana Real (`OGG/Opus` + 64 barras de onda sonora + `/mms/ptt`):** notas de voz indistinguíveis de gravação feita na hora no celular, com transcrição automática via Gemini e envio inteligente sem repetição (`Skill S06`).
 - **Dossiê Executivo de 3 Linhas (`S33`), Triagem de Sentimento (`H26`), Objeção Oculta (`S34`), Blindagem Anti-Prompt Injection (`S35`) e Coach de Funil IA (`Skill #10`)**.
-- **Catálogo Multi-Mídia (até 5 arquivos por item) + QR Code PIX PNG & Copia e Cola + Anti-Ban Completo + Retorno Agendado (`S19`) + Backup `.JSON` / Exportação `.CSV`.**
+- **Catálogo Multi-Mídia (até 5 arquivos por item) + QR Code PIX PNG & Copia e Cola + Anti-Ban Completo + Retorno Agendado (`S19`) + Auto-Update Automático na Abertura + Backup `.JSON` / Exportação `.CSV`.**

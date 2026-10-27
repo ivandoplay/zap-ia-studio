@@ -334,26 +334,46 @@
           <div>
             <div class="panel">
               <div class="panel-header">
-                <h2 class="panel-title">Conexão do Aparelho WhatsApp</h2>
-                <div style="display:flex; gap:8px;">
+                <div>
+                  <h2 class="panel-title">Conexão Multi-Chip WhatsApp</h2>
+                  <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">Conecte até 3 números no mesmo aparelho ou distribua em múltiplos aparelhos.</p>
+                </div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
                   <button type="button" id="btnConnectQr" class="btn btn-primary btn-sm">Gerar QR Code</button>
                   <button type="button" id="btnDisconnectWa" class="btn btn-danger btn-sm" style="display:none;">Desconectar</button>
                 </div>
               </div>
-              <p class="panel-desc">No celular, abra o WhatsApp em <strong>Aparelhos conectados &gt; Conectar aparelho</strong>.</p>
+
+              <!-- Seletor de Slots: Chip 1 (Principal), Chip 2 e Chip 3 -->
+              <div id="waSlotsTabBar" class="wa-slots-tabbar" role="tablist" aria-label="Chips de WhatsApp da conta"></div>
+
+              <!-- Faixa Rápida do Chip Selecionado: Apelido + Chave Individual de IA -->
+              <div id="waSlotConfigStrip" class="wa-slot-config-strip">
+                <div class="wa-slot-nick-wrap">
+                  <input type="text" id="waSlotLabelInput" maxlength="42" placeholder="Apelido do Chip (ex: Comercial)" aria-label="Apelido identificador deste Chip" />
+                  <button type="button" id="btnSaveWaSlotLabel" class="btn btn-secondary btn-sm" onclick="saveCurrentWaSlotConfig()">Salvar</button>
+                </div>
+                <label class="wa-slot-ai-toggle" title="Ativar ou pausar respostas automáticas da IA apenas neste Chip (mantendo o Cérebro Único)">
+                  <input type="checkbox" id="waSlotAiEnabledCheck" checked onchange="saveCurrentWaSlotConfig(true)" />
+                  <span id="waSlotAiEnabledText">IA Ativa neste Chip</span>
+                </label>
+              </div>
 
               <div id="qrStage" class="qr-stage">
                 <p>Clique em <strong>Gerar QR Code</strong> acima ou conecte por código numérico abaixo.</p>
               </div>
 
               <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
-                <label class="form-label" for="pairingPhoneInput">Conectar sem câmera (Código de 8 dígitos)</label>
+                <label class="form-label" for="pairingPhoneInput">Conectar sem câmera neste Chip (Código de 8 dígitos)</label>
                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
                   <input type="text" id="pairingPhoneInput" placeholder="Ex: 5586999998888 (com 55 + DDD)" style="flex:1; min-width:180px;" inputmode="tel" autocomplete="tel" />
                   <button type="button" id="btnConnectCode" class="btn btn-secondary">Gerar Código</button>
                 </div>
                 <div class="form-hint">Digite apenas números com código do país (55) e DDD.</div>
               </div>
+
+              <!-- Aparelhos Conectados na Conta (aparece automaticamente quando há Motor online) -->
+              <div id="waOnlineDevicesBox" class="wa-devices-box" style="display:none;"></div>
             </div>
 
             <!-- DOWNLOAD DA ÚLTIMA VERSÃO DO MOTOR (WINDOWS, LINUX & ANDROID TERMUX) -->
@@ -409,9 +429,20 @@
                   </div>
                 </div>
 
-                <div class="form-group" style="margin-bottom:10px;">
-                  <label class="form-label" for="dashProactiveTemplateSelect">Escolher Mensagem Aprovada</label>
-                  <select id="dashProactiveTemplateSelect"></select>
+                <div class="grid-equal" style="gap:10px;">
+                  <div class="form-group" style="margin-bottom:10px;">
+                    <label class="form-label" for="dashProactiveTemplateSelect">Escolher Mensagem Aprovada</label>
+                    <select id="dashProactiveTemplateSelect"></select>
+                  </div>
+                  <div class="form-group" style="margin-bottom:10px;">
+                    <label class="form-label" for="dashProactiveChannelMode">Chip de Saída</label>
+                    <select id="dashProactiveChannelMode">
+                      <option value="auto_rotate">🔄 Rodízio Inteligente Anti-Ban</option>
+                      <option value="slot_1">📱 Somente Chip 1</option>
+                      <option value="slot_2">📱 Somente Chip 2</option>
+                      <option value="slot_3">📱 Somente Chip 3</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div class="form-group" style="margin-bottom:10px;">
@@ -1020,9 +1051,18 @@
                   <select id="batchTemplateSelect"></select>
                 </div>
                 <div class="form-group">
-                  <label class="form-label" for="dailyProactiveLimit">Teto máximo / dia</label>
-                  <input type="number" id="dailyProactiveLimit" min="1" max="150" value="25" />
+                  <label class="form-label" for="batchChannelMode">Modo de Saída Multi-Chip</label>
+                  <select id="batchChannelMode">
+                    <option value="auto_rotate">🔄 Rodízio Anti-Ban (Alternar Chips)</option>
+                    <option value="slot_1">📱 Somente Chip 1</option>
+                    <option value="slot_2">📱 Somente Chip 2</option>
+                    <option value="slot_3">📱 Somente Chip 3</option>
+                  </select>
                 </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="dailyProactiveLimit">Teto base / dia por Chip conectado</label>
+                <input type="number" id="dailyProactiveLimit" min="1" max="150" value="25" />
               </div>
               <div class="form-group">
                 <label class="form-label" for="batchMessageText">Texto da Abordagem (aceita {{nome}})</label>
@@ -1205,6 +1245,12 @@
           <button type="button" class="filter-pill" data-crmfilter="hot">Quentes <span id="fltCntHot" style="opacity:0.75;"></span></button>
           <button type="button" class="filter-pill" data-crmfilter="followup">Retorno S19 <span id="fltCntFollowup" style="opacity:0.75;"></span></button>
           <button type="button" class="filter-pill" data-crmfilter="archived">Arquivadas <span id="fltCntArchived" style="opacity:0.75;"></span></button>
+          <select id="crmFilterSlotSelect" class="crm-inline-filter-select" aria-label="Filtrar conversas por Chip WhatsApp">
+            <option value="">Canal: Todos os Chips</option>
+            <option value="slot_1">Chip 1</option>
+            <option value="slot_2">Chip 2</option>
+            <option value="slot_3">Chip 3</option>
+          </select>
           <select id="crmFilterStageSelect" class="crm-inline-filter-select" aria-label="Filtrar por etapa do funil">
             <option value="">Etapa: Todas</option>
             <option value="novo">Novo Contato</option>
@@ -1289,6 +1335,7 @@
                       <div style="display:flex; align-items:center; gap:6px; min-width:0;">
                         <strong id="inboxContactName" style="font-size:14.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Cliente</strong>
                         <button type="button" id="btnQuickRenameContact" onclick="quickRenameActiveContact()" style="background:none; border:none; color:var(--text-muted); cursor:pointer; padding:0 2px; font-size:12px;" title="Editar nome do contato" aria-label="Editar nome do contato">✏️</button>
+                        <span id="inboxSlotBadge" class="slot-pill slot_1">Chip 1</span>
                         <span id="inboxSentimentBadge" class="sentiment-pill" style="display:none;"></span>
                         <span id="inboxAiStatusBadge" class="tag">Ativo</span>
                         <span id="inboxDealBadge" class="tag" style="display:none;"></span>
@@ -2006,9 +2053,19 @@
           </div>
         </div>
 
-        <div class="form-group" style="margin:0;">
-          <label class="form-label" for="newAccountAdminNotes">Observações Comerciais (Só você vê)</label>
-          <input type="text" id="newAccountAdminNotes" placeholder="Ex: Plano Mensal R$ 147 • Pago via PIX" />
+        <div class="grid-equal" style="gap:10px;">
+          <div class="form-group" style="margin:0;">
+            <label class="form-label" for="newAccountMaxWaSlots">Limite de Chips WhatsApp no Plano</label>
+            <select id="newAccountMaxWaSlots">
+              <option value="1" selected>1 Chip WhatsApp (Plano Padrão)</option>
+              <option value="2">Até 2 Chips Simultâneos</option>
+              <option value="3">Até 3 Chips Simultâneos (Plano Pro)</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="form-label" for="newAccountAdminNotes">Observações Comerciais (Só você vê)</label>
+            <input type="text" id="newAccountAdminNotes" placeholder="Ex: Plano Mensal R$ 147 • Pago via PIX" />
+          </div>
         </div>
 
         <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:4px;">
@@ -2445,6 +2502,14 @@
           <input type="text" id="newContactPhoneInput" required placeholder="Ex: 5586999887766" inputmode="tel" autocomplete="tel" />
         </div>
         <div class="form-group">
+          <label class="form-label" for="newContactSlotSelect">Abrir conversa em qual Chip?</label>
+          <select id="newContactSlotSelect">
+            <option value="slot_1">Chip 1 (Principal)</option>
+            <option value="slot_2">Chip 2</option>
+            <option value="slot_3">Chip 3</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label class="form-label" for="newContactNotesInput">Observação Inicial (opcional)</label>
           <input type="text" id="newContactNotesInput" placeholder="Ex: Veio pelo Instagram / Indicação" />
         </div>
@@ -2469,9 +2534,19 @@
           <label class="form-label" for="editManagedDisplayName">Nome da Empresa / Cliente</label>
           <input type="text" id="editManagedDisplayName" required />
         </div>
-        <div class="form-group">
-          <label class="form-label" for="editManagedCustomerPhone">WhatsApp do Contratante</label>
-          <input type="text" id="editManagedCustomerPhone" placeholder="Ex: 5586999887766" inputmode="tel" autocomplete="tel" />
+        <div class="grid-equal" style="gap:10px;">
+          <div class="form-group">
+            <label class="form-label" for="editManagedCustomerPhone">WhatsApp do Contratante</label>
+            <input type="text" id="editManagedCustomerPhone" placeholder="Ex: 5586999887766" inputmode="tel" autocomplete="tel" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="editManagedMaxWaSlots">Cota de Chips WhatsApp</label>
+            <select id="editManagedMaxWaSlots">
+              <option value="1">1 Chip WhatsApp</option>
+              <option value="2">Até 2 Chips Simultâneos</option>
+              <option value="3">Até 3 Chips Simultâneos</option>
+            </select>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label" for="editManagedAdminNotes">Observações Comerciais & Financeiras (Só você vê)</label>
@@ -2758,6 +2833,22 @@
             <button type="button" class="btn btn-secondary" onclick="copyFullVibeCoderSpecMd()">📋 Copiar Documento Técnico Inteiro</button>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: ESCOLHER APARELHO QUANDO HÁ 2+ DISPOSITIVOS ONLINE NA CONTA -->
+  <div id="deviceChoiceModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="deviceChoiceModalTitle">
+    <div class="modal-dialog" style="max-width:480px;">
+      <div class="modal-head">
+        <h3 id="deviceChoiceModalTitle" class="panel-title">📱 Em qual aparelho conectar este Chip?</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('deviceChoiceModal')">Cancelar</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
+        <p class="panel-desc" style="margin:0;">
+          Detectamos <strong>mais de um aparelho online</strong> conectado na sua conta agora. Escolha abaixo em qual aparelho deseja hospedar esta sessão do WhatsApp:
+        </p>
+        <div id="deviceChoiceList" style="display:flex; flex-direction:column; gap:8px;"></div>
       </div>
     </div>
   </div>

@@ -82,8 +82,10 @@ const state = {
   cloudSession: loadSavedCloudSession(),
   actAsUser: null,
   managedUsers: [],
-  waState: { status: 'disconnected', botEnabled: true },
-  proactiveQueueState: { running: false, paused: false, remaining: 0, sentSession: 0, dailySent: 0, dailyLimit: 25 },
+  waState: { status: 'disconnected', botEnabled: true, maxWaSlots: 1, connectedCount: 0, slots: {}, devices: [] },
+  selectedWaSlotId: 'slot_1',
+  pendingDeviceChoice: null,
+  proactiveQueueState: { running: false, paused: false, channelMode: 'auto_rotate', remaining: 0, sentSession: 0, dailySent: 0, dailyLimit: 25 },
   settings: null,
   geminiPoolCount: 1,
   business: null,
@@ -777,9 +779,9 @@ function applyReturnedContactToState(contact, fallbackChatId = '') {
 function formatContactSubtitle(c) {
   const rawPhone = String(c?.phone || '').trim();
   if (rawPhone && !rawPhone.includes('@')) {
-    return `+${rawPhone.replace(/^\+/, '')}`;
+    return `+${rawPhone.replace(/^slot_[123]::/i, '').replace(/^\+/, '')}`;
   }
-  const cid = String(c?.chatId || '');
+  const cid = String(c?.chatId || '').replace(/^slot_[123]::/i, '');
   if (cid.endsWith('@s.whatsapp.net')) {
     const digits = cid.split('@')[0].split(':')[0].replace(/\D/g, '');
     if (digits) return `+${digits}`;
@@ -815,6 +817,9 @@ async function refreshLiveStateOnly() {
         state.appVersion = snap.appVersion;
       }
       state.waState = snap.waState || state.waState;
+      if (snap.waSlots && state.settings) {
+        state.settings.waSlots = snap.waSlots;
+      }
       state.proactiveQueueState = snap.proactiveQueueState || state.proactiveQueueState;
       state.contacts = mergePolledContactsWithClientGuards(snap.contacts || state.contacts);
       state.stats = snap.stats || state.stats;
@@ -1193,6 +1198,163 @@ function renderAll() {
 
 // ======================== ABA 1: CONEXÃO, FUNIL & DISPARADOR ATIVO ========================
 
+const WA_SLOT_IDS_UI = ['slot_1', 'slot_2', 'slot_3'];
+
+function getAccountMaxSlots() {
+  const isTenantMaster = state.currentUser?.tenantRole === 'master' || (!state.currentUser?.tenantRole && state.currentUser?.role === 'master');
+  if (isTenantMaster) return 3;
+  const raw = Number(state.waState?.maxWaSlots || state.currentUser?.maxWaSlots || 1);
+  return raw === 2 || raw === 3 ? raw : 1;
+}
+
+function getContactSlotId(c) {
+  if (c?.slotId === 'slot_2' || c?.slotId === 'slot_3' || c?.slotId === 'slot_1') return c.slotId;
+  const cid = String(c?.chatId || '');
+  const m = cid.match(/^(slot_[123])::/i);
+  return m ? m[1].toLowerCase() : 'slot_1';
+}
+
+function getSlotUiMeta(slotId = 'slot_1') {
+  const cleanId = WA_SLOT_IDS_UI.includes(slotId) ? slotId : 'slot_1';
+  const num = Number(cleanId.slice(-1)) || 1;
+  const maxSlots = getAccountMaxSlots();
+  const cfg = state.settings?.waSlots?.[cleanId] || {};
+  const rtSlot = state.waState?.slots?.[cleanId] || (cleanId === 'slot_1' ? state.waState : {}) || {};
+  const defaultTitle = num === 1 ? 'Chip 1 · Principal' : `Chip ${num}`;
+  const label = String(cfg.label || rtSlot.label || defaultTitle).trim() || defaultTitle;
+  const aiEnabled = cfg.aiEnabled !== undefined ? cfg.aiEnabled !== false : rtSlot.aiEnabled !== false;
+  return {
+    slotId: cleanId,
+    slotNum: num,
+    locked: num > maxSlots,
+    label,
+    shortLabel: label.length > 18 ? `${label.slice(0, 17)}…` : label,
+    aiEnabled,
+    status: rtSlot.status || 'disconnected',
+    qrDataUrl: rtSlot.qrDataUrl || null,
+    pairingCode: rtSlot.pairingCode || null,
+    connectedUser: rtSlot.connectedUser || null,
+    lastKnownUser: rtSlot.lastKnownUser || null,
+    lastError: rtSlot.lastError || null,
+    deviceId: rtSlot.deviceId || null,
+    deviceName: rtSlot.deviceName || null
+  };
+}
+
+function renderSlotPillHtml(contactOrSlotId) {
+  const slotId = typeof contactOrSlotId === 'string' ? contactOrSlotId : getContactSlotId(contactOrSlotId);
+  const meta = getSlotUiMeta(slotId);
+  return `<span class="slot-pill ${escapeHtml(meta.slotId)}" title="Canal WhatsApp: ${escapeHtml(meta.label)}${meta.connectedUser?.phone ? ' (+' + escapeHtml(meta.connectedUser.phone) + ')' : ''}">${escapeHtml(meta.shortLabel)}</span>`;
+}
+
+function syncSlotSelectOptions() {
+  const maxSlots = getAccountMaxSlots();
+  const metas = WA_SLOT_IDS_UI.map((id) => getSlotUiMeta(id));
+  const sig = `${maxSlots}|` + metas.map((m) => `${m.slotId}:${m.label}:${m.status}:${m.connectedUser?.phone || ''}`).join('|');
+
+  const crmSel = document.getElementById('crmFilterSlotSelect');
+  if (crmSel && document.activeElement !== crmSel && crmSel.dataset.slotSig !== sig) {
+    const prev = crmSel.value;
+    crmSel.dataset.slotSig = sig;
+    crmSel.innerHTML =
+      `<option value="">Canal: Todos os Chips</option>` +
+      metas
+        .filter((m) => !m.locked || (state.contacts || []).some((c) => getContactSlotId(c) === m.slotId))
+        .map((m) => {
+          const cnt = (state.contacts || []).filter((c) => !c.archived && getContactSlotId(c) === m.slotId).length;
+          return `<option value="${m.slotId}">${escapeHtml(m.label)}${cnt > 0 ? ` (${cnt})` : ''}</option>`;
+        })
+        .join('');
+    if (prev && Array.from(crmSel.options).some((o) => o.value === prev)) crmSel.value = prev;
+  }
+
+  for (const selId of ['dashProactiveChannelMode', 'batchChannelMode']) {
+    const sel = document.getElementById(selId);
+    if (!sel || document.activeElement === sel || sel.dataset.slotSig === sig) continue;
+    const prev = sel.value || 'auto_rotate';
+    sel.dataset.slotSig = sig;
+    sel.innerHTML =
+      `<option value="auto_rotate">🔄 Rodízio Inteligente Anti-Ban (Chips Online)</option>` +
+      metas
+        .filter((m) => !m.locked)
+        .map((m) => {
+          const stTxt = m.status === 'connected' ? `🟢 +${m.connectedUser?.phone || 'Online'}` : '⚪ Offline';
+          return `<option value="${m.slotId}">📱 Somente ${escapeHtml(m.label)} (${escapeHtml(stTxt)})</option>`;
+        })
+        .join('');
+    if (Array.from(sel.options).some((o) => o.value === prev)) sel.value = prev;
+  }
+
+  const newContactSel = document.getElementById('newContactSlotSelect');
+  if (newContactSel && document.activeElement !== newContactSel && newContactSel.dataset.slotSig !== sig) {
+    const prev = newContactSel.value || state.selectedWaSlotId || 'slot_1';
+    newContactSel.dataset.slotSig = sig;
+    newContactSel.innerHTML = metas
+      .filter((m) => !m.locked)
+      .map((m) => {
+        const ph = m.connectedUser?.phone ? ` (+${m.connectedUser.phone})` : '';
+        return `<option value="${m.slotId}">${escapeHtml(m.label)}${escapeHtml(ph)}</option>`;
+      })
+      .join('');
+    if (Array.from(newContactSel.options).some((o) => o.value === prev)) newContactSel.value = prev;
+  }
+}
+
+window.selectWaSlotTab = function selectWaSlotTab(slotId) {
+  const meta = getSlotUiMeta(slotId);
+  if (meta.locked) {
+    showToast(`🔒 Seu plano atual inclui até ${getAccountMaxSlots()} Chip(s) WhatsApp. Fale com o suporte para liberar o Chip ${meta.slotNum}!`, true);
+    return;
+  }
+  state.selectedWaSlotId = meta.slotId;
+  const labelInp = document.getElementById('waSlotLabelInput');
+  if (labelInp) labelInp.dataset.slotBound = '';
+  renderWaState();
+};
+
+window.saveCurrentWaSlotConfig = async function saveCurrentWaSlotConfig(fromToggle = false) {
+  const slotId = state.selectedWaSlotId || 'slot_1';
+  const meta = getSlotUiMeta(slotId);
+  if (meta.locked) return;
+  const labelInp = document.getElementById('waSlotLabelInput');
+  const aiChk = document.getElementById('waSlotAiEnabledCheck');
+  const label = (labelInp?.value || '').trim() || `Chip ${meta.slotNum}`;
+  const aiEnabled = aiChk ? Boolean(aiChk.checked) : true;
+  try {
+    const res = await api('/api/wa/slot-config', {
+      method: 'POST',
+      body: JSON.stringify({ slotId, label, aiEnabled })
+    });
+    if (res.waSlots && state.settings) state.settings.waSlots = res.waSlots;
+    if (res.waState) state.waState = res.waState;
+    renderWaState();
+    renderCrmBoard();
+    showToast(
+      fromToggle
+        ? (aiEnabled ? `🤖 IA automática ATIVADA em ${label}!` : `⏸️ IA automática PAUSADA em ${label} (apenas atendimento manual).`)
+        : `✅ Apelido "${label}" salvo com sucesso!`
+    );
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.promptRenameWorkerDevice = async function promptRenameWorkerDevice(deviceId, currentName = '') {
+  const nextName = prompt('Digite um apelido fácil para identificar este aparelho (ex: Celular Recepção, PC Escritório):', currentName || '');
+  if (!nextName || !nextName.trim()) return;
+  try {
+    const res = await api('/api/wa/device-rename', {
+      method: 'POST',
+      body: JSON.stringify({ deviceId, deviceName: nextName.trim() })
+    });
+    if (res.waState) state.waState = res.waState;
+    renderWaState();
+    showToast('✅ Nome do aparelho atualizado!');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
 function renderWaState() {
   const pill = document.getElementById('waStatusPill');
   const txt = document.getElementById('waStatusText');
@@ -1201,77 +1363,191 @@ function renderWaState() {
   const btnDisc = document.getElementById('btnDisconnectWa');
   const masterToggle = document.getElementById('masterBotToggle');
   const masterLabel = document.getElementById('masterBotLabel');
+  const tabBar = document.getElementById('waSlotsTabBar');
+  const cfgStrip = document.getElementById('waSlotConfigStrip');
+  const devicesBox = document.getElementById('waOnlineDevicesBox');
 
-  const st = state.waState?.status || 'disconnected';
-  pill.className = `status-pill ${st}`;
+  if (!WA_SLOT_IDS_UI.includes(state.selectedWaSlotId) || getSlotUiMeta(state.selectedWaSlotId).locked) {
+    state.selectedWaSlotId = 'slot_1';
+  }
+
+  syncSlotSelectOptions();
+
+  const metas = WA_SLOT_IDS_UI.map((id) => getSlotUiMeta(id));
+  const connectedMetas = metas.filter((m) => m.status === 'connected');
+  const overallSt = connectedMetas.length > 0 ? 'connected' : (state.waState?.status || 'disconnected');
+  pill.className = `status-pill ${overallSt}`;
 
   const botOn = state.waState?.botEnabled !== false;
   masterToggle.checked = botOn;
   masterLabel.textContent = botOn ? 'IA Ativa' : 'IA Pausada';
 
-  if (st === 'connected') {
-    const phone = state.waState.connectedUser?.phone || '';
-    txt.textContent = window.innerWidth <= 820 ? 'Online' : (phone ? `Online (+${phone})` : 'Online');
-    pill.title = phone ? `WhatsApp conectado: +${phone}` : 'WhatsApp conectado';
-    btnConn.style.display = 'none';
-    btnDisc.style.display = 'inline-flex';
-    stage.innerHTML = `
-      <div style="color:var(--accent-bright); font-weight:700; font-size:16px;">WhatsApp conectado e pronto para atender!</div>
-      <div style="color:var(--text-secondary); font-size:13px;">Aparelho: <strong>${escapeHtml(state.waState.connectedUser?.name || '')}</strong> (+${escapeHtml(phone)})</div>
-      <div style="font-size:12.5px; color:var(--text-muted); max-width:380px;">Mande uma mensagem de outro celular ou use o card <strong>Disparar Abordagem Ativa</strong> logo abaixo.</div>
-    `;
-  } else if (st === 'qr_ready') {
-    btnConn.style.display = 'none';
-    btnDisc.style.display = 'inline-flex';
-    if (state.waState.pairingCode) {
-      txt.textContent = 'Parear Código';
-      stage.innerHTML = `
-        <div style="font-size:13.5px; color:var(--text-secondary);">Digite este código de 8 dígitos na notificação do seu WhatsApp:</div>
-        <div class="pairing-code-display">${escapeHtml(state.waState.pairingCode)}</div>
-        <div style="font-size:12px; color:var(--text-muted);">No celular: Aparelhos Conectados &gt; Conectar com número de telefone</div>
-      `;
-    } else if (state.waState.qrDataUrl) {
-      txt.textContent = 'Parear QR';
-      stage.innerHTML = `
-        <img class="qr-image" src="${state.waState.qrDataUrl}" alt="QR Code do WhatsApp" />
-        <div style="font-size:12.5px; color:var(--text-secondary);">Aponte a câmera do seu WhatsApp para conectar</div>
-      `;
-    }
-  } else if (st === 'connecting') {
+  if (connectedMetas.length > 1) {
+    txt.textContent = window.innerWidth <= 820 ? `${connectedMetas.length} Chips` : `${connectedMetas.length} Chips Online`;
+    pill.title = connectedMetas.map((m) => `${m.label}: +${m.connectedUser?.phone || ''}`).join(' | ');
+  } else if (connectedMetas.length === 1) {
+    const ph = connectedMetas[0].connectedUser?.phone || '';
+    txt.textContent = window.innerWidth <= 820 ? 'Online' : (ph ? `Online (+${ph})` : 'Online');
+    pill.title = ph ? `${connectedMetas[0].label} conectado: +${ph}` : 'WhatsApp conectado';
+  } else if (overallSt === 'qr_ready') {
+    txt.textContent = 'Pareando';
+  } else if (overallSt === 'connecting') {
     txt.textContent = 'Conectando...';
-    btnConn.style.display = 'none';
-    btnDisc.style.display = 'inline-flex';
-    stage.innerHTML = `
-      <div style="font-weight:600;">Iniciando ponte segura com o WhatsApp...</div>
-      <div style="font-size:12.5px; color:var(--text-secondary);">${escapeHtml(state.waState.lastError || 'Gerando sessão criptografada, aguarde alguns segundos.')}</div>
-    `;
   } else {
     txt.textContent = 'Offline';
     pill.title = 'WhatsApp desconectado';
-    btnConn.style.display = 'inline-flex';
+  }
+
+  // Renderiza barra dos 3 Slots (Chip 1 Principal, Chip 2, Chip 3)
+  if (tabBar) {
+    tabBar.innerHTML = metas
+      .map((m) => {
+        const isSel = m.slotId === state.selectedWaSlotId;
+        const subText = m.locked
+          ? '🔒 Fora do plano'
+          : m.status === 'connected'
+            ? `+${m.connectedUser?.phone || 'Online'}${m.aiEnabled ? '' : ' · IA off'}`
+            : m.status === 'qr_ready'
+              ? (m.pairingCode ? 'Código pronto' : 'QR pronto')
+              : m.status === 'connecting'
+                ? 'Conectando...'
+                : 'Disponível';
+        return `
+          <button
+            type="button"
+            role="tab"
+            aria-selected="${isSel ? 'true' : 'false'}"
+            class="wa-slot-tab ${isSel ? 'active' : ''} ${m.locked ? 'locked' : ''}"
+            onclick="selectWaSlotTab('${m.slotId}')"
+          >
+            <div class="wa-slot-tab-top">
+              <span class="wa-slot-dot ${m.locked ? '' : escapeHtml(m.status)}"></span>
+              <span class="wa-slot-tab-title">${escapeHtml(m.label)}</span>
+            </div>
+            <div class="wa-slot-tab-sub">${escapeHtml(subText)}</div>
+          </button>
+        `;
+      })
+      .join('');
+  }
+
+  const activeSlot = getSlotUiMeta(state.selectedWaSlotId);
+  if (cfgStrip) {
+    cfgStrip.style.display = activeSlot.locked ? 'none' : 'flex';
+    const lblInp = document.getElementById('waSlotLabelInput');
+    if (lblInp && document.activeElement !== lblInp && lblInp.dataset.slotBound !== `${activeSlot.slotId}:${activeSlot.label}`) {
+      lblInp.value = activeSlot.label;
+      lblInp.dataset.slotBound = `${activeSlot.slotId}:${activeSlot.label}`;
+    }
+    const aiChk = document.getElementById('waSlotAiEnabledCheck');
+    const aiTxt = document.getElementById('waSlotAiEnabledText');
+    if (aiChk) aiChk.checked = activeSlot.aiEnabled;
+    if (aiTxt) aiTxt.textContent = activeSlot.aiEnabled ? 'IA Ativa neste Chip' : 'IA Pausada neste Chip';
+  }
+
+  // Renderiza palco QR / Status do Chip selecionado
+  const slSt = activeSlot.status;
+  if (slSt === 'connected') {
+    const phone = activeSlot.connectedUser?.phone || '';
+    btnConn.style.display = 'none';
+    btnDisc.style.display = 'inline-flex';
+    btnDisc.textContent = `Desconectar ${activeSlot.shortLabel}`;
+    stage.innerHTML = `
+      <div style="color:var(--accent-bright); font-weight:700; font-size:16px;">${escapeHtml(activeSlot.label)} conectado e pronto!</div>
+      <div style="color:var(--text-secondary); font-size:13px;">Número: <strong>${escapeHtml(activeSlot.connectedUser?.name || 'WhatsApp')}</strong> (+${escapeHtml(phone)})</div>
+      ${activeSlot.deviceName ? `<div style="font-size:12px; color:var(--text-secondary);">Rodando em: <strong>📱 ${escapeHtml(activeSlot.deviceName)}</strong></div>` : ''}
+      <div style="font-size:12px; color:var(--text-muted); max-width:410px;">
+        ${activeSlot.slotId === 'slot_1'
+          ? '⭐ <strong>Chip 1 Principal:</strong> todos os alertas de fechamento para seu número pessoal saem centralizados por este chip.'
+          : '✅ Conversas existentes importadas automaticamente e unificadas na fila por horário.'}
+      </div>
+    `;
+  } else if (slSt === 'qr_ready') {
+    btnConn.style.display = 'none';
+    btnDisc.style.display = 'inline-flex';
+    btnDisc.textContent = 'Cancelar Pareamento';
+    if (activeSlot.pairingCode) {
+      stage.innerHTML = `
+        <div style="font-size:13.5px; color:var(--text-secondary);">Digite este código de 8 dígitos no WhatsApp do <strong>${escapeHtml(activeSlot.label)}</strong>:</div>
+        <div class="pairing-code-display">${escapeHtml(activeSlot.pairingCode)}</div>
+        <div style="font-size:12px; color:var(--text-muted);">No celular: Aparelhos Conectados &gt; Conectar com número de telefone</div>
+      `;
+    } else if (activeSlot.qrDataUrl) {
+      stage.innerHTML = `
+        <img class="qr-image" src="${activeSlot.qrDataUrl}" alt="QR Code do ${escapeHtml(activeSlot.label)}" />
+        <div style="font-size:12.5px; color:var(--text-secondary);">Aponte a câmera do WhatsApp para conectar em <strong>${escapeHtml(activeSlot.label)}</strong></div>
+      `;
+    }
+  } else if (slSt === 'connecting') {
+    btnConn.style.display = 'none';
+    btnDisc.style.display = 'inline-flex';
+    btnDisc.textContent = 'Cancelar';
+    stage.innerHTML = `
+      <div style="font-weight:600;">Iniciando ponte segura para <strong>${escapeHtml(activeSlot.label)}</strong>...</div>
+      <div style="font-size:12.5px; color:var(--text-secondary);">${escapeHtml(activeSlot.lastError || 'Gerando sessão criptografada isolada, aguarde alguns segundos.')}</div>
+    `;
+  } else {
+    btnConn.style.display = activeSlot.locked ? 'none' : 'inline-flex';
+    btnConn.textContent = `Gerar QR (${activeSlot.shortLabel})`;
     btnDisc.style.display = 'none';
     const isCloudWorkerOff = state.runtimeMode === 'vercel_cloud' && !state.waState?.workerOnline;
-    const lastKnownPhone = state.waState?.lastKnownUser?.phone || '';
+    const lastKnownPhone = activeSlot.lastKnownUser?.phone || '';
     if (isCloudWorkerOff) {
       stage.innerHTML = `
         <div style="font-weight:700; color:var(--accent-bright); font-size:15px;">☁️ Painel na Nuvem Ativo e Sincronizado!</div>
         <div style="font-size:12.5px; color:var(--text-secondary); max-width:440px; line-height:1.5;">
           Você já pode usar <strong>Simulador, Treinamento, Áudios Estratégicos, Catálogo, PIX e CRM</strong> normalmente por aqui.<br/>
-          Para conectar ou usar o WhatsApp ao vivo, inicie o <strong>Motor ZAP-IA</strong> no seu celular (Termux) ou computador (Windows) logado em <strong>@${escapeHtml(state.currentUser?.username || 'sua-conta')}</strong>.
+          Para conectar até <strong>${getAccountMaxSlots()} Chip(s) WhatsApp</strong> ao vivo, inicie o <strong>Motor ZAP-IA</strong> no seu celular (Termux) ou computador (Windows/Linux) logado em <strong>@${escapeHtml(state.currentUser?.username || 'sua-conta')}</strong>.
         </div>
-        ${lastKnownPhone ? `<div style="font-size:11.5px; color:var(--text-muted);">Último aparelho vinculado nesta conta: <strong>+${escapeHtml(lastKnownPhone)}</strong></div>` : ''}
+        ${lastKnownPhone ? `<div style="font-size:11.5px; color:var(--text-muted);">Último número deste slot: <strong>+${escapeHtml(lastKnownPhone)}</strong></div>` : ''}
         <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="downloadLatestMotorZip()">
-          Baixar Motor ZAP-IA v${escapeHtml(state.appVersion || '4.9.0')} (.ZIP)
+          Baixar Motor ZAP-IA v${escapeHtml(state.appVersion || '5.6.0')} (.ZIP)
         </button>
       `;
     } else {
       stage.innerHTML = `
-        <div style="font-weight:600;">Nenhum aparelho conectado no momento</div>
-        <div style="font-size:13px; color:var(--text-secondary); max-width:380px;">
-          Clique em <strong>Gerar QR Code</strong> acima, gere um código numérico abaixo ou teste tudo na aba <strong>Simulador de Teste</strong>!
+        <div style="font-weight:600;"><strong>${escapeHtml(activeSlot.label)}</strong> pronto para conectar</div>
+        <div style="font-size:13px; color:var(--text-secondary); max-width:400px;">
+          Clique em <strong>Gerar QR</strong> acima ou digite o número abaixo para receber o código de 8 dígitos neste chip!
         </div>
-        ${state.waState.lastError ? `<div style="color:var(--warning-bright); font-size:12px;">${escapeHtml(state.waState.lastError)}</div>` : ''}
+        ${activeSlot.lastError ? `<div style="color:var(--warning-bright); font-size:12px;">${escapeHtml(activeSlot.lastError)}</div>` : ''}
       `;
+    }
+  }
+
+  // Lista compacta de Aparelhos Online na Conta (suporta 1 ou múltiplos aparelhos!)
+  if (devicesBox) {
+    const onlineDevs = (state.waState?.devices || []).filter((d) => d.online);
+    if (onlineDevs.length > 0) {
+      devicesBox.style.display = 'flex';
+      devicesBox.innerHTML = `
+        <div style="font-size:11.5px; font-weight:700; color:var(--text-secondary); display:flex; justify-content:space-between; align-items:center;">
+          <span>Aparelhos Online nesta Conta (${onlineDevs.length})</span>
+          ${onlineDevs.length > 1 ? '<span style="color:var(--accent-bright);">Modo Multi-Aparelho Ativo</span>' : '<span>Até 3 Chips no mesmo aparelho</span>'}
+        </div>
+        ${onlineDevs
+          .map((d) => {
+            const hosted = metas.filter((m) => m.deviceId === d.deviceId && m.status === 'connected').map((m) => m.shortLabel);
+            return `
+              <div class="wa-device-row">
+                <div style="min-width:0; flex:1;">
+                  <strong style="color:var(--text-main);">🟢 ${escapeHtml(d.deviceName || 'Aparelho Online')}</strong>
+                  <div style="font-size:11px; color:var(--text-muted);">
+                    ${hosted.length ? `Hospedando: ${escapeHtml(hosted.join(', '))}` : 'Pronto p/ receber Chips'}
+                    ${d.appVersion ? ` • v${escapeHtml(d.appVersion)}` : ''}
+                  </div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" style="min-height:26px; padding:2px 8px; font-size:11px;" onclick="promptRenameWorkerDevice('${escapeJsArg(d.deviceId)}', '${escapeJsArg(d.deviceName || '')}')">
+                  ✏️ Apelido
+                </button>
+              </div>
+            `;
+          })
+          .join('')}
+      `;
+    } else {
+      devicesBox.style.display = 'none';
+      devicesBox.innerHTML = '';
     }
   }
 
@@ -1354,11 +1630,15 @@ function buildChatGptSuperPromptText(customBrief = '') {
   return `Você é um Engenheiro Sênior de Atendimento Comercial Humanizado no WhatsApp especialista no sistema ZAP-IA Studio.
 Sua missão é criar um arquivo JSON completo no padrão oficial "zapia-blueprint-v1" para treinar o Cérebro Único do nosso atendente no WhatsApp.
 
-REGRAS OBRIGATÓRIAS DE POSTURA DO ATENDENTE:
-1. O atendente NUNCA, sob nenhuma hipótese, pode dizer ou insinuar que é IA, robô, bot, assistente virtual ou automação. Deve conversar 100% como uma pessoa real da equipe no WhatsApp (mensagens curtas, naturais, sem listas robóticas gigantes).
-2. Nunca inventar preços, prazos, descontos ou promessas que não estejam nos dados do negócio.
-3. Quando o cliente pedir desconto especial, caso complexo, reclamação séria ou fechamento humano, usar exatamente a tag [[CHAMAR_HUMANO:Resumo curto do motivo]] no final da mensagem.
-4. Se o cliente pedir para agendar retorno depois ("fala comigo amanhã", "me chama mais tarde"), usar [[AGENDAR_RETORNO:120|Cliente pediu retorno]].
+REGRAS OBRIGATÓRIAS DE POSTURA DO ATENDENTE (ARQUITETURA CÉREBRO ÚNICO MULTI-CHIP v5.6):
+1. O atendente NUNCA, sob nenhuma hipótese, pode dizer ou insinuar que é IA, robô, bot, assistente virtual ou automação. Deve conversar 100% como uma pessoa real no WhatsApp (mensagens curtas de 1 a 3 parágrafos breves, sem listas numeradas artificiais).
+2. IDENTIDADE SOLO (1ª PESSOA) vs EQUIPE COMERCIAL:
+   - Se o negócio for um PROFISSIONAL AUTÔNOMO / ESPECIALISTA SOLO atendendo no próprio nome, escreva TUDO na 1ª pessoa do singular ("eu", "meu trabalho", "já te explico") e NUNCA diga "vou passar para o fulano" ou "nossa equipe" — mesmo ao usar [[CHAMAR_HUMANO:...]], despeça-se naturalmente em 1ª pessoa ("Me dá só um minutinho que já te mando o retorno certinho aqui").
+   - Se for EMPRESA / LOJA / CLÍNICA com equipe, use o nome humano do(a) consultor(a) e postura acolhedora da equipe.
+3. MULTI-CHIP TRANSPARENTE: o mesmo Cérebro Único atende até 3 números de WhatsApp simultâneos da conta — nunca cite números fixos de telefone de saída dentro das respostas salvo se pedido pelo cliente.
+4. Nunca inventar preços, prazos, estoque, descontos ou promessas que não estejam nos dados do negócio (Zero Alucinação Comercial).
+5. Quando o cliente pedir desconto especial, caso complexo, reclamação séria ou fechamento humano, usar exatamente a tag [[CHAMAR_HUMANO:Resumo curto do motivo]] no final da mensagem.
+6. Se o cliente pedir para agendar retorno depois ("fala comigo amanhã", "me chama mais tarde"), usar [[AGENDAR_RETORNO:120|Cliente pediu retorno]].
 
 ESTRUTURA JSON EXATA QUE VOCÊ DEVE RETORNAR (retorne APENAS um único bloco \`\`\`json válido, sem comentários // dentro do JSON):
 
@@ -2556,12 +2836,15 @@ function updateInboxFilterCounters() {
 
 function getFilteredCrmContacts() {
   syncCrmTagDropdowns();
+  syncSlotSelectOptions();
   const q = (document.getElementById('crmSearchInput')?.value || '').toLowerCase().trim();
+  const slotFilter = document.getElementById('crmFilterSlotSelect')?.value || '';
   const stageFilter = document.getElementById('crmFilterStageSelect')?.value || '';
   const tagFilter = document.getElementById('crmFilterTagSelect')?.value || '';
   const dealFilter = document.getElementById('crmFilterDealSelect')?.value || '';
   const out = [];
   for (const c of state.contacts || []) {
+    if (slotFilter && getContactSlotId(c) !== slotFilter) continue;
     const tagsStr = (c.tags || []).join(' ');
     const msgsBlob = (c.messages || []).slice(-12).map((m) => m.text || '').join(' ');
     const profileBlob = `${c.name || ''} ${c.phone || ''} ${c.company || ''} ${c.email || ''} ${c.docNumber || ''} ${c.city || ''} ${c.leadSource || ''}`;
@@ -2732,7 +3015,7 @@ function renderCrmBoard() {
               <span>${c.pinned ? '📌 ' : ''}${escapeHtml(c.name)}</span>
               ${c.aiIgnored ? '<span class="tag paused">🔕 Ignorado</span>' : paused ? '<span class="tag paused">Pausado</span>' : '<span class="tag">Ativo</span>'}
             </div>
-            <div class="lead-phone">${escapeHtml(formatContactSubtitle(c))}${c.company ? ` • ${escapeHtml(c.company)}` : ''}</div>
+            <div class="lead-phone">${renderSlotPillHtml(c)} ${escapeHtml(formatContactSubtitle(c))}${c.company ? ` • ${escapeHtml(c.company)}` : ''}</div>
             ${tagsHtml}
             ${followHtml}
             <div class="lead-summary">${escapeHtml(c.handoffDossier?.trigger || c.summary || lastMsg)}</div>
@@ -2845,6 +3128,7 @@ function renderCrmInbox(filteredList) {
                 <div style="font-size:11px; color:var(--text-muted); font-variant-numeric:tabular-nums;">${escapeHtml(subPhone)}${c.company ? ` • ${escapeHtml(c.company)}` : ''}</div>
                 <div class="crm-inbox-item-preview">${escapeHtml(preview)}</div>
                 <div class="crm-inbox-item-badges">
+                  ${renderSlotPillHtml(c)}
                   <span class="tag ${c.stage === 'aguardando_humano' ? 'paused' : ''}" style="font-size:10.5px; padding:1px 6px;">${escapeHtml(prettyStage)}</span>
                   ${c.waBlocked ? '<span class="deal-pill lost">🚫 Bloqueado</span>' : c.aiIgnored ? '<span class="tag paused" style="font-size:10.5px; padding:1px 6px;">🔕 Ignorado</span>' : paused ? '<span class="tag paused" style="font-size:10.5px; padding:1px 6px;">Humano</span>' : '<span class="tag" style="font-size:10.5px; padding:1px 6px;">IA Ativa</span>'}
                   ${dealBadge}${statusDealBadge}${customTagsMini}
@@ -2903,6 +3187,13 @@ function renderActiveInboxConversation() {
 
   document.getElementById('inboxContactName').textContent = c.name || 'Cliente';
   document.getElementById('inboxContactPhone').textContent = formatContactSubtitle(c);
+  const slotHeadBadge = document.getElementById('inboxSlotBadge');
+  if (slotHeadBadge) {
+    const slotMeta = getSlotUiMeta(getContactSlotId(c));
+    slotHeadBadge.className = `slot-pill ${slotMeta.slotId}`;
+    slotHeadBadge.textContent = slotMeta.shortLabel;
+    slotHeadBadge.title = `Conversa atendida via ${slotMeta.label}${slotMeta.connectedUser?.phone ? ' (+' + slotMeta.connectedUser.phone + ')' : ''}`;
+  }
   const headAvatar = document.getElementById('inboxHeadAvatar');
   if (headAvatar) {
     headAvatar.setAttribute('style', `width:34px; height:34px; font-size:12px; flex-shrink:0; ${getAvatarTintStyle(c.chatId || c.phone || c.name)}`);
@@ -5340,7 +5631,64 @@ function bindEvents() {
     }
   });
 
-  // Conexão WhatsApp (com trava anti-clique duplo)
+  async function executeSlotConnectRequest({ pairingPhone = null, slotId = null, targetDeviceId = null } = {}) {
+    const chosenSlot = slotId || state.selectedWaSlotId || 'slot_1';
+    const res = await api('/api/wa/connect', {
+      method: 'POST',
+      body: JSON.stringify({
+        pairingPhone: pairingPhone || null,
+        slotId: chosenSlot,
+        ...(targetDeviceId ? { targetDeviceId } : {})
+      })
+    });
+    if (res?.requiresDeviceChoice && Array.isArray(res.devices) && res.devices.length > 0) {
+      state.pendingDeviceChoice = { pairingPhone: pairingPhone || null, slotId: chosenSlot };
+      const listBox = document.getElementById('deviceChoiceList');
+      if (listBox) {
+        listBox.innerHTML = res.devices
+          .map(
+            (d) => `
+            <button type="button" class="device-choice-card" onclick="confirmDeviceChoiceForSlot('${escapeJsArg(d.deviceId)}')">
+              <div>
+                <strong style="font-size:13.5px; color:var(--text-main);">📱 ${escapeHtml(d.deviceName || 'Aparelho Online')}</strong>
+                <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">
+                  ${escapeHtml(d.platform || 'Motor ZAP-IA')}${d.activeSlots?.length ? ` • Já hospeda: ${escapeHtml(d.activeSlots.join(', '))}` : ' • Livre'}
+                </div>
+              </div>
+              <span class="btn btn-primary btn-sm" style="pointer-events:none;">Conectar aqui</span>
+            </button>
+          `
+          )
+          .join('');
+      }
+      document.getElementById('deviceChoiceModal')?.classList.add('open');
+      return { deferredChoice: true };
+    }
+    if (res.waState) state.waState = res.waState;
+    renderWaState();
+    return res;
+  }
+
+  window.confirmDeviceChoiceForSlot = async function confirmDeviceChoiceForSlot(deviceId) {
+    const pending = state.pendingDeviceChoice || { pairingPhone: null, slotId: state.selectedWaSlotId || 'slot_1' };
+    state.pendingDeviceChoice = null;
+    closeModal('deviceChoiceModal');
+    showToast('⏳ Gerando sessão neste aparelho...');
+    try {
+      const res = await executeSlotConnectRequest({
+        pairingPhone: pending.pairingPhone,
+        slotId: pending.slotId,
+        targetDeviceId: deviceId
+      });
+      if (pending.pairingPhone && !res?.deferredChoice) {
+        showToast('Código de 8 dígitos gerado!');
+      }
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  };
+
+  // Conexão WhatsApp Multi-Chip (com trava anti-clique duplo e seletor automático de aparelho quando há 2+ online)
   document.getElementById('btnConnectQr').addEventListener('click', async (e) => {
     const btn = e.currentTarget;
     if (btn.disabled) return;
@@ -5348,14 +5696,13 @@ function bindEvents() {
     btn.disabled = true;
     btn.textContent = 'Gerando QR Code...';
     try {
-      const res = await api('/api/wa/connect', { method: 'POST', body: JSON.stringify({}) });
-      state.waState = res.waState;
-      renderWaState();
+      await executeSlotConnectRequest({ pairingPhone: null, slotId: state.selectedWaSlotId || 'slot_1' });
     } catch (err) {
       showToast(err.message, true);
     } finally {
       btn.disabled = false;
-      btn.innerHTML = orig;
+      renderWaState();
+      if (btn.style.display !== 'none' && btn.textContent === 'Gerando QR Code...') btn.innerHTML = orig;
     }
   });
 
@@ -5370,13 +5717,13 @@ function bindEvents() {
     btn.disabled = true;
     btn.textContent = 'Gerando código...';
     try {
-      const res = await api('/api/wa/connect', {
-        method: 'POST',
-        body: JSON.stringify({ pairingPhone: phone })
+      const out = await executeSlotConnectRequest({
+        pairingPhone: phone,
+        slotId: state.selectedWaSlotId || 'slot_1'
       });
-      state.waState = res.waState;
-      renderWaState();
-      showToast('Código de 8 dígitos gerado!');
+      if (!out?.deferredChoice) {
+        showToast('Código de 8 dígitos gerado!');
+      }
     } catch (err) {
       showToast(err.message, true);
     } finally {
@@ -5388,20 +5735,25 @@ function bindEvents() {
   document.getElementById('btnDisconnectWa').addEventListener('click', async (e) => {
     const btn = e.currentTarget;
     if (btn.disabled) return;
-    if (!confirm('Deseja desconectar a sessão atual do WhatsApp?')) return;
+    const slotMeta = getSlotUiMeta(state.selectedWaSlotId || 'slot_1');
+    if (!confirm(`Deseja desconectar a sessão atual de "${slotMeta.label}"? (Os outros chips permanecerão conectados normalmente)`)) return;
     const orig = btn.innerHTML;
     btn.disabled = true;
     btn.textContent = 'Desconectando...';
     try {
-      const res = await api('/api/wa/disconnect', { method: 'POST', body: JSON.stringify({ clearSession: true }) });
+      const res = await api('/api/wa/disconnect', {
+        method: 'POST',
+        body: JSON.stringify({ clearSession: true, slotId: slotMeta.slotId })
+      });
       state.waState = res.waState;
       renderWaState();
-      showToast('WhatsApp desconectado.');
+      showToast(`${slotMeta.label} desconectado.`);
     } catch (err) {
       showToast(err.message, true);
     } finally {
       btn.disabled = false;
       btn.innerHTML = orig;
+      renderWaState();
     }
   });
 
@@ -5424,6 +5776,7 @@ function bindEvents() {
     const name = document.getElementById('dashProactiveName').value.trim();
     const text = document.getElementById('dashProactiveText').value.trim();
     const voiceId = document.getElementById('dashProactiveVoiceSelect')?.value || '';
+    const channelMode = document.getElementById('dashProactiveChannelMode')?.value || 'auto_rotate';
     const btn = document.getElementById('btnSendProactiveNow');
     if (!phone || (!text && !voiceId)) {
       return showToast('Preencha o WhatsApp de destino e escolha um texto ou áudio estratégico.', true);
@@ -5431,14 +5784,14 @@ function bindEvents() {
     btn.disabled = true;
     btn.textContent = voiceId ? 'Simulando gravação e enviando...' : 'Enviando com digitação humana...';
     try {
-      await api('/api/wa/proactive-send', {
+      const out = await api('/api/wa/proactive-send', {
         method: 'POST',
-        body: JSON.stringify({ phone, name: name || 'Contato Abordado', text, voiceId })
+        body: JSON.stringify({ phone, name: name || 'Contato Abordado', text, voiceId, channelMode })
       });
       document.getElementById('dashProactivePhone').value = '';
       document.getElementById('dashProactiveName').value = '';
       await loadBootstrap();
-      showToast('Abordagem enviada! A IA já está pronta aguardando a resposta.');
+      showToast(`Abordagem enviada${out?.slotLabel ? ` pelo ${out.slotLabel}` : ''}! A IA já está pronta aguardando a resposta.`);
     } catch (err) {
       showToast(err.message, true);
     } finally {
@@ -5839,14 +6192,19 @@ function bindEvents() {
           }
         })
       });
+      const channelMode = document.getElementById('batchChannelMode')?.value || 'auto_rotate';
       const res = await api('/api/wa/proactive-queue/start', {
         method: 'POST',
-        body: JSON.stringify({ leads, text })
+        body: JSON.stringify({ leads, text, channelMode })
       });
       state.proactiveQueueState = res.queue;
       document.getElementById('batchLeadsTextarea').value = '';
       renderProactiveQueueStatus();
-      showToast('Fila segura iniciada! Enviando 1 por vez com cadência humana.');
+      showToast(
+        channelMode === 'auto_rotate'
+          ? 'Fila segura iniciada em Rodízio Inteligente Anti-Ban entre seus Chips conectados!'
+          : 'Fila segura iniciada no Chip selecionado!'
+      );
     } catch (err) {
       showToast(err.message, true);
     }
@@ -6176,6 +6534,7 @@ function bindEvents() {
         body: JSON.stringify({
           name: document.getElementById('newContactNameInput')?.value || '',
           phone: document.getElementById('newContactPhoneInput')?.value || '',
+          slotId: document.getElementById('newContactSlotSelect')?.value || state.selectedWaSlotId || 'slot_1',
           notes: document.getElementById('newContactNotesInput')?.value || ''
         })
       });
@@ -6441,6 +6800,7 @@ function bindEvents() {
   });
 
   document.getElementById('crmSearchInput').addEventListener('input', renderCrmBoard);
+  document.getElementById('crmFilterSlotSelect')?.addEventListener('change', renderCrmBoard);
   document.getElementById('crmFilterStageSelect')?.addEventListener('change', renderCrmBoard);
   document.getElementById('crmFilterTagSelect')?.addEventListener('change', renderCrmBoard);
   document.getElementById('crmFilterDealSelect')?.addEventListener('change', renderCrmBoard);
@@ -7336,6 +7696,8 @@ function renderManagedUsers() {
                   </div>
 
                   <div style="font-size:12px; color:var(--text-muted); margin-top:6px; display:flex; gap:12px; flex-wrap:wrap; font-variant-numeric:tabular-nums;">
+                    <span>Plano Chips: <strong>${u.connectedSlotsCount || 0}/${u.maxWaSlots || 1} online</strong></span>
+                    ${u.onlineDevicesCount > 0 ? `<span>Aparelhos: <strong>${u.onlineDevicesCount}</strong></span>` : ''}
                     <span>CRM: <strong>${u.contactsCount || 0}</strong></span>
                     <span>Respostas IA: <strong>${u.totalAiReplies || 0}</strong></span>
                     ${u.customerPhone ? `<span>WhatsApp dono: <strong>+${escapeHtml(u.customerPhone)}</strong></span>` : ''}
@@ -7461,6 +7823,11 @@ window.openEditManagedUserModal = function openEditManagedUserModal(userId) {
   document.getElementById('editManagedDisplayName').value = u.displayName || '';
   const phEl = document.getElementById('editManagedCustomerPhone');
   if (phEl) phEl.value = u.customerPhone || '';
+  const slotsEl = document.getElementById('editManagedMaxWaSlots');
+  if (slotsEl) {
+    slotsEl.value = String(u.role === 'master' ? 3 : (u.maxWaSlots || 1));
+    slotsEl.disabled = u.role === 'master';
+  }
   const ntEl = document.getElementById('editManagedAdminNotes');
   if (ntEl) ntEl.value = u.adminNotes || '';
   document.getElementById('editManagedUserModal')?.classList.add('open');
@@ -7690,6 +8057,7 @@ function bindCloudAuthAndAdminEvents() {
         body: JSON.stringify({
           displayName: document.getElementById('editManagedDisplayName')?.value?.trim() || '',
           customerPhone: document.getElementById('editManagedCustomerPhone')?.value?.trim() || '',
+          maxWaSlots: Number(document.getElementById('editManagedMaxWaSlots')?.value || 1),
           adminNotes: document.getElementById('editManagedAdminNotes')?.value || ''
         })
       });
@@ -7777,6 +8145,7 @@ function bindCloudAuthAndAdminEvents() {
     const username = document.getElementById('newAccountUsername')?.value?.trim() || '';
     const password = document.getElementById('newAccountPassword')?.value || '';
     const customerPhone = document.getElementById('newAccountCustomerPhone')?.value?.trim() || '';
+    const maxWaSlots = Number(document.getElementById('newAccountMaxWaSlots')?.value || 1);
     const adminNotes = document.getElementById('newAccountAdminNotes')?.value?.trim() || '';
     const btn = document.getElementById('btnCreateManagedUser');
     if (btn) {
@@ -7786,7 +8155,7 @@ function bindCloudAuthAndAdminEvents() {
     try {
       const res = await api('/api/admin/users', {
         method: 'POST',
-        body: JSON.stringify({ displayName, username, password, customerPhone, adminNotes })
+        body: JSON.stringify({ displayName, username, password, customerPhone, maxWaSlots, adminNotes })
       });
       document.getElementById('createManagedUserForm').reset();
       closeModal('createClientModal');

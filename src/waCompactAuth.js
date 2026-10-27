@@ -45,7 +45,7 @@ function storeFilePath(folder, category) {
 }
 
 async function atomicWriteJson(filePath, value) {
-  const tmpPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  const tmpPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 6)}.tmp`;
   const serialized = JSON.stringify(value, BufferJSON.replacer);
   await fsp.writeFile(tmpPath, serialized, 'utf8');
   await fsp.rename(tmpPath, filePath);

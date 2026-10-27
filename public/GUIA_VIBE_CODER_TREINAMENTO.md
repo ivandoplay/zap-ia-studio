@@ -249,6 +249,17 @@ O motor do **ZAP-IA Studio** interpreta automaticamente estas tags especiais cas
 
 ---
 
+## 📱 Arquitetura Multi-Chip & Persona Solo vs Equipe (Novidade v5.6.0)
+
+1. **Cérebro Único Multi-Chip (Até 3 WhatsApps Simultâneos):**
+   - O treinamento compilado alimenta automaticamente `Chip 1`, `Chip 2` e `Chip 3` da conta (com chave individual de IA ligada/desligada por chip e alertas de fechamento centralizados no `Chip 1 Principal`).
+   - Evite travar números de WhatsApp fixos dentro das falas `M01..M13` para que todas as aberturas funcionem perfeitamente no **Rodízio Inteligente Anti-Ban**.
+2. **Modo Profissional Autônomo (1ª Pessoa `"Eu"`) vs Modo Equipe (`"Nós"`):**
+   - Para consultores, advogados, médicos, corretores ou especialistas solo que atendem como o próprio dono, redija `goldenRules`, `approvedMessages` e `operationalSkills` estritamente em **1ª pessoa do singular (`"eu"`, `"meu trabalho"`)** e defina `"soloIdentity": true` no perfil se desejar blindagem extra contra termos de agência/equipe.
+   - Em contas solo, até a passagem humana `[[CHAMAR_HUMANO:Motivo]]` deve soar em 1ª pessoa (*"Me dá só um instante que já confiro isso aqui e te respondo"*), jamais dizendo *"vou passar para o responsável"*.
+
+---
+
 ## 💡 Dica de Ouro para Vibe Coders
 Depois de importar seu `.JSON`, `.MD` ou `.ZIP`:
 1. Você pode **editar visualmente qualquer Mensagem (`Mxx`) ou Skill (`Sxx`/`Hxx`)** direto nos cartões da aba **Treinamento** sem precisar reimportar tudo;

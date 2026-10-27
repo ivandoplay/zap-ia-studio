@@ -31,12 +31,68 @@ export function uid(prefix = 'id') {
   return `${prefix}_${crypto.randomBytes(5).toString('hex')}`;
 }
 
+export const WA_SLOT_IDS = ['slot_1', 'slot_2', 'slot_3'];
+
+export function normalizeSlotId(slotId = 'slot_1') {
+  const s = String(slotId || '').trim().toLowerCase();
+  return WA_SLOT_IDS.includes(s) ? s : 'slot_1';
+}
+
+export function parseContactChannelKey(contactKey = '') {
+  const raw = String(contactKey || '').trim();
+  const m = raw.match(/^(slot_[123])::(.+)$/i);
+  if (m) {
+    const slotId = normalizeSlotId(m[1]);
+    const rawJid = m[2];
+    return {
+      slotId,
+      rawJid,
+      compositeKey: slotId === 'slot_1' ? rawJid : `${slotId}::${rawJid}`
+    };
+  }
+  return {
+    slotId: 'slot_1',
+    rawJid: raw,
+    compositeKey: raw
+  };
+}
+
+export function buildContactChannelKey(slotId = 'slot_1', rawJid = '') {
+  const cleanSlot = normalizeSlotId(slotId);
+  const parsed = parseContactChannelKey(rawJid);
+  const baseJid = parsed.rawJid;
+  if (!baseJid) return '';
+  return cleanSlot === 'slot_1' ? baseJid : `${cleanSlot}::${baseJid}`;
+}
+
+export function normalizeWaSlotsSettings(raw = {}) {
+  const defaults = {
+    slot_1: { label: 'Chip 1', aiEnabled: true },
+    slot_2: { label: 'Chip 2', aiEnabled: true },
+    slot_3: { label: 'Chip 3', aiEnabled: true }
+  };
+  const out = {};
+  for (const slotId of WA_SLOT_IDS) {
+    const src = raw && typeof raw[slotId] === 'object' ? raw[slotId] : {};
+    const numIdx = slotId.slice(-1);
+    out[slotId] = {
+      label: String(src.label || defaults[slotId].label).trim().slice(0, 28) || `Chip ${numIdx}`,
+      aiEnabled: src.aiEnabled !== false
+    };
+  }
+  return out;
+}
+
 export function normalizePhoneDigits(raw = '') {
-  return String(raw).replace(/@.*$/, '').replace(/:\d+$/, '').replace(/\D/g, '');
+  return String(raw)
+    .replace(/^slot_[123]::/i, '')
+    .replace(/@.*$/, '')
+    .replace(/:\d+$/, '')
+    .replace(/\D/g, '');
 }
 
 export function extractPhoneFromJidIfPn(jid = '') {
-  const s = String(jid || '');
+  const s = String(jid || '').replace(/^slot_[123]::/i, '');
   if (!s || s.endsWith('@lid') || s.endsWith('@g.us') || s.endsWith('@newsletter') || s.endsWith('@broadcast')) {
     return '';
   }
@@ -185,6 +241,7 @@ export function createBusinessFromTemplate(tpl = NICHE_TEMPLATES[0]) {
     niche: p.niche,
     icon: tpl.icon || '🚗',
     assistantName: p.assistantName || 'Assistente',
+    soloIdentity: Boolean(p.soloIdentity),
     tone: p.tone || 'consultivo',
     trainingPackId: p.trainingPackId || null,
     lockUntilManualResume: Boolean(p.lockUntilManualResume),
@@ -256,30 +313,43 @@ function normalizeBusinessObject(raw = {}, fallback = createBusinessFromTemplate
  * entra via @lid (padrão WhatsApp Baileys v7), preservando histórico, tags, pausas e notas em 1 único card.
  */
 function deduplicateContactsMap(rawContacts = {}) {
-  const entries = Object.entries(rawContacts || {}).map(([k, c]) => ({
-    tags: [],
-    sentVoiceIds: [],
-    followUpAt: null,
-    ...c,
-    chatId: c?.chatId || k
-  }));
+  const entries = Object.entries(rawContacts || {}).map(([k, c]) => {
+    const parsedKey = parseContactChannelKey(c?.chatId || k);
+    const effectiveSlot = c?.slotId ? normalizeSlotId(c.slotId) : parsedKey.slotId;
+    const canonicalKey = buildContactChannelKey(effectiveSlot, parsedKey.rawJid);
+    return {
+      tags: [],
+      sentVoiceIds: [],
+      followUpAt: null,
+      ...c,
+      slotId: effectiveSlot,
+      chatId: canonicalKey
+    };
+  });
 
   const mergedByKey = [];
   for (const item of entries) {
-    const existingIdx = mergedByKey.findIndex(other =>
-      other.chatId === item.chatId ||
-      (isLikelyRealPhone(other.phone) && isLikelyRealPhone(item.phone) && phonesMatch(other.phone, item.phone))
-    );
+    const itemSlot = normalizeSlotId(item.slotId || parseContactChannelKey(item.chatId).slotId);
+    const existingIdx = mergedByKey.findIndex(other => {
+      const otherSlot = normalizeSlotId(other.slotId || parseContactChannelKey(other.chatId).slotId);
+      if (otherSlot !== itemSlot) return false; // Isolamento absoluto por Chip: mesmo cliente em chips distintos gera 2 cards separados!
+      return (
+        other.chatId === item.chatId ||
+        (isLikelyRealPhone(other.phone) && isLikelyRealPhone(item.phone) && phonesMatch(other.phone, item.phone))
+      );
+    });
 
     if (existingIdx === -1) {
-      mergedByKey.push(item);
+      mergedByKey.push({ ...item, slotId: itemSlot });
       continue;
     }
 
     const prev = mergedByKey[existingIdx];
-    // Prefere o JID @lid quando ambos existem para o mesmo número real, pois o WhatsApp entrega respostas nele
-    const preferItemJid = item.chatId.endsWith('@lid') && !prev.chatId.endsWith('@lid');
-    const canonicalJid = preferItemJid ? item.chatId : prev.chatId;
+    const itemRaw = parseContactChannelKey(item.chatId).rawJid;
+    const prevRaw = parseContactChannelKey(prev.chatId).rawJid;
+    // Prefere o JID @lid dentro do mesmo chip quando ambos existem para o mesmo número real
+    const preferItemJid = itemRaw.endsWith('@lid') && !prevRaw.endsWith('@lid');
+    const canonicalJid = buildContactChannelKey(itemSlot, preferItemJid ? itemRaw : prevRaw);
 
     // Mescla mensagens ordenadas por horário sem duplicar waMsgId ou texto+role próximos
     const combinedMsgs = [...(prev.messages || []), ...(item.messages || [])]
@@ -337,6 +407,7 @@ function deduplicateContactsMap(rawContacts = {}) {
     mergedByKey[existingIdx] = {
       ...prev,
       ...item,
+      slotId: itemSlot,
       chatId: canonicalJid,
       phone: isLikelyRealPhone(item.phone) ? item.phone : prev.phone,
       name: prev.savedContact ? (prev.name || bestName) : (item.savedContact ? (item.name || bestName) : bestName),
@@ -434,6 +505,7 @@ function createDefaultDatabase() {
         timezone: 'America/Fortaleza',
         offHoursReplyMessage: 'Olá! Nosso atendimento funciona de Segunda a Sábado, das 08h às 18h. Assim que abrirmos já te respondemos!'
       },
+      waSlots: normalizeWaSlotsSettings(),
       ignoredContacts: [],
       deletedChatTombstones: {}
     },
@@ -548,7 +620,8 @@ export class Storage {
       ai: { ...defaults.settings.ai, ...(parsed.settings?.ai || {}) },
       antiBan: { ...defaults.settings.antiBan, ...(parsed.settings?.antiBan || {}) },
       humanHandoff: { ...defaults.settings.humanHandoff, ...(parsed.settings?.humanHandoff || {}) },
-      schedule: { ...defaults.settings.schedule, ...(parsed.settings?.schedule || {}) }
+      schedule: { ...defaults.settings.schedule, ...(parsed.settings?.schedule || {}) },
+      waSlots: normalizeWaSlotsSettings(parsed.settings?.waSlots)
     };
     delete cleanSettings.activeProfileId;
 
@@ -591,7 +664,8 @@ export class Storage {
           ai: { ...defaults.settings.ai, ...(parsed.settings?.ai || {}) },
           antiBan: { ...defaults.settings.antiBan, ...(parsed.settings?.antiBan || {}) },
           humanHandoff: { ...defaults.settings.humanHandoff, ...(parsed.settings?.humanHandoff || {}) },
-          schedule: { ...defaults.settings.schedule, ...(parsed.settings?.schedule || {}) }
+          schedule: { ...defaults.settings.schedule, ...(parsed.settings?.schedule || {}) },
+          waSlots: normalizeWaSlotsSettings(parsed.settings?.waSlots)
         };
         delete cleanSettings.activeProfileId;
 
@@ -908,10 +982,13 @@ export class Storage {
   }
 
   findSiblingContactKey(chatId, phone = '') {
-    if (this.data.contacts[chatId]) return chatId;
-    const checkPhone = phone || extractPhoneFromJidIfPn(chatId);
+    const { slotId, compositeKey } = parseContactChannelKey(chatId);
+    if (this.data.contacts[compositeKey]) return compositeKey;
+    const checkPhone = phone || extractPhoneFromJidIfPn(compositeKey);
     if (!isLikelyRealPhone(checkPhone)) return null;
     for (const [existingJid, c] of Object.entries(this.data.contacts)) {
+      const existingSlot = normalizeSlotId(c?.slotId || parseContactChannelKey(existingJid).slotId);
+      if (existingSlot !== slotId) continue;
       if (!String(existingJid).endsWith('@lid') || isLikelyRealPhone(c.phone)) {
         if (phonesMatch(c.phone, checkPhone)) {
           return existingJid;
@@ -933,7 +1010,10 @@ export class Storage {
     return false;
   }
 
-  upsertContact(chatId, patch = {}, opts = {}) {
+  upsertContact(rawChatIdInput, patch = {}, opts = {}) {
+    const parsedInput = parseContactChannelKey(rawChatIdInput);
+    const slotId = normalizeSlotId(patch.slotId || opts.slotId || parsedInput.slotId);
+    const chatId = buildContactChannelKey(slotId, parsedInput.rawJid);
     const jidPhone = extractPhoneFromJidIfPn(chatId);
     const existingDirect = this.data.contacts[chatId];
     const existingValidPhone = existingDirect && isLikelyRealPhone(existingDirect.phone) && !String(existingDirect.phone).endsWith('@lid')
@@ -945,10 +1025,12 @@ export class Storage {
 
     let targetKey = chatId;
 
-    // Unifica automaticamente qualquer card duplicado do mesmo telefone (@s.whatsapp.net <-> @lid) mesmo que ambos já existissem!
+    // Unifica automaticamente qualquer card duplicado do mesmo telefone DENTRO DO MESMO CHIP (@s.whatsapp.net <-> @lid)
     if (isLikelyRealPhone(candidatePhone)) {
       for (const [otherKey, otherCard] of Object.entries(this.data.contacts)) {
         if (otherKey === chatId) continue;
+        const otherSlot = normalizeSlotId(otherCard?.slotId || parseContactChannelKey(otherKey).slotId);
+        if (otherSlot !== slotId) continue;
         if (!phonesMatch(otherCard.phone, candidatePhone)) continue;
 
         const preferNew = String(chatId).endsWith('@lid') && !String(otherKey).endsWith('@lid');
@@ -959,8 +1041,8 @@ export class Storage {
 
         if (loserBase) {
           const mergedMap = deduplicateContactsMap({
-            [winnerKey]: { ...winnerBase, chatId: winnerKey, phone: candidatePhone },
-            [loserKey]: { ...loserBase, chatId: loserKey, phone: candidatePhone }
+            [winnerKey]: { ...winnerBase, slotId, chatId: winnerKey, phone: candidatePhone },
+            [loserKey]: { ...loserBase, slotId, chatId: loserKey, phone: candidatePhone }
           });
           const mergedCard = Object.values(mergedMap)[0];
           delete this.data.contacts[loserKey];
@@ -974,7 +1056,7 @@ export class Storage {
           delete this.data.contacts[otherKey];
           this.deletedContactIds.add(otherKey);
           this.dirtyContactIds.delete(otherKey);
-          this.data.contacts[chatId] = { ...otherCard, chatId, phone: candidatePhone };
+          this.data.contacts[chatId] = { ...otherCard, slotId, chatId, phone: candidatePhone };
           targetKey = chatId;
         } else {
           targetKey = winnerKey;
@@ -985,6 +1067,7 @@ export class Storage {
 
     const fallbackPhoneLabel = candidatePhone ? `+${candidatePhone}` : 'Contato WhatsApp';
     const existing = this.data.contacts[targetKey] || {
+      slotId,
       chatId: targetKey,
       phone: candidatePhone || '',
       name: patch.name || fallbackPhoneLabel,
@@ -1114,14 +1197,18 @@ export class Storage {
     if (!this.data.settings.deletedChatTombstones || typeof this.data.settings.deletedChatTombstones !== 'object') {
       this.data.settings.deletedChatTombstones = {};
     }
+    const { slotId, compositeKey } = parseContactChannelKey(chatId);
     const ts = new Date(Math.max(trueNowMs(), Number(floorMs) || 0)).toISOString();
     const map = this.data.settings.deletedChatTombstones;
-    if (chatId) map[chatId] = ts;
-    const digits = normalizePhoneDigits(phone || extractPhoneFromJidIfPn(chatId));
-    if (digits && digits.length >= 8) map[`tel:${digits}`] = ts;
+    if (compositeKey) map[compositeKey] = ts;
+    const digits = normalizePhoneDigits(phone || extractPhoneFromJidIfPn(compositeKey));
+    if (digits && digits.length >= 8) {
+      const telKey = slotId === 'slot_1' ? `tel:${digits}` : `${slotId}::tel:${digits}`;
+      map[telKey] = ts;
+    }
     const keys = Object.keys(map);
-    if (keys.length > 600) {
-      for (const oldKey of keys.slice(0, keys.length - 500)) delete map[oldKey];
+    if (keys.length > 800) {
+      for (const oldKey of keys.slice(0, keys.length - 650)) delete map[oldKey];
     }
     this.workspaceDirty = true;
   }
@@ -1129,14 +1216,16 @@ export class Storage {
   clearDeletedChatTombstone(chatId = '', phone = '') {
     const map = this.data.settings?.deletedChatTombstones;
     if (!map || typeof map !== 'object') return;
+    const { slotId, compositeKey } = parseContactChannelKey(chatId);
     let changed = false;
-    if (chatId && map[chatId]) {
-      delete map[chatId];
+    if (compositeKey && map[compositeKey]) {
+      delete map[compositeKey];
       changed = true;
     }
-    const digits = normalizePhoneDigits(phone || extractPhoneFromJidIfPn(chatId));
-    if (digits && map[`tel:${digits}`]) {
-      delete map[`tel:${digits}`];
+    const digits = normalizePhoneDigits(phone || extractPhoneFromJidIfPn(compositeKey));
+    const telKey = slotId === 'slot_1' ? `tel:${digits}` : `${slotId}::tel:${digits}`;
+    if (digits && map[telKey]) {
+      delete map[telKey];
       changed = true;
     }
     if (changed) this.workspaceDirty = true;
@@ -1145,9 +1234,11 @@ export class Storage {
   getDeletedChatTombstoneMs(chatId = '', phone = '') {
     const map = this.data.settings?.deletedChatTombstones;
     if (!map || typeof map !== 'object') return 0;
-    const t1 = chatId && map[chatId] ? new Date(map[chatId]).getTime() || 0 : 0;
-    const digits = normalizePhoneDigits(phone || extractPhoneFromJidIfPn(chatId));
-    const t2 = digits && map[`tel:${digits}`] ? new Date(map[`tel:${digits}`]).getTime() || 0 : 0;
+    const { slotId, compositeKey } = parseContactChannelKey(chatId);
+    const t1 = compositeKey && map[compositeKey] ? new Date(map[compositeKey]).getTime() || 0 : 0;
+    const digits = normalizePhoneDigits(phone || extractPhoneFromJidIfPn(compositeKey));
+    const telKey = slotId === 'slot_1' ? `tel:${digits}` : `${slotId}::tel:${digits}`;
+    const t2 = digits && map[telKey] ? new Date(map[telKey]).getTime() || 0 : 0;
     return Math.max(t1, t2);
   }
 

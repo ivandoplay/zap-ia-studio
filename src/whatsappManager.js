@@ -12,7 +12,22 @@ import {
   proto
 } from '@whiskeysockets/baileys';
 import { useCompactWaAuthState } from './waCompactAuth.js';
-import { AUTH_DIR, UPLOADS_DIR, storage, normalizePhoneDigits, extractPhoneFromJidIfPn, isLikelyRealPhone, uid, buildContactVCard } from './storage.js';
+import {
+  AUTH_DIR,
+  UPLOADS_DIR,
+  WA_SLOT_IDS,
+  normalizeSlotId,
+  parseContactChannelKey,
+  buildContactChannelKey,
+  normalizeWaSlotsSettings,
+  storage,
+  normalizePhoneDigits,
+  extractPhoneFromJidIfPn,
+  isLikelyRealPhone,
+  phonesMatch,
+  uid,
+  buildContactVCard
+} from './storage.js';
 import { generateSmartReply, buildExecutiveHandoffDossier } from './aiEngine.js';
 import { formatPixMessageWithQr } from './pix.js';
 import { convertToCanonicalWhatsAppVoice, WHATSAPP_VOICE_MIMETYPE, isNativeOggOpus } from './audioProcessor.js';
@@ -158,10 +173,49 @@ function isWithinBusinessSchedule(schedule = {}) {
   return { active: true };
 }
 
-class WhatsAppManager {
-  constructor() {
+function wrapSocketForSlot(rawSock) {
+  if (!rawSock) return rawSock;
+  const toRaw = (jid) => (typeof jid === 'string' ? parseContactChannelKey(jid).rawJid : jid);
+  return new Proxy(rawSock, {
+    get(target, prop, receiver) {
+      if (prop === 'sendMessage') {
+        return (jid, content, opts) => target.sendMessage(toRaw(jid), content, opts);
+      }
+      if (prop === 'sendPresenceUpdate') {
+        return (state, jid) => target.sendPresenceUpdate(state, jid ? toRaw(jid) : jid);
+      }
+      if (prop === 'profilePictureUrl') {
+        return (jid, type, timeoutMs) => target.profilePictureUrl(toRaw(jid), type, timeoutMs);
+      }
+      if (prop === 'updateBlockStatus') {
+        return (jid, action) => target.updateBlockStatus(toRaw(jid), action);
+      }
+      if (prop === 'readMessages') {
+        return (keys = []) =>
+          target.readMessages(
+            (keys || []).map((k) => (k?.remoteJid ? { ...k, remoteJid: toRaw(k.remoteJid) } : k))
+          );
+      }
+      if (prop === 'fetchMessageHistory') {
+        return (count, oldestKey, ts) =>
+          target.fetchMessageHistory(
+            count,
+            oldestKey?.remoteJid ? { ...oldestKey, remoteJid: toRaw(oldestKey.remoteJid) } : oldestKey,
+            ts
+          );
+      }
+      const val = Reflect.get(target, prop, receiver);
+      return typeof val === 'function' ? val.bind(target) : val;
+    }
+  });
+}
+
+class WhatsAppSlotEngine {
+  constructor(slotId = 'slot_1', orchestrator = null) {
+    this.slotId = normalizeSlotId(slotId);
+    this.orchestrator = orchestrator;
     this.sock = null;
-    this.authDir = AUTH_DIR;
+    this.authDir = this.slotId === 'slot_1' ? AUTH_DIR : path.join(AUTH_DIR, this.slotId);
     this.status = 'disconnected'; // 'disconnected' | 'connecting' | 'qr_ready' | 'connected'
     this.qrDataUrl = null;
     this.pairingCode = null;
@@ -190,28 +244,42 @@ class WhatsAppManager {
     this.avatarFetchCache = new Map(); // chatId -> ts
     this.scheduledSendingLock = false;
 
-    // Fila Segura Anti-Ban de Abordagem Ativa (M01–M13) — persistida em disco contra reinícios
-    this.proactiveQueue = Array.isArray(storage.data.proactiveQueue) ? [...storage.data.proactiveQueue] : [];
-    this.proactiveQueueRunning = false;
-    this.proactiveQueuePaused = this.proactiveQueue.length > 0;
-    this.proactiveQueueTimer = null;
-    this.proactiveNextRunAt = null;
-    this.proactiveSentCount = 0;
-
     this.loadLidMappingsFromDisk();
 
-    // Vigia automático de Retornos Agendados (Skill S19 — alerta o dono na hora marcada sem incomodar o cliente sozinho) + poda preventiva de memória 24/7
-    this.followUpTimer = setInterval(() => {
+    // Poda preventiva de memória 24/7 por slot
+    this.cachePruneTimer = setInterval(() => {
       this.pruneTransientCaches();
-      this.checkDueFollowUpsNow().catch(() => {});
-    }, 45_000);
-    if (this.followUpTimer.unref) this.followUpTimer.unref();
+    }, 60_000);
+    if (this.cachePruneTimer.unref) this.cachePruneTimer.unref();
 
-    // Disparador automático de Mensagens Programadas no Chat (a cada 15s quando WhatsApp conectado)
+    // Disparador automático de Mensagens Programadas das conversas deste Chip (a cada 15s)
     this.scheduledMsgTimer = setInterval(() => {
       this.processDueScheduledMessages().catch(() => {});
     }, 15_000);
     if (this.scheduledMsgTimer.unref) this.scheduledMsgTimer.unref();
+  }
+
+  toStorageKey(rawJid = '') {
+    return buildContactChannelKey(this.slotId, rawJid);
+  }
+
+  toRawJid(chatIdOrKey = '') {
+    return parseContactChannelKey(chatIdOrKey).rawJid;
+  }
+
+  getSlotConfig() {
+    const all = normalizeWaSlotsSettings(storage.data.settings?.waSlots);
+    return all[this.slotId] || { label: `Chip ${this.slotId.slice(-1)}`, aiEnabled: true };
+  }
+
+  isSlotAiEnabled() {
+    return this.getSlotConfig().aiEnabled !== false;
+  }
+
+  getSlotDisplayBadge() {
+    const cfg = this.getSlotConfig();
+    const num = this.connectedUser?.phone ? ` (+${this.connectedUser.phone})` : '';
+    return `${cfg.label}${num}`;
   }
 
   pruneTransientCaches() {
@@ -487,21 +555,22 @@ class WhatsAppManager {
     let count = 0;
 
     for (const ch of chats || []) {
-      const chatId = String(ch?.id || '').trim();
-      if (!this.isValid1to1ChatJid(chatId)) continue;
+      const rawChatId = String(ch?.id || '').trim();
+      if (!this.isValid1to1ChatJid(rawChatId)) continue;
+      const chatId = this.toStorageKey(rawChatId);
 
       if (ch.lidJid && ch.pnJid) {
         this.lidToPhoneMap.set(`${normalizePhoneDigits(ch.lidJid)}@lid`, normalizePhoneDigits(ch.pnJid));
-      } else if (chatId.endsWith('@lid') && ch.pnJid) {
-        this.lidToPhoneMap.set(`${normalizePhoneDigits(chatId)}@lid`, normalizePhoneDigits(ch.pnJid));
-      } else if (chatId.endsWith('@s.whatsapp.net') && ch.lidJid) {
-        this.lidToPhoneMap.set(`${normalizePhoneDigits(ch.lidJid)}@lid`, normalizePhoneDigits(chatId));
+      } else if (rawChatId.endsWith('@lid') && ch.pnJid) {
+        this.lidToPhoneMap.set(`${normalizePhoneDigits(rawChatId)}@lid`, normalizePhoneDigits(ch.pnJid));
+      } else if (rawChatId.endsWith('@s.whatsapp.net') && ch.lidJid) {
+        this.lidToPhoneMap.set(`${normalizePhoneDigits(ch.lidJid)}@lid`, normalizePhoneDigits(rawChatId));
       }
 
-      const phone = this.resolvePhoneFromJid(chatId);
+      const phone = this.resolvePhoneFromJid(rawChatId);
       const chatName =
         String(ch.name || ch.displayName || '').trim() ||
-        this.lookupBestContactName(chatId, phone);
+        this.lookupBestContactName(rawChatId, phone);
 
       const rawTsMs =
         toEpochMs(ch.conversationTimestamp) ||
@@ -591,8 +660,9 @@ class WhatsAppManager {
 
     for (const msg of sortedMsgs) {
       const destJid = msg?.message?.deviceSentMessage?.destinationJid;
-      const remoteJid = (destJid && this.isSelfJid(msg?.key?.remoteJid)) ? destJid : msg?.key?.remoteJid;
-      if (!this.isValid1to1ChatJid(remoteJid)) continue;
+      const rawRemoteJid = (destJid && this.isSelfJid(msg?.key?.remoteJid)) ? destJid : msg?.key?.remoteJid;
+      if (!this.isValid1to1ChatJid(rawRemoteJid)) continue;
+      const remoteJid = this.toStorageKey(rawRemoteJid);
 
       const unwrapped = unwrapMessageContent(msg.message);
       if (!unwrapped || unwrapped.protocolMessage || unwrapped.reactionMessage) continue;
@@ -629,7 +699,7 @@ class WhatsAppManager {
       if (clearedAtIso && tsMs <= (new Date(clearedAtIso).getTime() || 0)) continue;
 
       const contactName =
-        this.lookupBestContactName(remoteJid, bestPhone) ||
+        this.lookupBestContactName(rawRemoteJid, bestPhone) ||
         (!fromMe && msg.pushName && !storage.isGenericContactName(msg.pushName, ownerSelfName) ? msg.pushName : '');
 
       const updatedContact = storage.appendContactMessage(
@@ -703,6 +773,10 @@ class WhatsAppManager {
   }
 
   emitState(event = 'wa_state') {
+    if (this.orchestrator) {
+      this.orchestrator.emitState(event);
+      return;
+    }
     const pub = this.getPublicState();
     this.broadcastFn(event, pub);
     if (this.onStateChange) {
@@ -711,14 +785,18 @@ class WhatsAppManager {
   }
 
   getPublicState() {
+    const cfg = this.getSlotConfig();
     return {
+      slotId: this.slotId,
+      label: cfg.label,
+      aiEnabled: cfg.aiEnabled !== false,
       status: this.status,
       qrDataUrl: this.qrDataUrl,
       pairingCode: this.pairingCode,
       connectedUser: this.connectedUser,
       lastError: this.lastError,
       botEnabled: storage.data.settings.botEnabled,
-      proactive: this.getProactiveQueueState()
+      proactive: this.orchestrator ? this.orchestrator.getProactiveQueueState() : { running: false, paused: false, remaining: 0 }
     };
   }
 
@@ -870,7 +948,7 @@ class WhatsAppManager {
         return this.getPublicState();
       }
 
-      const sock = makeWASocket({
+      const rawSock = makeWASocket({
         version,
         logger,
         auth: state,
@@ -880,13 +958,14 @@ class WhatsAppManager {
         emitOwnEvents: false,
         markOnlineOnConnect: false,
         getMessage: async (key) => {
-          const cid = key?.remoteJid || '';
+          const cid = this.toStorageKey(key?.remoteJid || '');
           const c = storage.data.contacts[cid] || storage.data.contacts[storage.findSiblingContactKey(cid) || ''];
           const found = c?.messages?.find((m) => m.waMsgId && m.waMsgId === key?.id);
           return found?.text ? { conversation: found.text } : undefined;
         }
       });
 
+      const sock = wrapSocketForSlot(rawSock);
       this.sock = sock;
       let pairingRequested = false;
 
@@ -905,8 +984,9 @@ class WhatsAppManager {
             const cleanPn = normalizePhoneDigits(item.pn);
             if (isLikelyRealPhone(cleanPn)) {
               this.lidToPhoneMap.set(cleanLid, cleanPn);
-              if (storage.data.contacts[cleanLid] || storage.findSiblingContactKey(cleanLid, cleanPn)) {
-                storage.upsertContact(cleanLid, { phone: cleanPn }, { ownerSelfName: this.getOwnerSelfName() });
+              const slotLidKey = this.toStorageKey(cleanLid);
+              if (storage.data.contacts[slotLidKey] || storage.findSiblingContactKey(slotLidKey, cleanPn)) {
+                storage.upsertContact(slotLidKey, { phone: cleanPn }, { ownerSelfName: this.getOwnerSelfName() });
                 changed = true;
               }
             }
@@ -980,6 +1060,18 @@ class WhatsAppManager {
         }
 
         if (connection === 'open') {
+          const connectedPhone = normalizePhoneDigits(sock.user?.id || '');
+          // Proteção Anti-Conflito 440: impede que o mesmo número seja pareado em 2 slots da mesma conta!
+          const dupOtherSlot = this.orchestrator?.findOtherConnectedSlotByPhone(this.slotId, connectedPhone);
+          if (dupOtherSlot) {
+            const dupMsg = `Este número (+${connectedPhone}) já está ativo no ${dupOtherSlot.getSlotConfig().label}. Conecte um número diferente neste slot.`;
+            await this.disconnect(true);
+            this.lastError = dupMsg;
+            storage.addLog('alert', dupMsg);
+            this.emitState();
+            return;
+          }
+
           this.status = 'connected';
           this.reconnectAttempts = 0;
           this.qrDataUrl = null;
@@ -988,7 +1080,7 @@ class WhatsAppManager {
           this.loadLidMappingsFromDisk();
           this.connectedUser = {
             id: sock.user?.id || '',
-            phone: normalizePhoneDigits(sock.user?.id || ''),
+            phone: connectedPhone,
             name: sock.user?.name || 'WhatsApp Conectado'
           };
           this.lastConnectedUser = this.connectedUser;
@@ -999,16 +1091,17 @@ class WhatsAppManager {
           ) {
             this.lastConnectedLogPhone = this.connectedUser.phone;
             this.lastConnectedLogAt = nowMs;
-            storage.addLog('whatsapp', `WhatsApp conectado com sucesso! (${this.connectedUser.phone})`);
-            console.log(`✅ [WhatsApp 24h Ativo] Conectado em +${this.connectedUser.phone} (${this.connectedUser.name}) — Atendendo normalmente!`);
+            storage.addLog('whatsapp', `[${this.getSlotConfig().label}] WhatsApp conectado com sucesso! (+${this.connectedUser.phone})`);
+            console.log(`✅ [WhatsApp 24h Ativo · ${this.getSlotConfig().label}] Conectado em +${this.connectedUser.phone} (${this.connectedUser.name}) — Atendendo normalmente!`);
           }
           this.resolveConnectionWaiters(true);
           this.emitState();
 
-          // Limpa eventual auto-contato do próprio número caso tenha entrado em versões antigas
+          // Limpa eventual auto-contato do próprio número apenas dentro deste mesmo slot
           for (const k of Object.keys(storage.data.contacts || {})) {
-            if (this.isSelfJid(k)) {
-              storage.deleteContact(k);
+            const parsedK = parseContactChannelKey(k);
+            if (parsedK.slotId === this.slotId && this.isSelfJid(parsedK.rawJid)) {
+              storage.deleteContact(k, { recordTombstone: false });
             }
           }
 
@@ -1108,17 +1201,18 @@ class WhatsAppManager {
           const rJid = u?.key?.remoteJid;
           const mId = u?.key?.id;
           if (!rJid || !mId || !this.isValid1to1ChatJid(rJid)) continue;
+          const storageJid = this.toStorageKey(rJid);
           const st = u?.update?.status;
           if (typeof st === 'number' && st >= 2) {
             const ackLevel = st >= 4 ? 3 : st === 3 ? 2 : 1;
-            storage.applyMessageAck(rJid, mId, ackLevel);
+            storage.applyMessageAck(storageJid, mId, ackLevel);
             changed = true;
           }
           const edited = u?.update?.message?.editedMessage || u?.update?.message?.protocolMessage?.editedMessage;
           if (edited) {
             const newTxt = extractReadableTextFromUnwrapped(unwrapMessageContent(edited));
             if (newTxt) {
-              storage.applyMessageEdit(rJid, mId, newTxt);
+              storage.applyMessageEdit(storageJid, mId, newTxt);
               changed = true;
             }
           }
@@ -1146,9 +1240,15 @@ class WhatsAppManager {
     try {
       const dir = this.authDir || AUTH_DIR;
       if (fs.existsSync(dir)) {
-        fs.rmSync(dir, { recursive: true, force: true });
+        // Remove apenas arquivos deste slot (NUNCA apaga subpastas slot_2/slot_3 quando limpando slot_1!)
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          if (entry.isFile()) {
+            try { fs.unlinkSync(path.join(dir, entry.name)); } catch {}
+          }
+        }
+      } else {
+        fs.mkdirSync(dir, { recursive: true });
       }
-      fs.mkdirSync(dir, { recursive: true });
     } catch (err) {
       console.error('[WA] Erro ao limpar auth:', err.message);
     }
@@ -1392,8 +1492,9 @@ class WhatsAppManager {
 
   async handleIncomingRawMessage(msg, { isHistoryAppend = false } = {}) {
     const destJid = msg?.message?.deviceSentMessage?.destinationJid;
-    const remoteJid = (destJid && this.isSelfJid(msg?.key?.remoteJid)) ? destJid : msg?.key?.remoteJid;
-    if (!this.isValid1to1ChatJid(remoteJid)) return;
+    const rawRemoteJid = (destJid && this.isSelfJid(msg?.key?.remoteJid)) ? destJid : msg?.key?.remoteJid;
+    if (!this.isValid1to1ChatJid(rawRemoteJid)) return;
+    const remoteJid = this.toStorageKey(rawRemoteJid);
 
     const unwrapped = unwrapMessageContent(msg.message);
     if (!unwrapped) return;
@@ -1600,7 +1701,7 @@ class WhatsAppManager {
             : textContent;
 
     const cleanClientName =
-      this.lookupBestContactName(remoteJid, bestPhone) ||
+      this.lookupBestContactName(rawRemoteJid, bestPhone) ||
       (!storage.isGenericContactName(rawPushName, ownerSelfName) ? rawPushName : '') ||
       storage.data.contacts[remoteJid]?.name ||
       (bestPhone ? `+${bestPhone}` : 'Cliente');
@@ -1739,8 +1840,14 @@ class WhatsAppManager {
       }
     }
 
-    // 4. Checar chave geral do Robô
-    if (!storage.data.settings.botEnabled) {
+    // 4. Checar chave geral do Robô e chave individual de IA deste Chip (slot_1 / slot_2 / slot_3)
+    if (!storage.data.settings.botEnabled || !this.isSlotAiEnabled()) {
+      return;
+    }
+
+    // 4.1 Proteção Anti-Loop entre Chips da própria conta (impede IA do Chip 1 conversar infinitamente com IA do Chip 2!)
+    if (this.orchestrator?.isAnyOwnSlotPhone(bestPhone)) {
+      storage.addLog('info', `[Proteção Anti-Loop] Mensagem recebida de outro Chip da própria conta (+${bestPhone}) — resposta automática bloqueada.`);
       return;
     }
 
@@ -2231,12 +2338,11 @@ class WhatsAppManager {
       silentPause
     });
 
-    // Enviar Dossiê Executivo de 3 Linhas (Skill #2) para o WhatsApp pessoal do dono
-    if (handoffCfg.notifyOwnerOnHandoff && handoffCfg.ownerPersonalWhatsapp && this.sock && this.status === 'connected') {
+    // Enviar Dossiê Executivo de 3 Linhas (Skill #2) centralizado pelo Chip 1 Principal (com relay multi-dispositivo + failover)
+    if (handoffCfg.notifyOwnerOnHandoff && handoffCfg.ownerPersonalWhatsapp) {
       const ownerDigits = normalizePhoneDigits(handoffCfg.ownerPersonalWhatsapp);
       if (ownerDigits.length >= 10) {
         const fullOwnerDigits = ownerDigits.startsWith('55') ? ownerDigits : `55${ownerDigits}`;
-        const ownerJid = `${fullOwnerDigits}@s.whatsapp.net`;
         const waLink = phone ? `https://wa.me/${phone.startsWith('55') ? phone : `55${phone}`}` : 'Abra no painel';
 
         const headerTitle = silentPause
@@ -2248,6 +2354,7 @@ class WhatsAppManager {
 
         const alertText = [
           headerTitle,
+          `*Canal de Entrada:* ${this.getSlotDisplayBadge()}`,
           `*Atendimento:* ${profileName}`,
           `*Contato:* ${contactName} (+${phone || 'N/D'})`,
           '',
@@ -2264,19 +2371,35 @@ class WhatsAppManager {
           .join('\n');
 
         try {
-          let targetJid = ownerJid;
-          const check = await this.sock.onWhatsApp(fullOwnerDigits).catch(() => []);
-          if (Array.isArray(check) && check[0]?.exists && check[0]?.jid) {
-            targetJid = check[0].jid;
+          if (this.orchestrator) {
+            await this.orchestrator.deliverOwnerAlertCentralized({
+              fromSlotId: this.slotId,
+              ownerPhoneDigits: fullOwnerDigits,
+              alertText
+            });
+          } else if (this.sock && this.status === 'connected') {
+            await this.sendDirectAlertText(fullOwnerDigits, alertText);
           }
-          const sentAlert = await this.sock.sendMessage(targetJid, { text: alertText });
-          this.rememberBotMessage(sentAlert);
           storage.addLog('whatsapp', `Resumo enviado para o seu WhatsApp pessoal (+${fullOwnerDigits})!`);
         } catch (err) {
           storage.addLog('error', `Não foi possível enviar alerta ao WhatsApp pessoal: ${err.message}`);
         }
       }
     }
+  }
+
+  async sendDirectAlertText(fullOwnerDigits, alertText) {
+    if (!this.sock || this.status !== 'connected') {
+      throw new Error(`${this.getSlotConfig().label} não está conectado neste aparelho.`);
+    }
+    let targetJid = `${fullOwnerDigits}@s.whatsapp.net`;
+    const check = await this.sock.onWhatsApp(fullOwnerDigits).catch(() => []);
+    if (Array.isArray(check) && check[0]?.exists && check[0]?.jid) {
+      targetJid = check[0].jid;
+    }
+    const sentAlert = await this.sock.sendMessage(targetJid, { text: alertText });
+    this.rememberBotMessage(sentAlert);
+    return sentAlert;
   }
 
   async fetchContactAvatarIfNeeded(chatId) {
@@ -2304,9 +2427,10 @@ class WhatsAppManager {
 
   buildMsgKeyFromStored(chatId, msg) {
     if (!msg) return null;
+    const rawChatJid = this.toRawJid(chatId);
     if (msg.waMsgKey?.id) {
       return {
-        remoteJid: msg.waMsgKey.remoteJid || chatId,
+        remoteJid: this.toRawJid(msg.waMsgKey.remoteJid || rawChatJid),
         fromMe: Boolean(msg.waMsgKey.fromMe ?? (msg.role !== 'user')),
         id: msg.waMsgKey.id,
         ...(msg.waMsgKey.participant ? { participant: msg.waMsgKey.participant } : {})
@@ -2314,7 +2438,7 @@ class WhatsAppManager {
     }
     if (msg.waMsgId) {
       return {
-        remoteJid: chatId,
+        remoteJid: rawChatJid,
         fromMe: Boolean(msg.waFromMe ?? (msg.role !== 'user')),
         id: msg.waMsgId
       };
@@ -2329,9 +2453,11 @@ class WhatsAppManager {
         throw new Error('O WhatsApp não está conectado no momento.');
       }
     }
-    const targetJid = String(chatId || '').includes('@')
-      ? String(chatId)
-      : `${normalizePhoneDigits(chatId)}@s.whatsapp.net`;
+    const targetJid = this.toStorageKey(
+      String(chatId || '').includes('@')
+        ? String(chatId)
+        : `${normalizePhoneDigits(chatId)}@s.whatsapp.net`
+    );
 
     let sendOpts = undefined;
     let storedQuoted = undefined;
@@ -2434,7 +2560,9 @@ class WhatsAppManager {
     if (!srcContact || !msg) throw new Error('Mensagem de origem não encontrada.');
     const rawDest = String(toChatIdOrPhone || '').trim();
     if (!rawDest) throw new Error('Selecione o contato de destino.');
-    const destJid = rawDest.includes('@') ? rawDest : `${normalizePhoneDigits(rawDest)}@s.whatsapp.net`;
+    const destJid = this.toStorageKey(
+      rawDest.includes('@') ? rawDest : `${normalizePhoneDigits(rawDest)}@s.whatsapp.net`
+    );
     const cleanText = String(msg.text || '').trim();
 
     if (msg.mediaUrl && this.sock && this.status === 'connected') {
@@ -2443,7 +2571,7 @@ class WhatsAppManager {
         const fp = path.join(UPLOADS_DIR, path.basename(msg.mediaUrl));
         if (fs.existsSync(fp)) buf = fs.readFileSync(fp);
       } else if (/^https?:\/\//i.test(msg.mediaUrl)) {
-        const res = await fetch(msg.mediaUrl);
+        const res = await fetch(msg.mediaUrl, { signal: AbortSignal.timeout(25_000) });
         if (res.ok) buf = Buffer.from(await res.arrayBuffer());
       }
       if (buf) {
@@ -2472,6 +2600,8 @@ class WhatsAppManager {
     try {
       const nowMs = trueNowMs();
       for (const contact of Object.values(storage.data.contacts || {})) {
+        const contactSlot = normalizeSlotId(contact.slotId || parseContactChannelKey(contact.chatId).slotId);
+        if (contactSlot !== this.slotId) continue;
         if (!Array.isArray(contact.scheduledMessages) || contact.scheduledMessages.length === 0) continue;
         for (const item of contact.scheduledMessages) {
           if (item.status !== 'pending') continue;
@@ -2502,9 +2632,11 @@ class WhatsAppManager {
         throw new Error('O WhatsApp não está conectado no momento.');
       }
     }
-    const targetJid = String(chatId || '').includes('@')
-      ? String(chatId)
-      : `${normalizePhoneDigits(chatId)}@s.whatsapp.net`;
+    const targetJid = this.toStorageKey(
+      String(chatId || '').includes('@')
+        ? String(chatId)
+        : `${normalizePhoneDigits(chatId)}@s.whatsapp.net`
+    );
     const isImage = /^image\//i.test(mimeType) && !/svg/i.test(mimeType);
     const isVideo = /^video\//i.test(mimeType);
     const payload = isImage
@@ -2823,14 +2955,16 @@ class WhatsAppManager {
     if (digits.length === 10 || digits.length === 11) {
       digits = `55${digits}`;
     }
-    let targetJid = `${digits}@s.whatsapp.net`;
+    let rawTargetJid = `${digits}@s.whatsapp.net`;
     const check = await this.sock.onWhatsApp(digits).catch(() => []);
     if (Array.isArray(check) && check[0]?.exists && check[0]?.jid) {
-      targetJid = check[0].jid;
+      rawTargetJid = check[0].jid;
     }
 
-    const resolvedPhone = normalizePhoneDigits(targetJid) || digits;
+    const targetJid = this.toStorageKey(rawTargetJid);
+    const resolvedPhone = normalizePhoneDigits(rawTargetJid) || digits;
     storage.upsertContact(targetJid, {
+      slotId: this.slotId,
       phone: resolvedPhone,
       name: leadName,
       stage: 'em_atendimento',
@@ -2856,11 +2990,11 @@ class WhatsAppManager {
 
     storage.data.stats.totalAiReplies += 1;
     storage.recordProactiveSend();
-    storage.addLog('whatsapp', `Abordagem ativa enviada para +${resolvedPhone} (${targetJid}) — IA pronta aguardando resposta!`);
+    storage.addLog('whatsapp', `[${this.getSlotConfig().label}] Abordagem ativa enviada para +${resolvedPhone} — IA pronta aguardando resposta!`);
     storage.writeNow();
     this.broadcastFn('crm_updated', { chatId: targetJid });
     this.broadcastFn('logs_updated', {});
-    return { targetJid, resolvedPhone };
+    return { targetJid, resolvedPhone, slotId: this.slotId, slotLabel: this.getSlotConfig().label };
   }
 
   getProactiveQueueState() {
@@ -3062,6 +3196,590 @@ class WhatsAppManager {
   }
 
   clearProactiveQueue() {
+    if (this.orchestrator) return this.orchestrator.clearProactiveQueue();
+    return { running: false, paused: false, remaining: 0 };
+  }
+}
+
+/**
+ * Orquestrador Multi-Chip (até 3 números simultâneos por conta: slot_1, slot_2, slot_3)
+ * Compatível com execução no mesmo dispositivo (~140MB RAM total) OU distribuída entre múltiplos aparelhos!
+ */
+class WhatsAppMultiSlotManager {
+  constructor() {
+    this.broadcastFn = () => {};
+    this.onStateChange = null;
+    this.remoteOwnerAlertRelayFn = null; // Injetado pelo CloudWorker p/ repassar alerta ao Chip 1 quando estiver em outro aparelho
+    this.knownCloudSlotPhones = new Set(); // Telefones conectados em outros aparelhos da mesma conta (Proteção Anti-Loop entre dispositivos)
+    this.rotationCursor = 0;
+
+    this.slots = {
+      slot_1: new WhatsAppSlotEngine('slot_1', this),
+      slot_2: new WhatsAppSlotEngine('slot_2', this),
+      slot_3: new WhatsAppSlotEngine('slot_3', this)
+    };
+
+    // Fila Segura Anti-Ban de Abordagem Ativa centralizada com suporte a Rodízio Inteligente entre Chips
+    this.proactiveQueue = Array.isArray(storage.data.proactiveQueue) ? [...storage.data.proactiveQueue] : [];
+    this.proactiveChannelMode = 'auto_rotate';
+    this.proactiveQueueRunning = false;
+    this.proactiveQueuePaused = this.proactiveQueue.length > 0;
+    this.proactiveQueueTimer = null;
+    this.proactiveNextRunAt = null;
+    this.proactiveSentCount = 0;
+
+    // Vigia centralizado de Retornos Agendados (Skill S19 — roda 1 vez p/ todos os chips e alerta pelo Chip 1)
+    this.followUpTimer = setInterval(() => {
+      this.checkDueFollowUpsNow().catch(() => {});
+    }, 45_000);
+    if (this.followUpTimer.unref) this.followUpTimer.unref();
+  }
+
+  getSlot(slotId = 'slot_1') {
+    const clean = normalizeSlotId(slotId);
+    return this.slots[clean] || this.slots.slot_1;
+  }
+
+  getSlotForChat(chatId = '') {
+    const { slotId } = parseContactChannelKey(chatId);
+    return this.getSlot(slotId);
+  }
+
+  getConnectedSlots() {
+    return WA_SLOT_IDS.map((id) => this.slots[id]).filter((s) => s && s.status === 'connected' && s.sock);
+  }
+
+  getActiveLocalSlotIds() {
+    return WA_SLOT_IDS.filter((id) => {
+      const s = this.slots[id];
+      return s && (s.status === 'connected' || s.status === 'connecting' || s.status === 'qr_ready' || s.hasSavedSession());
+    });
+  }
+
+  setCloudPeerSlotPhones(phones = []) {
+    this.knownCloudSlotPhones = new Set((phones || []).map((p) => normalizePhoneDigits(p)).filter(Boolean));
+  }
+
+  isAnyOwnSlotPhone(phone = '') {
+    const digits = normalizePhoneDigits(phone);
+    if (!isLikelyRealPhone(digits)) return false;
+    for (const id of WA_SLOT_IDS) {
+      const sp = this.slots[id]?.connectedUser?.phone;
+      if (sp && phonesMatch(sp, digits)) return true;
+    }
+    for (const cp of this.knownCloudSlotPhones) {
+      if (cp && phonesMatch(cp, digits)) return true;
+    }
+    return false;
+  }
+
+  findOtherConnectedSlotByPhone(currentSlotId, phone = '') {
+    const digits = normalizePhoneDigits(phone);
+    if (!isLikelyRealPhone(digits)) return null;
+    for (const id of WA_SLOT_IDS) {
+      if (id === currentSlotId) continue;
+      const s = this.slots[id];
+      if (s?.status === 'connected' && s.connectedUser?.phone && phonesMatch(s.connectedUser.phone, digits)) {
+        return s;
+      }
+    }
+    return null;
+  }
+
+  setBroadcaster(fn) {
+    this.broadcastFn = fn;
+    for (const id of WA_SLOT_IDS) {
+      this.slots[id].setBroadcaster(fn);
+    }
+  }
+
+  setStateChangeHook(fn) {
+    this.onStateChange = fn;
+  }
+
+  setRemoteOwnerAlertRelay(fn) {
+    this.remoteOwnerAlertRelayFn = fn;
+  }
+
+  setAuthDir(userBaseAuthDir) {
+    if (!userBaseAuthDir) return;
+    // Slot 1 mantém exatamente a raiz userBaseAuthDir para 100% de retrocompatibilidade sem reconectar QR!
+    this.slots.slot_1.setAuthDir(userBaseAuthDir);
+    this.slots.slot_2.setAuthDir(path.join(userBaseAuthDir, 'slot_2'));
+    this.slots.slot_3.setAuthDir(path.join(userBaseAuthDir, 'slot_3'));
+  }
+
+  get status() {
+    if (this.getConnectedSlots().length > 0) return 'connected';
+    for (const id of WA_SLOT_IDS) {
+      if (this.slots[id].status === 'qr_ready') return 'qr_ready';
+    }
+    for (const id of WA_SLOT_IDS) {
+      if (this.slots[id].status === 'connecting') return 'connecting';
+    }
+    return 'disconnected';
+  }
+
+  emitState(event = 'wa_state') {
+    const pub = this.getPublicState();
+    this.broadcastFn(event, pub);
+    if (this.onStateChange) {
+      try { this.onStateChange(pub); } catch {}
+    }
+  }
+
+  getPublicState() {
+    const slotsState = {};
+    for (const id of WA_SLOT_IDS) {
+      slotsState[id] = this.slots[id].getPublicState();
+    }
+    const primary =
+      slotsState.slot_1.status === 'connected'
+        ? slotsState.slot_1
+        : (WA_SLOT_IDS.map((id) => slotsState[id]).find((s) => s.status === 'connected') || slotsState.slot_1);
+
+    return {
+      status: primary.status,
+      qrDataUrl: slotsState.slot_1.qrDataUrl,
+      pairingCode: slotsState.slot_1.pairingCode,
+      connectedUser: primary.connectedUser,
+      lastError: slotsState.slot_1.lastError,
+      botEnabled: storage.data.settings.botEnabled,
+      connectedCount: WA_SLOT_IDS.filter((id) => slotsState[id].status === 'connected').length,
+      slots: slotsState,
+      proactive: this.getProactiveQueueState()
+    };
+  }
+
+  hasSavedSession(slotId = null) {
+    if (slotId) return this.getSlot(slotId).hasSavedSession();
+    return WA_SLOT_IDS.some((id) => this.slots[id].hasSavedSession());
+  }
+
+  async autoRestoreIfSessionExists(maxSlots = 3) {
+    const allowedIds = WA_SLOT_IDS.slice(0, Math.max(1, Math.min(3, Number(maxSlots) || 3)));
+    for (const id of allowedIds) {
+      const s = this.slots[id];
+      if (s.hasSavedSession() && s.status !== 'connected' && s.status !== 'connecting') {
+        s.connect(null).catch((err) => {
+          console.error(`[WA ${id}] Erro ao restaurar sessão salva:`, err.message);
+        });
+      }
+    }
+  }
+
+  async connect(pairingPhone = null, slotId = 'slot_1') {
+    const slot = this.getSlot(slotId);
+    await slot.connect(pairingPhone);
+    return this.getPublicState();
+  }
+
+  async disconnect(clearSession = true, slotId = 'slot_1') {
+    const slot = this.getSlot(slotId);
+    await slot.disconnect(clearSession);
+    return this.getPublicState();
+  }
+
+  async disconnectOnly(slotId = null) {
+    if (slotId) {
+      await this.getSlot(slotId).disconnectOnly();
+      return;
+    }
+    await Promise.all(WA_SLOT_IDS.map((id) => this.slots[id].disconnectOnly().catch(() => {})));
+  }
+
+  async syncAllConversationsFromPhone({ force = false, waitMs = 6500, slotId = null } = {}) {
+    if (slotId) {
+      return this.getSlot(slotId).syncAllConversationsFromPhone({ force, waitMs });
+    }
+    const connected = this.getConnectedSlots();
+    if (!connected.length) {
+      return this.slots.slot_1.syncAllConversationsFromPhone({ force, waitMs });
+    }
+    let totalContacts = 0;
+    for (const s of connected) {
+      const r = await s.syncAllConversationsFromPhone({ force, waitMs }).catch(() => ({ totalContacts: 0 }));
+      totalContacts = Math.max(totalContacts, Number(r?.totalContacts) || 0);
+    }
+    return { ok: true, totalContacts: Object.keys(storage.data.contacts || {}).length };
+  }
+
+  async fetchOlderMessagesForChat(chatId, count = 50) {
+    return this.getSlotForChat(chatId).fetchOlderMessagesForChat(chatId, count);
+  }
+
+  async sendManualOwnerMessage(chatId, text, pauseAi = true, opts = {}) {
+    const targetSlot = opts?.slotId ? this.getSlot(opts.slotId) : this.getSlotForChat(chatId);
+    const scopedChatId = buildContactChannelKey(targetSlot.slotId, chatId);
+    return targetSlot.sendManualOwnerMessage(scopedChatId, text, pauseAi, opts);
+  }
+
+  async reactToWhatsappMessage(chatId, msgId, emoji = '') {
+    return this.getSlotForChat(chatId).reactToWhatsappMessage(chatId, msgId, emoji);
+  }
+
+  async editWhatsappMessage(chatId, msgId, newText = '') {
+    return this.getSlotForChat(chatId).editWhatsappMessage(chatId, msgId, newText);
+  }
+
+  async deleteWhatsappMessageForEveryone(chatId, msgId) {
+    return this.getSlotForChat(chatId).deleteWhatsappMessageForEveryone(chatId, msgId);
+  }
+
+  async forwardCrmMessage(fromChatId, msgId, toChatIdOrPhone) {
+    return this.getSlotForChat(toChatIdOrPhone).forwardCrmMessage(fromChatId, msgId, toChatIdOrPhone);
+  }
+
+  async sendCatalogMediaFile(chatId, item, senderRole = 'assistant') {
+    return this.getSlotForChat(chatId).sendCatalogMediaFile(chatId, item, senderRole);
+  }
+
+  async sendPixPayloadToChat(chatId, profile, requestedAmount = null, senderRole = 'assistant', contactLabel = '') {
+    return this.getSlotForChat(chatId).sendPixPayloadToChat(chatId, profile, requestedAmount, senderRole, contactLabel);
+  }
+
+  async sendManualAttachment(params = {}) {
+    const slot = this.getSlotForChat(params.chatId);
+    return slot.sendManualAttachment({ ...params, chatId: buildContactChannelKey(slot.slotId, params.chatId) });
+  }
+
+  async sendCanonicalVoiceNote(params = {}) {
+    const slot = this.getSlotForChat(params.chatId);
+    return slot.sendCanonicalVoiceNote({ ...params, chatId: buildContactChannelKey(slot.slotId, params.chatId) });
+  }
+
+  async sendLibraryVoiceToChat(chatId, voiceId, opts = {}) {
+    const slot = this.getSlotForChat(chatId);
+    return slot.sendLibraryVoiceToChat(buildContactChannelKey(slot.slotId, chatId), voiceId, opts);
+  }
+
+  async sendVoiceNoteToChat(chatId, buffer, originalName = 'nota-voz.ogg', senderRole = 'owner', pauseAi = true) {
+    const slot = this.getSlotForChat(chatId);
+    return slot.sendVoiceNoteToChat(buildContactChannelKey(slot.slotId, chatId), buffer, originalName, senderRole, pauseAi);
+  }
+
+  async setWhatsAppBlockStatus(chatId, blocked = true) {
+    return this.getSlotForChat(chatId).setWhatsAppBlockStatus(chatId, blocked);
+  }
+
+  async sendContactVCardOnWhatsApp(targetChatId, cardContact = {}) {
+    return this.getSlotForChat(targetChatId).sendContactVCardOnWhatsApp(targetChatId, cardContact);
+  }
+
+  /**
+   * Regra Centralizada do Usuário:
+   * Alertas ao WhatsApp pessoal saem SEMPRE pelo Chip 1 Principal!
+   * 1) Se Chip 1 estiver conectado neste aparelho -> envia direto pelo Chip 1.
+   * 2) Se Chip 1 estiver conectado em outro aparelho online da mesma conta -> repassa via Cloud Relay (6s timeout).
+   * 3) Se Chip 1 estiver desconectado -> usa o chip local conectado como backup automático para nunca perder um fechamento!
+   */
+  async deliverOwnerAlertCentralized({ fromSlotId = 'slot_1', ownerPhoneDigits, alertText }) {
+    if (this.slots.slot_1.status === 'connected' && this.slots.slot_1.sock) {
+      return this.slots.slot_1.sendDirectAlertText(ownerPhoneDigits, alertText);
+    }
+    if (this.remoteOwnerAlertRelayFn) {
+      try {
+        const relayed = await this.remoteOwnerAlertRelayFn({ ownerPhoneDigits, alertText });
+        if (relayed) return relayed;
+      } catch {}
+    }
+    const fallbackSlot =
+      (this.slots[fromSlotId]?.status === 'connected' && this.slots[fromSlotId]) ||
+      this.getConnectedSlots()[0];
+    if (!fallbackSlot) {
+      throw new Error('Nenhum chip WhatsApp conectado para entregar o alerta ao seu número pessoal.');
+    }
+    return fallbackSlot.sendDirectAlertText(ownerPhoneDigits, alertText);
+  }
+
+  async sendTestAlertToOwner(ownerPhoneInput, preferredSlotId = 'slot_1') {
+    const digits = normalizePhoneDigits(ownerPhoneInput || storage.data.settings.humanHandoff?.ownerPersonalWhatsapp);
+    if (digits.length < 10) {
+      throw new Error('Informe um número de WhatsApp válido com DDD (ex: 5586999999999).');
+    }
+    const fullDigits = digits.startsWith('55') ? digits : `55${digits}`;
+    const msg = [
+      '✅ *TESTE DE ALERTA — ZAP-IA STUDIO MULTI-CHIP*',
+      '',
+      'Perfeito! Seu número pessoal está configurado corretamente.',
+      'Todos os avisos de fechamento dos seus Chips conectados chegarão centralizados aqui!'
+    ].join('\n');
+
+    const slot =
+      (this.slots.slot_1.status === 'connected' && this.slots.slot_1) ||
+      (this.slots[preferredSlotId]?.status === 'connected' && this.slots[preferredSlotId]) ||
+      this.getConnectedSlots()[0];
+    if (!slot) {
+      throw new Error('Conecte pelo menos um Chip WhatsApp primeiro para testar o envio real.');
+    }
+    await slot.sendDirectAlertText(fullDigits, msg);
+    storage.addLog('whatsapp', `Teste de alerta enviado com sucesso pelo ${slot.getSlotConfig().label} para +${fullDigits}!`);
+    return { sentTo: fullDigits, sentViaSlot: slot.slotId };
+  }
+
+  async checkDueFollowUpsNow({ notifyOwnerWhatsapp = true } = {}) {
+    const now = trueNowMs();
+    const contacts = Object.values(storage.data.contacts || {});
+    const triggered = [];
+
+    for (const c of contacts) {
+      if (!c.followUpAt || c.followUpNotifiedAt) continue;
+      const dueMs = new Date(c.followUpAt).getTime();
+      if (Number.isNaN(dueMs) || dueMs > now) continue;
+
+      const notifiedAt = trueNowIso();
+      storage.upsertContact(c.chatId, {
+        followUpNotifiedAt: notifiedAt,
+        unreadAlert: true
+      });
+      triggered.push(c);
+
+      const cSlot = this.getSlotForChat(c.chatId);
+      storage.addLog(
+        'alert',
+        `⏰ Hora do retorno agendado (Skill S19 · ${cSlot.getSlotConfig().label}) com ${c.name} (+${c.phone || 'N/D'})!`
+      );
+      this.broadcastFn('followup_due', {
+        chatId: c.chatId,
+        slotId: cSlot.slotId,
+        contactName: c.name,
+        phone: c.phone,
+        followUpAt: c.followUpAt,
+        summary: c.summary || ''
+      });
+
+      const handoffCfg = storage.data.settings.humanHandoff || {};
+      if (notifyOwnerWhatsapp && handoffCfg.notifyOwnerOnHandoff && handoffCfg.ownerPersonalWhatsapp && !String(c.chatId).startsWith('demo_')) {
+        const ownerDigits = normalizePhoneDigits(handoffCfg.ownerPersonalWhatsapp);
+        if (ownerDigits.length >= 10) {
+          const fullOwner = ownerDigits.startsWith('55') ? ownerDigits : `55${ownerDigits}`;
+          const waLink = c.phone ? `https://wa.me/${c.phone.startsWith('55') ? c.phone : `55${c.phone}`}` : 'Abra no painel';
+          const whenStr = new Date(c.followUpAt).toLocaleString('pt-BR');
+          const alertText = [
+            '⏰ *LEMBRETE DE RETORNO AGENDADO (SKILL S19)*',
+            `*Canal da Conversa:* ${cSlot.getSlotDisplayBadge()}`,
+            `*Contato:* ${c.name} (+${c.phone || 'N/D'})`,
+            `*Horário combinado:* ${whenStr}`,
+            c.summary ? `*Contexto:* ${c.summary}` : null,
+            c.notes ? `*Observações:* ${c.notes}` : null,
+            '',
+            `*Chamar agora:* ${waLink}`,
+            '_Nenhuma mensagem automática foi enviada ao cliente sem sua revisão._'
+          ].filter(Boolean).join('\n');
+
+          try {
+            await this.deliverOwnerAlertCentralized({
+              fromSlotId: cSlot.slotId,
+              ownerPhoneDigits: fullOwner,
+              alertText
+            });
+          } catch (err) {
+            storage.addLog('error', `Falha ao enviar lembrete S19 ao WhatsApp pessoal: ${err.message}`);
+          }
+        }
+      }
+    }
+
+    if (triggered.length > 0) {
+      storage.writeNow();
+      this.broadcastFn('crm_updated', {});
+      this.broadcastFn('logs_updated', {});
+    }
+    return triggered;
+  }
+
+  pickSlotForProactive(channelMode = 'auto_rotate') {
+    const connected = this.getConnectedSlots();
+    if (!connected.length) {
+      throw new Error('Conecte pelo menos 1 Chip de WhatsApp antes de disparar abordagens ativas.');
+    }
+    if (channelMode && channelMode !== 'auto_rotate' && WA_SLOT_IDS.includes(channelMode)) {
+      const requested = this.slots[channelMode];
+      if (!requested || requested.status !== 'connected' || !requested.sock) {
+        throw new Error(`O ${requested?.getSlotConfig().label || channelMode} não está conectado neste aparelho.`);
+      }
+      return requested;
+    }
+    // Rodízio Inteligente Anti-Ban entre todos os chips conectados!
+    const picked = connected[this.rotationCursor % connected.length];
+    this.rotationCursor = (this.rotationCursor + 1) % 100000;
+    return picked;
+  }
+
+  async sendProactiveAiOpening(phoneInput, text, leadName = 'Lead Teste', voiceId = '', channelMode = 'auto_rotate') {
+    const slot = this.pickSlotForProactive(channelMode);
+    return slot.sendProactiveAiOpening(phoneInput, text, leadName, voiceId);
+  }
+
+  getProactiveQueueState() {
+    storage.ensureDailyRollover();
+    const dailyLimit = Number(storage.data.settings.antiBan?.dailyProactiveLimit || 25);
+    const dailySent = Number(storage.data.stats.dailyProactiveSent || 0);
+    return {
+      running: this.proactiveQueueRunning && !this.proactiveQueuePaused,
+      paused: this.proactiveQueuePaused,
+      channelMode: this.proactiveChannelMode || 'auto_rotate',
+      remaining: this.proactiveQueue.length,
+      sentSession: this.proactiveSentCount,
+      nextRunAt: this.proactiveNextRunAt,
+      dailySent,
+      dailyLimit,
+      preview: this.proactiveQueue.slice(0, 8)
+    };
+  }
+
+  emitProactiveQueueState() {
+    storage.data.proactiveQueue = [...this.proactiveQueue];
+    storage.saveSoon();
+    this.broadcastFn('proactive_queue_state', this.getProactiveQueueState());
+  }
+
+  enqueueProactiveBatch(items = [], templateText = '', channelMode = 'auto_rotate') {
+    const connected = this.getConnectedSlots();
+    if (!connected.length) {
+      throw new Error('Conecte pelo menos um Chip WhatsApp antes de iniciar a fila de abordagem ativa.');
+    }
+    if (channelMode && channelMode !== 'auto_rotate' && WA_SLOT_IDS.includes(channelMode)) {
+      if (this.slots[channelMode]?.status !== 'connected') {
+        throw new Error(`O ${this.slots[channelMode]?.getSlotConfig().label || channelMode} não está conectado neste aparelho.`);
+      }
+    }
+    this.proactiveChannelMode = channelMode || 'auto_rotate';
+    const added = [];
+    for (const raw of items) {
+      const phone = normalizePhoneDigits(raw.phone || '');
+      if (phone.length < 10) continue;
+      if (storage.isContactIgnored(phone) || this.isAnyOwnSlotPhone(phone)) continue;
+      if (this.proactiveQueue.some((q) => q.phone === phone)) continue;
+      const name = (raw.name || 'Contato').trim();
+      const baseText = (raw.text || templateText || '').trim();
+      if (!baseText) continue;
+      const personalized = baseText
+        .replace(/\{\{\s*nome\s*\}\}/gi, name !== 'Contato' ? name.split(' ')[0] : '')
+        .replace(/\{\s*nome\s*\}/gi, name !== 'Contato' ? name.split(' ')[0] : '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+      const entry = {
+        phone,
+        name,
+        text: personalized,
+        channelMode: raw.channelMode || this.proactiveChannelMode
+      };
+      this.proactiveQueue.push(entry);
+      added.push(entry);
+    }
+
+    if (!added.length) {
+      throw new Error('Nenhum contato válido novo encontrado (verifique DDD + número ou contatos bloqueados).');
+    }
+
+    this.proactiveQueuePaused = false;
+    if (!this.proactiveQueueRunning) {
+      this.proactiveQueueRunning = true;
+      this.scheduleNextProactiveStep(1500);
+    }
+    this.emitProactiveQueueState();
+    return this.getProactiveQueueState();
+  }
+
+  scheduleNextProactiveStep(delayMs) {
+    if (this.proactiveQueueTimer) clearTimeout(this.proactiveQueueTimer);
+    this.proactiveNextRunAt = Date.now() + delayMs;
+    this.emitProactiveQueueState();
+    this.proactiveQueueTimer = setTimeout(() => {
+      this.proactiveQueueTimer = null;
+      this.runNextProactiveItem().catch((err) => {
+        storage.addLog('error', `Erro na fila de abordagem ativa: ${err.message}`);
+        this.proactiveQueueRunning = false;
+        this.proactiveNextRunAt = null;
+        this.emitProactiveQueueState();
+      });
+    }, delayMs);
+  }
+
+  async runNextProactiveItem() {
+    if (!this.proactiveQueueRunning || this.proactiveQueuePaused) return;
+    if (!this.proactiveQueue.length) {
+      this.proactiveQueueRunning = false;
+      this.proactiveNextRunAt = null;
+      storage.addLog('info', `Fila segura de abordagem ativa concluída (${this.proactiveSentCount} enviados na sessão).`);
+      this.emitProactiveQueueState();
+      this.broadcastFn('logs_updated', {});
+      return;
+    }
+
+    storage.ensureDailyRollover();
+    const connectedCount = Math.max(1, this.getConnectedSlots().length);
+    const baseDailyLimit = Number(storage.data.settings.antiBan?.dailyProactiveLimit || 25);
+    // Com Rodízio Anti-Ban entre múltiplos chips, escala a capacidade segura proporcionalmente aos chips online!
+    const effectiveDailyLimit =
+      this.proactiveChannelMode === 'auto_rotate' ? baseDailyLimit * connectedCount : baseDailyLimit;
+    const dailySent = Number(storage.data.stats.dailyProactiveSent || 0);
+    if (dailySent >= effectiveDailyLimit) {
+      this.proactiveQueuePaused = true;
+      this.proactiveNextRunAt = null;
+      storage.addLog('alert', `Fila de abordagem pausada automaticamente: teto diário seguro atingido (${dailySent}/${effectiveDailyLimit}).`);
+      this.emitProactiveQueueState();
+      this.broadcastFn('logs_updated', {});
+      return;
+    }
+
+    if (!this.getConnectedSlots().length) {
+      this.proactiveQueuePaused = true;
+      this.proactiveNextRunAt = null;
+      this.emitProactiveQueueState();
+      return;
+    }
+
+    const next = this.proactiveQueue.shift();
+    if (next && !storage.isContactIgnored(next.phone) && !this.isAnyOwnSlotPhone(next.phone)) {
+      try {
+        await this.sendProactiveAiOpening(next.phone, next.text, next.name, '', next.channelMode || this.proactiveChannelMode);
+        this.proactiveSentCount += 1;
+      } catch (err) {
+        storage.addLog('error', `Falha ao abordar +${next.phone}: ${err.message}`);
+      }
+    }
+
+    if (!this.proactiveQueue.length) {
+      this.proactiveQueueRunning = false;
+      this.proactiveNextRunAt = null;
+      storage.addLog('info', `Fila segura de abordagem ativa concluída (${this.proactiveSentCount} enviados na sessão).`);
+      this.emitProactiveQueueState();
+      this.broadcastFn('logs_updated', {});
+      return;
+    }
+
+    const minSec = Math.max(20, Number(storage.data.settings.antiBan?.proactiveMinDelaySec || 45));
+    const maxSec = Math.max(minSec + 10, Number(storage.data.settings.antiBan?.proactiveMaxDelaySec || 110));
+    // Com múltiplos chips no rodízio, divide o intervalo de espera pelo nº de chips conectados (respeitando piso de 18s)
+    const rawWaitSec = minSec + Math.floor(Math.random() * (maxSec - minSec + 1));
+    const effectiveWaitSec =
+      this.proactiveChannelMode === 'auto_rotate' && connectedCount > 1
+        ? Math.max(18, Math.round(rawWaitSec / connectedCount))
+        : rawWaitSec;
+    this.scheduleNextProactiveStep(effectiveWaitSec * 1000);
+  }
+
+  pauseProactiveQueue(paused = true) {
+    this.proactiveQueuePaused = Boolean(paused);
+    if (this.proactiveQueuePaused) {
+      if (this.proactiveQueueTimer) {
+        clearTimeout(this.proactiveQueueTimer);
+        this.proactiveQueueTimer = null;
+      }
+      this.proactiveNextRunAt = null;
+    } else if (this.proactiveQueue.length > 0 && !this.proactiveQueueRunning) {
+      this.proactiveQueueRunning = true;
+      this.scheduleNextProactiveStep(1500);
+    } else if (this.proactiveQueue.length > 0 && !this.proactiveQueueTimer) {
+      this.scheduleNextProactiveStep(1500);
+    }
+    this.emitProactiveQueueState();
+    return this.getProactiveQueueState();
+  }
+
+  clearProactiveQueue() {
     if (this.proactiveQueueTimer) {
       clearTimeout(this.proactiveQueueTimer);
       this.proactiveQueueTimer = null;
@@ -3075,4 +3793,4 @@ class WhatsAppManager {
   }
 }
 
-export const whatsappManager = new WhatsAppManager();
+export const whatsappManager = new WhatsAppMultiSlotManager();

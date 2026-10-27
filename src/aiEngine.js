@@ -1045,6 +1045,33 @@ async function runProviderCall(creds, { systemPrompt, history, userText, media, 
   };
 }
 
+// Bulkhead Anti-Burst p/ Multi-Chip (até 3 números simultâneos sem estourar cota RPM de API gratuita)
+let activeAiCalls = 0;
+const MAX_CONCURRENT_AI_CALLS = 2;
+const pendingAiWaiters = [];
+
+async function withAiConcurrencyBulkhead(fn) {
+  if (activeAiCalls >= MAX_CONCURRENT_AI_CALLS) {
+    await new Promise((resolve) => {
+      const safetyTimer = setTimeout(resolve, 18_000);
+      pendingAiWaiters.push(() => {
+        clearTimeout(safetyTimer);
+        resolve();
+      });
+    });
+    // Micro-escalonamento de 160ms entre chamadas enfileiradas de chips diferentes
+    await new Promise((r) => setTimeout(r, 160));
+  }
+  activeAiCalls += 1;
+  try {
+    return await fn();
+  } finally {
+    activeAiCalls = Math.max(0, activeAiCalls - 1);
+    const next = pendingAiWaiters.shift();
+    if (next) next();
+  }
+}
+
 export async function generateSmartReply({
   profile,
   settings,
@@ -1162,26 +1189,30 @@ export async function generateSmartReply({
   let usedFallback = false;
 
   try {
-    execOut = await runProviderCall(creds, {
-      systemPrompt,
-      history: trimmedHistory,
-      userText,
-      media,
-      temperature
-    });
+    execOut = await withAiConcurrencyBulkhead(() =>
+      runProviderCall(creds, {
+        systemPrompt,
+        history: trimmedHistory,
+        userText,
+        media,
+        temperature
+      })
+    );
   } catch (primaryErr) {
     const fallbackName = settings.ai?.autoFallbackProvider || 'none';
     if (fallbackName !== 'none' && fallbackName !== creds.provider) {
       const backupCreds = getProviderCredentialsByName(fallbackName, settings.ai);
       if (backupCreds.apiKey) {
         console.warn(`[Auto-Fallback] Provedor principal (${creds.provider}) falhou; acionando reserva (${fallbackName})...`);
-        execOut = await runProviderCall(backupCreds, {
-          systemPrompt,
-          history: trimmedHistory,
-          userText,
-          media,
-          temperature
-        });
+        execOut = await withAiConcurrencyBulkhead(() =>
+          runProviderCall(backupCreds, {
+            systemPrompt,
+            history: trimmedHistory,
+            userText,
+            media,
+            temperature
+          })
+        );
         usedFallback = true;
       } else {
         throw primaryErr;

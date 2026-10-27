@@ -44,7 +44,21 @@ try {
   };
 })();
 
-import { ROOT_DIR, UPLOADS_DIR, storage, tenantStorageContext, uid, normalizePhoneDigits, normalizeCatalogItem, buildContactVCard } from './storage.js';
+import {
+  ROOT_DIR,
+  UPLOADS_DIR,
+  WA_SLOT_IDS,
+  normalizeSlotId,
+  parseContactChannelKey,
+  buildContactChannelKey,
+  normalizeWaSlotsSettings,
+  storage,
+  tenantStorageContext,
+  uid,
+  normalizePhoneDigits,
+  normalizeCatalogItem,
+  buildContactVCard
+} from './storage.js';
 import { trueNowIso } from './trueClock.js';
 import { NICHE_TEMPLATES } from './templates.js';
 import { buildSystemPrompt, generateSmartReply, parseGeminiKeyPool, transcribeVoiceBufferWithAi, analyzeCrmFunnelCoach } from './aiEngine.js';
@@ -57,12 +71,15 @@ const { whatsappManager } = IS_VERCEL
   : await import('./whatsappManager.js');
 import {
   changeOwnPassword,
+  clampMaxWaSlots,
   cloudWorker,
   createManagedUser,
   deleteManagedUser,
   dispatchCommandToWorker,
   ensureLocalMediaCached,
+  getOrCreateDeviceIdentity,
   listManagedUsers,
+  renameLocalDeviceIdentity,
   loadTenantContextAsMasterSupport,
   loadTenantContextFromCloud,
   refreshCloudSession,
@@ -617,8 +634,37 @@ function getEffectiveWaState(req) {
   }
   const st = whatsappManager.getPublicState();
   const workerSt = cloudWorker.getStatus();
+  const devId = workerSt.deviceId || getOrCreateDeviceIdentity().deviceId;
+  const devName = workerSt.deviceName || getOrCreateDeviceIdentity().deviceName;
+  const maxWaSlots = clampMaxWaSlots(workerSt.user?.maxWaSlots ?? 3, workerSt.user?.role || 'master');
+  const enrichedSlots = {};
+  for (const id of WA_SLOT_IDS) {
+    const slotObj = st.slots?.[id] || {};
+    enrichedSlots[id] = {
+      ...slotObj,
+      slotId: id,
+      workerOnline: true,
+      workerPlatform: workerSt.platform,
+      workerVersion: APP_VERSION,
+      deviceId: slotObj.status !== 'disconnected' || whatsappManager.hasSavedSession?.(id) ? devId : null,
+      deviceName: slotObj.status !== 'disconnected' || whatsappManager.hasSavedSession?.(id) ? devName : null
+    };
+  }
   return {
     ...st,
+    slots: enrichedSlots,
+    maxWaSlots,
+    devices: [
+      {
+        deviceId: devId,
+        deviceName: devName,
+        platform: workerSt.platform,
+        appVersion: APP_VERSION,
+        activeSlots: whatsappManager.getActiveLocalSlotIds ? whatsappManager.getActiveLocalSlotIds() : ['slot_1'],
+        online: true
+      }
+    ],
+    onlineDevicesCount: 1,
     workerOnline: true,
     workerPlatform: workerSt.platform,
     workerVersion: APP_VERSION
@@ -627,18 +673,28 @@ function getEffectiveWaState(req) {
 
 function getEffectiveCurrentUser(req) {
   if (req.cloudAuth?.profile) {
+    const tRole = req.cloudAuth.profile.role || 'user';
     return {
       id: req.cloudAuth.authUser.id,
       username: req.cloudAuth.profile.username,
       displayName: req.cloudAuth.profile.display_name || req.cloudAuth.profile.username,
-      role: req.realMasterProfile?.role === 'master' ? 'master' : (req.cloudAuth.profile.role || 'user'),
-      tenantRole: req.cloudAuth.profile.role || 'user',
+      role: req.realMasterProfile?.role === 'master' ? 'master' : tRole,
+      tenantRole: tRole,
+      maxWaSlots: clampMaxWaSlots(req.cloudAuth.profile.max_wa_slots, tRole),
       impersonating: Boolean(req.cloudAuth.isRemoteImpersonation),
       impersonatedBy: req.cloudAuth.impersonatedBy || null
     };
   }
   const u = cloudWorker.getStatus().user;
-  return u ? { ...u, tenantRole: u.role, impersonating: false, impersonatedBy: null } : null;
+  return u
+    ? {
+        ...u,
+        tenantRole: u.role,
+        maxWaSlots: clampMaxWaSlots(u.maxWaSlots ?? 3, u.role),
+        impersonating: false,
+        impersonatedBy: null
+      }
+    : null;
 }
 
 function sortContactsForInbox(contactsObj = {}) {
@@ -680,6 +736,7 @@ app.get('/api/cloud/poll', (req, res) => {
     runtimeMode: usesCloudBridge(req) ? 'vercel_cloud' : 'local_worker',
     currentUser: getEffectiveCurrentUser(req),
     waState,
+    waSlots: normalizeWaSlotsSettings(storage.data.settings?.waSlots),
     proactiveQueueState: usesCloudBridge(req) ? waState.proactive : whatsappManager.getProactiveQueueState(),
     contacts: sortContactsForInbox(storage.data.contacts),
     stats: storage.data.stats,
@@ -714,6 +771,7 @@ const MOTOR_EXCLUDED_SEGMENTS = new Set([
   'tenants',
   'database.json',
   'cloud_session.json',
+  'device_identity.json',
   '.wrapper.pid',
   '.last_auto_update.json',
   '.env',
@@ -936,23 +994,49 @@ app.get('/api/media/download', async (req, res) => {
   }
 });
 
-// ======================== WHATSAPP CONNECTION & PROACTIVE ========================
+// ======================== WHATSAPP CONNECTION (MULTI-CHIP ATÉ 3 NÚMEROS + MULTI-APARELHO) & PROACTIVE ========================
 
 app.post('/api/wa/connect', async (req, res) => {
   try {
-    const { pairingPhone } = req.body || {};
+    const { pairingPhone, slotId: rawSlotId, targetDeviceId } = req.body || {};
+    const slotId = normalizeSlotId(rawSlotId || 'slot_1');
+    const effUser = getEffectiveCurrentUser(req);
+    const maxSlots = clampMaxWaSlots(effUser?.maxWaSlots ?? 3, effUser?.tenantRole || 'master');
+    const slotNum = Number(slotId.slice(-1)) || 1;
+    if (slotNum > maxSlots) {
+      return res.status(403).json({
+        ok: false,
+        error: `Seu plano atual permite conectar até ${maxSlots} número(s) de WhatsApp. Solicite ao administrador a liberação do Chip ${slotNum}.`
+      });
+    }
+
     if (usesCloudBridge(req)) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
         req.cloudAuth.authUser.id,
         'wa_connect',
-        { pairingPhone: pairingPhone || null },
-        9500
+        { pairingPhone: pairingPhone || null, slotId, targetDeviceId: targetDeviceId || null },
+        9500,
+        { slotId, targetDeviceId: targetDeviceId || null }
       );
-      return res.json({ ok: true, ...out, waState: out.waState || getEffectiveWaState(req) });
+      if (out?.requiresDeviceChoice) {
+        return res.json(out);
+      }
+      const freshCtx = await loadTenantContextFromCloud(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser,
+        req.cloudAuth.profile
+      ).catch(() => null);
+      return res.json({
+        ok: true,
+        ...out,
+        slotId,
+        waState: freshCtx?.waRuntime || out.waState || getEffectiveWaState(req)
+      });
     }
-    const state = await whatsappManager.connect(pairingPhone || null);
-    res.json({ ok: true, waState: state });
+
+    await whatsappManager.connect(pairingPhone || null, slotId);
+    res.json({ ok: true, slotId, waState: getEffectiveWaState(req) });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, workerOffline: Boolean(err.workerOffline), error: err.message });
   }
@@ -961,33 +1045,126 @@ app.post('/api/wa/connect', async (req, res) => {
 app.post('/api/wa/disconnect', async (req, res) => {
   try {
     const clearSession = req.body?.clearSession !== false;
+    const slotId = normalizeSlotId(req.body?.slotId || 'slot_1');
     if (usesCloudBridge(req)) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
         req.cloudAuth.authUser.id,
         'wa_disconnect',
-        { clearSession }
+        { clearSession, slotId },
+        8800,
+        { slotId }
       );
       storage.workspaceDirty = false;
       storage.dirtyContactIds.clear();
-      return res.json({ ok: true, waState: out.waState || getEffectiveWaState(req) });
+      const freshCtx = await loadTenantContextFromCloud(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser,
+        req.cloudAuth.profile
+      ).catch(() => null);
+      return res.json({ ok: true, slotId, waState: freshCtx?.waRuntime || out.waState || getEffectiveWaState(req) });
     }
-    const state = await whatsappManager.disconnect(clearSession);
-    res.json({ ok: true, waState: state });
+    await whatsappManager.disconnect(clearSession, slotId);
+    res.json({ ok: true, slotId, waState: getEffectiveWaState(req) });
   } catch (err) {
     res.status(err.statusCode || 500).json({ ok: false, workerOffline: Boolean(err.workerOffline), error: err.message });
   }
 });
 
+app.post('/api/wa/slot-config', async (req, res) => {
+  try {
+    const slotId = normalizeSlotId(req.body?.slotId || 'slot_1');
+    const currentSlots = normalizeWaSlotsSettings(storage.data.settings?.waSlots);
+    const prev = currentSlots[slotId] || { label: `Chip ${slotId.slice(-1)}`, aiEnabled: true };
+    const nextLabel =
+      req.body?.label !== undefined
+        ? (String(req.body.label || '').trim().slice(0, 42) || `Chip ${slotId.slice(-1)}`)
+        : prev.label;
+    const nextAiEnabled =
+      req.body?.aiEnabled !== undefined ? Boolean(req.body.aiEnabled) : prev.aiEnabled !== false;
+
+    currentSlots[slotId] = { label: nextLabel, aiEnabled: nextAiEnabled };
+    storage.data.settings.waSlots = currentSlots;
+    storage.writeNow();
+    storage.addLog(
+      'info',
+      `[${nextLabel}] Configuração atualizada — IA automática neste chip: ${nextAiEnabled ? 'ATIVADA' : 'PAUSADA'}.`
+    );
+
+    if (usesCloudBridge(req) && req.cloudAuth?.client && req.cloudAuth?.authUser?.id) {
+      await req.cloudAuth.client
+        .from('zapia_wa_slots')
+        .update({ label: nextLabel, ai_enabled: nextAiEnabled, updated_at: trueNowIso() })
+        .eq('user_id', req.cloudAuth.authUser.id)
+        .eq('slot_id', slotId)
+        .catch(() => {});
+      if (req.cloudAuth.tenantStore?.waRuntime?.slots?.[slotId]) {
+        req.cloudAuth.tenantStore.waRuntime.slots[slotId].label = nextLabel;
+        req.cloudAuth.tenantStore.waRuntime.slots[slotId].aiEnabled = nextAiEnabled;
+      }
+    } else if (!IS_VERCEL) {
+      whatsappManager.emitState();
+    }
+
+    res.json({
+      ok: true,
+      slotId,
+      waSlots: currentSlots,
+      waState: getEffectiveWaState(req)
+    });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/wa/device-rename', async (req, res) => {
+  try {
+    const deviceName = String(req.body?.deviceName || '').trim().slice(0, 60);
+    const deviceId = String(req.body?.deviceId || '').trim();
+    if (!deviceName) {
+      return res.status(400).json({ ok: false, error: 'Informe o apelido do aparelho (ex: Celular Recepção).' });
+    }
+    if (usesCloudBridge(req)) {
+      if (!deviceId) return res.status(400).json({ ok: false, error: 'Informe qual aparelho deseja renomear.' });
+      await req.cloudAuth.client
+        .from('zapia_worker_devices')
+        .update({ device_label: deviceName, updated_at: trueNowIso() })
+        .eq('user_id', req.cloudAuth.authUser.id)
+        .eq('device_id', deviceId);
+      await dispatchCommandToWorker(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser.id,
+        'rename_worker_device',
+        { deviceName },
+        4500,
+        { targetDeviceId: deviceId }
+      ).catch(() => {});
+      const freshCtx = await loadTenantContextFromCloud(
+        req.cloudAuth.client,
+        req.cloudAuth.authUser,
+        req.cloudAuth.profile
+      ).catch(() => null);
+      return res.json({ ok: true, waState: freshCtx?.waRuntime || getEffectiveWaState(req) });
+    }
+    renameLocalDeviceIdentity(deviceName);
+    await cloudWorker.pushRuntimeHeartbeat?.().catch(() => {});
+    res.json({ ok: true, waState: getEffectiveWaState(req) });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
 app.post('/api/wa/sync-history', async (req, res) => {
   try {
+    const slotId = req.body?.slotId ? normalizeSlotId(req.body.slotId) : null;
     if (usesCloudBridge(req)) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
         req.cloudAuth.authUser.id,
         'wa_sync_history',
-        { waitMs: Number(req.body?.waitMs) || 6800 },
-        11800
+        { waitMs: Number(req.body?.waitMs) || 6800, ...(slotId ? { slotId } : {}) },
+        11800,
+        slotId ? { slotId } : {}
       );
       storage.workspaceDirty = false;
       storage.dirtyContactIds.clear();
@@ -1004,7 +1181,8 @@ app.post('/api/wa/sync-history', async (req, res) => {
     }
     const result = await whatsappManager.syncAllConversationsFromPhone({
       force: true,
-      waitMs: Number(req.body?.waitMs) || 6500
+      waitMs: Number(req.body?.waitMs) || 6500,
+      slotId
     });
     res.json({ ok: true, ...result, contacts: sortContactsForInbox(storage.data.contacts) });
   } catch (err) {
@@ -1041,7 +1219,8 @@ app.post('/api/wa/test-owner-alert', async (req, res) => {
 
 app.post('/api/wa/proactive-send', async (req, res) => {
   try {
-    const { phone, text, name, voiceId } = req.body || {};
+    const { phone, text, name, voiceId, channelMode: rawMode } = req.body || {};
+    const channelMode = WA_SLOT_IDS.includes(rawMode) ? rawMode : 'auto_rotate';
     if (!phone || (!String(text || '').trim() && !voiceId)) {
       return res.status(400).json({ ok: false, error: 'Informe o telefone com DDD e uma mensagem de texto ou áudio estratégico.' });
     }
@@ -1056,13 +1235,15 @@ app.post('/api/wa/proactive-send', async (req, res) => {
         req.cloudAuth.client,
         req.cloudAuth.authUser.id,
         'send_proactive',
-        { phone, text: personalizedText, name: cleanName, voiceId: voiceId || '' }
+        { phone, text: personalizedText, name: cleanName, voiceId: voiceId || '', channelMode },
+        9500,
+        WA_SLOT_IDS.includes(channelMode) ? { slotId: channelMode } : {}
       );
       storage.workspaceDirty = false;
       storage.dirtyContactIds.clear();
       return res.json({ ok: true, ...out });
     }
-    const result = await whatsappManager.sendProactiveAiOpening(phone, personalizedText, cleanName, voiceId || '');
+    const result = await whatsappManager.sendProactiveAiOpening(phone, personalizedText, cleanName, voiceId || '', channelMode);
     res.json({ ok: true, ...result, stats: storage.data.stats });
   } catch (err) {
     res.status(err.statusCode || 400).json({ ok: false, workerOffline: Boolean(err.workerOffline), error: err.message });
@@ -1076,17 +1257,20 @@ app.get('/api/wa/proactive-queue', (req, res) => {
 
 app.post('/api/wa/proactive-queue/start', async (req, res) => {
   try {
-    const { leads, text } = req.body || {};
+    const { leads, text, channelMode: rawMode } = req.body || {};
+    const channelMode = WA_SLOT_IDS.includes(rawMode) ? rawMode : 'auto_rotate';
     if (usesCloudBridge(req)) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
         req.cloudAuth.authUser.id,
         'queue_start',
-        { leads: Array.isArray(leads) ? leads : [], text: text || '' }
+        { leads: Array.isArray(leads) ? leads : [], text: text || '', channelMode },
+        9500,
+        WA_SLOT_IDS.includes(channelMode) ? { slotId: channelMode } : {}
       );
       return res.json({ ok: true, queue: out.queue });
     }
-    const state = whatsappManager.enqueueProactiveBatch(Array.isArray(leads) ? leads : [], text || '');
+    const state = whatsappManager.enqueueProactiveBatch(Array.isArray(leads) ? leads : [], text || '', channelMode);
     res.json({ ok: true, queue: state });
   } catch (err) {
     res.status(err.statusCode || 400).json({ ok: false, workerOffline: Boolean(err.workerOffline), error: err.message });
@@ -1141,7 +1325,8 @@ app.put('/api/settings', (req, res) => {
     ai: { ...storage.data.settings.ai, ...(incoming.ai || {}) },
     antiBan: { ...storage.data.settings.antiBan, ...(incoming.antiBan || {}) },
     humanHandoff: { ...storage.data.settings.humanHandoff, ...(incoming.humanHandoff || {}) },
-    schedule: { ...storage.data.settings.schedule, ...(incoming.schedule || {}) }
+    schedule: { ...storage.data.settings.schedule, ...(incoming.schedule || {}) },
+    waSlots: normalizeWaSlotsSettings(incoming.waSlots || storage.data.settings.waSlots)
   };
   delete storage.data.settings.activeProfileId;
   storage.writeNow();
@@ -1716,13 +1901,16 @@ app.delete('/api/quick-replies/:id', (req, res) => {
 app.post('/api/crm/new-contact', (req, res) => {
   const rawPhone = normalizePhoneDigits(req.body?.phone || '');
   const name = String(req.body?.name || '').trim() || 'Novo Contato';
+  const slotId = normalizeSlotId(req.body?.slotId || 'slot_1');
   if (!rawPhone || rawPhone.length < 10) {
     return res.status(400).json({ ok: false, error: 'Informe um telefone válido com DDD (ex: 5586999887766).' });
   }
   const fullPhone = rawPhone.startsWith('55') || rawPhone.length >= 12 ? rawPhone : `55${rawPhone}`;
-  const existingKey = storage.findSiblingContactKey(`${fullPhone}@s.whatsapp.net`, fullPhone);
-  const chatId = existingKey || `${fullPhone}@s.whatsapp.net`;
+  const candidateKey = buildContactChannelKey(slotId, `${fullPhone}@s.whatsapp.net`);
+  const existingKey = storage.findSiblingContactKey(candidateKey, fullPhone);
+  const chatId = existingKey || candidateKey;
   const contact = storage.upsertContact(chatId, {
+    slotId,
     name,
     forceName: true,
     savedContact: true,

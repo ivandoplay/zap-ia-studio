@@ -219,7 +219,7 @@ export function createBusinessFromTemplate(tpl = NICHE_TEMPLATES[0]) {
       includeCopyPaste: true,
       sendQrImage: true
     },
-    updatedAt: new Date().toISOString()
+    updatedAt: trueNowIso()
   };
 }
 
@@ -496,7 +496,7 @@ export function createCleanBusinessForNewTenant(displayName = 'Meu Negócio') {
       includeCopyPaste: true,
       sendQrImage: true
     },
-    updatedAt: new Date().toISOString()
+    updatedAt: trueNowIso()
   };
 }
 
@@ -744,7 +744,7 @@ export class Storage {
       pix: keepCatalogAndPix && current.pix?.key ? current.pix : fresh.pix,
       catalog: keepCatalogAndPix && current.catalog?.length ? current.catalog : fresh.catalog,
       voiceLibrary: keepCatalogAndPix && current.voiceLibrary?.length ? current.voiceLibrary : [],
-      updatedAt: new Date().toISOString()
+      updatedAt: trueNowIso()
     };
     this.writeNow();
     return this.data.business;
@@ -849,8 +849,8 @@ export class Storage {
     const normalized = normalizeVoiceLibraryItem({
       ...prev,
       ...rawItem,
-      createdAt: prev.createdAt || rawItem.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: prev.createdAt || rawItem.createdAt || trueNowIso(),
+      updatedAt: trueNowIso()
     });
     if (idx >= 0) {
       biz.voiceLibrary[idx] = normalized;
@@ -1563,11 +1563,16 @@ export class Storage {
       throw new Error('Arquivo JSON inválido: não parece ser um backup do ZAP-IA Studio.');
     }
     if (parsed.embeddedVoiceFiles && typeof parsed.embeddedVoiceFiles === 'object') {
+      const SAFE_VOICE_EXT = /\.(ogg|opus|mp3|m4a|wav|webm|aac)$/i;
+      let totalVoiceBytes = 0;
       for (const [fn, b64] of Object.entries(parsed.embeddedVoiceFiles)) {
         const safeFn = path.basename(String(fn || ''));
-        if (!safeFn || typeof b64 !== 'string') continue;
+        if (!safeFn || !SAFE_VOICE_EXT.test(safeFn) || typeof b64 !== 'string') continue;
         try {
-          fs.writeFileSync(path.join(UPLOADS_DIR, safeFn), Buffer.from(b64, 'base64'));
+          const buf = Buffer.from(b64, 'base64');
+          totalVoiceBytes += buf.length;
+          if (totalVoiceBytes > 35 * 1024 * 1024) break;
+          fs.writeFileSync(path.join(UPLOADS_DIR, safeFn), buf);
         } catch {}
       }
     }

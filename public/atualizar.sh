@@ -140,7 +140,7 @@ for (let i = 0; i < total && ptr < cdOffset + cdSize; i++) {
   const lExtraLen = buf.readUInt16LE(localOff + 28);
   const dataStart = localOff + 30 + lNameLen + lExtraLen;
   const slice = buf.subarray(dataStart, dataStart + compSize);
-  const content = method === 0 ? slice : zlib.inflateRawSync(slice);
+  const content = method === 0 ? slice : zlib.inflateRawSync(slice, { maxOutputLength: 50 * 1024 * 1024 });
 
   const outFile = path.join(targetRoot, ...strippedRel.split('/'));
   fs.mkdirSync(path.dirname(outFile), { recursive: true });

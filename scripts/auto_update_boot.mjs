@@ -69,10 +69,12 @@ function extractZipBuffer(buf) {
     throw new Error('Assinatura ZIP (EOCD) não encontrada.');
   }
 
-  const total = buf.readUInt16LE(eocd + 10);
+  const total = Math.min(buf.readUInt16LE(eocd + 10), 1500);
   const cdSize = buf.readUInt32LE(eocd + 12);
   const cdOffset = buf.readUInt32LE(eocd + 16);
   let ptr = cdOffset;
+  let totalBytes = 0;
+  const maxUpdateBytes = 50 * 1024 * 1024;
   const files = [];
 
   for (let i = 0; i < total && ptr < cdOffset + cdSize; i++) {
@@ -99,7 +101,10 @@ function extractZipBuffer(buf) {
     const lExtraLen = buf.readUInt16LE(localOff + 28);
     const dataStart = localOff + 30 + lNameLen + lExtraLen;
     const slice = buf.subarray(dataStart, dataStart + compSize);
-    const content = method === 0 ? slice : zlib.inflateRawSync(slice);
+    const remaining = maxUpdateBytes - totalBytes;
+    if (remaining <= 0) throw new Error('Limite de segurança do pacote excedido.');
+    const content = method === 0 ? slice : zlib.inflateRawSync(slice, { maxOutputLength: remaining });
+    totalBytes += content.length;
     files.push({ zipPath: cleanRel, content });
   }
   return files;

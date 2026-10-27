@@ -130,6 +130,8 @@ function escapeJsArg(str = '') {
       .replace(/\\/g, '\\\\')
       .replace(/'/g, "\\'")
       .replace(/\r?\n/g, '\\n')
+      .replace(/\u2028/g, '\\u2028')
+      .replace(/\u2029/g, '\\u2029')
   );
 }
 
@@ -1746,7 +1748,7 @@ function renderProfileSelectors() {
     tplGrid.innerHTML = state.templates
       .map(
         (t) => `
-        <button type="button" class="template-card" onclick="applyStarterTemplate('${escapeHtml(t.id)}', '${escapeHtml(t.name)}')">
+        <button type="button" class="template-card" onclick="applyStarterTemplate('${escapeJsArg(t.id)}', '${escapeJsArg(t.name)}')">
           <h4>${escapeHtml(t.name)}</h4>
           <p>${escapeHtml(t.subtitle)}</p>
         </button>
@@ -1855,7 +1857,7 @@ function renderActivePackStatus(p) {
             </div>
           </div>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="inspectTrainingPack('${escapeHtml(pack.id)}')">Resumo Geral</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="inspectTrainingPack('${escapeJsArg(pack.id)}')">Resumo Geral</button>
             <button type="button" class="btn btn-danger btn-sm" onclick="detachTrainingPack()">Desvincular</button>
           </div>
         </div>
@@ -1871,7 +1873,7 @@ function renderActivePackStatus(p) {
   }
 
   const existingOptions = state.trainingPacks
-    .map((tp) => `<button type="button" class="btn btn-secondary btn-sm" onclick="attachExistingPack('${escapeHtml(tp.id)}')">Vincular "${escapeHtml(tp.name)}"</button>`)
+    .map((tp) => `<button type="button" class="btn btn-secondary btn-sm" onclick="attachExistingPack('${escapeJsArg(tp.id)}')">Vincular "${escapeHtml(tp.name)}"</button>`)
     .join('');
 
   box.innerHTML = `
@@ -1925,9 +1927,9 @@ function renderPackVisualStudio(p) {
             <div style="font-size:12.5px; color:var(--text-secondary); margin-top:6px; white-space:pre-wrap;">${escapeHtml(m.text)}</div>
           </div>
           <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">
-            <button type="button" class="btn btn-primary btn-sm" onclick="useMessageInProactive('${escapeHtml(m.id)}')">Usar no Disparador</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="openEditPackMsgModal('${escapeHtml(m.id)}')">Editar</button>
-            <button type="button" class="btn btn-danger btn-sm" onclick="removePackMsg('${escapeHtml(m.id)}')">Excluir</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="useMessageInProactive('${escapeJsArg(m.id)}')">Usar no Disparador</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="openEditPackMsgModal('${escapeJsArg(m.id)}')">Editar</button>
+            <button type="button" class="btn btn-danger btn-sm" onclick="removePackMsg('${escapeJsArg(m.id)}')">Excluir</button>
           </div>
         </div>
       `
@@ -1962,8 +1964,8 @@ function renderPackVisualStudio(p) {
             ${sampleText ? `<div style="font-size:12px; color:var(--text-muted); margin-top:4px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;">${escapeHtml(sampleText)}</div>` : ''}
           </div>
           <div style="display:flex; gap:6px;">
-            <button type="button" class="btn btn-secondary btn-sm" style="flex:1;" onclick="openEditPackSkillModal('${escapeHtml(s.id)}', '${isHum ? 'humanization' : 'operational'}')">Editar Skill</button>
-            <button type="button" class="btn btn-danger btn-sm" onclick="removePackSkill('${escapeHtml(s.id)}', '${isHum ? 'humanization' : 'operational'}')">Excluir</button>
+            <button type="button" class="btn btn-secondary btn-sm" style="flex:1;" onclick="openEditPackSkillModal('${escapeJsArg(s.id)}', '${isHum ? 'humanization' : 'operational'}')">Editar Skill</button>
+            <button type="button" class="btn btn-danger btn-sm" onclick="removePackSkill('${escapeJsArg(s.id)}', '${isHum ? 'humanization' : 'operational'}')">Excluir</button>
           </div>
         </div>
       `;
@@ -2167,7 +2169,7 @@ function renderKnowledgeDocs(docs) {
           <strong>${escapeHtml(d.title)}</strong>
           <div style="font-size:11.5px; color:var(--text-secondary);">${d.content.length} caracteres indexados no prompt</div>
         </div>
-        <button type="button" class="btn btn-danger btn-sm" onclick="deleteKnowledgeDoc('${escapeHtml(d.id)}')">Excluir</button>
+        <button type="button" class="btn btn-danger btn-sm" onclick="deleteKnowledgeDoc('${escapeJsArg(d.id)}')">Excluir</button>
       </div>
     `
     )
@@ -2270,9 +2272,9 @@ function renderCatalogAndPix() {
             <div class="catalog-price">${item.price ? 'R$ ' + escapeHtml(item.price) : 'Sob consulta'}</div>
             <p style="font-size:12.5px; color:var(--text-secondary); flex:1;">${escapeHtml(item.description || '')}</p>
             <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
-              <button type="button" class="btn btn-secondary btn-sm" onclick="toggleCatalogItemActive('${escapeHtml(item.id)}')">${isActive ? 'Pausar' : 'Ativar'}</button>
-              <button type="button" class="btn btn-secondary btn-sm" style="flex:1;" onclick="openEditCatalogItem('${escapeHtml(item.id)}')">Editar</button>
-              <button type="button" class="btn btn-danger btn-sm" onclick="deleteCatalogItem('${escapeHtml(item.id)}')">Excluir</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="toggleCatalogItemActive('${escapeJsArg(item.id)}')">${isActive ? 'Pausar' : 'Ativar'}</button>
+              <button type="button" class="btn btn-secondary btn-sm" style="flex:1;" onclick="openEditCatalogItem('${escapeJsArg(item.id)}')">Editar</button>
+              <button type="button" class="btn btn-danger btn-sm" onclick="deleteCatalogItem('${escapeJsArg(item.id)}')">Excluir</button>
             </div>
           </div>
         </div>
@@ -2313,7 +2315,7 @@ function renderModalExistingMedia(item) {
       return `
         <div class="thumb-mini" title="${escapeHtml(mf.originalName || mf.filename)}">
           ${inner}
-          <button type="button" onclick="removeSingleCatalogMedia('${escapeHtml(item.id)}', '${escapeHtml(mf.filename)}')" aria-label="Remover arquivo">×</button>
+          <button type="button" onclick="removeSingleCatalogMedia('${escapeJsArg(item.id)}', '${escapeJsArg(mf.filename)}')" aria-label="Remover arquivo">×</button>
         </div>
       `;
     })
@@ -2478,7 +2480,7 @@ function renderSecurityAndIgnored() {
           <strong>${escapeHtml(c.name)}</strong>
           <span style="color:var(--text-secondary); margin-left:6px;">+${escapeHtml(c.phone)}</span>
         </div>
-        <button type="button" class="btn btn-danger btn-sm" onclick="removeIgnoredContact('${escapeHtml(c.id)}')">Remover</button>
+        <button type="button" class="btn btn-danger btn-sm" onclick="removeIgnoredContact('${escapeJsArg(c.id)}')">Remover</button>
       </div>
     `
     )

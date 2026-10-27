@@ -1,6 +1,7 @@
 import { GoogleGenAI } from '@google/genai';
 import { selectTurnPackContext, generatePackDemoReply } from './trainingPackEngine.js';
 import { storage } from './storage.js';
+import { trueNowIso } from './trueClock.js';
 
 const TONE_DESCRIPTIONS = {
   consultivo: 'Simpático, consultivo, firme com educação e focado em conduzir com clareza sem pressionar.',
@@ -284,7 +285,7 @@ export function buildExecutiveHandoffDossier({ contact = {}, handoffReason = '',
     scenario,
     trigger,
     nextMove,
-    updatedAt: new Date().toISOString()
+    updatedAt: trueNowIso()
   };
 }
 

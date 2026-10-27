@@ -200,8 +200,9 @@ class WhatsAppManager {
 
     this.loadLidMappingsFromDisk();
 
-    // Vigia automático de Retornos Agendados (Skill S19 — alerta o dono na hora marcada sem incomodar o cliente sozinho)
+    // Vigia automático de Retornos Agendados (Skill S19 — alerta o dono na hora marcada sem incomodar o cliente sozinho) + poda preventiva de memória 24/7
     this.followUpTimer = setInterval(() => {
+      this.pruneTransientCaches();
       this.checkDueFollowUpsNow().catch(() => {});
     }, 45_000);
     if (this.followUpTimer.unref) this.followUpTimer.unref();
@@ -211,6 +212,46 @@ class WhatsAppManager {
       this.processDueScheduledMessages().catch(() => {});
     }, 15_000);
     if (this.scheduledMsgTimer.unref) this.scheduledMsgTimer.unref();
+  }
+
+  pruneTransientCaches() {
+    const now = Date.now();
+    // 1. Mantém sentByBotIds limitado às últimas 3.000 mensagens para estabilidade contínua de meses no Termux/Linux
+    if (this.sentByBotIds.size > 3000) {
+      const dropCount = this.sentByBotIds.size - 2000;
+      let i = 0;
+      for (const id of this.sentByBotIds) {
+        this.sentByBotIds.delete(id);
+        if (++i >= dropCount) break;
+      }
+    }
+    // 2. Limpa entradas antigas de avatarFetchCache (> 6h ou > 2.500 chaves)
+    if (this.avatarFetchCache.size > 500) {
+      for (const [k, ts] of this.avatarFetchCache) {
+        if (now - ts > 6 * 3600_000) this.avatarFetchCache.delete(k);
+      }
+      if (this.avatarFetchCache.size > 2500) {
+        const firstKey = this.avatarFetchCache.keys().next().value;
+        if (firstKey) this.avatarFetchCache.delete(firstKey);
+      }
+    }
+    // 3. Limpa avisos fora de horário (> 24h) e janelas antigas de rateTracker (> 15 min)
+    for (const [k, ts] of this.offHoursNotified) {
+      if (now - ts > 24 * 3600_000) this.offHoursNotified.delete(k);
+    }
+    for (const [k, arr] of this.rateTracker) {
+      const recent = Array.isArray(arr) ? arr.filter((t) => now - t < 15 * 60_000) : [];
+      if (recent.length === 0) this.rateTracker.delete(k);
+      else this.rateTracker.set(k, recent);
+    }
+    if (this.contactDirectory.size > 12000) {
+      const drop = this.contactDirectory.size - 10000;
+      let n = 0;
+      for (const k of this.contactDirectory.keys()) {
+        this.contactDirectory.delete(k);
+        if (++n >= drop) break;
+      }
+    }
   }
 
   setAuthDir(dirPath) {

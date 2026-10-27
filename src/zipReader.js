@@ -122,7 +122,7 @@ export function createZipBuffer(entries = []) {
  * Suporta métodos Store (0) e Deflate (8), nomes UTF-8 e proteção contra Zip Slip.
  */
 export function extractZipBuffer(buffer, options = {}) {
-  const maxTotalUncompressedBytes = options.maxTotalBytes || 60 * 1024 * 1024; // 60 MB limite seguro
+  const maxTotalUncompressedBytes = options.maxTotalBytes || options.maxTotalUncompressedBytes || 60 * 1024 * 1024; // 60 MB limite seguro
   const maxFiles = options.maxFiles || 2000;
 
   if (!Buffer.isBuffer(buffer) || buffer.length < 22) {
@@ -198,9 +198,8 @@ export function extractZipBuffer(buffer, options = {}) {
       continue;
     }
 
-    totalUncompressed += uncompressedSize;
-    if (totalUncompressed > maxTotalUncompressedBytes) {
-      throw new Error('Tamanho descompactado do ZIP excede o limite permitido (60 MB).');
+    if (uncompressedSize > maxTotalUncompressedBytes) {
+      throw new Error('Arquivo individual do ZIP excede o limite permitido (60 MB).');
     }
 
     if (localHeaderOffset + 30 > buffer.length) {
@@ -224,15 +223,26 @@ export function extractZipBuffer(buffer, options = {}) {
       throw new Error(`O arquivo ${normalizedPath} está protegido por senha.`);
     }
 
+    const remainingBudget = maxTotalUncompressedBytes - totalUncompressed;
+    if (remainingBudget <= 0) {
+      throw new Error('Tamanho descompactado real do ZIP excede o limite permitido (60 MB).');
+    }
+
     const compSlice = buffer.subarray(dataStart, dataEnd);
     let contentBuf;
     if (compressionMethod === 0) {
+      if (compSlice.length > remainingBudget) {
+        throw new Error('Tamanho descompactado real do ZIP excede o limite permitido (60 MB).');
+      }
       contentBuf = Buffer.from(compSlice);
     } else if (compressionMethod === 8) {
-      contentBuf = zlib.inflateRawSync(compSlice);
+      // Proteção nativa C++ contra Zip Bomb com cabeçalho falsificado (CVE/OWASP Resource Exhaustion)
+      contentBuf = zlib.inflateRawSync(compSlice, { maxOutputLength: remainingBudget });
     } else {
       continue;
     }
+
+    totalUncompressed += contentBuf.length;
 
     files.push({
       path: normalizedPath,

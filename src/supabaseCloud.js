@@ -551,12 +551,23 @@ export async function flushTenantStoreToCloud(client, userId, tenantStore) {
 /**
  * Faz upload de áudio OGG/Opus, imagem de catálogo ou mídia recebida para o bucket isolado `<user_id>/<filename>`.
  */
+const DANGEROUS_ACTIVE_MIMES = /^(text\/html|application\/xhtml\+xml|image\/svg\+xml|text\/javascript|application\/javascript|application\/x-javascript|text\/xml)/i;
+const DANGEROUS_ACTIVE_EXTS = /\.(html?|xhtml|svg|s?htm|mjs|cjs|js)$/i;
+
 export async function uploadMediaBufferToCloud(client, userId, filename, buffer, contentType = 'application/octet-stream') {
   if (!client || !userId || !filename || !buffer) return null;
-  const safeName = path.basename(filename);
+  let safeName = path.basename(filename);
+  let safeContentType = String(contentType || 'application/octet-stream').trim() || 'application/octet-stream';
+  // Blindagem Anti-Stored-XSS: impede execução de HTML/SVG/JS ativo em URLs públicas do bucket
+  if (DANGEROUS_ACTIVE_MIMES.test(safeContentType) || DANGEROUS_ACTIVE_EXTS.test(safeName)) {
+    safeContentType = 'application/octet-stream';
+    if (DANGEROUS_ACTIVE_EXTS.test(safeName)) {
+      safeName = `${safeName}.bin`;
+    }
+  }
   const storagePath = `${userId}/${safeName}`;
   const { error } = await client.storage.from(MEDIA_BUCKET).upload(storagePath, buffer, {
-    contentType,
+    contentType: safeContentType,
     upsert: true
   });
   if (error) {
@@ -835,7 +846,7 @@ export async function createManagedUser({ username, password, displayName, custo
       simulator_history: [],
       proactive_queue: [],
       custom_pack: {},
-      updated_at: new Date().toISOString()
+      updated_at: trueNowIso()
     }, { onConflict: 'user_id' }),
     admin.from('zapia_wa_runtime').upsert({
       user_id: uid,
@@ -847,7 +858,7 @@ export async function createManagedUser({ username, password, displayName, custo
       proactive_state: { queueLength: 0, paused: false, processing: false },
       worker_online: false,
       worker_platform: '',
-      updated_at: new Date().toISOString()
+      updated_at: trueNowIso()
     }, { onConflict: 'user_id' })
   ]);
 
@@ -962,7 +973,7 @@ class FileSessionStorage {
   persist() {
     try {
       const obj = Object.fromEntries(this.cache.entries());
-      fs.writeFileSync(this.filePath, JSON.stringify({ updatedAt: new Date().toISOString(), items: obj }, null, 2), 'utf8');
+      fs.writeFileSync(this.filePath, JSON.stringify({ updatedAt: trueNowIso(), items: obj }, null, 2), 'utf8');
     } catch {}
   }
 
@@ -1638,11 +1649,29 @@ class CloudWorkerBridge {
       this.pollPendingCommands().catch(() => {});
     }, 2500);
 
-    // 3. Heartbeat a cada 12s + verificação de sincronia de workspace
+    // 3. Heartbeat a cada 12s + verificação de sincronia de workspace + limpeza leve de comandos antigos (>48h)
+    this.pruneOldCommands().catch(() => {});
+    let hbTicks = 0;
     this.heartbeatTimer = setInterval(() => {
       this.pushRuntimeHeartbeat().catch(() => {});
       this.pullCloudIntoLocal(false).catch(() => {});
+      if (++hbTicks % 1800 === 0) {
+        this.pruneOldCommands().catch(() => {});
+      }
     }, 12_000);
+  }
+
+  async pruneOldCommands() {
+    if (!this.client || !this.user?.id) return;
+    try {
+      const cutoffIso = new Date(trueNowMs() - 48 * 3600_000).toISOString();
+      await this.client
+        .from('zapia_commands')
+        .delete()
+        .eq('user_id', this.user.id)
+        .in('status', ['done', 'failed'])
+        .lt('created_at', cutoffIso);
+    } catch {}
   }
 
   stopBackgroundLoops() {

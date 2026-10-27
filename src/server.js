@@ -45,6 +45,7 @@ try {
 })();
 
 import { ROOT_DIR, UPLOADS_DIR, storage, tenantStorageContext, uid, normalizePhoneDigits, normalizeCatalogItem, buildContactVCard } from './storage.js';
+import { trueNowIso } from './trueClock.js';
 import { NICHE_TEMPLATES } from './templates.js';
 import { buildSystemPrompt, generateSmartReply, parseGeminiKeyPool, transcribeVoiceBufferWithAi, analyzeCrmFunnelCoach } from './aiEngine.js';
 import { formatPixMessageWithQr } from './pix.js';
@@ -95,10 +96,44 @@ const APP_VERSION = (() => {
 const server = IS_VERCEL ? null : http.createServer(app);
 const wss = IS_VERCEL ? null : new WebSocketServer({ server, path: '/ws' });
 
-app.use(cors());
+function isTrustedBrowserOrigin(origin) {
+  if (!origin) return true; // Requisições diretas (mesma origem GET/CLI/Node)
+  try {
+    const u = new URL(origin);
+    const h = u.hostname.toLowerCase();
+    if (
+      h === 'localhost' ||
+      h === '127.0.0.1' ||
+      h === '[::1]' ||
+      h === '::1' ||
+      h.endsWith('.vercel.app') ||
+      h.endsWith('.e2b.app') ||
+      h.endsWith('.local') ||
+      /^192\.168\.\d{1,3}\.\d{1,3}$/.test(h) ||
+      /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h) ||
+      /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(h)
+    ) {
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+// Bloqueia ataques Drive-By Localhost CORS de páginas externas maliciosas contra o motor local (porta 3000)
+app.use(
+  cors({
+    origin: (origin, cb) => cb(null, isTrustedBrowserOrigin(origin)),
+    credentials: false
+  })
+);
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Referrer-Policy', 'same-origin');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), geolocation=(), payment=()');
+  res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://*.vercel.app https://*.e2b.app http://localhost:* http://127.0.0.1:*");
+  if (IS_VERCEL) {
+    res.setHeader('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
+  }
   next();
 });
 app.use(express.json({ limit: '15mb' }));
@@ -168,11 +203,16 @@ if (!IS_VERCEL) {
 
 if (wss) {
   wss.on('connection', (ws, req) => {
+    // Proteção Anti-CSWSH (Cross-Site WebSocket Hijacking) contra sites externos acessando ws://localhost:3000/ws
+    if (!isTrustedBrowserOrigin(req.headers?.origin || '')) {
+      ws.close(4003, 'Untrusted origin');
+      return;
+    }
     const configuredPin = String(storage.data.settings.securityPin || '').trim();
     if (configuredPin) {
       const urlObj = new URL(req.url || '/ws', 'http://localhost');
       const qsPin = urlObj.searchParams.get('pin') || '';
-      if (qsPin !== configuredPin) {
+      if (!safeComparePin(configuredPin, qsPin)) {
         ws.close(4001, 'PIN required');
         return;
       }
@@ -193,6 +233,19 @@ if (wss) {
 // ======================== AUTENTICAÇÃO NUVEM (SUPABASE RLS) + PIN LOCAL ========================
 
 const pinRateTracker = new Map(); // ip -> { fails, blockedUntil }
+function recordRateFailure(key, entry) {
+  if (pinRateTracker.size >= 2000 && !pinRateTracker.has(key)) {
+    const now = Date.now();
+    for (const [k, v] of pinRateTracker) {
+      if (!v || (v.blockedUntil > 0 && v.blockedUntil < now)) pinRateTracker.delete(k);
+    }
+    if (pinRateTracker.size >= 2000) {
+      const oldestKey = pinRateTracker.keys().next().value;
+      if (oldestKey) pinRateTracker.delete(oldestKey);
+    }
+  }
+  pinRateTracker.set(key, entry);
+}
 
 function safeComparePin(expected = '', given = '') {
   const a = Buffer.from(String(expected || ''), 'utf8');
@@ -309,7 +362,7 @@ app.post('/api/auth/login', async (req, res) => {
       entry.blockedUntil = Date.now() + 60_000;
       entry.fails = 0;
     }
-    pinRateTracker.set(`login_${ip}`, entry);
+    recordRateFailure(`login_${ip}`, entry);
     return res.status(401).json({ ok: false, error: err.message || 'Usuário ou senha inválidos.' });
   }
 });
@@ -354,7 +407,7 @@ app.post('/api/auth/verify-pin', (req, res) => {
     entry.blockedUntil = Date.now() + 60_000;
     entry.fails = 0;
   }
-  pinRateTracker.set(ip, entry);
+  recordRateFailure(ip, entry);
   return res.status(401).json({ ok: false, error: 'PIN incorreto.' });
 });
 
@@ -838,14 +891,16 @@ app.get('/api/media/download', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'URL de mídia inválida.' });
     }
 
-    const allowedPrefix = `${SUPABASE_URL.replace(/\/+$/, '')}/storage/v1/object/public/${MEDIA_BUCKET}/`;
-    if (!rawUrl.startsWith(allowedPrefix)) {
+    const supaBaseParsed = new URL(SUPABASE_URL);
+    const expectedPathPrefix = `/storage/v1/object/public/${MEDIA_BUCKET}/`;
+    if (parsed.origin !== supaBaseParsed.origin || !parsed.pathname.startsWith(expectedPathPrefix)) {
       return res.status(403).json({ ok: false, error: 'Origem de arquivo bloqueada por política de segurança.' });
     }
 
-    const relObjectPath = decodeURIComponent(rawUrl.slice(allowedPrefix.length));
-    const [folderTenantUid, objectFileName] = relObjectPath.split('/');
-    if (!folderTenantUid || !objectFileName || relObjectPath.includes('..')) {
+    const relObjectPath = decodeURIComponent(parsed.pathname.slice(expectedPathPrefix.length));
+    const pathParts = relObjectPath.split('/').filter(Boolean);
+    const [folderTenantUid, objectFileName] = pathParts;
+    if (pathParts.length !== 2 || !folderTenantUid || !objectFileName || relObjectPath.includes('..') || relObjectPath.includes('\\')) {
       return res.status(400).json({ ok: false, error: 'Caminho de objeto inválido.' });
     }
 
@@ -855,9 +910,16 @@ app.get('/api/media/download', async (req, res) => {
       return res.status(403).json({ ok: false, error: 'Acesso negado a arquivo de outra conta.' });
     }
 
-    const upstream = await fetch(parsed.toString());
+    const upstream = await fetch(`${supaBaseParsed.origin}${expectedPathPrefix}${encodeURIComponent(folderTenantUid)}/${encodeURIComponent(objectFileName)}`, {
+      redirect: 'error',
+      signal: AbortSignal.timeout(25000)
+    });
     if (!upstream.ok) {
       return res.status(404).json({ ok: false, error: 'Arquivo não encontrado na nuvem.' });
+    }
+    const contentLen = Number(upstream.headers.get('content-length') || 0);
+    if (contentLen > 36 * 1024 * 1024) {
+      return res.status(413).json({ ok: false, error: 'Arquivo excede o limite seguro de download direto (35 MB).' });
     }
     const arrayBuf = await upstream.arrayBuffer();
     const buf = Buffer.from(arrayBuf);
@@ -1142,7 +1204,7 @@ app.put('/api/business', (req, res) => {
     catalog: Array.isArray(patch.catalog) ? patch.catalog.map(normalizeCatalogItem) : current.catalog,
     faqs: Array.isArray(patch.faqs) ? patch.faqs : current.faqs,
     knowledgeDocs: Array.isArray(patch.knowledgeDocs) ? patch.knowledgeDocs : current.knowledgeDocs,
-    updatedAt: new Date().toISOString()
+    updatedAt: trueNowIso()
   };
 
   storage.writeNow();
@@ -1252,7 +1314,7 @@ function applyImportedTrainingResult({ packSummary, suggestedProfile }) {
       Array.isArray(suggestedProfile.knowledgeDocs) && suggestedProfile.knowledgeDocs.length > 0
         ? suggestedProfile.knowledgeDocs
         : current.knowledgeDocs,
-    updatedAt: new Date().toISOString()
+    updatedAt: trueNowIso()
   };
 
   storage.writeNow();

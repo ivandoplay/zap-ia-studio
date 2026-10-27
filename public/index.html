@@ -540,18 +540,19 @@
           <div id="templatesGrid" class="templates-grid" style="margin-top:12px;"></div>
         </div>
 
-        <!-- Motor de Pacote de Treinamento Turbo (.ZIP) -->
+        <!-- Motor de Pacote de Treinamento Turbo (.ZIP / .JSON / .MD + Gerador ChatGPT & Vibe Coding) -->
         <div class="panel" style="border-left:3px solid var(--accent);">
           <div class="panel-header">
             <div>
-              <h2 class="panel-title">Motor de Pacote de Treinamento Estruturado (.ZIP Turbo)</h2>
+              <h2 class="panel-title">Motor de Treinamento IA · ChatGPT & Vibe Coding</h2>
               <p class="panel-desc" style="margin-bottom:0; margin-top:4px;">
-                Importe qualquer pacote/backup em <strong>.ZIP</strong> ou edite visualmente abaixo todas as Mensagens Aprovadas (M01–M13) e Skills sem mexer em código.
+                Gere todo o treinamento em <strong>2 minutos pelo ChatGPT/Claude</strong>, baixe a especificação oficial para <strong>Vibe Coders</strong> ou importe arquivos <strong>.ZIP, .JSON ou .MD</strong>.
               </p>
             </div>
             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <label for="zipPackInput" class="btn btn-primary btn-sm" style="cursor:pointer;">Importar Pacote / Backup .ZIP</label>
-              <input type="file" id="zipPackInput" accept=".zip,application/zip" style="display:none;" />
+              <button type="button" class="btn btn-primary btn-sm" onclick="openAiTrainingBuilderModal()">🤖 Gerar com ChatGPT / Vibe Coding</button>
+              <label for="zipPackInput" class="btn btn-secondary btn-sm" style="cursor:pointer;">📂 Importar Arquivo (.ZIP / .JSON / .MD)</label>
+              <input type="file" id="zipPackInput" accept=".zip,.json,.md,.txt,application/zip,application/json,text/markdown,text/plain" style="display:none;" />
             </div>
           </div>
           <div id="activePackStatusBox" style="margin-top:12px;"></div>
@@ -2676,6 +2677,78 @@
             <button type="button" class="btn btn-primary btn-sm" onclick="sendCustomTypedVcardNow()">Enviar</button>
           </div>
         </details>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CENTRAL DE TREINAMENTO COM CHATGPT & VIBE CODING -->
+  <div id="aiTrainingBuilderModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="aiBuilderModalTitle">
+    <div class="modal-dialog" style="max-width:680px;">
+      <div class="modal-head">
+        <h3 id="aiBuilderModalTitle" class="panel-title">🤖 Criar Treinamento com ChatGPT ou Vibe Coding</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('aiTrainingBuilderModal')">Fechar</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:14px;">
+        <div class="studio-subtabs" style="width:100%;">
+          <button type="button" id="btnBuilderTabChatgpt" class="studio-subtab active" onclick="switchAiBuilderTab('chatgpt')">⚡ Rápido com ChatGPT / Claude (2 min)</button>
+          <button type="button" id="btnBuilderTabVibecoder" class="studio-subtab" onclick="switchAiBuilderTab('vibecoder')">🛠️ Modo Vibe Coder (Documento & .ZIP)</button>
+        </div>
+
+        <!-- ABA 1: CHATGPT / CLAUDE RÁPIDO -->
+        <div id="aiBuilderPaneChatgpt" style="display:flex; flex-direction:column; gap:12px;">
+          <div style="background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25); border-radius:10px; padding:12px; font-size:12.5px; line-height:1.5;">
+            <strong>Como funciona em 2 passos simples:</strong><br/>
+            1️⃣ Clique em <strong>Copiar Super-Prompt</strong> abaixo e cole no ChatGPT, Claude ou Gemini (lá você conta por texto ou áudio sobre a empresa).<br/>
+            2️⃣ Copie a resposta gerada pela IA, cole na caixa abaixo e clique em <strong>Aplicar Treinamento Completo</strong> — ele já preenche Identidade, Regras, FAQs, Mensagens Aprovadas (M01..) e Skills (S01../H01..) sozinho!
+          </div>
+
+          <div class="form-group" style="margin-bottom:0;">
+            <label class="form-label" for="aiBuilderBriefInput">Resumo opcional do negócio (já vai embutido no prompt se preencher):</label>
+            <textarea id="aiBuilderBriefInput" rows="2" placeholder="Opcional: Ex: Clínica Odontológica Sorriso Prime em Teresina, atendemos implantes, lentes e limpeza, aceitamos cartão em 12x e PIX... (ou deixe em branco para explicar lá no ChatGPT)"></textarea>
+          </div>
+
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-primary" onclick="copyChatGptSuperPrompt()">📋 1. Copiar Super-Prompt para o ChatGPT</button>
+            <button type="button" class="btn btn-secondary" onclick="downloadSampleBlueprintJson()">📦 Baixar Exemplo Pronto (.JSON)</button>
+          </div>
+
+          <div style="border-top:1px solid var(--border); padding-top:12px; display:flex; flex-direction:column; gap:8px;">
+            <label class="form-label" for="aiBlueprintPasteArea" style="margin-bottom:0;">2. Cole aqui a resposta que o ChatGPT / Claude gerou:</label>
+            <textarea id="aiBlueprintPasteArea" rows="6" spellcheck="false" placeholder="Cole aqui o código JSON (ou Markdown) gerado pelo ChatGPT e clique em Aplicar abaixo..."></textarea>
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+              <label for="zipPackInput" class="btn btn-secondary btn-sm" style="cursor:pointer;" onclick="closeModal('aiTrainingBuilderModal')">📂 Ou enviar arquivo (.JSON / .MD / .ZIP)</label>
+              <button type="button" id="btnApplyPastedBlueprint" class="btn btn-primary" onclick="applyPastedAiTraining()">⚡ 2. Aplicar Treinamento Completo</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ABA 2: VIBE CODER PRO -->
+        <div id="aiBuilderPaneVibecoder" style="display:none; flex-direction:column; gap:12px;">
+          <div style="background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.28); border-radius:10px; padding:12px; font-size:12.5px; line-height:1.55;">
+            <strong>Para Vibe Coders (Arena, Cursor, Claude Code, Windsurf, Bolt, ChatGPT Plus):</strong><br/>
+            Baixe ou copie abaixo o <strong>Documento Oficial de Arquitetura (<code>GUIA_VIBE_CODER_TREINAMENTO.md</code>)</strong> e solte direto no seu agente de IA dizendo:<br/>
+            <code style="display:block; margin-top:6px; padding:6px 8px; background:rgba(0,0,0,0.28); border-radius:6px;">"Leia este guia técnico do ZAP-IA Studio e gere o pacote completo de treinamento para a empresa [DESCRIÇÃO]."</code>
+          </div>
+
+          <div style="font-size:12.5px; color:var(--text-secondary); line-height:1.55;">
+            <strong>Os 3 formatos suportados nativamente pelo compilador do ZAP-IA Studio:</strong>
+            <ul style="margin:6px 0 0 18px; display:flex; flex-direction:column; gap:4px;">
+              <li><strong>Nível 1 — Blueprint Único (<code>.JSON</code>):</strong> 1 arquivo com <code>profile</code> + <code>approvedMessages</code> + <code>operationalSkills</code> + <code>humanizationSkills</code> + <code>objections</code>.</li>
+              <li><strong>Nível 2 — Pacote Modular Turbo (<code>.ZIP</code>):</strong> Múltiplas pastas (<code>00-regras-canonicas.md</code>, <code>01-negocio/</code>, <code>03-skills/indice-skills.json</code>, <code>04-respostas/</code>, <code>12-humanizacao/</code> + áudios <code>.ogg</code>).</li>
+              <li><strong>Nível 3 — Playbook em Markdown (<code>.MD</code>):</strong> Cabeçalhos <code>## M01</code>, <code>## S01</code>, <code>## H01</code> convertidos automaticamente em skills ativas.</li>
+            </ul>
+          </div>
+
+          <div style="font-size:12px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:10px; line-height:1.5;">
+            <strong>Tags Nativas de Automação disponíveis para usar nas Skills:</strong><br/>
+            <code>[[CHAMAR_HUMANO:Motivo]]</code> · <code>[[AGENDAR_RETORNO:120|Motivo]]</code> · <code>[[GERAR_PIX:99.90|Descrição]]</code> · <code>[[ENVIAR_MIDIA:ID]]</code> · <code>[[ENVIAR_AUDIO:ID]]</code>
+          </div>
+
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <a href="/GUIA_VIBE_CODER_TREINAMENTO.md" download="GUIA_VIBE_CODER_TREINAMENTO.md" class="btn btn-primary" style="text-decoration:none;">📥 Baixar Documento p/ Vibe Coders (.MD)</a>
+            <button type="button" class="btn btn-secondary" onclick="copyFullVibeCoderSpecMd()">📋 Copiar Documento Técnico Inteiro</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>

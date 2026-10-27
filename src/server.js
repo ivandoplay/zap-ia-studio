@@ -72,6 +72,7 @@ import {
 } from './supabaseCloud.js';
 import {
   importTrainingZipBuffer,
+  importTrainingUniversal,
   listTrainingPacks,
   getTrainingPack,
   summarizePack,
@@ -1222,49 +1223,74 @@ app.delete('/api/training-packs/:packId/skills/:skillId', (req, res) => {
   }
 });
 
+function applyImportedTrainingResult({ packSummary, suggestedProfile }) {
+  const current = storage.getBusiness();
+  storage.data.business = {
+    ...current,
+    ...suggestedProfile,
+    id: 'business_unico',
+    trainingPackId: packSummary.id,
+    lockUntilManualResume: suggestedProfile.lockUntilManualResume !== false,
+    promptShieldEnabled: suggestedProfile.promptShieldEnabled !== false,
+    // Preserva catálogo e chave PIX atuais caso o pacote importado não traga seus próprios
+    catalog:
+      Array.isArray(suggestedProfile.catalog) && suggestedProfile.catalog.length > 0
+        ? suggestedProfile.catalog.map(normalizeCatalogItem)
+        : current.catalog,
+    pix: suggestedProfile.pix?.key ? { ...current.pix, ...suggestedProfile.pix } : current.pix,
+    voiceLibrary: Array.isArray(current.voiceLibrary) ? current.voiceLibrary : [],
+    knowledgeDocs:
+      Array.isArray(suggestedProfile.knowledgeDocs) && suggestedProfile.knowledgeDocs.length > 0
+        ? suggestedProfile.knowledgeDocs
+        : current.knowledgeDocs,
+    updatedAt: new Date().toISOString()
+  };
+
+  storage.writeNow();
+  storage.addLog(
+    'info',
+    `Treinamento "${packSummary.name}" ativado no Cérebro Único (${packSummary.stats.operationalSkillsCount + packSummary.stats.humanizationSkillsCount} skills, ${packSummary.stats.approvedMessagesCount || 0} msgs).`
+  );
+  return storage.data.business;
+}
+
 app.post('/api/training-packs/import-zip', memUpload.single('file'), (req, res) => {
   try {
     if (!req.file || !req.file.buffer) {
-      return res.status(400).json({ ok: false, error: 'Selecione um arquivo .ZIP de treinamento válido.' });
+      return res.status(400).json({ ok: false, error: 'Selecione um arquivo .ZIP, .JSON ou .MD válido.' });
     }
-    const { packSummary, suggestedProfile } = importTrainingZipBuffer(req.file.buffer, req.file.originalname);
-
-    const current = storage.getBusiness();
-    storage.data.business = {
-      ...current,
-      ...suggestedProfile,
-      id: 'business_unico',
-      trainingPackId: packSummary.id,
-      lockUntilManualResume: suggestedProfile.lockUntilManualResume !== false,
-      promptShieldEnabled: suggestedProfile.promptShieldEnabled !== false,
-      // Preserva catálogo e chave PIX atuais caso o pacote importado não traga seus próprios
-      catalog:
-        Array.isArray(suggestedProfile.catalog) && suggestedProfile.catalog.length > 0
-          ? suggestedProfile.catalog.map(normalizeCatalogItem)
-          : current.catalog,
-      pix: suggestedProfile.pix?.key ? { ...current.pix, ...suggestedProfile.pix } : current.pix,
-      voiceLibrary: Array.isArray(current.voiceLibrary) ? current.voiceLibrary : [],
-      knowledgeDocs:
-        Array.isArray(suggestedProfile.knowledgeDocs) && suggestedProfile.knowledgeDocs.length > 0
-          ? suggestedProfile.knowledgeDocs
-          : current.knowledgeDocs,
-      updatedAt: new Date().toISOString()
-    };
-
-    storage.writeNow();
-    storage.addLog(
-      'info',
-      `Pacote Turbo "${packSummary.name}" ativado no Cérebro Único (${packSummary.stats.operationalSkillsCount + packSummary.stats.humanizationSkillsCount} skills).`
-    );
+    const result = importTrainingUniversal(req.file.buffer, req.file.originalname);
+    const business = applyImportedTrainingResult(result);
 
     res.json({
       ok: true,
-      packSummary,
-      business: storage.data.business,
+      packSummary: result.packSummary,
+      business,
       trainingPacks: listTrainingPacks()
     });
   } catch (err) {
-    res.status(400).json({ ok: false, error: `Falha ao importar pacote .ZIP: ${err.message}` });
+    res.status(400).json({ ok: false, error: `Falha ao importar treinamento: ${err.message}` });
+  }
+});
+
+app.post('/api/training-packs/import-text', (req, res) => {
+  try {
+    const rawText = String(req.body?.text || '').trim();
+    const filename = String(req.body?.filename || 'blueprint-chatgpt.json').trim();
+    if (!rawText) {
+      return res.status(400).json({ ok: false, error: 'Cole o código JSON ou Markdown gerado pelo ChatGPT/IA primeiro.' });
+    }
+    const result = importTrainingUniversal(rawText, filename);
+    const business = applyImportedTrainingResult(result);
+
+    res.json({
+      ok: true,
+      packSummary: result.packSummary,
+      business,
+      trainingPacks: listTrainingPacks()
+    });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: `Falha ao aplicar treinamento colado: ${err.message}` });
   }
 });
 

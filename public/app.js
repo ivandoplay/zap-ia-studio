@@ -1302,6 +1302,221 @@ window.triggerRemoteMotorUpdate = async function triggerRemoteMotorUpdate() {
   }
 };
 
+// ======================== CENTRAL DE TREINAMENTO COM CHATGPT & VIBE CODING ========================
+
+window.openAiTrainingBuilderModal = function openAiTrainingBuilderModal(defaultTab = 'chatgpt') {
+  switchAiBuilderTab(defaultTab);
+  document.getElementById('aiTrainingBuilderModal')?.classList.add('open');
+};
+
+window.switchAiBuilderTab = function switchAiBuilderTab(tab = 'chatgpt') {
+  const isVibe = tab === 'vibecoder';
+  document.getElementById('btnBuilderTabChatgpt')?.classList.toggle('active', !isVibe);
+  document.getElementById('btnBuilderTabVibecoder')?.classList.toggle('active', isVibe);
+  const paneChat = document.getElementById('aiBuilderPaneChatgpt');
+  const paneVibe = document.getElementById('aiBuilderPaneVibecoder');
+  if (paneChat) paneChat.style.display = isVibe ? 'none' : 'flex';
+  if (paneVibe) paneVibe.style.display = isVibe ? 'flex' : 'none';
+};
+
+function buildChatGptSuperPromptText(customBrief = '') {
+  const briefSection = customBrief
+    ? `DADOS DO NEGÓCIO QUE QUERO TREINAR AGORA:\n${customBrief}`
+    : `DADOS DO NEGÓCIO QUE QUERO TREINAR AGORA:\n[ESCREVA OU MANDE ÁUDIO AQUI CONTANDO SOBRE SUA EMPRESA, O QUE VENDE, PREÇOS, FORMAS DE PAGAMENTO E REGRAS — OU PEÇA PARA A IA TE FAZER 4 PERGUNTAS RÁPIDAS ANTES DE GERAR!]`;
+
+  return `Você é um Engenheiro Sênior de Atendimento Comercial Humanizado no WhatsApp especialista no sistema ZAP-IA Studio.
+Sua missão é criar um arquivo JSON completo no padrão oficial "zapia-blueprint-v1" para treinar o Cérebro Único do nosso atendente no WhatsApp.
+
+REGRAS OBRIGATÓRIAS DE POSTURA DO ATENDENTE:
+1. O atendente NUNCA, sob nenhuma hipótese, pode dizer ou insinuar que é IA, robô, bot, assistente virtual ou automação. Deve conversar 100% como uma pessoa real da equipe no WhatsApp (mensagens curtas, naturais, sem listas robóticas gigantes).
+2. Nunca inventar preços, prazos, descontos ou promessas que não estejam nos dados do negócio.
+3. Quando o cliente pedir desconto especial, caso complexo, reclamação séria ou fechamento humano, usar exatamente a tag [[CHAMAR_HUMANO:Resumo curto do motivo]] no final da mensagem.
+4. Se o cliente pedir para agendar retorno depois ("fala comigo amanhã", "me chama mais tarde"), usar [[AGENDAR_RETORNO:120|Cliente pediu retorno]].
+
+ESTRUTURA JSON EXATA QUE VOCÊ DEVE RETORNAR (retorne APENAS um único bloco \`\`\`json válido, sem comentários // dentro do JSON):
+
+{
+  "schema": "zapia-blueprint-v1",
+  "version": "1.0",
+  "profile": {
+    "name": "Nome Comercial da Empresa",
+    "niche": "Segmento / Nicho de atuação",
+    "assistantName": "Nome humano do(a) atendente (ex: Camila - Equipe X)",
+    "tone": "consultivo",
+    "companySummary": "Resumo completo do que a empresa vende/faz, público-alvo, cidade/região e principais diferenciais.",
+    "deliveryAndPayment": "Formas de pagamento, parcelamento, entrega/atendimento, endereço e horário de funcionamento.",
+    "goldenRules": "Lista numerada de regras invioláveis do que fazer, como conduzir a venda e o que jamais inventar.",
+    "extraInstructions": "Dicas extras de vocabulário natural no WhatsApp, tamanho ideal das mensagens (2 a 4 linhas) e condução para fechamento.",
+    "lockUntilManualResume": true,
+    "promptShieldEnabled": true,
+    "faqs": [
+      { "question": "Pergunta frequente real do cliente 1", "answer": "Resposta natural, humana e direta de WhatsApp" }
+    ]
+  },
+  "approvedMessages": [
+    { "id": "M01", "title": "Boas-vindas / Primeiro Contato", "text": "Mensagem aprovada natural para abertura" },
+    { "id": "M02", "title": "Explicação rápida da oferta", "text": "Mensagem curta explicando como funciona na prática" },
+    { "id": "M03", "title": "Passagem para especialista", "text": "Perfeito! Vou passar aqui pro responsável finalizar certinho com você agora mesmo. [[CHAMAR_HUMANO:Cliente pronto para avançar]]" }
+  ],
+  "operationalSkills": [
+    {
+      "id": "S01",
+      "name": "qualificar-necessidade-do-cliente",
+      "when": "Quando o cliente chega perguntando de forma genérica como funciona ou pedindo orçamento sem contexto",
+      "example_response": "Oi! Tudo bem? Pra eu te indicar certinho o melhor formato, me conta rapidinho o que você está buscando hoje?",
+      "bodyMd": "Acolher sem texto longo e fazer 1 pergunta simples de qualificação."
+    }
+  ],
+  "humanizationSkills": [
+    {
+      "id": "H01",
+      "name": "ritmo-natural-de-whatsapp",
+      "trigger": "Em todas as respostas enviadas ao cliente",
+      "goal": "Soar 100% como humano digitando no WhatsApp",
+      "avoid": "Evitar 'Com certeza!', 'Fico feliz em ajudar!', listas robóticas ou textos longos",
+      "bad_response": "Olá! Seja muito bem-vindo! Confira nossas 5 soluções incríveis...",
+      "better_response": "Oi, tudo bom? Me conta rapidinho o que você tá precisando hoje pra eu já te passar certinho!"
+    }
+  ],
+  "objections": [
+    {
+      "id": "O01",
+      "input_pattern": "tá caro / vou pensar / achei puxado",
+      "nature": "Objeção de preço",
+      "skill_id": "S01",
+      "response_strategy": "Validar sem discutir, destacar diferencial prático e oferecer opção adequada ou chamar humano.",
+      "avoid": "Nunca inventar desconto não autorizado."
+    }
+  ]
+}
+
+Crie pelo menos: 8 FAQs reais, 6 Mensagens Aprovadas (M01..M06), 10 Skills Operacionais (S01..S10), 5 Skills de Humanização (H01..H05) e 6 Objeções (O01..O06).
+Valores válidos para "tone": "consultivo", "acolhedor", "descontraido", "profissional" ou "formal".
+
+${briefSection}`;
+}
+
+window.copyChatGptSuperPrompt = async function copyChatGptSuperPrompt() {
+  const brief = document.getElementById('aiBuilderBriefInput')?.value?.trim() || '';
+  const text = buildChatGptSuperPromptText(brief);
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('📋 Super-Prompt copiado! Cole agora no ChatGPT, Claude ou Gemini.');
+  } catch {
+    showToast('Não foi possível copiar automaticamente — selecione e copie manualmente.', true);
+  }
+};
+
+window.copyFullVibeCoderSpecMd = async function copyFullVibeCoderSpecMd() {
+  try {
+    const res = await fetch('/GUIA_VIBE_CODER_TREINAMENTO.md', { cache: 'no-cache' });
+    if (!res.ok) throw new Error('Guia não encontrado.');
+    const md = await res.text();
+    await navigator.clipboard.writeText(md);
+    showToast('📋 Documento Oficial de Vibe Coding (.MD) copiado para a área de transferência!');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.downloadSampleBlueprintJson = function downloadSampleBlueprintJson() {
+  const sample = {
+    schema: 'zapia-blueprint-v1',
+    version: '1.0',
+    profile: {
+      name: 'Exemplo — Loja / Clínica Modelo',
+      niche: 'Comércio & Atendimento Especializado',
+      assistantName: 'Marina — Equipe Comercial',
+      tone: 'consultivo',
+      companySummary: 'Atendemos clientes com foco em agilidade, transparência e acompanhamento próximo pelo WhatsApp.',
+      deliveryAndPayment: 'Aceitamos PIX, cartão em até 12x e boleto. Atendimento de segunda a sábado.',
+      goldenRules: '1. Converse sempre 100% como pessoa real da equipe (jamais diga que é IA ou robô).\n2. Nunca invente preços ou condições fora da tabela.\n3. Em negociações especiais, use [[CHAMAR_HUMANO:Negociação especial]].',
+      extraInstructions: 'Prefira mensagens curtas (2 a 4 linhas) e termine conduzindo com 1 pergunta leve.',
+      lockUntilManualResume: true,
+      promptShieldEnabled: true,
+      faqs: [
+        { question: 'Quais as formas de pagamento?', answer: 'Trabalhamos com PIX à vista e parcelamento no cartão! Qual formato fica melhor pra você?' }
+      ]
+    },
+    approvedMessages: [
+      { id: 'M01', title: 'Boas-vindas', text: 'Oi! Tudo bem? Aqui é a Marina! Como posso te ajudar hoje?' },
+      { id: 'M02', title: 'Passagem Humana', text: 'Perfeito! Já estou passando aqui pro responsável finalizar isso pessoalmente com você agora mesmo. [[CHAMAR_HUMANO:Fechamento comercial]]' }
+    ],
+    operationalSkills: [
+      {
+        id: 'S01',
+        name: 'qualificar-demanda-inicial',
+        when: 'Cliente pergunta como funciona ou pede orçamento inicial',
+        example_response: 'Oi! Tudo ótimo por aqui. Me conta rapidinho qual opção você está procurando hoje pra eu já te passar certinho!',
+        bodyMd: 'Acolher com simpatia e fazer 1 pergunta objetiva para entender a necessidade antes de despejar informações.'
+      }
+    ],
+    humanizationSkills: [
+      {
+        id: 'H01',
+        name: 'naturalidade-whatsapp',
+        trigger: 'Todas as mensagens',
+        goal: 'Escrever como humano real no WhatsApp',
+        avoid: 'Textões robóticos ou frases artificiais de telemarketing',
+        bad_response: 'Prezado cliente, agradecemos seu contato com nossa central!',
+        better_response: 'Oi! Tudo bom? Já vi sua mensagem aqui, me conta como posso te ajudar!'
+      }
+    ],
+    objections: [
+      {
+        id: 'O01',
+        input_pattern: 'achei caro / vou pensar',
+        nature: 'Sensibilidade a preço',
+        skill_id: 'S01',
+        response_strategy: 'Mostrar o custo-benefício real e verificar se outra condição de parcelamento ajuda.',
+        avoid: 'Não inventar desconto fora da tabela.'
+      }
+    ]
+  };
+  const blob = new Blob([JSON.stringify(sample, null, 2)], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'modelo-treinamento-zapia.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+};
+
+window.applyPastedAiTraining = async function applyPastedAiTraining() {
+  const area = document.getElementById('aiBlueprintPasteArea');
+  const btn = document.getElementById('btnApplyPastedBlueprint');
+  const raw = area?.value?.trim() || '';
+  if (!raw) {
+    return showToast('Cole primeiro o código JSON ou Markdown gerado pelo ChatGPT/IA!', true);
+  }
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = '⏳ Compilando e aplicando...';
+  }
+  try {
+    const res = await api('/api/training-packs/import-text', {
+      method: 'POST',
+      body: JSON.stringify({ text: raw, filename: 'blueprint-chatgpt.json' })
+    });
+    state.business = res.business;
+    state.trainingPacks = res.trainingPacks || state.trainingPacks;
+    await ensureFullPackLoaded(res.packSummary.id, true);
+    if (area) area.value = '';
+    closeModal('aiTrainingBuilderModal');
+    renderAll();
+    showToast(`🎉 Treinamento "${res.packSummary.name}" aplicado (${res.packSummary.stats.operationalSkillsCount + res.packSummary.stats.humanizationSkillsCount} skills + ${res.packSummary.stats.approvedMessagesCount || 0} mensagens)!`);
+  } catch (err) {
+    showToast(err.message, true);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '⚡ 2. Aplicar Treinamento Completo';
+    }
+  }
+};
+
 function renderReadinessAndFunnel() {
   const strip = document.getElementById('readinessStrip');
   const funnel = document.getElementById('funnelSummaryBar');
@@ -5300,7 +5515,7 @@ function bindEvents() {
       const fd = new FormData();
       fd.append('file', file);
       try {
-        showToast('Descompactando e aplicando pacote .ZIP ao Cérebro Único...');
+        showToast(`Importando "${file.name}" para o Cérebro Único...`);
         const res = await api('/api/training-packs/import-zip', {
           method: 'POST',
           body: fd
@@ -5310,7 +5525,7 @@ function bindEvents() {
         await ensureFullPackLoaded(res.packSummary.id, true);
         zipPackInput.value = '';
         renderAll();
-        showToast(`Pacote "${res.packSummary.name}" ativado no Cérebro Único!`);
+        showToast(`✅ Treinamento "${res.packSummary.name}" ativado com sucesso!`);
       } catch (err) {
         zipPackInput.value = '';
         showToast(err.message, true);

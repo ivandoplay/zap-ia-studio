@@ -1125,6 +1125,11 @@ export function generatePackDemoReply(packId, { userText = '', history = [], med
   const pack = getTrainingPack(packId);
   if (!pack) return null;
 
+  const isLizandroPack = Boolean(
+    String(pack.id || '').includes('lizandro') ||
+    String(pack.businessFacts?.representative || '').includes('Lizandro')
+  );
+
   const folded = foldPt(userText).trim();
   const ctx = selectTurnPackContext(packId, {
     userText,
@@ -1132,6 +1137,32 @@ export function generatePackDemoReply(packId, { userText = '', history = [], med
     hasAudio: Boolean(media?.mimeType?.startsWith('audio/')),
     hasImage: Boolean(media?.mimeType?.startsWith('image/'))
   });
+
+  // Se for um pacote customizado de outro negócio (gerado via ChatGPT / Vibe Coding) em modo offline sem API Key:
+  if (!isLizandroPack) {
+    const tokens = tokenizePt(userText);
+    if (tokens.length > 0 && Array.isArray(pack.operationalSkills) && pack.operationalSkills.length > 0) {
+      const bestSkill = pack.operationalSkills
+        .map((s) => ({ s, score: scoreItem(s.searchBlob || foldPt(`${s.name} ${s.when} ${s.bodyMd}`), tokens, folded, []) }))
+        .sort((a, b) => b.score - a.score)[0];
+      if (bestSkill && bestSkill.score >= 2 && bestSkill.s.example_response) {
+        return {
+          rawText: bestSkill.s.example_response,
+          activatedSkills: [`${bestSkill.s.id} · ${bestSkill.s.name}`]
+        };
+      }
+    }
+    if (/\b(oi|ola|bom dia|boa tarde|boa noite|tudo bem|como funciona)\b/.test(folded)) {
+      const m01 = pack.canonicalCore?.approvedMessages?.[0];
+      if (m01?.text) {
+        return {
+          rawText: m01.text,
+          activatedSkills: [`${m01.id} · ${m01.title || 'boas-vindas'}`]
+        };
+      }
+    }
+    return null;
+  }
 
   // 1. Mídia sem chave de IA configurada -> segue regra canônica R024: Pausa Silenciosa (não fingir que ouviu/leu!)
   if (media && (!userText || userText.trim().length < 3)) {
@@ -1325,3 +1356,423 @@ export function generatePackDemoReply(packId, { userText = '', history = [], med
     activatedSkills: ['02.13 · intencao-nao-compreendida-e-pausa-silenciosa', 'R024']
   };
 }
+
+/**
+ * Extrai JSON limpo mesmo que o usuário tenha copiado a resposta inteira do ChatGPT/Claude com cercas ```json ... ``` ou texto ao redor.
+ */
+export function extractCleanJsonFromAiText(rawText = '') {
+  const trimmed = String(rawText || '').trim();
+  if (!trimmed) return null;
+
+  // 1. Tentativa direta
+  try {
+    return JSON.parse(trimmed);
+  } catch {}
+
+  // 2. Bloco cercado ```json ... ```
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fenceMatch && fenceMatch[1]) {
+    try {
+      return JSON.parse(fenceMatch[1].trim());
+    } catch {}
+  }
+
+  // 3. Do primeiro '{' ao último '}'
+  const firstBrace = trimmed.indexOf('{');
+  const lastBrace = trimmed.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
+    } catch {}
+  }
+
+  return null;
+}
+
+/**
+ * Compila um Blueprint JSON único (gerado pelo ChatGPT, Claude, Gemini ou Vibe Coder)
+ * em pacote completo de Skills + Perfil do Cérebro Único.
+ */
+export function importTrainingBlueprintObject(rawObj, originalFilename = 'blueprint-ia.json', customPackId = null) {
+  if (!rawObj || typeof rawObj !== 'object') {
+    throw new Error('JSON de treinamento inválido ou vazio.');
+  }
+
+  // Caso seja um zapia-pack-compilado.json direto
+  if (rawObj.canonicalCore && (Array.isArray(rawObj.operationalSkills) || Array.isArray(rawObj.humanizationSkills))) {
+    const restoredId =
+      customPackId ||
+      sanitizePackId(rawObj.id) ||
+      foldPt(path.basename(originalFilename, path.extname(originalFilename))).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') ||
+      uid('pack');
+    const restoredPack = {
+      ...rawObj,
+      id: restoredId,
+      importedAt: new Date().toISOString()
+    };
+    persistTrainingPack(restoredPack);
+    return {
+      packSummary: summarizePack(restoredPack),
+      suggestedProfile: buildSuggestedProfileFromPack(restoredPack)
+    };
+  }
+
+  const prof = rawObj.profile || rawObj.business || rawObj;
+  const bizName = String(prof.name || rawObj.name || 'Meu Negócio Treinado').trim();
+  const baseSlug = foldPt(bizName || path.basename(originalFilename, path.extname(originalFilename)))
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  const packId = customPackId || sanitizePackId(rawObj.id) || (baseSlug ? `bp-${baseSlug}` : uid('pack'));
+
+  const rawApproved = Array.isArray(rawObj.approvedMessages)
+    ? rawObj.approvedMessages
+    : Array.isArray(prof.approvedMessages)
+      ? prof.approvedMessages
+      : [];
+  const approvedMessages = rawApproved
+    .filter((m) => m && (m.text || m.content))
+    .map((m, idx) => ({
+      id: String(m.id || `M${String(idx + 1).padStart(2, '0')}`).trim(),
+      title: String(m.title || m.name || `Mensagem ${idx + 1}`).trim(),
+      text: String(m.text || m.content || '').trim()
+    }));
+
+  const rawOpSkills = Array.isArray(rawObj.operationalSkills)
+    ? rawObj.operationalSkills
+    : Array.isArray(rawObj.skills)
+      ? rawObj.skills
+      : [];
+  const operationalSkills = rawOpSkills
+    .filter((s) => s && (s.name || s.when || s.example_response || s.bodyMd))
+    .map((s, idx) => {
+      const id = String(s.id || `S${String(idx + 1).padStart(2, '0')}`).trim();
+      const name = String(s.name || s.title || `skill-${idx + 1}`).trim();
+      const when = String(s.when || s.trigger || '').trim();
+      const example_response = String(s.example_response || s.response || '').trim();
+      const bodyMd = String(s.bodyMd || s.instructions || example_response || '').trim();
+      return {
+        id,
+        name,
+        when,
+        example_response,
+        bodyMd,
+        searchBlob: foldPt(`${id} ${name} ${when} ${example_response} ${bodyMd}`)
+      };
+    });
+
+  const rawHumSkills = Array.isArray(rawObj.humanizationSkills) ? rawObj.humanizationSkills : [];
+  const humanizationSkills = rawHumSkills
+    .filter((h) => h && (h.name || h.goal || h.better_response))
+    .map((h, idx) => {
+      const id = String(h.id || `H${String(idx + 1).padStart(2, '0')}`).trim();
+      const name = String(h.name || `humanizacao-${idx + 1}`).trim();
+      const trigger = String(h.trigger || h.when || 'Em todas as interações').trim();
+      const goal = String(h.goal || '').trim();
+      const avoid = String(h.avoid || '').trim();
+      const bad_response = String(h.bad_response || '').trim();
+      const better_response = String(h.better_response || '').trim();
+      const bodyMd = String(h.bodyMd || '').trim();
+      return {
+        id,
+        name,
+        trigger,
+        goal,
+        avoid,
+        bad_response,
+        better_response,
+        bodyMd,
+        searchBlob: foldPt(`${id} ${name} ${trigger} ${goal} ${avoid} ${better_response} ${bodyMd}`)
+      };
+    });
+
+  const rawObjections = Array.isArray(rawObj.objections) ? rawObj.objections : [];
+  const objections = rawObjections
+    .filter((o) => o && (o.input_pattern || o.response_strategy))
+    .map((o, idx) => {
+      const id = String(o.id || `O${String(idx + 1).padStart(2, '0')}`).trim();
+      const input_pattern = String(o.input_pattern || o.objection || '').trim();
+      const nature = String(o.nature || 'Objeção comercial').trim();
+      const skill_id = String(o.skill_id || '').trim();
+      const response_strategy = String(o.response_strategy || o.answer || '').trim();
+      const avoid = String(o.avoid || '').trim();
+      return {
+        id,
+        input_pattern,
+        nature,
+        skill_id,
+        response_strategy,
+        avoid,
+        searchBlob: foldPt(`${id} ${input_pattern} ${nature} ${response_strategy}`)
+      };
+    });
+
+  const rawPersonas = Array.isArray(rawObj.personas) ? rawObj.personas : [];
+  const interlocutorPersonas = rawPersonas
+    .filter((p) => p && (p.name || p.signals))
+    .map((p, idx) => {
+      const id = String(p.id || `P${String(idx + 1).padStart(2, '0')}`).trim();
+      const name = String(p.name || `Perfil ${idx + 1}`).trim();
+      const signals = String(p.signals || '').trim();
+      const bodyMd = String(p.bodyMd || p.strategy || '').trim();
+      return {
+        id,
+        name,
+        signals,
+        bodyMd,
+        searchBlob: foldPt(`${id} ${name} ${signals} ${bodyMd}`)
+      };
+    });
+
+  const rawFaqs = Array.isArray(prof.faqs) ? prof.faqs : Array.isArray(rawObj.faqs) ? rawObj.faqs : [];
+  const cleanFaqs = rawFaqs
+    .filter((f) => f && f.question && f.answer)
+    .map((f) => ({
+      id: f.id || uid('faq'),
+      question: String(f.question).trim(),
+      answer: String(f.answer).trim()
+    }));
+
+  const validTones = new Set(['consultivo', 'acolhedor', 'descontraido', 'profissional', 'formal']);
+  const tone = validTones.has(String(prof.tone || '').toLowerCase())
+    ? String(prof.tone).toLowerCase()
+    : 'consultivo';
+
+  const canonicalRulesMd = String(
+    rawObj.canonicalRulesMd ||
+      prof.goldenRules ||
+      '1. Converse sempre 100% como humano real da equipe comercial no WhatsApp (nunca revele ou insinue ser IA/robô).\n2. Nunca invente preços, condições ou promessas fora deste treinamento.'
+  ).trim();
+
+  const mainPromptMd = [
+    `# ${bizName}`,
+    prof.niche ? `**Segmento:** ${prof.niche}` : '',
+    prof.companySummary ? `\n## Sobre a Empresa & Oferta\n${prof.companySummary}` : '',
+    prof.deliveryAndPayment ? `\n## Pagamentos, Entrega, Endereço & Horários\n${prof.deliveryAndPayment}` : '',
+    prof.extraInstructions ? `\n## Diretrizes de Conversa no WhatsApp\n${prof.extraInstructions}` : ''
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const packData = {
+    id: packId,
+    name: `${bizName} (Blueprint IA)`,
+    version: String(rawObj.version || '1.0'),
+    originalFilename,
+    importedAt: new Date().toISOString(),
+    stats: {
+      totalFilesInZip: 1,
+      operationalSkillsCount: operationalSkills.length,
+      humanizationSkillsCount: humanizationSkills.length,
+      referenceResponsesCount: 0,
+      objectionsCount: objections.length,
+      approvedMessagesCount: approvedMessages.length,
+      personasCount: interlocutorPersonas.length,
+      voiceFiltersCount: 0,
+      conversationsCount: 0,
+      goodBadCount: humanizationSkills.filter((h) => h.bad_response).length
+    },
+    businessFacts: {
+      commercial_name_from_approved_material: bizName,
+      niche: prof.niche || '',
+      version: String(rawObj.version || '1.0')
+    },
+    canonicalCore: {
+      canonicalRulesMd,
+      mainPromptMd,
+      playbookMd: String(rawObj.playbookMd || '').trim(),
+      howToDeliverMd: '',
+      businessDocs: [],
+      behaviorDocs: [],
+      humanizationCoreDocs: [],
+      approvedRulesMd: '',
+      approvedMessages,
+      voiceFilters: [],
+      genericDocs: []
+    },
+    operationalSkills,
+    humanizationSkills,
+    referenceResponses: [],
+    objections,
+    interlocutorPersonas,
+    goodBadPairs: [],
+    appliedConversations: []
+  };
+
+  persistTrainingPack(packData);
+
+  const suggestedProfile = {
+    name: bizName,
+    niche: String(prof.niche || 'Atendimento & Vendas').trim(),
+    assistantName: String(prof.assistantName || 'Equipe Comercial').trim(),
+    tone,
+    trainingPackId: packId,
+    lockUntilManualResume: prof.lockUntilManualResume !== false,
+    promptShieldEnabled: prof.promptShieldEnabled !== false,
+    companySummary: String(prof.companySummary || '').trim(),
+    deliveryAndPayment: String(prof.deliveryAndPayment || '').trim(),
+    goldenRules: canonicalRulesMd,
+    extraInstructions: String(prof.extraInstructions || '').trim(),
+    faqs: cleanFaqs
+  };
+
+  if (Array.isArray(rawObj.catalog) && rawObj.catalog.length > 0) {
+    suggestedProfile.catalog = rawObj.catalog;
+  }
+
+  return {
+    packSummary: summarizePack(packData),
+    suggestedProfile
+  };
+}
+
+/**
+ * Compila um Playbook único em Markdown (.MD / .TXT) diretamente em um Pacote de Treinamento + Perfil sugerido.
+ */
+export function importTrainingMarkdownText(mdText = '', originalFilename = 'playbook.md', customPackId = null) {
+  const cleanMd = String(mdText || '').trim();
+  if (cleanMd.length < 20) {
+    throw new Error('O texto/arquivo enviado está muito curto para gerar um treinamento.');
+  }
+
+  // Se o arquivo .md/.txt na verdade contém um JSON do ChatGPT colado dentro dele, usa o compilador JSON!
+  if (cleanMd.includes('"zapia-blueprint-v1"') || (cleanMd.startsWith('{') && cleanMd.endsWith('}'))) {
+    const maybeJson = extractCleanJsonFromAiText(cleanMd);
+    if (maybeJson) {
+      return importTrainingBlueprintObject(maybeJson, originalFilename, customPackId);
+    }
+  }
+
+  const titleMatch = cleanMd.match(/^#\s+(.+)$/m);
+  const bizName = titleMatch
+    ? titleMatch[1].replace(/[*_`#]/g, '').trim().slice(0, 80)
+    : path.basename(originalFilename, path.extname(originalFilename));
+
+  const baseSlug = foldPt(bizName).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const packId = customPackId || (baseSlug ? `md-${baseSlug}` : uid('pack'));
+
+  const approvedMessages = [];
+  const operationalSkills = [];
+  const humanizationSkills = [];
+
+  // Extrai blocos "## M01 - Título", "## S01 - Nome", "## H01 - Nome" se existirem no Markdown
+  const sections = cleanMd.split(/\n(?=##\s+)/g);
+  for (const sec of sections) {
+    const headerMatch = sec.match(/^##\s+([MSH]\d{1,3})\s*[-:·–]?\s*(.+)$/m);
+    if (!headerMatch) continue;
+    const code = headerMatch[1].toUpperCase();
+    const title = headerMatch[2].trim();
+    const body = sec.replace(/^##\s+.+$/m, '').trim();
+    if (!body) continue;
+
+    if (code.startsWith('M')) {
+      approvedMessages.push({ id: code, title, text: body });
+    } else if (code.startsWith('S')) {
+      operationalSkills.push({
+        id: code,
+        name: foldPt(title).replace(/[^a-z0-9]+/g, '-'),
+        when: title,
+        example_response: '',
+        bodyMd: body,
+        searchBlob: foldPt(`${code} ${title} ${body}`)
+      });
+    } else if (code.startsWith('H')) {
+      humanizationSkills.push({
+        id: code,
+        name: foldPt(title).replace(/[^a-z0-9]+/g, '-'),
+        trigger: title,
+        goal: body.slice(0, 240),
+        avoid: '',
+        bad_response: '',
+        better_response: '',
+        bodyMd: body,
+        searchBlob: foldPt(`${code} ${title} ${body}`)
+      });
+    }
+  }
+
+  const packData = {
+    id: packId,
+    name: `${bizName} (Playbook MD)`,
+    version: '1.0',
+    originalFilename,
+    importedAt: new Date().toISOString(),
+    stats: {
+      totalFilesInZip: 1,
+      operationalSkillsCount: operationalSkills.length,
+      humanizationSkillsCount: humanizationSkills.length,
+      referenceResponsesCount: 0,
+      objectionsCount: 0,
+      approvedMessagesCount: approvedMessages.length,
+      personasCount: 0,
+      voiceFiltersCount: 0,
+      conversationsCount: 0,
+      goodBadCount: 0
+    },
+    businessFacts: { commercial_name_from_approved_material: bizName, version: '1.0' },
+    canonicalCore: {
+      canonicalRulesMd: 'Siga rigorosamente o Playbook Canônico importado abaixo, mantendo conversa 100% humana no WhatsApp.',
+      mainPromptMd: cleanMd.slice(0, 28000),
+      playbookMd: '',
+      howToDeliverMd: '',
+      businessDocs: [],
+      behaviorDocs: [],
+      humanizationCoreDocs: [],
+      approvedRulesMd: '',
+      approvedMessages,
+      voiceFilters: [],
+      genericDocs: []
+    },
+    operationalSkills,
+    humanizationSkills,
+    referenceResponses: [],
+    objections: [],
+    interlocutorPersonas: [],
+    goodBadPairs: [],
+    appliedConversations: []
+  };
+
+  persistTrainingPack(packData);
+
+  return {
+    packSummary: summarizePack(packData),
+    suggestedProfile: {
+      name: bizName,
+      niche: 'Playbook Estruturado',
+      assistantName: 'Equipe Comercial',
+      tone: 'consultivo',
+      trainingPackId: packId,
+      lockUntilManualResume: true,
+      promptShieldEnabled: true,
+      companySummary: cleanMd.slice(0, 900),
+      deliveryAndPayment: 'Conforme diretrizes do Playbook ativo.',
+      goldenRules: '1. Siga fielmente o Playbook ativo no pacote de treinamento.\n2. Jamais diga ou insinue ser IA, robô ou assistente virtual.',
+      extraInstructions: '',
+      faqs: []
+    }
+  };
+}
+
+/**
+ * Importador Universal (.ZIP, .JSON ou .MD/.TXT) — funciona tanto por arquivo enviado quanto por texto colado do ChatGPT.
+ */
+export function importTrainingUniversal(bufferOrText, originalFilename = 'treinamento.json', customPackId = null) {
+  const isBuf = Buffer.isBuffer(bufferOrText);
+  const lowerName = String(originalFilename || '').toLowerCase();
+
+  // 1. Detecta arquivo .ZIP (assinatura PK\x03\x04 ou extensão .zip)
+  if (isBuf && bufferOrText.length >= 4 && bufferOrText[0] === 0x50 && bufferOrText[1] === 0x4b) {
+    return importTrainingZipBuffer(bufferOrText, originalFilename, customPackId);
+  }
+  if (lowerName.endsWith('.zip') && isBuf) {
+    return importTrainingZipBuffer(bufferOrText, originalFilename, customPackId);
+  }
+
+  const rawText = isBuf ? bufferOrText.toString('utf8') : String(bufferOrText || '');
+  const maybeJson = extractCleanJsonFromAiText(rawText);
+  if (maybeJson && typeof maybeJson === 'object') {
+    return importTrainingBlueprintObject(maybeJson, originalFilename, customPackId);
+  }
+
+  return importTrainingMarkdownText(rawText, originalFilename, customPackId);
+}
+

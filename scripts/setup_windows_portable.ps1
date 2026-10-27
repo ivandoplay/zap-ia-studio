@@ -236,6 +236,24 @@ if (-not $nodeInfo) {
 }
 
 $env:Path = "$($nodeInfo.NodeDir);$env:Path"
+$env:NODE_OPTIONS = '--dns-result-order=ipv4first --no-network-family-autoselection'
+
+# Auto-Update Universal ANTES do npm install (usa apenas Node puro!)
+$autoUpdateScript = Join-Path $RootDir 'scripts\auto_update_boot.mjs'
+$justUpdated = $false
+if ($StartApp -and (Test-Path -LiteralPath $autoUpdateScript)) {
+    Push-Location -LiteralPath $RootDir
+    try {
+        $env:ZAPIA_DEFER_NPM = '1'
+        & $nodeInfo.NodeExe '--dns-result-order=ipv4first' '--no-network-family-autoselection' 'scripts/auto_update_boot.mjs' '--signal-updated-exit-20'
+        if ($LASTEXITCODE -eq 20) {
+            $justUpdated = $true
+        }
+    } catch {} finally {
+        Remove-Item Env:\ZAPIA_DEFER_NPM -ErrorAction SilentlyContinue
+        Pop-Location
+    }
+}
 
 $expressCheck = Join-Path $RootDir 'node_modules\express\package.json'
 $baileysCheck = Join-Path $RootDir 'node_modules\@whiskeysockets\baileys\package.json'
@@ -243,10 +261,14 @@ $needsNpmInstall = $ForceInstall -or (-not (Test-Path -LiteralPath $expressCheck
 
 if ($needsNpmInstall) {
     Write-Host ''
-    Write-Host '[2/2] Baixando e configurando bibliotecas do ZAP-IA Studio (20 a 40s)...' -ForegroundColor Green
+    Write-Host '[2/2] Baixando e configurando bibliotecas do ZAP-IA Studio (modo anti-timeout IPv4)...' -ForegroundColor Green
     Push-Location -LiteralPath $RootDir
     try {
-        & $nodeInfo.NpmCmd install --no-audit --no-fund
+        & $nodeInfo.NpmCmd install --legacy-peer-deps --no-audit --no-fund --maxsockets=4 --fetch-timeout=300000 --fetch-retries=6 --prefer-offline
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host '      [Auto-Recuperacao] Oscilacao de rede detectada -- tentando via espelho CDN...' -ForegroundColor Yellow
+            & $nodeInfo.NpmCmd install --legacy-peer-deps --no-audit --no-fund --registry=https://registry.npmmirror.com --maxsockets=4 --fetch-timeout=300000 --fetch-retries=6 --prefer-offline --omit=optional
+        }
         if ($LASTEXITCODE -ne 0) {
             throw "npm install retornou codigo $LASTEXITCODE"
         }
@@ -282,21 +304,6 @@ function Test-LocalPortListening([int]$Port) {
 }
 
 if ($StartApp) {
-    # Auto-Update Universal na Abertura (garante sempre a ultima versao oficial ao abrir no Windows!)
-    $autoUpdateScript = Join-Path $RootDir 'scripts\auto_update_boot.mjs'
-    $justUpdated = $false
-    if (Test-Path -LiteralPath $autoUpdateScript) {
-        Push-Location -LiteralPath $RootDir
-        try {
-            & $nodeInfo.NodeExe '--dns-result-order=ipv4first' 'scripts/auto_update_boot.mjs' '--signal-updated-exit-20'
-            if ($LASTEXITCODE -eq 20) {
-                $justUpdated = $true
-            }
-        } catch {} finally {
-            Pop-Location
-        }
-    }
-
     if ($justUpdated -and (Test-LocalPortListening 3000)) {
         Write-Host '[Auto-Update] Reiniciando motor em segundo plano para ativar a nova versao...' -ForegroundColor Cyan
         try {

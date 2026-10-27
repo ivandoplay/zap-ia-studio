@@ -192,6 +192,20 @@ if [ -z "$NODE_BIN_DIR" ]; then
 fi
 
 export PATH="$NODE_BIN_DIR:$PATH"
+# Blindagem contra ERR_SOCKET_TIMEOUT no Node 20/22 em redes Dual-Stack (IPv6 instavel + Happy Eyeballs do undici/npm)
+export NODE_OPTIONS="--dns-result-order=ipv4first --no-network-family-autoselection"
+
+# Auto-Update Universal ANTES do npm install (usa apenas Node puro, garantindo .npmrc e scripts sempre na ultima versao!)
+JUST_UPDATED=0
+if [ -f "$ROOT_DIR/scripts/auto_update_boot.mjs" ]; then
+  set +e
+  (cd "$ROOT_DIR" && ZAPIA_DEFER_NPM=1 node scripts/auto_update_boot.mjs --signal-updated-exit-20)
+  AU_CODE=$?
+  set -e
+  if [ "$AU_CODE" -eq 20 ]; then
+    JUST_UPDATED=1
+  fi
+fi
 
 NEEDS_NPM=0
 if [ "$MODE" = "install" ] || [ ! -f "$ROOT_DIR/node_modules/express/package.json" ] || [ ! -f "$ROOT_DIR/node_modules/@whiskeysockets/baileys/package.json" ]; then
@@ -200,10 +214,31 @@ fi
 
 if [ "$NEEDS_NPM" -eq 1 ]; then
   echo ""
-  echo "[2/2] Configurando bibliotecas do ZAP-IA Studio (20 a 40s)..."
+  echo "[2/2] Configurando bibliotecas do ZAP-IA Studio (modo anti-timeout IPv4 ativado)..."
+  EXTRA_OPT_FLAG=""
+  if command -v ffmpeg >/dev/null 2>&1; then
+    echo "      [Info] FFmpeg nativo do Linux detectado -- pulando download extra de 80MB!"
+    EXTRA_OPT_FLAG="--omit=optional"
+  fi
   (
     cd "$ROOT_DIR"
-    npm install --no-audit --no-fund
+    set +e
+    npm install --legacy-peer-deps --no-audit --no-fund --maxsockets=4 --fetch-timeout=300000 --fetch-retries=6 --prefer-offline $EXTRA_OPT_FLAG
+    NPM_EXIT=$?
+    if [ "$NPM_EXIT" -ne 0 ]; then
+      echo ""
+      echo "      [Auto-Recuperacao de Rede] Oscilacao/timeout detectado no servidor padrao npm."
+      echo "      Tentando automaticamente via espelho global de alta velocidade (CDN Mirror)..."
+      npm install --legacy-peer-deps --no-audit --no-fund --registry=https://registry.npmmirror.com --maxsockets=4 --fetch-timeout=300000 --fetch-retries=6 --prefer-offline --omit=optional
+      NPM_EXIT=$?
+    fi
+    if [ "$NPM_EXIT" -ne 0 ]; then
+      echo "      [Auto-Recuperacao Final] Tentando modo ultra-conservador (2 conexoes simultaneas)..."
+      npm install --legacy-peer-deps --no-audit --no-fund --maxsockets=2 --fetch-timeout=300000 --fetch-retries=8 --prefer-offline --omit=optional
+      NPM_EXIT=$?
+    fi
+    set -e
+    exit "$NPM_EXIT"
   )
   if [ -f "$ROOT_DIR/node_modules/ffmpeg-static/ffmpeg" ]; then
     chmod +x "$ROOT_DIR/node_modules/ffmpeg-static/ffmpeg" 2>/dev/null || true
@@ -222,18 +257,6 @@ if [ "$MODE" = "install" ]; then
   echo "  Agora execute: bash INICIAR_NO_LINUX.sh"
   echo "=============================================================="
   exit 0
-fi
-
-# Auto-Update Universal na Abertura (garante sempre a ultima versao oficial ao abrir no Linux!)
-JUST_UPDATED=0
-if [ -f "$ROOT_DIR/scripts/auto_update_boot.mjs" ]; then
-  set +e
-  (cd "$ROOT_DIR" && node --dns-result-order=ipv4first scripts/auto_update_boot.mjs --signal-updated-exit-20)
-  AU_CODE=$?
-  set -e
-  if [ "$AU_CODE" -eq 20 ]; then
-    JUST_UPDATED=1
-  fi
 fi
 
 # Verifica se a porta 3000 ja esta ativa

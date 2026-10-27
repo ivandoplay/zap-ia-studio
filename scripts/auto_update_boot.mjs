@@ -9,6 +9,7 @@
  */
 
 import dns from 'node:dns';
+import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -17,6 +18,9 @@ import { fileURLToPath } from 'node:url';
 
 try {
   dns.setDefaultResultOrder('ipv4first');
+  if (typeof net.setDefaultAutoSelectFamily === 'function') {
+    net.setDefaultAutoSelectFamily(false);
+  }
 } catch {}
 
 const __filename = fileURLToPath(import.meta.url);
@@ -175,12 +179,16 @@ async function runAutoUpdateCheck() {
 
     const newPkg = readJsonSafe(pkgPath) || {};
     const newDepsSig = JSON.stringify(newPkg.dependencies || {});
-    if (newDepsSig !== oldDepsSig) {
+    if (newDepsSig !== oldDepsSig && process.env.ZAPIA_DEFER_NPM !== '1') {
       console.log('📦 [Auto-Update] Novas dependências detectadas — atualizando bibliotecas...');
       const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-      const npmArgs = ['install', '--legacy-peer-deps', '--no-audit', '--no-fund'];
-      if (IS_TERMUX) npmArgs.push('--no-bin-links');
-      spawnSync(npmCmd, npmArgs, { cwd: ROOT_DIR, stdio: 'inherit', shell: process.platform === 'win32' });
+      const npmArgs = ['install', '--legacy-peer-deps', '--no-audit', '--no-fund', '--maxsockets=4', '--fetch-timeout=300000', '--fetch-retries=6', '--prefer-offline'];
+      if (IS_TERMUX) npmArgs.push('--no-bin-links', '--omit=optional');
+      const env = { ...process.env, NODE_OPTIONS: '--dns-result-order=ipv4first --no-network-family-autoselection' };
+      const r1 = spawnSync(npmCmd, npmArgs, { cwd: ROOT_DIR, stdio: 'inherit', shell: process.platform === 'win32', env });
+      if (r1.status !== 0) {
+        spawnSync(npmCmd, [...npmArgs, '--registry=https://registry.npmmirror.com', '--omit=optional'], { cwd: ROOT_DIR, stdio: 'inherit', shell: process.platform === 'win32', env });
+      }
     }
 
     const dataDir = path.join(ROOT_DIR, 'data');

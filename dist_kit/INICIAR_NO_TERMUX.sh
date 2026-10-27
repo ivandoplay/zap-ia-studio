@@ -62,11 +62,18 @@ if ! command -v node >/dev/null 2>&1 || ! command -v ffmpeg >/dev/null 2>&1; the
 fi
 
 cd "$APP_DIR"
+export NODE_OPTIONS="--dns-result-order=ipv4first --no-network-family-autoselection"
+
+# Auto-Update antes do npm install (garante .npmrc e scripts sempre na versao mais recente!)
+if [ -f "scripts/auto_update_boot.mjs" ]; then
+  ZAPIA_DEFER_NPM=1 node scripts/auto_update_boot.mjs || true
+fi
 
 if [ ! -f "node_modules/express/package.json" ] || [ ! -f "node_modules/@whiskeysockets/baileys/package.json" ]; then
   echo ""
-  echo "Instalando bibliotecas do ZAP-IA Studio..."
-  npm install --legacy-peer-deps --no-bin-links --no-audit --no-fund
+  echo "Instalando bibliotecas do ZAP-IA Studio (modo anti-timeout IPv4)..."
+  npm install --legacy-peer-deps --no-bin-links --no-audit --no-fund --maxsockets=4 --fetch-timeout=300000 --fetch-retries=6 --prefer-offline --omit=optional || \
+    npm install --legacy-peer-deps --no-bin-links --no-audit --no-fund --registry=https://registry.npmmirror.com --maxsockets=4 --fetch-timeout=300000 --fetch-retries=6 --prefer-offline --omit=optional
 fi
 
 if [ ! -f ".env" ] && [ -f ".env.example" ]; then
@@ -81,12 +88,7 @@ if [ -d "/data/data/com.termux/files/usr" ]; then
   fi
 fi
 
-# Auto-Update antes de exibir versao (garante que toda abertura no Termux ja baixe a ultima versao!)
-if [ -f "scripts/auto_update_boot.mjs" ]; then
-  node --dns-result-order=ipv4first scripts/auto_update_boot.mjs || true
-fi
-
-APP_VER=$(node -p "try{JSON.parse(require('fs').readFileSync('./package.json','utf8')).version}catch(e){'5.4'}" 2>/dev/null || echo "5.4")
+APP_VER=$(node -p "try{JSON.parse(require('fs').readFileSync('./package.json','utf8')).version}catch(e){'5.5'}" 2>/dev/null || echo "5.5")
 echo "=============================================================="
 echo "  ZAP-IA STUDIO v${APP_VER} -- MOTOR 24H ATIVO NO ANDROID (TERMUX)"
 echo "=============================================================="

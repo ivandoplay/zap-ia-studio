@@ -640,7 +640,14 @@ const MOTOR_SYSTEM_ROOT_FILES = new Set([
   '.env.example',
   '.npmrc',
   'package.json',
-  'package-lock.json'
+  'package-lock.json',
+  'vercel.json',
+  'LEIA-ME_COMO_USAR.md',
+  '1_Instalar_No_Windows.bat',
+  '2_Iniciar_Atendente_IA.bat',
+  '3_Criar_Atalho_Area_de_Trabalho.bat',
+  '4_Instalar_No_Termux.sh',
+  '5_Iniciar_No_Termux.sh'
 ]);
 
 const MOTOR_EXCLUDED_SEGMENTS = new Set([
@@ -654,6 +661,8 @@ const MOTOR_EXCLUDED_SEGMENTS = new Set([
   'tenants',
   'database.json',
   'cloud_session.json',
+  '.wrapper.pid',
+  '.last_auto_update.json',
   '.env',
   '.DS_Store'
 ]);

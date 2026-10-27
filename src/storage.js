@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { fileURLToPath } from 'url';
 import { NICHE_TEMPLATES } from './templates.js';
+import { trueNowIso, trueNowMs } from './trueClock.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -1013,8 +1014,8 @@ export class Storage {
       unreadCount: 0,
       archived: false,
       pinned: false,
-      createdAt: patch.createdAt || new Date().toISOString(),
-      lastMessageAt: patch.lastMessageAt || new Date().toISOString(),
+      createdAt: patch.createdAt || trueNowIso(),
+      lastMessageAt: patch.lastMessageAt || trueNowIso(),
       messages: []
     };
 
@@ -1108,12 +1109,12 @@ export class Storage {
     return updated;
   }
 
-  recordDeletedChatTombstone(chatId = '', phone = '') {
+  recordDeletedChatTombstone(chatId = '', phone = '', floorMs = 0) {
     if (!this.data.settings) this.data.settings = {};
     if (!this.data.settings.deletedChatTombstones || typeof this.data.settings.deletedChatTombstones !== 'object') {
       this.data.settings.deletedChatTombstones = {};
     }
-    const ts = new Date().toISOString();
+    const ts = new Date(Math.max(trueNowMs(), Number(floorMs) || 0)).toISOString();
     const map = this.data.settings.deletedChatTombstones;
     if (chatId) map[chatId] = ts;
     const digits = normalizePhoneDigits(phone || extractPhoneFromJidIfPn(chatId));
@@ -1154,7 +1155,10 @@ export class Storage {
     const key = this.findSiblingContactKey(chatId) || chatId;
     const existing = this.data.contacts[key];
     if (!existing) return null;
-    const nowIso = new Date().toISOString();
+    const lastExistingMs = Array.isArray(existing.messages) && existing.messages.length
+      ? Math.max(0, ...existing.messages.map((m) => new Date(m?.timestamp || 0).getTime() || 0))
+      : 0;
+    const nowIso = new Date(Math.max(trueNowMs(), lastExistingMs + 1)).toISOString();
     existing.messages = [];
     existing.unreadCount = 0;
     existing.unreadAlert = false;
@@ -1170,9 +1174,12 @@ export class Storage {
     const key = this.findSiblingContactKey(chatId) || chatId;
     const existing = this.data.contacts[key];
     if (!existing) return false;
+    const lastExistingMs = Array.isArray(existing.messages) && existing.messages.length
+      ? Math.max(0, ...existing.messages.map((m) => new Date(m?.timestamp || 0).getTime() || 0))
+      : (new Date(existing.lastMessageAt || 0).getTime() || 0);
     if (opts.recordTombstone !== false) {
-      this.recordDeletedChatTombstone(key, existing.phone || '');
-      if (chatId && chatId !== key) this.recordDeletedChatTombstone(chatId, existing.phone || '');
+      this.recordDeletedChatTombstone(key, existing.phone || '', lastExistingMs + 1);
+      if (chatId && chatId !== key) this.recordDeletedChatTombstone(chatId, existing.phone || '', lastExistingMs + 1);
     }
     delete this.data.contacts[key];
     this.dirtyContactIds.delete(key);
@@ -1342,7 +1349,11 @@ export class Storage {
     const key = this.findSiblingContactKey(chatId) || chatId;
     const existing = this.upsertContact(key, {});
     const noteId = uid('inote');
-    const createdAt = new Date().toISOString();
+    const lastNoteBaseMs = Array.isArray(existing.messages) && existing.messages.length
+      ? Math.max(0, ...existing.messages.map((m) => new Date(m?.timestamp || 0).getTime() || 0))
+      : 0;
+    const clearedNoteMs = existing.historyClearedAt ? (new Date(existing.historyClearedAt).getTime() || 0) : 0;
+    const createdAt = new Date(Math.max(trueNowMs(), clearedNoteMs + 1000, lastNoteBaseMs + 10)).toISOString();
     const noteEntry = {
       id: noteId,
       text: cleanText,
@@ -1385,9 +1396,23 @@ export class Storage {
     const isIncomingUser = msgObj?.role === 'user' && !msgObj?.skipUnread && !isHistorical;
     const isManualOwner = msgObj?.role === 'owner' && !isHistorical;
 
-    const msgIso = msgObj?.timestamp && !Number.isNaN(new Date(msgObj.timestamp).getTime())
-      ? new Date(msgObj.timestamp).toISOString()
-      : new Date().toISOString();
+    const rawCandidateMs =
+      msgObj?.timestamp && !Number.isNaN(new Date(msgObj.timestamp).getTime())
+        ? new Date(msgObj.timestamp).getTime()
+        : trueNowMs();
+
+    // Proteção Causal Anti-Clock-Skew (ex.: Dual-Boot Windows + Linux/antiX com BIOS em UTC-3):
+    // Toda mensagem AO VIVO (!isHistorical) nunca pode nascer antes de historyClearedAt nem antes da última mensagem da conversa!
+    const clearedFloorMs = !isHistorical && prev?.historyClearedAt
+      ? (new Date(prev.historyClearedAt).getTime() || 0) + 1000
+      : 0;
+    const lastExistingFloorMs = !isHistorical && Array.isArray(prev?.messages) && prev.messages.length > 0
+      ? Math.max(0, ...prev.messages.map((m) => new Date(m?.timestamp || 0).getTime() || 0)) + 10
+      : 0;
+    const effectiveMsgMs = isHistorical
+      ? rawCandidateMs
+      : Math.max(rawCandidateMs, trueNowMs(), clearedFloorMs, lastExistingFloorMs);
+    const msgIso = new Date(effectiveMsgMs).toISOString();
 
     // Checa duplicidade ANTES de incrementar contador de não-lidas!
     if (prev && Array.isArray(prev.messages) && prev.messages.length > 0) {
@@ -1477,7 +1502,7 @@ export class Storage {
     if (contact.pausedUntil === 'forever') return true;
     const untilMs = new Date(contact.pausedUntil).getTime();
     if (Number.isNaN(untilMs)) return false;
-    if (Date.now() < untilMs) return true;
+    if (trueNowMs() < untilMs) return true;
     contact.pausedUntil = null;
     contact.pauseReason = '';
     this.saveSoon();
@@ -1488,7 +1513,7 @@ export class Storage {
     const key = this.findSiblingContactKey(chatId, phone) || chatId;
     const pausedUntil = minutes === 'forever'
       ? 'forever'
-      : new Date(Date.now() + Number(minutes) * 60 * 1000).toISOString();
+      : new Date(trueNowMs() + Number(minutes) * 60 * 1000).toISOString();
     return this.upsertContact(key, {
       pausedUntil,
       pauseReason: reason

@@ -17,6 +17,7 @@ import { generateSmartReply, buildExecutiveHandoffDossier } from './aiEngine.js'
 import { formatPixMessageWithQr } from './pix.js';
 import { convertToCanonicalWhatsAppVoice, WHATSAPP_VOICE_MIMETYPE, isNativeOggOpus } from './audioProcessor.js';
 import { ensureLocalMediaCached } from './supabaseCloud.js';
+import { observeServerTimestamp, trueNowIso, trueNowMs } from './trueClock.js';
 
 // Garante que Notas de Voz subam no bucket nativo /mms/ptt do WhatsApp (idêntico à gravação no celular)
 if (MEDIA_PATH_MAP && !MEDIA_PATH_MAP.ptt) {
@@ -573,7 +574,7 @@ class WhatsAppManager {
               ? `[Arquivo: ${rawDocName}] ${textContent}`.trim()
               : textContent;
 
-      const tsMs = toEpochMs(msg.messageTimestamp) || Date.now();
+      const tsMs = toEpochMs(msg.messageTimestamp) || trueNowMs();
       const tombMs = storage.getDeletedChatTombstoneMs(remoteJid, bestPhone);
       if (tombMs > 0 && tsMs <= tombMs + 2000) continue;
 
@@ -1405,9 +1406,13 @@ class WhatsAppManager {
     const bestPhone = this.resolvePhoneFromMessage(msg);
     const ownerSelfName = this.getOwnerSelfName();
     const rawPushName = String(msg.pushName || '').trim();
-    const msgTsMs = toEpochMs(msg.messageTimestamp) || Date.now();
+    const rawWaTsMs = toEpochMs(msg.messageTimestamp);
+    if (!isHistoryAppend && rawWaTsMs > 1_700_000_000_000) {
+      observeServerTimestamp(rawWaTsMs);
+    }
+    const msgTsMs = rawWaTsMs || trueNowMs();
     const msgIso = new Date(msgTsMs).toISOString();
-    const msgAgeMs = Math.max(0, Date.now() - msgTsMs);
+    const msgAgeMs = Math.max(0, trueNowMs() - msgTsMs);
     const isOldHistoricalMsg = isHistoryAppend && msgAgeMs > 90_000;
 
     const textContent = extractReadableTextFromUnwrapped(unwrapped);
@@ -2306,6 +2311,8 @@ class WhatsAppManager {
 
     const sent = await this.sock.sendMessage(targetJid, { text }, sendOpts);
     this.rememberBotMessage(sent);
+    const sentWaMs = toEpochMs(sent?.messageTimestamp);
+    if (sentWaMs > 1_700_000_000_000) observeServerTimestamp(sentWaMs);
     const sentKey = sent?.key?.id
       ? { id: sent.key.id, remoteJid: sent.key.remoteJid || targetJid, fromMe: true }
       : undefined;
@@ -2313,6 +2320,7 @@ class WhatsAppManager {
       role: 'owner',
       text,
       ack: 1,
+      timestamp: new Date(sentWaMs || trueNowMs()).toISOString(),
       ...(sent?.key?.id ? { waMsgId: sent.key.id } : {}),
       ...(sentKey ? { waMsgKey: sentKey } : {}),
       ...(storedQuoted ? { quoted: storedQuoted } : {})
@@ -2415,7 +2423,7 @@ class WhatsAppManager {
     if (this.scheduledSendingLock || !this.sock || this.status !== 'connected') return;
     this.scheduledSendingLock = true;
     try {
-      const nowMs = Date.now();
+      const nowMs = trueNowMs();
       for (const contact of Object.values(storage.data.contacts || {})) {
         if (!Array.isArray(contact.scheduledMessages) || contact.scheduledMessages.length === 0) continue;
         for (const item of contact.scheduledMessages) {

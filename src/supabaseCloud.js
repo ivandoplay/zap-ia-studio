@@ -23,6 +23,7 @@ import {
   localStorageInstance,
   mergeContactMessagesUnion
 } from './storage.js';
+import { calibrateTrueClock, trueNowIso, trueNowMs } from './trueClock.js';
 
 const CLOUD_SESSION_FILE = path.join(DATA_DIR, 'cloud_session.json');
 const WORKER_HEARTBEAT_TTL_MS = 95_000;
@@ -71,7 +72,7 @@ export function isWorkerHeartbeatFresh(heartbeatAt) {
   if (!heartbeatAt) return false;
   const ts = new Date(heartbeatAt).getTime();
   if (Number.isNaN(ts)) return false;
-  const age = Date.now() - ts;
+  const age = trueNowMs() - ts;
   // Tolera até 60s de relógio adiantado no celular e até 95s de oscilação 4G/Doze
   return age >= -60_000 && age <= WORKER_HEARTBEAT_TTL_MS;
 }
@@ -81,7 +82,7 @@ export function mapCloudRuntimeToWaState(rt = null, botEnabled = true) {
   const platformStr = String(rt?.worker_platform || '');
   const verMatch = platformStr.match(/v(\d+\.\d+\.\d+)/i);
   const rawStatus = rt?.status || 'disconnected';
-  const updAgeMs = rt?.updated_at ? Math.max(0, Date.now() - new Date(rt.updated_at).getTime()) : 999_999;
+  const updAgeMs = rt?.updated_at ? Math.max(0, trueNowMs() - new Date(rt.updated_at).getTime()) : 999_999;
 
   // Anti-flap: micro-reconexão automática 4G/Wi-Fi (<20s) com aparelho já autenticado mantém UI estável como "connected"
   const isTransientReconnect =
@@ -462,7 +463,7 @@ export async function flushTenantStoreToCloud(client, userId, tenantStore) {
           simulator_history: (tenantStore.data.simulatorHistory || []).slice(-60),
           proactive_queue: Array.isArray(tenantStore.data.proactiveQueue) ? tenantStore.data.proactiveQueue : [],
           custom_pack: tenantStore.data.customPacks || {},
-          updated_at: new Date().toISOString()
+          updated_at: trueNowIso()
         },
         { onConflict: 'user_id' }
       )
@@ -529,8 +530,8 @@ export async function flushTenantStoreToCloud(client, userId, tenantStore) {
         user_id: userId,
         chat_id: cid,
         data: c,
-        last_message_at: c.lastMessageAt || new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        last_message_at: c.lastMessageAt || trueNowIso(),
+        updated_at: trueNowIso()
       });
     }
     for (let i = 0; i < rows.length; i += 60) {
@@ -1208,6 +1209,7 @@ class CloudWorkerBridge {
   }
 
   async activateWorkerSession(authUser) {
+    await calibrateTrueClock();
     const { data: profile } = await this.client
       .from('zapia_users')
       .select('*')
@@ -1268,7 +1270,7 @@ class CloudWorkerBridge {
           .from('zapia_wa_runtime')
           .update({
             worker_online: false,
-            updated_at: new Date().toISOString()
+            updated_at: trueNowIso()
           })
           .eq('user_id', this.user.id);
         await this.client.auth.signOut();
@@ -1290,7 +1292,7 @@ class CloudWorkerBridge {
         .from('zapia_wa_runtime')
         .update({
           worker_online: false,
-          updated_at: new Date().toISOString()
+          updated_at: trueNowIso()
         })
         .eq('user_id', this.user.id);
     } catch {}
@@ -1375,13 +1377,13 @@ class CloudWorkerBridge {
         this.scheduleLocalToCloudSync();
       }
     } else if (initial && !this.lastSyncedContactsIso) {
-      this.lastSyncedContactsIso = new Date().toISOString();
+      this.lastSyncedContactsIso = trueNowIso();
     }
 
     const ws = wsRes.data;
     if (ws) {
       if (initial || (ws.updated_at && ws.updated_at > this.lastSyncedWorkspaceIso)) {
-        this.lastSyncedWorkspaceIso = ws.updated_at || new Date().toISOString();
+        this.lastSyncedWorkspaceIso = ws.updated_at || trueNowIso();
         const contactsMap = localStorageInstance.data.contacts || {};
         const prevMutate = localStorageInstance.onMutate;
         localStorageInstance.onMutate = null;
@@ -1558,9 +1560,9 @@ class CloudWorkerBridge {
           last_error: st.lastError || '',
           proactive_state: st.proactive || { queueLength: 0, paused: false, processing: false },
           worker_online: true,
-          worker_heartbeat_at: new Date().toISOString(),
+          worker_heartbeat_at: trueNowIso(),
           worker_platform: detectWorkerPlatformLabel(),
-          updated_at: new Date().toISOString()
+          updated_at: trueNowIso()
         },
         { onConflict: 'user_id' }
       );
@@ -1931,7 +1933,7 @@ class CloudWorkerBridge {
         .update({
           status: 'done',
           result,
-          processed_at: new Date().toISOString()
+          processed_at: trueNowIso()
         })
         .eq('id', row.id);
     } catch (err) {
@@ -1940,7 +1942,7 @@ class CloudWorkerBridge {
         .update({
           status: 'error',
           error_text: err.message || 'Erro ao processar comando no Motor WhatsApp',
-          processed_at: new Date().toISOString()
+          processed_at: trueNowIso()
         })
         .eq('id', row.id);
     } finally {

@@ -764,8 +764,10 @@ function applyReturnedContactToState(contact, fallbackChatId = '') {
     return new Date(b.lastMessageAt || 0).getTime() - new Date(a.lastMessageAt || 0).getTime();
   });
   const msgBox = document.getElementById('crmInboxMessages');
-  if (msgBox && msgBox.dataset.renderedChatId === contact.chatId) {
+  if (msgBox && (msgBox.dataset.renderedChatId === contact.chatId || msgBox.dataset.renderedChatId === fallbackChatId)) {
     msgBox.dataset.renderedFp = '';
+    msgBox.dataset.forceRender = '1';
+    msgBox.dataset.forceScrollBottom = '1';
   }
   updateInboxFilterCounters();
   renderCrmBoard();
@@ -3009,8 +3011,14 @@ function renderActiveInboxConversation() {
     clearComposerQuote();
   }
 
-  if (chatChanged || (msgBox.dataset.renderedFp !== msgFp && !mediaPlaying)) {
-    const wasNearBottom = chatChanged || (msgBox.scrollHeight - msgBox.scrollTop - msgBox.clientHeight < 140);
+  const forceRender = msgBox.dataset.forceRender === '1';
+  const forceScrollBottom = msgBox.dataset.forceScrollBottom === '1';
+  msgBox.dataset.forceRender = '';
+  msgBox.dataset.forceScrollBottom = '';
+
+  if (chatChanged || forceRender || (msgBox.dataset.renderedFp !== msgFp && !mediaPlaying)) {
+    const wasNearBottom =
+      forceScrollBottom || chatChanged || (msgBox.scrollHeight - msgBox.scrollTop - msgBox.clientHeight < 140);
     msgBox.dataset.renderedChatId = c.chatId;
     msgBox.dataset.renderedFp = msgFp;
 

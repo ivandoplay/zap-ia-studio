@@ -37,11 +37,15 @@ function randomJitter(baseMs) {
 
 function unwrapMessageContent(message) {
   if (!message) return null;
+  if (message.deviceSentMessage?.message) return unwrapMessageContent(message.deviceSentMessage.message);
   if (message.ephemeralMessage?.message) return unwrapMessageContent(message.ephemeralMessage.message);
   if (message.viewOnceMessage?.message) return unwrapMessageContent(message.viewOnceMessage.message);
   if (message.viewOnceMessageV2?.message) return unwrapMessageContent(message.viewOnceMessageV2.message);
   if (message.viewOnceMessageV2Extension?.message) return unwrapMessageContent(message.viewOnceMessageV2Extension.message);
   if (message.documentWithCaptionMessage?.message) return unwrapMessageContent(message.documentWithCaptionMessage.message);
+  if (message.associatedChildMessage?.message) return unwrapMessageContent(message.associatedChildMessage.message);
+  if (message.groupMentionedMessage?.message) return unwrapMessageContent(message.groupMentionedMessage.message);
+  if (message.botInvokeMessage?.message) return unwrapMessageContent(message.botInvokeMessage.message);
   if (message.editedMessage?.message?.protocolMessage?.editedMessage) {
     return unwrapMessageContent(message.editedMessage.message.protocolMessage.editedMessage);
   }
@@ -545,7 +549,8 @@ class WhatsAppManager {
     let msgsImported = 0;
 
     for (const msg of sortedMsgs) {
-      const remoteJid = msg?.key?.remoteJid;
+      const destJid = msg?.message?.deviceSentMessage?.destinationJid;
+      const remoteJid = (destJid && this.isSelfJid(msg?.key?.remoteJid)) ? destJid : msg?.key?.remoteJid;
       if (!this.isValid1to1ChatJid(remoteJid)) continue;
 
       const unwrapped = unwrapMessageContent(msg.message);
@@ -1345,7 +1350,8 @@ class WhatsAppManager {
   }
 
   async handleIncomingRawMessage(msg, { isHistoryAppend = false } = {}) {
-    const remoteJid = msg?.key?.remoteJid;
+    const destJid = msg?.message?.deviceSentMessage?.destinationJid;
+    const remoteJid = (destJid && this.isSelfJid(msg?.key?.remoteJid)) ? destJid : msg?.key?.remoteJid;
     if (!this.isValid1to1ChatJid(remoteJid)) return;
 
     const unwrapped = unwrapMessageContent(msg.message);

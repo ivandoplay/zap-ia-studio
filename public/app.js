@@ -592,9 +592,8 @@ async function loadBootstrap() {
 
     renderAll();
 
-    if (state.runtimeMode === 'vercel_cloud') {
-      startCloudPoller();
-    } else {
+    startCloudPoller();
+    if (state.runtimeMode !== 'vercel_cloud') {
       connectWebSocket();
     }
 
@@ -787,8 +786,12 @@ function formatContactSubtitle(c) {
   return 'WhatsApp Conectado';
 }
 
+let liveRefreshQueued = false;
 async function refreshLiveStateOnly() {
-  if (liveRefreshInFlight) return liveRefreshInFlight;
+  if (liveRefreshInFlight) {
+    liveRefreshQueued = true;
+    return liveRefreshInFlight;
+  }
   liveRefreshInFlight = (async () => {
     try {
       if (document.getElementById('cloudLoginScreen')?.classList.contains('open')) return;
@@ -827,17 +830,21 @@ async function refreshLiveStateOnly() {
       }
       checkClientSideDueFollowUps(false);
 
-      if (!document.hidden) {
-        renderCloudHeaderBar();
-        renderWaState();
-        renderStatsAndLogs();
-        renderReadinessAndFunnel();
-        renderProactiveQueueStatus();
-        renderCrmBoard();
-      }
+      // Renderiza SEMPRE (mesmo se você estiver com o WhatsApp aberto em outra janela/aba),
+      // para que ao voltar ao painel a mensagem enviada pelo seu celular já esteja na tela!
+      renderCloudHeaderBar();
+      renderWaState();
+      renderStatsAndLogs();
+      renderReadinessAndFunnel();
+      renderProactiveQueueStatus();
+      renderCrmBoard();
     } catch {}
   })().finally(() => {
     liveRefreshInFlight = null;
+    if (liveRefreshQueued) {
+      liveRefreshQueued = false;
+      setTimeout(() => refreshLiveStateOnly(), 80);
+    }
   });
   return liveRefreshInFlight;
 }
@@ -848,10 +855,10 @@ function startCloudPoller() {
   const tick = async () => {
     await refreshLiveStateOnly();
     const fast = state.waState?.status === 'qr_ready' || state.waState?.status === 'connecting';
-    const interval = document.hidden ? 12000 : (fast ? 2200 : 4200);
+    const interval = document.hidden ? 8000 : (fast ? 2000 : 3500);
     cloudPollTimer = setTimeout(tick, interval);
   };
-  cloudPollTimer = setTimeout(tick, 3500);
+  cloudPollTimer = setTimeout(tick, 3000);
 }
 
 let wsInstance = null;
@@ -864,6 +871,10 @@ function connectWebSocket() {
   const pinQs = state.sessionPin ? `?pin=${encodeURIComponent(state.sessionPin)}` : '';
   const ws = new WebSocket(`${proto}//${window.location.host}/ws${pinQs}`);
   wsInstance = ws;
+
+  ws.onopen = () => {
+    refreshLiveStateOnly();
+  };
 
   ws.onmessage = (ev) => {
     try {
@@ -898,9 +909,21 @@ function connectWebSocket() {
   ws.onclose = (ev) => {
     if (wsInstance === ws) wsInstance = null;
     if (ev.code === 4001 || state.runtimeMode === 'vercel_cloud') return;
-    setTimeout(connectWebSocket, 3500);
+    setTimeout(connectWebSocket, 2000);
   };
 }
+
+let lastFocusSyncAt = 0;
+function triggerReturnToPanelSync() {
+  if (document.hidden) return;
+  const now = Date.now();
+  if (now - lastFocusSyncAt < 800) return;
+  lastFocusSyncAt = now;
+  if (state.runtimeMode !== 'vercel_cloud') connectWebSocket();
+  refreshLiveStateOnly();
+}
+document.addEventListener('visibilitychange', triggerReturnToPanelSync);
+window.addEventListener('focus', triggerReturnToPanelSync);
 
 // ======================== RENDERIZAÇÃO GLOBAL ========================
 
@@ -3003,16 +3026,19 @@ function renderActiveInboxConversation() {
     .map((x) => `${x.id || x.waMsgId || ''}:${x.editedAt || ''}:${x.deletedForEveryone ? 1 : 0}:${x.ack || 0}:${JSON.stringify(x.reactions || {})}`)
     .join('|');
   const lastM = msgs[msgs.length - 1] || null;
-  const msgFp = `${c.chatId}::${msgs.length}::${lastM?.timestamp || ''}::${lastM?.mediaUrl || ''}::${mutSig}::${searchQ}::${state.openReactionMsgId || ''}`;
   const chatChanged = msgBox.dataset.renderedChatId !== c.chatId;
+  const lastMIdent = String(lastM?.id || lastM?.waMsgId || lastM?.timestamp || '');
+  const prevLastMIdent = msgBox.dataset.renderedLastMsgIdent || '';
+  const newOwnerMsgArrived = !chatChanged && Boolean(lastMIdent && lastMIdent !== prevLastMIdent && lastM?.role === 'owner');
+  const msgFp = `${c.chatId}::${msgs.length}::${lastM?.timestamp || ''}::${lastM?.mediaUrl || ''}::${mutSig}::${searchQ}::${state.openReactionMsgId || ''}`;
   const mediaPlaying = !chatChanged && Array.from(msgBox.querySelectorAll('audio, video')).some((el) => !el.paused && !el.ended);
 
   if (chatChanged) {
     clearComposerQuote();
   }
 
-  const forceRender = msgBox.dataset.forceRender === '1';
-  const forceScrollBottom = msgBox.dataset.forceScrollBottom === '1';
+  const forceRender = msgBox.dataset.forceRender === '1' || newOwnerMsgArrived;
+  const forceScrollBottom = msgBox.dataset.forceScrollBottom === '1' || newOwnerMsgArrived;
   msgBox.dataset.forceRender = '';
   msgBox.dataset.forceScrollBottom = '';
 
@@ -3021,6 +3047,7 @@ function renderActiveInboxConversation() {
       forceScrollBottom || chatChanged || (msgBox.scrollHeight - msgBox.scrollTop - msgBox.clientHeight < 140);
     msgBox.dataset.renderedChatId = c.chatId;
     msgBox.dataset.renderedFp = msgFp;
+    msgBox.dataset.renderedLastMsgIdent = lastMIdent;
 
     const canFetchOlder = !String(c.chatId || '').startsWith('demo_');
     const fetchOlderBtnHtml = canFetchOlder

@@ -706,7 +706,7 @@ export class Storage {
       type,
       message,
       meta,
-      timestamp: new Date().toISOString()
+      timestamp: trueNowIso()
     };
     this.data.logs.unshift(entry);
     if (this.data.logs.length > 150) {

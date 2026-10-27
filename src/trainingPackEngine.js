@@ -1132,7 +1132,8 @@ export function generatePackDemoReply(packId, { userText = '', history = [], med
 
   const isLizandroPack = Boolean(
     String(pack.id || '').includes('lizandro') ||
-    String(pack.businessFacts?.representative || '').includes('Lizandro')
+    String(pack.businessFacts?.representative || '').includes('Lizandro') ||
+    String(pack.businessFacts?.profissional || '').includes('Lizandro')
   );
 
   const folded = foldPt(userText).trim();
@@ -1215,8 +1216,8 @@ export function generatePackDemoReply(packId, { userText = '', history = [], med
   ) {
     return {
       rawText:
-        'Essa parte de valores e condições comerciais o Lizandro responde pessoalmente. Já deixei sua pergunta organizada aqui para ele continuar com você na sequência. [[CHAMAR_HUMANO:Interessado perguntou sobre valores / condições comerciais]]',
-      activatedSkills: ['S15 · encaminhar-questao-comercial', 'H15 · passar-ao-humano-sem-cerimonia-falsa']
+        'Boa, essa parte de valores varia conforme o cenário de cada loja pra não te passar número solto, me dá só um minutinho aqui pra eu olhar isso com calma e já te falo certinho por aqui. [[CHAMAR_HUMANO:Interessado perguntou sobre valores / condições comerciais]]',
+      activatedSkills: ['S15 · encaminhar-questao-comercial', 'H15 · pausar-sem-quebrar-primeira-pessoa']
     };
   }
 
@@ -1224,7 +1225,7 @@ export function generatePackDemoReply(packId, { userText = '', history = [], med
   if (/\b(quantos posts|quantas postagens|filmar|gravacao presencial|visita presencial|integracao|rd station|crm)\b/.test(folded)) {
     return {
       rawText:
-        'A produção e publicação de conteúdo fazem parte do nosso trabalho, mas detalhes específicos de formato, rotina ou execução presencial precisam ser alinhados direto com o Lizandro. Vou deixar registrado para ele te responder por aqui. [[CHAMAR_HUMANO:Dúvida sobre escopo operacional específico]]',
+        'A produção e publicação de conteúdo fazem parte do meu trabalho, e sobre esses detalhes específicos de formato ou rotina me dá só um minutinho aqui pra eu olhar seu cenário com calma e já te respondo certinho por aqui. [[CHAMAR_HUMANO:Dúvida sobre escopo operacional específico]]',
       activatedSkills: ['S29 · delimitar-escopo-e-integracoes', 'H22 · reconhecer-limites-com-linguagem-comum']
     };
   }
@@ -1233,7 +1234,7 @@ export function generatePackDemoReply(packId, { userText = '', history = [], med
   if (/\b(nao liga|nao me liga|prefiro mensagem|prefiro texto|explica por aqui|por mensagem|sem ligacao)\b/.test(folded)) {
     return {
       rawText:
-        'Combinado, seguimos por mensagem aqui mesmo. A gente ajuda lojas e vendedores de veículos com presença nas redes sociais, produção e publicação de conteúdo, campanhas pensadas para cada veículo e apoio nas estratégias de vendas para aproveitar os contatos que chegam. Hoje, como vocês fazem a divulgação do estoque?',
+        'Combinado, seguimos por mensagem aqui mesmo. Eu ajudo lojas e vendedores de veículos com presença nas redes sociais, produção e publicação de conteúdo, campanhas pensadas pra cada veículo e condução comercial de quem chama no WhatsApp. Hoje como você divulga os carros por aí?',
       activatedSkills: ['S23 · respeitar-texto-e-ligacao', 'S02 · explicar-oferta-completa']
     };
   }
@@ -1242,7 +1243,7 @@ export function generatePackDemoReply(packId, { userText = '', history = [], med
   if (/\b(amanha as|hoje as|pode ligar|15 minutos|14h|15h|16h|10h|11h|melhor horario)\b/.test(folded)) {
     return {
       rawText:
-        'Perfeito, anotei essa preferência de horário para o Lizandro conferir a agenda e confirmar certinho com você por aqui. [[CHAMAR_HUMANO:Lead informou preferência de dia/horário para conversa]]',
+        'Perfeito, já anotei esse horário aqui, me dá só um minutinho pra eu conferir minha agenda com calma e já te confirmo certinho por aqui. [[CHAMAR_HUMANO:Lead informou preferência de dia/horário para conversa]]',
       activatedSkills: ['S18 · receber-preferencia-de-agenda', 'H19 · resumir-para-encaminhamento']
     };
   }
@@ -1251,7 +1252,7 @@ export function generatePackDemoReply(packId, { userText = '', history = [], med
   if (/\b(qual o valor do carro|aceita troca|tabela fipe|quero comprar um carro|tem hilux|financia)\b/.test(folded)) {
     return {
       rawText:
-        'Acho que houve um engano rápido: nós não somos uma loja de veículos e não vendemos carros diretamente. Trabalhamos com assessoria de marketing, conteúdo e vendas para lojas e vendedores de veículos.',
+        'Acho que rolou um engano rápido, eu não sou loja de veículos e não vendo carros diretamente. Meu trabalho é ajudar lojas e vendedores de veículos com divulgação, conteúdo e estratégias de vendas.',
       activatedSkills: ['S13 · esclarecer-engano-com-compra-de-carro', 'H10 · corrigir-sem-defesa-longa']
     };
   }
@@ -1260,7 +1261,7 @@ export function generatePackDemoReply(packId, { userText = '', history = [], med
   if (/\b(trafego|anuncio|anuncios|impulsionar|ads)\b/.test(folded)) {
     return {
       rawText:
-        'Sim, o tráfego pago faz parte! Além das campanhas pensadas para cada veículo, a gente também cuida da presença nas redes sociais, da produção e publicação de conteúdo e apoia nas técnicas de vendas para aproveitar os contatos que chegam. Vocês já anunciam hoje?',
+        'Sim, o tráfego pago faz parte! Além das campanhas pensadas pra cada veículo, eu também cuido da presença nas redes sociais, da produção e publicação de conteúdo e ajudo nas estratégias de vendas pra aproveitar quem chama no WhatsApp. Você já anuncia hoje?',
       activatedSkills: ['S03 · responder-trafego-pago', 'H02 · responder-antes-de-preparar-o-terreno']
     };
   }
@@ -1269,7 +1270,7 @@ export function generatePackDemoReply(packId, { userText = '', history = [], med
   if (/\b(post|posts|conteudo|redes sociais|instagram|reels)\b/.test(folded)) {
     return {
       rawText:
-        'Sim, também fazemos produção e publicação de conteúdo, além do cuidado com a presença nas redes sociais. A proposta é conectar isso à divulgação de cada veículo e ao aproveitamento comercial no atendimento.',
+        'Sim, eu também faço a produção e publicação de conteúdo além de cuidar da presença nas redes sociais, conectando isso direto na divulgação de cada veículo e no aproveitamento comercial no WhatsApp.',
       activatedSkills: ['S04 · explicar-conteudo-e-gestao', 'H04 · tornar-o-servico-concreto']
     };
   }
@@ -1278,29 +1279,29 @@ export function generatePackDemoReply(packId, { userText = '', history = [], med
   if (/\b(agencia|gestor)\b/.test(folded)) {
     return {
       rawText:
-        'Entendi que vocês já contam com agência hoje. Nosso trabalho olha para o mercado de veículos juntando presença nas redes, produção de conteúdo, campanhas pensadas por veículo e também apoio em técnicas de vendas/social selling para converter quem chama. Hoje vocês sentem mais gargalo na atração ou no fechamento dos contatos?',
+        'Entendi que você já conta com agência hoje. Meu trabalho olha específico pro mercado de veículos juntando presença nas redes, produção de conteúdo, campanhas pensadas por carro e condução comercial no WhatsApp pra converter quem chama. Hoje você sente mais gargalo na atração ou no fechamento dos contatos?',
       activatedSkills: ['S11 · responder-agencia-existente', 'H06 · acolher-sem-adivinhar-emocoes']
     };
   }
 
-  // 13. Pergunta se é robô / IA — Postura 100% Humana (jamais entregar IA/automação)
-  if (/\b(robo|inteligencia artificial|automatico|bot)\b/.test(folded)) {
+  // 13. Pergunta se é robô / IA — Postura 100% Pessoal em 1ª Pessoa
+  if (/\b(robo|inteligencia artificial|automatico|bot|quem fala|quem ta falando)\b/.test(folded)) {
     return {
       rawText:
-        'Que nada, tô falando contigo por aqui mesmo! Faço parte da equipe comercial do Lizandro. Se preferir falar direto com o próprio Lizandro também, já deixo alinhado pra ele continuar contigo por aqui.',
+        'Que nada, sou eu mesmo, o Lizandro, tô falando contigo direto por aqui!',
       activatedSkills: ['S14 · identidade-e-origem-verificadas', 'H14 · manter-postura-humana-identidade']
     };
   }
 
   // 14. Saudação ou pedido geral de explicação ("oi", "como funciona?", "o que vocês fazem?", "pode explicar")
   if (
-    /\b(oi|ola|bom dia|boa tarde|boa noite|tudo bem|como funciona|o que voces fazem|pode explicar|explica|me conta|assessoria)\b/.test(
+    /\b(oi|ola|bom dia|boa tarde|boa noite|tudo bem|como funciona|o que voces fazem|o que voce faz|pode explicar|explica|me conta)\b/.test(
       folded
     )
   ) {
     return {
       rawText:
-        'Olá! Tudo bem? A gente atua com assessoria voltada para quem vende veículos: cuidamos da presença nas redes sociais, produzimos e publicamos conteúdo, estruturamos campanhas pensadas por veículo e apoiamos nas estratégias de vendas e acompanhamento. Hoje você fala de uma loja/revenda ou trabalha de forma independente?',
+        'Opa, tudo bem? Aqui é o Lizandro, eu trabalho ajudando quem vende veículos com presença nas redes sociais, produção e publicação de conteúdo, campanhas pensadas por carro e condução comercial no WhatsApp. Hoje você fala de uma loja ou trabalha de forma independente?',
       activatedSkills: ['S02 · explicar-oferta-completa', 'H02 · responder-antes-de-preparar-o-terreno']
     };
   }
@@ -1542,10 +1543,13 @@ export function importTrainingBlueprintObject(rawObj, originalFilename = 'bluepr
     ? String(prof.tone).toLowerCase()
     : 'consultivo';
 
+  const isSoloImport = Boolean(prof.soloIdentity);
   const canonicalRulesMd = String(
     rawObj.canonicalRulesMd ||
       prof.goldenRules ||
-      '1. Converse sempre 100% como humano real da equipe comercial no WhatsApp (nunca revele ou insinue ser IA/robô).\n2. Nunca invente preços, condições ou promessas fora deste treinamento.'
+      (isSoloImport
+        ? '1. Converse sempre 100% em 1ª pessoa do singular como o próprio profissional no seu WhatsApp (sem empresa, sem equipe e jamais revelando IA/robô).\n2. Nunca invente preços, condições ou promessas fora deste treinamento.'
+        : '1. Converse sempre 100% como humano real da equipe comercial no WhatsApp (nunca revele ou insinue ser IA/robô).\n2. Nunca invente preços, condições ou promessas fora deste treinamento.')
   ).trim();
 
   const mainPromptMd = [

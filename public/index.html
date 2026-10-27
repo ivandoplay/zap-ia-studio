@@ -578,20 +578,29 @@
         <div class="grid-equal">
           <div class="panel">
             <div class="panel-header">
-              <h2 class="panel-title">Identidade do Negócio & Assistente</h2>
+              <h2 class="panel-title">Identidade de Atendimento</h2>
+            </div>
+            <div class="form-group" style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:10px; padding:11px 12px; margin-bottom:14px;">
+              <label style="display:flex; align-items:flex-start; gap:9px; cursor:pointer; font-size:13px; line-height:1.45;">
+                <input type="checkbox" id="profSoloIdentityCheck" style="margin-top:3px;" />
+                <span>
+                  <strong>Atuação Individual em 1ª Pessoa (Sem Empresa / Sem Equipe)</strong><br />
+                  <span style="font-size:12px; color:var(--text-secondary);">Ative quando o WhatsApp pertence diretamente a você (ex: consultor, corretor, médico, especialista). O atendimento falará sempre como <em>"eu / meu trabalho"</em>, sem citar empresa ou equipe e sem jamais dizer que vai passar para outra pessoa.</span>
+                </span>
+              </label>
             </div>
             <div class="form-group">
-              <label class="form-label" for="profName">Nome da Empresa / Negócio</label>
-              <input type="text" id="profName" placeholder="Ex: Alavancagem de Vendas — Lizandro Celestino" />
+              <label class="form-label" id="profNameLabel" for="profName">Nome da Empresa ou Profissional</label>
+              <input type="text" id="profName" placeholder="Ex: Lizandro Celestino (ou Nome da Loja)" />
             </div>
             <div class="grid-equal" style="gap:12px;">
               <div class="form-group">
-                <label class="form-label" for="profNiche">Nicho / Segmento</label>
-                <input type="text" id="profNiche" placeholder="Ex: Assessoria Comercial p/ Veículos" />
+                <label class="form-label" for="profNiche">Nicho / Área de Atuação</label>
+                <input type="text" id="profNiche" placeholder="Ex: Estratégia de Vendas para Veículos" />
               </div>
               <div class="form-group">
-                <label class="form-label" for="profAssistantName">Nome do(a) Atendente Virtual</label>
-                <input type="text" id="profAssistantName" placeholder="Ex: Assistente do Lizandro" />
+                <label class="form-label" id="profAssistantLabel" for="profAssistantName">Nome de Quem Atende no WhatsApp</label>
+                <input type="text" id="profAssistantName" placeholder="Ex: Lizandro (ou Clara)" />
               </div>
             </div>
             <div class="form-group">
@@ -605,8 +614,8 @@
               </select>
             </div>
             <div class="form-group">
-              <label class="form-label" for="profSummary">Sobre a Empresa & Diferenciais</label>
-              <textarea id="profSummary" rows="3" placeholder="Descreva o que sua empresa vende ou faz, cidade/região e principais diferenciais..."></textarea>
+              <label class="form-label" id="profSummaryLabel" for="profSummary">Sobre o Trabalho & Diferenciais</label>
+              <textarea id="profSummary" rows="3" placeholder="Descreva como você trabalha (ou o que sua empresa vende), região e principais diferenciais..."></textarea>
             </div>
             <div class="form-group">
               <label class="form-label" for="profDeliveryPayment">Pagamentos, Entrega, Endereço e Horários</label>

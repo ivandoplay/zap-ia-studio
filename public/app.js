@@ -1596,11 +1596,15 @@ function getApprovedMessagesForActiveProfile() {
     const sum = state.trainingPacks.find((tp) => tp.id === p.trainingPackId);
     if (sum?.approvedMessages?.length) return sum.approvedMessages;
   }
+  const isSolo = Boolean(p?.soloIdentity);
+  const firstName = String(p?.assistantName || p?.name || 'eu').trim().split(/\s+/)[0];
   return [
     {
       id: 'ABERTURA',
       title: 'Abertura Consultiva Universal',
-      text: `Olá{{nome ? ', ' + nome : ''}}! Tudo bem? Aqui é do atendimento da *${p?.name || 'nossa equipe'}*. Posso te explicar rapidinho como funciona nosso trabalho?`
+      text: isSolo
+        ? `Opa{{nome ? ', ' + nome : ''}}! Tudo bem? Aqui é o *${firstName}*. Posso te mostrar rapidinho como funciona meu trabalho?`
+        : `Olá{{nome ? ', ' + nome : ''}}! Tudo bem? Aqui é do atendimento da *${p?.name || 'nossa equipe'}*. Posso te explicar rapidinho como funciona nosso trabalho?`
     }
   ];
 }
@@ -1776,9 +1780,35 @@ window.applyStarterTemplate = async function applyStarterTemplate(templateId, la
   }
 };
 
+function syncSoloIdentityFormLabels() {
+  const soloCheck = document.getElementById('profSoloIdentityCheck');
+  const isSolo = Boolean(soloCheck?.checked);
+  const nameLbl = document.getElementById('profNameLabel');
+  const asstLbl = document.getElementById('profAssistantLabel');
+  const sumLbl = document.getElementById('profSummaryLabel');
+  const nameInp = document.getElementById('profName');
+  const asstInp = document.getElementById('profAssistantName');
+  const sumInp = document.getElementById('profSummary');
+
+  if (nameLbl) nameLbl.textContent = isSolo ? 'Seu Nome Completo / Profissional' : 'Nome da Empresa / Negócio';
+  if (asstLbl) asstLbl.textContent = isSolo ? 'Como Você se Apresenta (1º Nome)' : 'Nome de Quem Atende no WhatsApp';
+  if (sumLbl) sumLbl.textContent = isSolo ? 'Sobre Você & Seu Trabalho (em 1ª pessoa: "Eu ajudo...")' : 'Sobre a Empresa & Diferenciais';
+  if (nameInp) nameInp.placeholder = isSolo ? 'Ex: Lizandro Celestino' : 'Ex: Auto Norte Veículos';
+  if (asstInp) asstInp.placeholder = isSolo ? 'Ex: Lizandro' : 'Ex: Clara';
+  if (sumInp) {
+    sumInp.placeholder = isSolo
+      ? 'Ex: Sou o Lizandro. Trabalho pessoalmente ajudando lojas de veículos a divulgar e vender mais pelo WhatsApp...'
+      : 'Descreva o que sua empresa vende ou faz, cidade/região e principais diferenciais...';
+  }
+}
+
 function renderActiveProfileForm() {
   const p = getActiveProfile();
   if (!p) return;
+
+  const soloCheck = document.getElementById('profSoloIdentityCheck');
+  if (soloCheck) soloCheck.checked = Boolean(p.soloIdentity);
+  syncSoloIdentityFormLabels();
 
   document.getElementById('profName').value = p.name || '';
   document.getElementById('profNiche').value = p.niche || '';
@@ -5510,14 +5540,20 @@ function bindEvents() {
     renderFaqList(p.faqs);
   });
 
+  document.getElementById('profSoloIdentityCheck')?.addEventListener('change', () => {
+    syncSoloIdentityFormLabels();
+  });
+
   document.getElementById('btnSaveProfile').addEventListener('click', async () => {
     const p = getActiveProfile();
     if (!p) return;
     syncFaqsFromDom(p);
+    const soloIdentity = Boolean(document.getElementById('profSoloIdentityCheck')?.checked);
     const payload = {
-      name: document.getElementById('profName').value.trim() || 'Meu Negócio',
+      name: document.getElementById('profName').value.trim() || (soloIdentity ? 'Profissional' : 'Meu Negócio'),
       niche: document.getElementById('profNiche').value.trim(),
-      assistantName: document.getElementById('profAssistantName').value.trim() || 'Assistente',
+      assistantName: document.getElementById('profAssistantName').value.trim() || (soloIdentity ? (document.getElementById('profName').value.trim().split(/\s+/)[0] || 'Eu') : 'Atendente'),
+      soloIdentity,
       tone: document.getElementById('profTone').value,
       companySummary: document.getElementById('profSummary').value.trim(),
       deliveryAndPayment: document.getElementById('profDeliveryPayment').value.trim(),

@@ -70,7 +70,7 @@ export function analyzeLeadSentiment(userText = '', history = []) {
       emoji: '🚨',
       severeHostility: true,
       promptGuidance:
-        'TRIAGEM DE SENTIMENTO (CRÍTICO / IRRITADO): O contato demonstrou forte irritação. Responda em 1 frase calma, respeitosa e humana sem discutir, e acione [[CHAMAR_HUMANO:...]] imediatamente para o responsável conduzir.'
+        'TRIAGEM DE SENTIMENTO (CRÍTICO / IRRITADO): O contato demonstrou forte irritação. Responda em 1 frase calma, respeitosa e humana sem discutir (mantendo sua identidade atual sem falar de si em 3ª pessoa), e acione [[CHAMAR_HUMANO:...]] imediatamente.'
     };
   }
 
@@ -154,7 +154,7 @@ export function detectHiddenObjectionBattlecard(userText = '') {
     return {
       id: 'S34-receio-investimento',
       guidance:
-        'SKILL S34 (DIAGNÓSTICO DE OBJEÇÃO OCULTA — RECEIO DE INVESTIMENTO): Não invente descontos nem valores! Acolha com naturalidade e, se a pessoa estiver aberta a entender formato/condição real, encaminhe para o responsável alinhar com [[CHAMAR_HUMANO:...]].'
+        'SKILL S34 (DIAGNÓSTICO DE OBJEÇÃO OCULTA — RECEIO DE INVESTIMENTO): Não invente descontos nem valores! Acolha com naturalidade e, se a pessoa estiver aberta a entender formato/condição real, acione [[CHAMAR_HUMANO:...]] mantendo sua identidade atual (se for profissional individual em 1ª pessoa, diga apenas que vai olhar o cenário com calma num minutinho, sem falar em 3ª pessoa).'
     };
   }
 
@@ -459,7 +459,7 @@ ${profile.companySummary || 'Atendimento especializado ao cliente.'}
 ${profile.goldenRules || '- Atenda com cordialidade e nunca invente informações que não estejam confirmadas.'}
 
 === CONDIÇÕES COMERCIAIS, PAGAMENTO E FUNCIONAMENTO ===
-${profile.deliveryAndPayment || 'Consulte condições com nossa equipe.'}
+${profile.deliveryAndPayment || (soloMode ? 'Valores e condições alinhados diretamente comigo conforme o cenário.' : 'Consulte condições com nossa equipe.')}
 
 === CATÁLOGO ESTRUTURADO ===
 ${catalogBlock}
@@ -480,8 +480,8 @@ O sistema lê e remove automaticamente qualquer uma das tags abaixo antes de ent
 3. [[ENVIAR_PIX]] ou [[ENVIAR_PIX:149.90]] -> Envia QR Code PIX + código Copia e Cola (somente se PAGAMENTO PIX ATIVO).
 4. [[CHAMAR_HUMANO:Cenário: <perfil do lead> | Gatilho: <dúvida/pedido exato> | Próxima jogada: <sugestão de abertura>]] -> (SKILL #2: Dossiê Executivo de 3 Linhas) Use quando:
    - O contato perguntar valores, mensalidade, verba, condições comerciais, desejar contratar/fechar pedido ou enviar comprovante;
-   - O contato pedir para falar diretamente com o proprietário/responsável, informar preferência de dia/horário na agenda ou perguntar sobre escopo específico não confirmado.
-   Ao usar [[CHAMAR_HUMANO:...]] em uma intenção compreendida, escreva apenas o reconhecimento humano natural e curto (sem prometer prazo imediato, sem inventar valores e sem emendar novo pitch) seguido da tag estruturada em 3 partes separadas por "|".
+   - O contato informar preferência de dia/horário na agenda, perguntar sobre escopo específico não confirmado${soloMode ? '' : ' ou pedir para falar diretamente com o proprietário/responsável'}.
+   Ao usar [[CHAMAR_HUMANO:...]] em uma intenção compreendida, escreva apenas o reconhecimento humano natural e curto${soloMode ? ` EM 1ª PESSOA como o próprio *${soloFirstName}* (ex: pedindo só um minutinho para olhar o caso com calma, JAMAIS dizendo que vai passar para outra pessoa)` : ''} seguido da tag estruturada em 3 partes separadas por "|".
 5. [[PAUSA_SILENCIOSA:Motivo interno para revisão]] -> REGRA DE PAUSA SILENCIOSA:
    - Se a intenção da mensagem NÃO puder ser compreendida com segurança (frase desconexa, referência sem antecedente no histórico ou mídia ininteligível), retorne **UNICAMENTE** a tag [[PAUSA_SILENCIOSA:Motivo]] **SEM NENHUMA PALAVRA FORA DA TAG**!
    - NUNCA envie "não entendi, pode reformular?" quando a conduta correta for pausa silenciosa. O sistema ficará 100% em silêncio para o contato e avisará o responsável humano nos bastidores.
@@ -893,17 +893,23 @@ function generateDemoResponse({ profile, userText = '', history = [], media = nu
 
   const lower = userText.toLowerCase();
   const catalog = (profile.catalog || []).filter((i) => i.active !== false);
+  const soloMode = isSoloProfessionalProfile(profile);
+  const soloFirstName = String(profile.assistantName || profile.name || 'Atendente').trim().split(/\s+/)[0];
 
   if (media?.mimeType?.startsWith('audio/')) {
     return {
-      rawText: `Olá! Aqui é *${profile.assistantName}* da *${profile.name}*.\n*(Modo Simulador Sem Chave)* Recebi o seu áudio! Assim que você colar sua chave gratuita do *Google Gemini* na aba *Motor de IA*, eu escutarei cada palavra dos áudios nativamente.`,
+      rawText: soloMode
+        ? `Opa! Aqui é o *${soloFirstName}*.\n*(Modo Simulador Sem Chave)* Recebi o seu áudio! Assim que você colar sua chave gratuita do *Google Gemini* na aba *Motor de IA*, eu escutarei cada palavra dos áudios nativamente.`
+        : `Olá! Aqui é *${profile.assistantName}* da *${profile.name}*.\n*(Modo Simulador Sem Chave)* Recebi o seu áudio! Assim que você colar sua chave gratuita do *Google Gemini* na aba *Motor de IA*, eu escutarei cada palavra dos áudios nativamente.`,
       activatedSkills: []
     };
   }
 
   if (media?.mimeType?.startsWith('image/')) {
     return {
-      rawText: `Recebi sua imagem aqui na *${profile.name}*!\nEncaminhei agora mesmo para conferência da nossa equipe. [[CHAMAR_HUMANO:Cliente enviou imagem/comprovante no atendimento]]`,
+      rawText: soloMode
+        ? `Recebi sua imagem aqui! Me dá só um minutinho pra eu olhar com calma e já te retorno por aqui. [[CHAMAR_HUMANO:Cliente enviou imagem/comprovante no atendimento]]`
+        : `Recebi sua imagem aqui na *${profile.name}*!\nEncaminhei agora mesmo para conferência da nossa equipe. [[CHAMAR_HUMANO:Cliente enviou imagem/comprovante no atendimento]]`,
       activatedSkills: []
     };
   }
@@ -911,19 +917,25 @@ function generateDemoResponse({ profile, userText = '', history = [], media = nu
   if (lower.includes('pix') || lower.includes('pagar') || lower.includes('chave')) {
     if (profile.pix?.enabled && profile.pix?.key) {
       return {
-        rawText: 'Perfeito! Vou enviar nossos dados oficiais de *PIX* logo abaixo para facilitar: [[ENVIAR_PIX]]',
+        rawText: soloMode
+          ? 'Perfeito! Vou te mandar meus dados de *PIX* logo abaixo pra facilitar: [[ENVIAR_PIX]]'
+          : 'Perfeito! Vou enviar nossos dados oficiais de *PIX* logo abaixo para facilitar: [[ENVIAR_PIX]]',
         activatedSkills: []
       };
     }
     return {
-      rawText: `Aqui na *${profile.name}*, ${profile.deliveryAndPayment || 'aceitamos PIX e cartões!'}\n*(Dica: ative sua Chave PIX na aba Catálogo & PIX para envio automático do QR Code e Copia e Cola.)*`,
+      rawText: soloMode
+        ? `${profile.deliveryAndPayment || 'Aceito PIX e cartões!'}\n*(Dica: ative sua Chave PIX na aba Catálogo & PIX para envio automático do QR Code e Copia e Cola.)*`
+        : `Aqui na *${profile.name}*, ${profile.deliveryAndPayment || 'aceitamos PIX e cartões!'}\n*(Dica: ative sua Chave PIX na aba Catálogo & PIX para envio automático do QR Code e Copia e Cola.)*`,
       activatedSkills: []
     };
   }
 
   if (lower.includes('humano') || lower.includes('atendente') || lower.includes('fechar') || lower.includes('comprar') || lower.includes('agendar')) {
     return {
-      rawText: `Combinado! Já anotei sua solicitação aqui na *${profile.name}* e acabei de chamar nosso responsável para finalizar com você na sequência. [[CHAMAR_HUMANO:Cliente solicitou fechamento / atendimento humano: "${userText.slice(0, 80)}"]]`,
+      rawText: soloMode
+        ? `Combinado! Me dá só um minutinho aqui pra eu olhar tudo com calma e já sigo contigo na sequência. [[CHAMAR_HUMANO:Cliente solicitou fechamento / alinhamento: "${userText.slice(0, 80)}"]]`
+        : `Combinado! Já anotei sua solicitação aqui na *${profile.name}* e acabei de chamar nosso responsável para finalizar com você na sequência. [[CHAMAR_HUMANO:Cliente solicitou fechamento / atendimento humano: "${userText.slice(0, 80)}"]]`,
       activatedSkills: []
     };
   }
@@ -934,14 +946,18 @@ function generateDemoResponse({ profile, userText = '', history = [], media = nu
       const withMedia = catalog.find((it) => (it.mediaFiles && it.mediaFiles.length) || it.mediaFile);
       const tag = withMedia ? ` [[ENVIAR_ITEM:${withMedia.id}]]` : '';
       return {
-        rawText: `Claro! Confira nossas principais opções na *${profile.name}*:\n\n${listStr}\n\nQual dessas opções faz mais sentido para você?${tag}`,
+        rawText: soloMode
+          ? `Claro! Dá uma olhada nas opções:\n\n${listStr}\n\nQual delas faz mais sentido pra você?${tag}`
+          : `Claro! Confira nossas principais opções na *${profile.name}*:\n\n${listStr}\n\nQual dessas opções faz mais sentido para você?${tag}`,
         activatedSkills: []
       };
     }
   }
 
   return {
-    rawText: `Olá! Seja bem-vindo(a) à *${profile.name}*! Sou *${profile.assistantName}*.\n\n${profile.companySummary}\n\nComo posso te ajudar hoje? *(Cole sua chave gratuita do Gemini na aba "Motor de IA" para respostas livres com IA generativa completa!)*`,
+    rawText: soloMode
+      ? `Opa, tudo bem? Aqui é o *${soloFirstName}*!\n\n${profile.companySummary}\n\nComo posso te ajudar hoje? *(Cole sua chave gratuita do Gemini na aba "Motor de IA" para respostas livres com IA generativa completa!)*`
+      : `Olá! Seja bem-vindo(a) à *${profile.name}*! Sou *${profile.assistantName}*.\n\n${profile.companySummary}\n\nComo posso te ajudar hoje? *(Cole sua chave gratuita do Gemini na aba "Motor de IA" para respostas livres com IA generativa completa!)*`,
     activatedSkills: []
   };
 }
@@ -1047,7 +1063,11 @@ export async function generateSmartReply({
   if (shieldActive && detectPromptInjection(userText)) {
     storage.recordAiTelemetry({ blockedInjection: true });
     storage.addLog('alert', `🛡️ Tripwire Anti-Injection bloqueou tentativa suspeita por ${contactName}: "${String(userText).slice(0, 70)}"`);
-    const safeReply = `Aqui falamos pela equipe comercial de *${profile.name}*. Se quiser saber como funciona nosso trabalho ou alinhar algum ponto comercial, me conta seu cenário atual que te ajudo por aqui!`;
+    const soloMode = isSoloProfessionalProfile(profile);
+    const soloFirstName = String(profile.assistantName || profile.name || 'eu').trim().split(/\s+/)[0];
+    const safeReply = soloMode
+      ? `Aqui é o *${soloFirstName}* falando contigo por aqui mesmo. Se quiser entender como funciona meu trabalho ou alinhar algum ponto, me conta seu cenário atual que te ajudo por aqui!`
+      : `Aqui falamos pela equipe comercial de *${profile.name}*. Se quiser saber como funciona nosso trabalho ou alinhar algum ponto comercial, me conta seu cenário atual que te ajudo por aqui!`;
     return {
       cleanText: safeReply,
       actions: {

@@ -255,19 +255,37 @@ if ($StartApp -and (Test-Path -LiteralPath $autoUpdateScript)) {
     }
 }
 
-$expressCheck = Join-Path $RootDir 'node_modules\express\package.json'
-$baileysCheck = Join-Path $RootDir 'node_modules\@whiskeysockets\baileys\package.json'
-$needsNpmInstall = $ForceInstall -or (-not (Test-Path -LiteralPath $expressCheck)) -or (-not (Test-Path -LiteralPath $baileysCheck))
+function Test-NodeModulesIntegrity {
+    $nodeModulesDir = Join-Path $RootDir 'node_modules'
+    if (-not (Test-Path -LiteralPath $nodeModulesDir)) { return $false }
+    Push-Location -LiteralPath $RootDir
+    try {
+        & $nodeInfo.NodeExe -e "Promise.all([import('express'),import('@supabase/supabase-js'),import('@whiskeysockets/baileys'),import('@google/genai')]).then(()=>process.exit(0)).catch(()=>process.exit(1))" 2>$null | Out-Null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    } finally {
+        Pop-Location
+    }
+}
+
+$needsNpmInstall = $ForceInstall -or (-not (Test-NodeModulesIntegrity))
 
 if ($needsNpmInstall) {
+    $nmDir = Join-Path $RootDir 'node_modules'
+    if ((Test-Path -LiteralPath $nmDir) -and (-not $ForceInstall)) {
+        Write-Host '[Auto-Reparo] Detectada instalacao anterior incompleta -- limpando node_modules corrompido...' -ForegroundColor Yellow
+        & cmd.exe /c "rmdir /s /q `"$nmDir`"" 2>$null | Out-Null
+    }
     Write-Host ''
     Write-Host '[2/2] Baixando e configurando bibliotecas do ZAP-IA Studio (modo anti-timeout IPv4)...' -ForegroundColor Green
     Push-Location -LiteralPath $RootDir
     try {
         & $nodeInfo.NpmCmd install --legacy-peer-deps --no-audit --no-fund --maxsockets=4 --fetch-timeout=300000 --fetch-retries=6 --prefer-offline
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host '      [Auto-Recuperacao] Oscilacao de rede detectada -- tentando via espelho CDN...' -ForegroundColor Yellow
-            & $nodeInfo.NpmCmd install --legacy-peer-deps --no-audit --no-fund --registry=https://registry.npmmirror.com --maxsockets=4 --fetch-timeout=300000 --fetch-retries=6 --prefer-offline --omit=optional
+        if (($LASTEXITCODE -ne 0) -or (-not (Test-NodeModulesIntegrity))) {
+            Write-Host '      [Auto-Recuperacao] Reinstalando de forma limpa via espelho CDN...' -ForegroundColor Yellow
+            if (Test-Path -LiteralPath $nmDir) { & cmd.exe /c "rmdir /s /q `"$nmDir`"" 2>$null | Out-Null }
+            & $nodeInfo.NpmCmd install --legacy-peer-deps --no-audit --no-fund --registry=https://registry.npmmirror.com --maxsockets=4 --fetch-timeout=300000 --fetch-retries=6 --omit=optional
         }
         if ($LASTEXITCODE -ne 0) {
             throw "npm install retornou codigo $LASTEXITCODE"

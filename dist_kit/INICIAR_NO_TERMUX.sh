@@ -69,11 +69,15 @@ if [ -f "scripts/auto_update_boot.mjs" ]; then
   ZAPIA_DEFER_NPM=1 node scripts/auto_update_boot.mjs || true
 fi
 
-if [ ! -f "node_modules/express/package.json" ] || [ ! -f "node_modules/@whiskeysockets/baileys/package.json" ]; then
+if [ ! -d "node_modules" ] || ! node -e "Promise.all([import('express'),import('@supabase/supabase-js'),import('@whiskeysockets/baileys'),import('@google/genai')]).then(()=>process.exit(0)).catch(()=>process.exit(1))" >/dev/null 2>&1; then
+  if [ -d "node_modules" ]; then
+    echo "[Auto-Reparo] Limpando instalacao incompleta anterior..."
+    rm -rf node_modules
+  fi
   echo ""
   echo "Instalando bibliotecas do ZAP-IA Studio (modo anti-timeout IPv4)..."
   npm install --legacy-peer-deps --no-bin-links --no-audit --no-fund --maxsockets=4 --fetch-timeout=300000 --fetch-retries=6 --prefer-offline --omit=optional || \
-    npm install --legacy-peer-deps --no-bin-links --no-audit --no-fund --registry=https://registry.npmmirror.com --maxsockets=4 --fetch-timeout=300000 --fetch-retries=6 --prefer-offline --omit=optional
+    (rm -rf node_modules && npm install --legacy-peer-deps --no-bin-links --no-audit --no-fund --registry=https://registry.npmmirror.com --maxsockets=4 --fetch-timeout=300000 --fetch-retries=6 --omit=optional)
 fi
 
 if [ ! -f ".env" ] && [ -f ".env.example" ]; then

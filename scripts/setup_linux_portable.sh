@@ -197,22 +197,38 @@ export NODE_OPTIONS="--dns-result-order=ipv4first --no-network-family-autoselect
 
 # Auto-Update Universal ANTES do npm install (usa apenas Node puro, garantindo .npmrc e scripts sempre na ultima versao!)
 JUST_UPDATED=0
-if [ -f "$ROOT_DIR/scripts/auto_update_boot.mjs" ]; then
+if [ -f "$ROOT_DIR/scripts/auto_update_boot.mjs" ] && [ "${ZAPIA_REEXEC:-0}" != "1" ]; then
   set +e
   (cd "$ROOT_DIR" && ZAPIA_DEFER_NPM=1 node scripts/auto_update_boot.mjs --signal-updated-exit-20)
   AU_CODE=$?
   set -e
   if [ "$AU_CODE" -eq 20 ]; then
-    JUST_UPDATED=1
+    export ZAPIA_REEXEC=1
+    exec bash "$ROOT_DIR/scripts/setup_linux_portable.sh" "$@"
   fi
 fi
+if [ "${ZAPIA_REEXEC:-0}" = "1" ]; then
+  JUST_UPDATED=1
+fi
+
+check_node_modules_integrity() {
+  (
+    cd "$ROOT_DIR" && node -e "Promise.all([import('express'),import('@supabase/supabase-js'),import('@whiskeysockets/baileys'),import('@google/genai')]).then(()=>process.exit(0)).catch(()=>process.exit(1))" >/dev/null 2>&1
+  )
+}
 
 NEEDS_NPM=0
-if [ "$MODE" = "install" ] || [ ! -f "$ROOT_DIR/node_modules/express/package.json" ] || [ ! -f "$ROOT_DIR/node_modules/@whiskeysockets/baileys/package.json" ]; then
+if [ "$MODE" = "install" ] || [ ! -d "$ROOT_DIR/node_modules" ] || ! check_node_modules_integrity; then
   NEEDS_NPM=1
 fi
 
 if [ "$NEEDS_NPM" -eq 1 ]; then
+  if [ -d "$ROOT_DIR/node_modules" ] && [ "$MODE" != "install" ]; then
+    echo ""
+    echo "[Auto-Reparo] Detectada pasta node_modules incompleta de instalacao interrompida anterior."
+    echo "              Limpando arquivos corrompidos e restaurando do cache local..."
+    rm -rf "$ROOT_DIR/node_modules"
+  fi
   echo ""
   echo "[2/2] Configurando bibliotecas do ZAP-IA Studio (modo anti-timeout IPv4 ativado)..."
   EXTRA_OPT_FLAG=""
@@ -225,16 +241,17 @@ if [ "$NEEDS_NPM" -eq 1 ]; then
     set +e
     npm install --legacy-peer-deps --no-audit --no-fund --maxsockets=4 --fetch-timeout=300000 --fetch-retries=6 --prefer-offline $EXTRA_OPT_FLAG
     NPM_EXIT=$?
-    if [ "$NPM_EXIT" -ne 0 ]; then
+    if [ "$NPM_EXIT" -ne 0 ] || ! node -e "Promise.all([import('express'),import('@supabase/supabase-js'),import('@whiskeysockets/baileys'),import('@google/genai')]).then(()=>process.exit(0)).catch(()=>process.exit(1))" >/dev/null 2>&1; then
       echo ""
-      echo "      [Auto-Recuperacao de Rede] Oscilacao/timeout detectado no servidor padrao npm."
-      echo "      Tentando automaticamente via espelho global de alta velocidade (CDN Mirror)..."
-      npm install --legacy-peer-deps --no-audit --no-fund --registry=https://registry.npmmirror.com --maxsockets=4 --fetch-timeout=300000 --fetch-retries=6 --prefer-offline --omit=optional
+      echo "      [Auto-Recuperacao] Reinstalando de forma limpa via espelho CDN de alta velocidade..."
+      rm -rf "$ROOT_DIR/node_modules"
+      npm install --legacy-peer-deps --no-audit --no-fund --registry=https://registry.npmmirror.com --maxsockets=4 --fetch-timeout=300000 --fetch-retries=6 --omit=optional
       NPM_EXIT=$?
     fi
     if [ "$NPM_EXIT" -ne 0 ]; then
       echo "      [Auto-Recuperacao Final] Tentando modo ultra-conservador (2 conexoes simultaneas)..."
-      npm install --legacy-peer-deps --no-audit --no-fund --maxsockets=2 --fetch-timeout=300000 --fetch-retries=8 --prefer-offline --omit=optional
+      rm -rf "$ROOT_DIR/node_modules"
+      npm install --legacy-peer-deps --no-audit --no-fund --maxsockets=2 --fetch-timeout=300000 --fetch-retries=8 --omit=optional
       NPM_EXIT=$?
     fi
     set -e
@@ -243,7 +260,7 @@ if [ "$NEEDS_NPM" -eq 1 ]; then
   if [ -f "$ROOT_DIR/node_modules/ffmpeg-static/ffmpeg" ]; then
     chmod +x "$ROOT_DIR/node_modules/ffmpeg-static/ffmpeg" 2>/dev/null || true
   fi
-  echo "      [OK] Bibliotecas prontas!"
+  echo "      [OK] Todas as bibliotecas verificadas e prontas!"
 fi
 
 if [ ! -f "$ROOT_DIR/.env" ] && [ -f "$ROOT_DIR/.env.example" ]; then

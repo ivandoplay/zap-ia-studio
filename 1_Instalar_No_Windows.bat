@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title Instalador Portatil Automatico -- ZAP-IA Studio
+title Instalador Portatil Automatico -- Ienvia
 cd /d "%~dp0"
 
 if not exist "%~dp0package.json" (
@@ -12,7 +12,7 @@ if not exist "%~dp0package.json" (
 )
 
 echo ==============================================================
-echo   ZAP-IA STUDIO -- PREPARACAO AUTOMATICA PORTATIL (WINDOWS)
+echo   IENVIA -- PREPARACAO AUTOMATICA PORTATIL (WINDOWS)
 echo   Zero instalacao externa: prepara o motor Node.js sozinho!
 echo ==============================================================
 echo.

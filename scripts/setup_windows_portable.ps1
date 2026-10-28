@@ -27,7 +27,7 @@ if (-not (Test-Path -LiteralPath $PkgJson)) {
 if ($CreateShortcut) {
     $ws = New-Object -ComObject WScript.Shell
     $desktop = [Environment]::GetFolderPath('Desktop')
-    $lnkPath = Join-Path $desktop 'ZAP-IA Studio (WhatsApp).lnk'
+    $lnkPath = Join-Path $desktop 'Ienvia (WhatsApp).lnk'
     $OuterDir = Split-Path -Parent $RootDir
     $OuterBat = Join-Path $OuterDir 'INICIAR_NO_WINDOWS.bat'
     $s = $ws.CreateShortcut($lnkPath)
@@ -39,9 +39,9 @@ if ($CreateShortcut) {
         $s.WorkingDirectory = $RootDir
     }
     $s.IconLocation = 'shell32.dll,13'
-    $s.Description = 'Abrir ZAP-IA Studio (Motor Portatil Automatico)'
+    $s.Description = 'Abrir Ienvia (Motor Portatil Automatico)'
     $s.Save()
-    Write-Host "[PRONTO] Atalho 'ZAP-IA Studio (WhatsApp)' criado na sua Area de Trabalho!" -ForegroundColor Green
+    Write-Host "[PRONTO] Atalho 'Ienvia (WhatsApp)' criado na sua Area de Trabalho!" -ForegroundColor Green
     exit 0
 }
 
@@ -101,7 +101,7 @@ function Resolve-ActiveNodeInfo {
 function Install-PortableNode {
     Write-Host ''
     Write-Host '==============================================================' -ForegroundColor Cyan
-    Write-Host '  PREPARANDO MOTOR PORTATIL ZAP-IA STUDIO (1a EXECUCAO)' -ForegroundColor Cyan
+    Write-Host '  PREPARANDO MOTOR PORTATIL IENVIA (1a EXECUCAO)' -ForegroundColor Cyan
     Write-Host '  Nao precisa instalar nada por fora nem permissao Admin!' -ForegroundColor Gray
     Write-Host '==============================================================' -ForegroundColor Cyan
     Write-Host ''
@@ -278,7 +278,7 @@ if ($needsNpmInstall) {
         & cmd.exe /c "rmdir /s /q `"$nmDir`"" 2>$null | Out-Null
     }
     Write-Host ''
-    Write-Host '[2/2] Baixando e configurando bibliotecas do ZAP-IA Studio (modo anti-timeout IPv4)...' -ForegroundColor Green
+    Write-Host '[2/2] Baixando e configurando bibliotecas do Ienvia (modo anti-timeout IPv4)...' -ForegroundColor Green
     Push-Location -LiteralPath $RootDir
     try {
         & $nodeInfo.NpmCmd install --legacy-peer-deps --no-audit --no-fund --maxsockets=4 --fetch-timeout=300000 --fetch-retries=6 --prefer-offline
@@ -333,7 +333,7 @@ if ($StartApp) {
     }
 
     if (-not (Test-LocalPortListening 3000)) {
-        Write-Host 'Iniciando Motor ZAP-IA Studio em segundo plano...' -ForegroundColor Cyan
+        Write-Host 'Iniciando Motor Ienvia em segundo plano...' -ForegroundColor Cyan
         if (-not (Test-Path -LiteralPath $RuntimeDir)) {
             New-Item -ItemType Directory -Path $RuntimeDir -Force | Out-Null
         }
@@ -344,7 +344,7 @@ if ($StartApp) {
             $batLines = @(
                 '@echo off',
                 'chcp 65001 >nul',
-                'title Motor ZAP-IA Studio (Nao feche enquanto usar o robo)',
+                'title Motor Ienvia (Nao feche enquanto usar o robo)',
                 'set "PATH=%CD%\.runtime\node;%PATH%"',
                 ':loop',
                 '".runtime\node\node.exe" --dns-result-order=ipv4first scripts/auto_update_boot.mjs',
@@ -358,7 +358,7 @@ if ($StartApp) {
             $batLines = @(
                 '@echo off',
                 'chcp 65001 >nul',
-                'title Motor ZAP-IA Studio (Nao feche enquanto usar o robo)',
+                'title Motor Ienvia (Nao feche enquanto usar o robo)',
                 "set `"PATH=$($nodeInfo.NodeDir);%PATH%`"",
                 ':loop',
                 "`"$($nodeInfo.NodeExe)`" --dns-result-order=ipv4first scripts/auto_update_boot.mjs",

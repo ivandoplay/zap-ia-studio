@@ -2,7 +2,7 @@
 set -e
 
 echo "=============================================================="
-echo "  ZAP-IA STUDIO — INSTALACAO AUTOMATICA NO ANDROID (TERMUX)"
+echo "  IENVIA — INSTALACAO AUTOMATICA NO ANDROID (TERMUX)"
 echo "=============================================================="
 echo ""
 

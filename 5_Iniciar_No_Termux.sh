@@ -11,7 +11,7 @@ case "$CURRENT_DIR" in
 esac
 
 echo "=============================================================="
-echo "  ZAP-IA STUDIO — RODANDO 24H NO ANDROID (TERMUX)"
+echo "  IENVIA — RODANDO 24H NO ANDROID (TERMUX)"
 echo "=============================================================="
 
 # Ativa o Wake-Lock para o Android nao derrubar o robo com a tela apagada!

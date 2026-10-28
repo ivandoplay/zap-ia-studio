@@ -3632,7 +3632,7 @@ class WhatsAppMultiSlotManager {
     }
     const fullDigits = digits.startsWith('55') ? digits : `55${digits}`;
     const msg = [
-      '✅ *TESTE DE ALERTA — ZAP-IA STUDIO MULTI-CHIP*',
+      '✅ *TESTE DE ALERTA — IENVIA MULTI-CHIP*',
       '',
       'Perfeito! Seu número pessoal está configurado corretamente.',
       'Todos os avisos de fechamento dos seus Chips conectados chegarão centralizados aqui!'

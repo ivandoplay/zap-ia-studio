@@ -42,6 +42,9 @@ try {
   assert.equal(await page.locator('#orbitStage').evaluate(e=>e.classList.contains('has-webgl')),false);
   const panelLink=page.getByRole('link',{name:/Já sou cliente/});assert.equal(await panelLink.getAttribute('href'),'/painel');
   await page.goto(base+'/painel',{waitUntil:'load'});await page.locator('#cloudLoginScreen.open').waitFor();
+  assert.equal(await page.locator('#cloudLoginTitle').textContent(),'Ienvia');
+  await page.evaluate(() => applyBrandingToDom({appName:'ZAP-IA Studio'}));assert.equal(await page.locator('#brandTitleEl').textContent(),'Ienvia');
+  await page.evaluate(() => applyBrandingToDom({appName:'Marca do Cliente'}));assert.equal(await page.locator('#brandTitleEl').textContent(),'Marca do Cliente');
   await page.getByLabel('Usuário',{exact:true}).fill('teste');await page.getByLabel('Senha',{exact:true}).fill('senha-ficticia');
   await page.getByRole('button',{name:'Mostrar ou ocultar senha'}).click();assert.equal(await page.locator('#cloudLoginPass').getAttribute('type'),'text');
   assert.deepEqual(errors,[]);await page.close();

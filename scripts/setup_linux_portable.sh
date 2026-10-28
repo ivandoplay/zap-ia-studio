@@ -34,12 +34,12 @@ if [ "$MODE" = "shortcut" ]; then
   mkdir -p "$DESKTOP_DIR"
   TARGET_SH="$OUTER_DIR/INICIAR_NO_LINUX.sh"
   [ ! -f "$TARGET_SH" ] && TARGET_SH="$SCRIPT_DIR/setup_linux_portable.sh --start-app"
-  SHORTCUT_FILE="$DESKTOP_DIR/ZAP-IA-Studio.desktop"
+  SHORTCUT_FILE="$DESKTOP_DIR/Ienvia.desktop"
   cat > "$SHORTCUT_FILE" <<EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=ZAP-IA Studio (WhatsApp)
+Name=Ienvia (WhatsApp)
 Comment=Atendente Humano IA & CRM Multi-Contas
 Exec=bash "$OUTER_DIR/INICIAR_NO_LINUX.sh"
 Path=$OUTER_DIR
@@ -100,7 +100,7 @@ fetch_text_url() {
 install_portable_node_linux() {
   echo ""
   echo "=============================================================="
-  echo "  ZAP-IA STUDIO -- PREPARANDO MOTOR PORTATIL LINUX (1a VEZ)"
+  echo "  IENVIA -- PREPARANDO MOTOR PORTATIL LINUX (1a VEZ)"
   echo "  Zero sudo / Zero instalacao global no seu sistema!"
   echo "=============================================================="
   echo ""
@@ -230,7 +230,7 @@ if [ "$NEEDS_NPM" -eq 1 ]; then
     rm -rf "$ROOT_DIR/node_modules"
   fi
   echo ""
-  echo "[2/2] Configurando bibliotecas do ZAP-IA Studio (modo anti-timeout IPv4 ativado)..."
+  echo "[2/2] Configurando bibliotecas do Ienvia (modo anti-timeout IPv4 ativado)..."
   EXTRA_OPT_FLAG=""
   if command -v ffmpeg >/dev/null 2>&1; then
     echo "      [Info] FFmpeg nativo do Linux detectado -- pulando download extra de 80MB!"
@@ -318,14 +318,14 @@ open_linux_browser() {
 }
 
 if [ "$PORT_BUSY" -eq 1 ]; then
-  echo "[OK] Motor ZAP-IA Studio ja esta ativo na porta 3000. Abrindo painel..."
+  echo "[OK] Motor Ienvia ja esta ativo na porta 3000. Abrindo painel..."
   open_linux_browser
   exit 0
 fi
 
 echo ""
 echo "=============================================================="
-echo "  ZAP-IA STUDIO -- MOTOR ATIVO NO LINUX"
+echo "  IENVIA -- MOTOR ATIVO NO LINUX"
 echo "  Painel Local:  http://localhost:3000"
 echo "  Painel Nuvem:  https://zap-ia-studio.vercel.app"
 echo "  (Mantenha este terminal aberto enquanto usar o WhatsApp)"

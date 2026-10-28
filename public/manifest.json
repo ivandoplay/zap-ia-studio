@@ -1,6 +1,6 @@
 {
-  "name": "ZAP-IA Studio — Atendimento Universal no WhatsApp",
-  "short_name": "ZAP-IA Studio",
+  "name": "Ienvia — Atendimento Universal no WhatsApp",
+  "short_name": "Ienvia",
   "description": "Plataforma Universal de Atendimento Inteligente no WhatsApp com Multi-IA, Treinamento Turbo e CRM.",
   "start_url": "/painel",
   "scope": "/",

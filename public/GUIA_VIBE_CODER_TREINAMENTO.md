@@ -1,14 +1,14 @@
 # 🧠 Guia Oficial de Treinamento IA — Para Usuários de ChatGPT & Vibe Coders
-**Plataforma:** ZAP-IA Studio (`v5.5+`) · **Arquitetura:** Cérebro Único + Roteador Semântico de Skills (`Mxx`, `Sxx`, `Hxx`, `Oxx`, `Pxx`)
+**Plataforma:** Ienvia (`v5.5+`) · **Arquitetura:** Cérebro Único + Roteador Semântico de Skills (`Mxx`, `Sxx`, `Hxx`, `Oxx`, `Pxx`)
 
 Este documento serve para **dois objetivos**:
 1. **Você mesmo usar no ChatGPT / Claude / Gemini** para criar o treinamento completo de qualquer empresa em **2 minutos** (sem escrever uma linha na mão).
 2. **Você jogar este arquivo `.MD` inteiro dentro de uma IA de Vibe Coding** (*Arena, Cursor, Claude Code, Windsurf, Bolt, ChatGPT Plus*) e pedir:
-   > *"Leia este guia técnico do ZAP-IA Studio e gere o treinamento completo para a empresa [DESCREVA A EMPRESA AQUI]."*
+   > *"Leia este guia técnico do Ienvia e gere o treinamento completo para a empresa [DESCREVA A EMPRESA AQUI]."*
 
 ---
 
-## 🚀 Como funciona o Upload de Treinamento no ZAP-IA Studio?
+## 🚀 Como funciona o Upload de Treinamento no Ienvia?
 
 Na aba **Treinamento** do painel, o sistema aceita **3 formatos universais** (tanto por **Upload de Arquivo** quanto **Colando o Texto direto da resposta do ChatGPT**):
 
@@ -25,8 +25,8 @@ Na aba **Treinamento** do painel, o sistema aceita **3 formatos universais** (ta
 Copie tudo dentro do bloco abaixo, cole no **ChatGPT / Claude / Gemini** e no final fale (por texto ou áudio) sobre o negócio que você quer treinar:
 
 ```text
-Você é um Engenheiro Sênior de Atendimento Comercial Humanizado no WhatsApp especialista no sistema ZAP-IA Studio.
-Sua missão é criar um arquivo JSON completo no padrão oficial "zapia-blueprint-v1" para treinar o Cérebro Único do nosso atendente no WhatsApp.
+Você é um Engenheiro Sênior de Atendimento Comercial Humanizado no WhatsApp especialista no sistema Ienvia.
+Sua missão é criar um arquivo JSON completo no padrão oficial "ienvia-blueprint-v1" para treinar o Cérebro Único do nosso atendente no WhatsApp.
 
 REGRAS OBRIGATÓRIAS DE POSTURA DO ATENDENTE:
 1. O atendente NUNCA, sob nenhuma hipótese, pode dizer ou insinuar que é IA, robô, bot, assistente virtual ou automação. Deve conversar 100% como uma pessoa real da equipe no WhatsApp (mensagens curtas, naturais, sem listas robóticas gigantes, sem linguagem artificial).
@@ -37,7 +37,7 @@ REGRAS OBRIGATÓRIAS DE POSTURA DO ATENDENTE:
 ESTRUTURA JSON EXATA QUE VOCÊ DEVE RETORNAR (retorne APENAS um único bloco ```json válido, sem comentários // dentro do JSON):
 
 {
-  "schema": "zapia-blueprint-v1",
+  "schema": "ienvia-blueprint-v1",
   "version": "1.0",
   "profile": {
     "name": "Nome Comercial da Empresa",
@@ -137,14 +137,14 @@ DADOS DO NEGÓCIO QUE QUERO TREINAR AGORA:
 
 ### Como importar o resultado gerado pelo ChatGPT:
 1. Copie o código JSON que o ChatGPT respondeu;
-2. No painel do **ZAP-IA Studio**, vá em **Treinamento** → clique em **`🤖 Gerar com ChatGPT / Vibe Coding`**;
+2. No painel do **Ienvia**, vá em **Treinamento** → clique em **`🤖 Gerar com ChatGPT / Vibe Coding`**;
 3. Cole a resposta na caixa **Passo 2** e clique em **`⚡ Aplicar Treinamento Completo`** (ou salve como `.json` e suba no botão **Importar Arquivo**)!
 
 ---
 
 ## 🛠️ MODO 2: Especificação Avançada para Vibe Coders (Pacote `.ZIP` Modular `v.turbo`)
 
-Se você está usando **Arena, Cursor, Claude Code, Windsurf ou Python** e quer construir um **Pacote `.ZIP` Modular Profissional** (com múltiplos arquivos `.md` + `.json` + áudios `.ogg`, igual aos pacotes corporativos avançados), o motor `trainingPackEngine.js` do ZAP-IA Studio compila automaticamente a seguinte árvore de pastas dentro do `.ZIP`:
+Se você está usando **Arena, Cursor, Claude Code, Windsurf ou Python** e quer construir um **Pacote `.ZIP` Modular Profissional** (com múltiplos arquivos `.md` + `.json` + áudios `.ogg`, igual aos pacotes corporativos avançados), o motor `trainingPackEngine.js` do Ienvia compila automaticamente a seguinte árvore de pastas dentro do `.ZIP`:
 
 ```text
 MEU-TREINAMENTO-TURBO.zip
@@ -239,7 +239,7 @@ MEU-TREINAMENTO-TURBO.zip
 
 ## 🎯 Tags Nativas de Automação que você pode usar dentro dos textos e Skills
 
-O motor do **ZAP-IA Studio** interpreta automaticamente estas tags especiais caso você as inclua nas **Regras de Ouro**, **FAQs**, **Mensagens Aprovadas** ou **Skills**:
+O motor do **Ienvia** interpreta automaticamente estas tags especiais caso você as inclua nas **Regras de Ouro**, **FAQs**, **Mensagens Aprovadas** ou **Skills**:
 
 - `[[CHAMAR_HUMANO:Motivo resumido]]` → Pausa a IA imediatamente naquela conversa, move o cliente para a coluna **Aguardando Humano**, gera o **Dossiê Executivo de 3 Linhas** e avisa o dono no WhatsApp/Painel!
 - `[[AGENDAR_RETORNO:120|Cliente pediu para chamar à tarde]]` → Agenda um follow-up proativo automático daqui a `X` minutos caso o cliente não responda antes.

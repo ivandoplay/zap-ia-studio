@@ -147,10 +147,10 @@ export function importTrainingZipBuffer(zipBuffer, originalFilename = 'treinamen
   const readText = (relPath) => fileMap.get(relPath)?.buffer.toString('utf8').trim() || '';
   const findFile = (predicate) => extracted.files.find((f) => !isBlockedHistoricalPath(f.relPath) && predicate(f.relPath));
 
-  // Caso 0: Backup completo exportado pelo próprio ZAP-IA Studio (restauração 100% sem perda!)
-  const exportedProfileFile = findFile((p) => p.toLowerCase().endsWith('perfil-zapia-studio.json'));
+  // Caso 0: Backup completo exportado pelo próprio Ienvia (restauração 100% sem perda!)
+  const exportedProfileFile = findFile((p) => ['perfil-ienvia.json', 'perfil-zapia-studio.json'].some((name) => p.toLowerCase().endsWith(name)));
   const exportedProfileJson = exportedProfileFile ? safeParseJson(exportedProfileFile.buffer) : null;
-  const compiledPackFile = findFile((p) => p.toLowerCase().endsWith('zapia-pack-compilado.json'));
+  const compiledPackFile = findFile((p) => ['ienvia-pack-compilado.json', 'zapia-pack-compilado.json'].some((name) => p.toLowerCase().endsWith(name)));
   const compiledPackJson = compiledPackFile ? safeParseJson(compiledPackFile.buffer) : null;
 
   if (compiledPackJson && compiledPackJson.canonicalCore) {
@@ -764,7 +764,7 @@ export function deletePackSkill(packId, skillId, skillType = 'operational') {
 }
 
 export function exportProfileBundleZip(profile) {
-  const slug = foldPt(profile.name || 'perfil-zapia').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'perfil-zapia';
+  const slug = foldPt(profile.name || 'perfil-ienvia').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'perfil-ienvia';
   const root = `PACOTE-${slug.toUpperCase()}`;
   const entries = [];
 
@@ -784,7 +784,7 @@ export function exportProfileBundleZip(profile) {
   });
 
   entries.push({
-    path: `${root}/perfil-zapia-studio.json`,
+    path: `${root}/perfil-ienvia.json`,
     content: JSON.stringify(profile, null, 2)
   });
 
@@ -831,7 +831,7 @@ export function exportProfileBundleZip(profile) {
   const pack = profile.trainingPackId ? getTrainingPack(profile.trainingPackId) : null;
   if (pack) {
     entries.push({
-      path: `${root}/zapia-pack-compilado.json`,
+      path: `${root}/ienvia-pack-compilado.json`,
       content: JSON.stringify(pack, null, 2)
     });
     if (pack.canonicalCore?.approvedMessages?.length) {
@@ -1644,7 +1644,7 @@ export function importTrainingMarkdownText(mdText = '', originalFilename = 'play
   }
 
   // Se o arquivo .md/.txt na verdade contém um JSON do ChatGPT colado dentro dele, usa o compilador JSON!
-  if (cleanMd.includes('"zapia-blueprint-v1"') || (cleanMd.startsWith('{') && cleanMd.endsWith('}'))) {
+  if ((cleanMd.includes('"ienvia-blueprint-v1"') || cleanMd.includes('"zapia-blueprint-v1"')) || (cleanMd.startsWith('{') && cleanMd.endsWith('}'))) {
     const maybeJson = extractCleanJsonFromAiText(cleanMd);
     if (maybeJson) {
       return importTrainingBlueprintObject(maybeJson, originalFilename, customPackId);

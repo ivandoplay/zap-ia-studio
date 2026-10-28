@@ -1,4 +1,4 @@
-# ZAP-IA Studio v5.6 Institutional SaaS Edition — Multi-Chip (Até 3 WhatsApps), Multi-Aparelho & Inbox 360º
+# Ienvia v5.6 Institutional SaaS Edition — Multi-Chip (Até 3 WhatsApps), Multi-Aparelho & Inbox 360º
 
 Plataforma comercial pronta para venda e operação diária de atendimento autônomo **100% humano** no WhatsApp, **Suporte Multi-Chip (até 3 números simultâneos por conta com Cérebro Único e Rodízio Anti-Ban)**, **Multi-Aparelho (1 ou vários dispositivos conectados à mesma conta)**, **Central de Conversas 360º em 3 Colunas** e CRM comercial, com **Arquitetura SaaS Multi-Contas (`Vercel Cloud` + `Supabase RLS Zero-Trust` + `Pacote Institucional Portátil para Windows PC, Linux Desktop/VPS e Android Termux`)**, construída com `@whiskeysockets/baileys` v7, `@supabase/supabase-js` e `@google/genai`.
 
@@ -6,10 +6,10 @@ Plataforma comercial pronta para venda e operação diária de atendimento autô
 
 ## 0. Estrutura Institucional do Pacote `.ZIP` (`v5.0.0`)
 
-Ao baixar o motor pelo botão **`Baixar Motor (.ZIP)`** dentro do painel (`ZAP-IA-Studio-v5.0.0.zip`) e extrair, o cliente enxerga uma pasta corporativa ultra-limpa **`ZAP-IA-Studio/`** onde toda a engenharia técnica fica isolada em `sistema/`:
+Ao baixar o motor pelo botão **`Baixar Motor (.ZIP)`** dentro do painel (`Ienvia-v5.8.13.zip`) e extrair, o cliente enxerga uma pasta corporativa ultra-limpa **`Ienvia/`** onde toda a engenharia técnica fica isolada em `sistema/`:
 
 ```text
-ZAP-IA-Studio/
+Ienvia/
 ├── INICIAR_NO_WINDOWS.bat     (Windows 10/11 — 2 cliques, zero instalação externa)
 ├── INICIAR_NO_LINUX.sh        (Ubuntu, Debian, Mint, Fedora, Arch, VPS SSH — zero sudo)
 ├── INICIAR_NO_TERMUX.sh       (Celular Android 24h via Termux — auto-instala na 1ª vez)
@@ -25,13 +25,13 @@ ZAP-IA-Studio/
 
 ### Windows 10 ou 11 (PC / Notebook — Zero Admin)
 1. Extraia o `.ZIP` baixado (`Botão direito > Extrair Tudo...`).
-2. Abra a pasta **`ZAP-IA-Studio`** e dê **2 cliques em `INICIAR_NO_WINDOWS.bat`**.
+2. Abra a pasta **`Ienvia`** e dê **2 cliques em `INICIAR_NO_WINDOWS.bat`**.
    - **Na 1ª abertura:** baixa automaticamente o **Node.js v22 LTS Portátil Oficial** (com validação `SHA-256`) em `sistema\.runtime\node\`, instala as bibliotecas e já abre o painel no navegador!
    - **Nas próximas aberturas:** abre em **2 segundos**!
    - *(Opcional)* Use `Ferramentas_Extras\Windows_Criar_Atalho_Desktop.bat` para criar o atalho na Área de Trabalho.
 
 ### Linux (Desktop ou Servidor VPS SSH — Zero `sudo`)
-1. Extraia o `.ZIP`, abra o terminal na pasta **`ZAP-IA-Studio`** e execute:
+1. Extraia o `.ZIP`, abra o terminal na pasta **`Ienvia`** e execute:
    ```bash
    bash INICIAR_NO_LINUX.sh
    ```
@@ -43,8 +43,8 @@ ZAP-IA-Studio/
 2. Extraia o `.ZIP` na pasta `Downloads` do celular e cole no Termux:
    ```bash
    termux-setup-storage
-   cp -r ~/storage/downloads/ZAP-IA-Studio ~/ZAP-IA-Studio
-   cd ~/ZAP-IA-Studio
+   cp -r ~/storage/downloads/Ienvia ~/Ienvia
+   cd ~/Ienvia
    bash INICIAR_NO_TERMUX.sh
    ```
    - Na 1ª execução, instala sozinho `nodejs-lts` + `ffmpeg`, migra sessões anteriores caso existam e abre o assistente de login + pareamento por **Código de 8 Dígitos** direto na tela!

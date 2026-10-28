@@ -73,7 +73,7 @@ function detectLegacyCategory(fileName) {
 }
 
 /**
- * Cofre Compacto Atômico do WhatsApp (ZAP-IA Studio):
+ * Cofre Compacto Atômico do WhatsApp (Ienvia):
  * Agrupa milhares de micro-arquivos do Baileys (ex: 7.000+ lid-mapping-*.json e pre-key-*.json)
  * em apenas ~9 arquivos atômicos por categoria (`store_<categoria>.json` + `creds.json`),
  * migrando sessões antigas automaticamente sem perder a conexão do WhatsApp.

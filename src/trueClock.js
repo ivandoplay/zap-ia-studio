@@ -1,5 +1,5 @@
 /**
- * ZAP-IA Studio — Sincronizador Automático de Relógio UTC Real (TrueClock)
+ * Ienvia — Sincronizador Automático de Relógio UTC Real (TrueClock)
  * Resolve 100% o clássico problema de PCs Dual-Boot (Windows + Linux/antiX) ou baterias CMOS
  * onde o relógio do sistema operacional está defasado em horas (ex: UTC-3 gravado como UTC na BIOS),
  * impedindo que mensagens enviadas sumam atrás de historyClearedAt ou que o heartbeat na nuvem pareça offline.

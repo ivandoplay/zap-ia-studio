@@ -1,7 +1,7 @@
 {
-  "name": "zap-ia-studio",
-  "version": "5.8.12",
-  "description": "ZAP-IA Studio — Vitrine 3D e correções de sincronização Multi-Chip",
+  "name": "ienvia",
+  "version": "5.8.13",
+  "description": "Ienvia — Atendimento inteligente e CRM para WhatsApp",
   "type": "module",
   "main": "src/server.js",
   "scripts": {

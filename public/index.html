@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f8faf7">
   <meta name="description" content="Organize suas conversas, atenda no WhatsApp com apoio de IA e acompanhe clientes em um só lugar.">
-  <title>ZAP-IA Studio — Seu atendimento, mais próximo</title>
+  <title>Ienvia — Seu atendimento, mais próximo</title>
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <link rel="preload" href="/fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/spatial.css">
@@ -14,7 +14,7 @@
   <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
   <header class="site-header">
     <div class="wrap nav-row">
-      <a class="brand" href="/" aria-label="ZAP-IA Studio, início"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.7 11.5a8.7 8.7 0 0 1-12.8 7.7L3 20.8l1.6-4.9a8.7 8.7 0 1 1 16.1-4.4Z"/><path d="M8 11.8h.1m3.9 0h.1m3.9 0h.1"/></svg></span><span id="brandTitleText">zap-ia<span class="brand-studio"> studio</span></span></a>
+      <a class="brand" href="/" aria-label="Ienvia, início"><span id="brandTitleText"><img class="ienvia-wordmark" src="/ienvia-logo.png" alt="Ienvia" /></span></a>
       <nav class="nav-links" aria-label="Navegação principal"><a href="#recursos">O que faz</a><a href="#demonstracao">Demonstração</a><a href="#planos">Planos</a><a href="#perguntas">Dúvidas</a></nav>
       <div class="nav-actions"><a class="nav-login" href="/painel">Entrar no painel</a><a class="button button-small button-dark" href="#planos">Conhecer os planos <span aria-hidden="true">↗</span></a></div>
     </div>
@@ -38,7 +38,7 @@
       <div class="wrap hero-under"><span>Uma plataforma. Muitas possibilidades.</span><a href="#recursos">Descubra o que você pode fazer <span aria-hidden="true">↓</span></a></div>
     </section>
     <section class="intro-section" id="recursos">
-      <div class="wrap intro-grid"><div><span class="section-kicker">Menos correria. Mais presença.</span><h2>Uma conversa pode mudar o dia do seu negócio.</h2></div><div class="intro-copy"><p>Quem chega até você não quer falar com um menu. Quer uma resposta, uma atenção e alguém que entenda o que precisa.</p><p>O ZAP-IA Studio reúne suas conversas, sua voz e seus contatos para você cuidar disso com mais tranquilidade.</p></div></div>
+      <div class="wrap intro-grid"><div><span class="section-kicker">Menos correria. Mais presença.</span><h2>Uma conversa pode mudar o dia do seu negócio.</h2></div><div class="intro-copy"><p>Quem chega até você não quer falar com um menu. Quer uma resposta, uma atenção e alguém que entenda o que precisa.</p><p>O Ienvia reúne suas conversas, sua voz e seus contatos para você cuidar disso com mais tranquilidade.</p></div></div>
       <div class="wrap capabilities">
         <article class="capability"><span class="cap-icon cap-mint" aria-hidden="true">✳</span><div><h3>Conversas organizadas</h3><p>Acompanhe seus contatos, histórico disponível e oportunidades em um CRM fácil de acessar.</p></div></article>
         <article class="capability"><span class="cap-icon cap-peach" aria-hidden="true">◒</span><div><h3>Sua voz no atendimento</h3><p>Use suas próprias gravações como notas de voz e mantenha seu jeito de conversar.</p></div></article>
@@ -47,7 +47,7 @@
     </section>
     <section class="demo-section" id="demonstracao">
       <div class="wrap demo-grid hero-grid">
-        <div class="demo-copy"><div class="section-kicker light-kicker"><span class="green-dot"></span> Demonstração interativa</div><h2 class="demo-title">Veja uma conversa ganhar vida.</h2><p>Escolha um segmento e explore um exemplo de atendimento. É uma simulação visual, sem som: você configura tudo do seu jeito.</p><div class="demo-points"><div><span>01</span><p><strong>Uma resposta com contexto</strong><br>Para começar a conversa com mais naturalidade.</p></div><div><span>02</span><p><strong>Você no controle</strong><br>Entre no atendimento quando fizer sentido.</p></div></div><a class="button button-light" id="heroPrimaryWaBtn" href="#planos">Falar sobre o ZAP-IA <span aria-hidden="true">↗</span></a></div>
+        <div class="demo-copy"><div class="section-kicker light-kicker"><span class="green-dot"></span> Demonstração interativa</div><h2 class="demo-title">Veja uma conversa ganhar vida.</h2><p>Escolha um segmento e explore um exemplo de atendimento. É uma simulação visual, sem som: você configura tudo do seu jeito.</p><div class="demo-points"><div><span>01</span><p><strong>Uma resposta com contexto</strong><br>Para começar a conversa com mais naturalidade.</p></div><div><span>02</span><p><strong>Você no controle</strong><br>Entre no atendimento quando fizer sentido.</p></div></div><a class="button button-light" id="heroPrimaryWaBtn" href="#planos">Falar sobre o Ienvia <span aria-hidden="true">↗</span></a></div>
         <div class="sim-shell" aria-label="Exemplo ilustrativo de atendimento no WhatsApp">
           <div class="sim-top-controls"><span class="sim-label">Escolha um exemplo</span><div class="niche-bar" role="tablist" aria-label="Escolha um segmento para simular"><button type="button" role="tab" id="niche-veiculos" aria-controls="simThreadArea" tabindex="0" aria-selected="true" class="niche-pill active" data-niche="veiculos">Veículos</button><button type="button" role="tab" id="niche-clinica" aria-controls="simThreadArea" tabindex="-1" aria-selected="false" class="niche-pill" data-niche="clinica">Clínica</button><button type="button" role="tab" id="niche-solo" aria-controls="simThreadArea" tabindex="-1" aria-selected="false" class="niche-pill" data-niche="solo">Profissional solo</button><button type="button" role="tab" id="niche-catalogo" aria-controls="simThreadArea" tabindex="-1" aria-selected="false" class="niche-pill" data-niche="catalogo">Catálogo e PIX</button></div>
             <div class="demo-view-switch" role="group" aria-label="Alternar visão"><button type="button" class="demo-mode-btn active" data-view="chat">Conversa</button><button type="button" class="demo-mode-btn" data-view="dossier">Resumo para você</button></div></div>
@@ -63,9 +63,9 @@
       <article class="price-card"><div><span class="plan-tag">Para expandir</span><h3>Scale <span>· 3 chips</span></h3><p>Para quem precisa de mais espaço para atender.</p><div class="price"><span id="priceTier3">R$ 347</span><small>/mês</small></div><ul><li>Até 3 números de WhatsApp</li><li>Um ou mais aparelhos</li><li>Acompanhamento de implantação</li></ul></div><a class="button button-outline plan-wa-btn" data-plan="Plano Scale (3 Chips)" href="#">Conversar sobre o Scale <span aria-hidden="true">↗</span></a></article>
     </div></div></section>
     <section class="faq-section" id="perguntas"><div class="wrap faq-grid"><div><span class="section-kicker">Estamos aqui para ajudar</span><h2>Algumas respostas antes da primeira conversa.</h2><p>Se sua dúvida não estiver aqui, é só falar com a gente.</p><a href="#planos" class="text-link">Falar com o comercial <span aria-hidden="true">↗</span></a></div><div class="faq-list"><details class="faq-item"><summary>O atendimento vai parecer humano?<span>＋</span></summary><p>A IA pode usar linguagem natural e suas gravações de voz. A qualidade depende da configuração e não é possível garantir que toda resposta pareça humana.</p></details><details class="faq-item"><summary>Posso usar meu número atual?<span>＋</span></summary><p>Sim, você pode conectar seu número por QR Code ou código numérico. A importação do histórico depende dos dados disponibilizados pelo WhatsApp; faça backup antes de conectar.</p></details><details class="faq-item"><summary>O motor precisa ficar ligado?<span>＋</span></summary><p>Sim. O motor funciona no seu computador ou Android via Termux e precisa estar ligado e conectado para atender. O provedor de IA pode ter custos e limites próprios.</p></details><details class="faq-item"><summary>Como funcionam os chips?<span>＋</span></summary><p>Você pode conectar até 3 números, conforme seu plano, no mesmo aparelho ou em aparelhos diferentes. As conversas recebidas pelo motor são identificadas por chip.</p></details></div></div></section>
-    <section class="closing-section"><div class="wrap closing-inner"><div><span class="section-kicker light-kicker">Vamos conversar?</span><h2>Seu próximo cliente pode estar<br> na próxima mensagem.</h2><p>Conheça o ZAP-IA Studio e descubra como ele pode ajudar na sua rotina.</p></div><a href="#planos" class="button button-light">Conhecer os planos <span aria-hidden="true">↗</span></a></div></section>
+    <section class="closing-section"><div class="wrap closing-inner"><div><span class="section-kicker light-kicker">Vamos conversar?</span><h2>Seu próximo cliente pode estar<br> na próxima mensagem.</h2><p>Conheça o Ienvia e descubra como ele pode ajudar na sua rotina.</p></div><a href="#planos" class="button button-light">Conhecer os planos <span aria-hidden="true">↗</span></a></div></section>
   </main>
-  <footer class="site-footer"><div class="wrap footer-inner"><div><a class="brand footer-brand" href="/"><span class="brand-mark" aria-hidden="true">✳</span><span>zap-ia<span class="brand-studio"> studio</span></span></a><p>Mais tempo para as conversas que importam.</p></div><div class="footer-links"><a href="#recursos">O que faz</a><a href="#planos">Planos</a><a href="#perguntas">Dúvidas</a><a href="/painel">Entrar no painel</a></div></div><div class="wrap footer-bottom">ZAP-IA Studio <span>Feito para aproximar negócios e pessoas.</span></div></footer>
+  <footer class="site-footer"><div class="wrap footer-inner"><div><a class="brand footer-brand" href="/"><img class="ienvia-mark" src="/ienvia-icon.png" alt="" /><span><span class="ienvia-initial">I</span>envia</span></a><p>Mais tempo para as conversas que importam.</p></div><div class="footer-links"><a href="#recursos">O que faz</a><a href="#planos">Planos</a><a href="#perguntas">Dúvidas</a><a href="/painel">Entrar no painel</a></div></div><div class="wrap footer-bottom">Ienvia <span>Feito para aproximar negócios e pessoas.</span></div></footer>
   <div class="mobile-cta-bar"><a href="/painel" class="mobile-login">Entrar</a><a id="mobileStickyWaBtn" href="#planos" class="button button-dark">Conversar no WhatsApp <span aria-hidden="true">↗</span></a></div>
   <script>
     (function () {
@@ -87,7 +87,7 @@
         return 'https://wa.me/' + closerPhone + '?text=' + encodeURIComponent(text);
       }
 
-      const heroUrl = buildWaLink('Olá! Vi a página do ZAP-IA Studio e quero entender como ativar no meu WhatsApp.');
+      const heroUrl = buildWaLink('Olá! Vi a página do Ienvia e quero entender como ativar no meu WhatsApp.');
       document.getElementById('heroPrimaryWaBtn').href = heroUrl;
       document.getElementById('heroPrimaryWaBtn').target = '_blank';
       document.getElementById('heroPrimaryWaBtn').rel = 'noopener';
@@ -96,8 +96,8 @@
       document.getElementById('mobileStickyWaBtn').rel = 'noopener';
 
       document.querySelectorAll('.plan-wa-btn').forEach(function (btn) {
-        const plan = btn.getAttribute('data-plan') || 'ZAP-IA Studio';
-        btn.href = buildWaLink('Olá! Quero contratar o ' + plan + ' do ZAP-IA Studio. Pode me explicar os próximos passos?');
+        const plan = btn.getAttribute('data-plan') || 'Ienvia';
+        btn.href = buildWaLink('Olá! Quero contratar o ' + plan + ' do Ienvia. Pode me explicar os próximos passos?');
         btn.target = '_blank';
         btn.rel = 'noopener';
       });

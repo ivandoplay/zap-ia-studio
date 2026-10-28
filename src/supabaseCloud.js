@@ -1624,7 +1624,7 @@ class CloudWorkerBridge {
     }
 
     if (!process.stdin.isTTY || process.env.ZAPIA_NO_TTY_PROMPT === '1') {
-      console.log('☁️  [Nuvem ZAP-IA] Motor aguardando login da conta em http://localhost:3000 (ou via API).');
+      console.log('☁️  [Nuvem Ienvia] Motor aguardando login da conta em http://localhost:3000 (ou via API).');
       return;
     }
 
@@ -1632,7 +1632,7 @@ class CloudWorkerBridge {
     const ask = (q) => new Promise((res) => rl.question(q, res));
     try {
       console.log('\n========================================================');
-      console.log('🔐 1º PASSO — VINCULAR SUA CONTA ZAP-IA STUDIO');
+      console.log('🔐 1º PASSO — VINCULAR SUA CONTA IENVIA');
       console.log('   Digite o @usuario e senha entregues pelo administrador');
       console.log('   (ou aperte ENTER em branco para entrar pelo navegador)');
       console.log('========================================================');

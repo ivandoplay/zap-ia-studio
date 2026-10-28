@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * ZAP-IA Studio — Auto-Updater Universal de Inicialização (Windows + Linux + Android Termux)
+ * Ienvia — Auto-Updater Universal de Inicialização (Windows + Linux + Android Termux)
  * Executado automaticamente toda vez que o sistema é aberto em qualquer um dos 3 dispositivos:
  * 1. Consulta a versão oficial publicada na nuvem (https://zap-ia-studio.vercel.app/api/public/version) em < 0.4s;
  * 2. Se já estiver na última versão (ou sem internet no momento), segue a abertura imediatamente sem travar;

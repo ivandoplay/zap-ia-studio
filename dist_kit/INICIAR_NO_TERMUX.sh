@@ -8,10 +8,15 @@ BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 case "$BASE_DIR" in
   */storage/*|/sdcard/*|/storage/*)
     echo "[!] Detectado que voce abriu pela pasta Downloads do Android."
-    echo "    Instalando copia segura na memoria interna do Termux (~/ZAP-IA-Studio)..."
-    mkdir -p "$HOME/ZAP-IA-Studio"
-    cp -rf "$BASE_DIR"/. "$HOME/ZAP-IA-Studio/"
-    BASE_DIR="$HOME/ZAP-IA-Studio"
+    if [ -d "$HOME/ZAP-IA-Studio/sistema" ]; then
+      SAFE_DIR="$HOME/ZAP-IA-Studio" # Instalacao anterior: manter sessoes no lugar.
+    else
+      SAFE_DIR="$HOME/Ienvia"
+    fi
+    echo "    Instalando copia segura na memoria interna do Termux..."
+    mkdir -p "$SAFE_DIR"
+    cp -rf "$BASE_DIR"/. "$SAFE_DIR/"
+    BASE_DIR="$SAFE_DIR"
     cd "$BASE_DIR"
     echo "[OK] Pasta ativa: $BASE_DIR"
     echo ""
@@ -75,7 +80,7 @@ if [ ! -d "node_modules" ] || ! node -e "Promise.all([import('express'),import('
     rm -rf node_modules
   fi
   echo ""
-  echo "Instalando bibliotecas do ZAP-IA Studio (modo anti-timeout IPv4)..."
+  echo "Instalando bibliotecas do Ienvia (modo anti-timeout IPv4)..."
   npm install --legacy-peer-deps --no-bin-links --no-audit --no-fund --maxsockets=4 --fetch-timeout=300000 --fetch-retries=6 --prefer-offline --omit=optional || \
     (rm -rf node_modules && npm install --legacy-peer-deps --no-bin-links --no-audit --no-fund --registry=https://registry.npmmirror.com --maxsockets=4 --fetch-timeout=300000 --fetch-retries=6 --omit=optional)
 fi
@@ -87,14 +92,14 @@ fi
 # Registra atalho pratico "zapia" no Termux para abrir já atualizando com 1 palavra!
 if [ -d "/data/data/com.termux/files/usr" ]; then
   touch "$HOME/.bashrc"
-  if ! grep -q "alias zapia=" "$HOME/.bashrc" 2>/dev/null; then
-    echo "alias zapia='bash \"\$HOME/ZAP-IA-Studio/INICIAR_NO_TERMUX.sh\"'" >> "$HOME/.bashrc"
+  if ! grep -q "alias ienvia=" "$HOME/.bashrc" 2>/dev/null; then
+    printf "alias ienvia='bash \"%s/INICIAR_NO_TERMUX.sh\"'\n" "$BASE_DIR" >> "$HOME/.bashrc"
   fi
 fi
 
 APP_VER=$(node -p "try{JSON.parse(require('fs').readFileSync('./package.json','utf8')).version}catch(e){'5.5'}" 2>/dev/null || echo "5.5")
 echo "=============================================================="
-echo "  ZAP-IA STUDIO v${APP_VER} -- MOTOR 24H ATIVO NO ANDROID (TERMUX)"
+echo "  IENVIA v${APP_VER} -- MOTOR 24H ATIVO NO ANDROID (TERMUX)"
 echo "=============================================================="
 
 # Garante instancia unica REAL: encerra qualquer loop anterior de outra aba do Termux + qualquer node antigo (sem usar pkill -f!)

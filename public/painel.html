@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#059669" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>ZAP-IA Studio — Atendimento Universal no WhatsApp</title>
+  <title>Ienvia — Atendimento Universal no WhatsApp</title>
   <link rel="manifest" href="/manifest.json" />
   <link rel="icon" href="/icon.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/styles.css" />
@@ -18,12 +18,10 @@
     <div class="panel saas-login-card">
       <div style="display:flex; align-items:center; gap:12px;">
         <div class="brand-mark" aria-hidden="true">
-          <svg class="icon-svg" viewBox="0 0 24 24">
-            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-          </svg>
+          <img src="/ienvia-icon.png" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" />
         </div>
         <div>
-          <h2 id="cloudLoginTitle" class="panel-title" style="margin:0; font-size:20px;">ZAP-IA Studio</h2>
+          <h2 id="cloudLoginTitle" class="panel-title" style="margin:0; font-size:20px;">Ienvia</h2>
           <div style="font-size:12px; color:var(--text-muted);">Plataforma SaaS de Atendimento Humanizado & CRM</div>
         </div>
       </div>
@@ -85,12 +83,10 @@
     <div class="brand">
       <div class="brand-left">
         <div class="brand-mark" aria-hidden="true">
-          <svg class="icon-svg" viewBox="0 0 24 24">
-            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-          </svg>
+          <img src="/ienvia-icon.png" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit" />
         </div>
         <div style="min-width:0;">
-          <div id="brandTitleEl" class="brand-title">ZAP-IA Studio</div>
+          <div id="brandTitleEl" class="brand-title">Ienvia</div>
           <div id="brandSubEl" class="brand-sub">Atendente Universal</div>
         </div>
       </div>
@@ -288,7 +284,7 @@
             <p>Conecte seu WhatsApp, dispare abordagens ativas aprovadas e acompanhe todo o funil em tempo real.</p>
           </div>
           <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <button type="button" class="btn btn-secondary" onclick="downloadLatestMotorZip()" title="Baixar última versão do Motor ZAP-IA (.ZIP para Windows PC e Android Termux)">
+            <button type="button" class="btn btn-secondary" onclick="downloadLatestMotorZip()" title="Baixar última versão do Motor Ienvia (.ZIP para Windows PC e Android Termux)">
               <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
               <span>Baixar Motor (.ZIP)</span>
             </button>
@@ -402,8 +398,8 @@
                 <summary style="cursor:pointer; font-weight:600; color:var(--text-main);">Como abrir em cada sistema (Windows / Linux / Android Termux)</summary>
                 <div style="margin-top:8px; display:flex; flex-direction:column; gap:7px; line-height:1.5;">
                   <div><strong>Windows 10/11 (Portátil):</strong> extraia o <code>.ZIP</code> e dê 2 cliques em <code>INICIAR_NO_WINDOWS.bat</code> (prepara o Node v22 portátil sozinho na 1ª vez).</div>
-                  <div><strong>Linux (Desktop ou VPS SSH):</strong><br/><code style="display:block; margin-top:3px; padding:5px 8px; background:var(--bg-input); border:1px solid var(--border); border-radius:6px; user-select:all; word-break:break-all;">unzip -o ZAP-IA-Studio-v*.zip -d ~ &amp;&amp; cd ~/ZAP-IA-Studio &amp;&amp; bash INICIAR_NO_LINUX.sh</code></div>
-                  <div><strong>Android Termux (24h):</strong><br/><code style="display:block; margin-top:3px; padding:5px 8px; background:var(--bg-input); border:1px solid var(--border); border-radius:6px; user-select:all; word-break:break-all;">unzip -o ~/storage/downloads/ZAP-IA-Studio-v*.zip -d ~ &amp;&amp; cd ~/ZAP-IA-Studio &amp;&amp; bash INICIAR_NO_TERMUX.sh</code></div>
+                  <div><strong>Linux (Desktop ou VPS SSH):</strong><br/><code style="display:block; margin-top:3px; padding:5px 8px; background:var(--bg-input); border:1px solid var(--border); border-radius:6px; user-select:all; word-break:break-all;">unzip -o Ienvia-v*.zip -d ~ &amp;&amp; cd ~/Ienvia &amp;&amp; bash INICIAR_NO_LINUX.sh</code></div>
+                  <div><strong>Android Termux (24h):</strong><br/><code style="display:block; margin-top:3px; padding:5px 8px; background:var(--bg-input); border:1px solid var(--border); border-radius:6px; user-select:all; word-break:break-all;">unzip -o ~/storage/downloads/Ienvia-v*.zip -d ~ &amp;&amp; cd ~/Ienvia &amp;&amp; bash INICIAR_NO_TERMUX.sh</code></div>
                 </div>
               </details>
             </div>
@@ -1928,11 +1924,11 @@
               </div>
               <div class="growth-lever-card">
                 <strong>2. Parceria com Gestores de Tráfego Local (20% Recorrente)</strong>
-                <p>Todo gestor de tráfego sofre quando gera leads e o cliente demora para responder no WhatsApp. Ofereça comissão recorrente para ele indicar o ZAP-IA Studio aos clientes de tráfego dele.</p>
+                <p>Todo gestor de tráfego sofre quando gera leads e o cliente demora para responder no WhatsApp. Ofereça comissão recorrente para ele indicar o Ienvia aos clientes de tráfego dele.</p>
               </div>
               <div class="growth-lever-card">
                 <strong>3. Vídeo Curto "Tela Dividida" (Voz OGG + Dossiê)</strong>
-                <p>Grave 35 segundos mostrando um lead mandando áudio de um lado e o ZAP-IA respondendo com nota de voz de ondas verdes + enviando o Dossiê de 3 Linhas no seu celular pessoal.</p>
+                <p>Grave 35 segundos mostrando um lead mandando áudio de um lado e o Ienvia respondendo com nota de voz de ondas verdes + enviando o Dossiê de 3 Linhas no seu celular pessoal.</p>
               </div>
               <div class="growth-lever-card">
                 <strong>4. Upsell Multi-Chip na Carteira Atual (1 → 2 ou 3 Chips)</strong>
@@ -2168,7 +2164,7 @@
       <form id="brandForm" class="modal-body">
         <div class="form-group">
           <label class="form-label" for="brandNameInput">Nome Principal no Topo e Aba</label>
-          <input type="text" id="brandNameInput" placeholder="Ex: ZAP-IA Studio" required />
+          <input type="text" id="brandNameInput" placeholder="Ex: Ienvia" required />
         </div>
         <div class="form-group">
           <label class="form-label" for="brandSubtitleInput">Subtítulo abaixo do nome</label>
@@ -2888,11 +2884,11 @@
           <div style="background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.28); border-radius:10px; padding:12px; font-size:12.5px; line-height:1.55;">
             <strong>Para Vibe Coders (Arena, Cursor, Claude Code, Windsurf, Bolt, ChatGPT Plus):</strong><br/>
             Baixe ou copie abaixo o <strong>Documento Oficial de Arquitetura (<code>GUIA_VIBE_CODER_TREINAMENTO.md</code>)</strong> e solte direto no seu agente de IA dizendo:<br/>
-            <code style="display:block; margin-top:6px; padding:6px 8px; background:rgba(0,0,0,0.28); border-radius:6px;">"Leia este guia técnico do ZAP-IA Studio e gere o pacote completo de treinamento para a empresa [DESCRIÇÃO]."</code>
+            <code style="display:block; margin-top:6px; padding:6px 8px; background:rgba(0,0,0,0.28); border-radius:6px;">"Leia este guia técnico do Ienvia e gere o pacote completo de treinamento para a empresa [DESCRIÇÃO]."</code>
           </div>
 
           <div style="font-size:12.5px; color:var(--text-secondary); line-height:1.55;">
-            <strong>Os 3 formatos suportados nativamente pelo compilador do ZAP-IA Studio:</strong>
+            <strong>Os 3 formatos suportados nativamente pelo compilador do Ienvia:</strong>
             <ul style="margin:6px 0 0 18px; display:flex; flex-direction:column; gap:4px;">
               <li><strong>Nível 1 — Blueprint Único (<code>.JSON</code>):</strong> 1 arquivo com <code>profile</code> + <code>approvedMessages</code> + <code>operationalSkills</code> + <code>humanizationSkills</code> + <code>objections</code>.</li>
               <li><strong>Nível 2 — Pacote Modular Turbo (<code>.ZIP</code>):</strong> Múltiplas pastas (<code>00-regras-canonicas.md</code>, <code>01-negocio/</code>, <code>03-skills/indice-skills.json</code>, <code>04-respostas/</code>, <code>12-humanizacao/</code> + áudios <code>.ogg</code>).</li>

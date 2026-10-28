@@ -1,4 +1,4 @@
-// Configuração Pública da Nuvem ZAP-IA Studio (Supabase Auth + RLS Isolado por Conta)
+// Configuração Pública da Nuvem Ienvia (Supabase Auth + RLS Isolado por Conta)
 // Nota de Segurança: SUPABASE_ANON_KEY é uma chave pública de cliente desenhada para uso com Row Level Security (RLS).
 // A chave administrativa SUPABASE_SERVICE_ROLE_KEY NUNCA fica no código — fica apenas nas variáveis criptografadas da Vercel.
 

@@ -857,7 +857,7 @@ async function callOpenAICompatible({ providerName, baseUrl, apiKey, model, syst
   };
   if (providerName === 'openrouter') {
     headers['HTTP-Referer'] = 'http://localhost:3000';
-    headers['X-Title'] = 'ZAP-IA Studio';
+    headers['X-Title'] = 'Ienvia';
   }
 
   const controller = new AbortController();

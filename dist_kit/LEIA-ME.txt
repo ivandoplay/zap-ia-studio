@@ -1,5 +1,5 @@
 ==============================================================================
-  ZAP-IA STUDIO v5.6 -- EDICAO INSTITUCIONAL MULTI-CHIP & MULTI-CONTAS
+  IENVIA v5.6 -- EDICAO INSTITUCIONAL MULTI-CHIP & MULTI-CONTAS
   Ate 3 WhatsApps Simultaneos, Voz Nativa OGG/Opus & Central 360 + Auto-Update
   Painel Oficial 24h: https://zap-ia-studio.vercel.app/
 ==============================================================================
@@ -29,8 +29,8 @@ de senha de Administrador:
 ------------------------------------------------------------------------------
 100% portatil (nao pede sudo):
 
-  unzip -o ZAP-IA-Studio-v*.zip -d ~
-  cd ~/ZAP-IA-Studio
+  unzip -o Ienvia-v*.zip -d ~
+  cd ~/Ienvia
   bash INICIAR_NO_LINUX.sh
 
   - Em PC Linux com tela: abre automaticamente http://localhost:3000.
@@ -45,8 +45,8 @@ Desative a restricao de bateria do Termux nas Configuracoes do Android e rode:
 
   termux-setup-storage
   pkg install -y unzip
-  unzip -o ~/storage/downloads/ZAP-IA-Studio-v*.zip -d ~
-  cd ~/ZAP-IA-Studio
+  unzip -o ~/storage/downloads/Ienvia-v*.zip -d ~
+  cd ~/Ienvia
   bash INICIAR_NO_TERMUX.sh
 
 
@@ -58,5 +58,5 @@ Desative a restricao de bateria do Termux nas Configuracoes do Android e rode:
   INICIAR_NO_TERMUX.sh     -> Inicializador automatico Android Termux 24h
   MANUAL_OFICIAL.html      -> Manual Institucional Interativo (abre offline)
   Ferramentas_Extras/      -> Criadores de atalho Desktop e reparo rapido
-  sistema/                 -> Nucleo tecnico isolado do ZAP-IA Studio
+  sistema/                 -> Nucleo tecnico isolado do Ienvia
 ==============================================================================

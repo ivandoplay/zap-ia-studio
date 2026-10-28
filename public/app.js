@@ -1,4 +1,4 @@
-// ZAP-IA Studio v2.0 — Plataforma Universal de Atendimento IA, Studio de Skills & CRM (30-Skill Upgrade)
+// Ienvia v2.0 — Plataforma Universal de Atendimento IA, Studio de Skills & CRM (30-Skill Upgrade)
 
 const PRESET_CRM_TAGS = ['Quente', 'Lojista', 'Pediu Valor', 'Retorno Autorizado', 'VIP'];
 
@@ -335,9 +335,9 @@ window.downloadLatestMotorZip = async function downloadLatestMotorZip() {
   const btn = document.getElementById('btnDashDownloadMotor');
   if (btn) btn.disabled = true;
   const ver = state.appVersion || '4.9.0';
-  showToast(`Preparando pacote ZAP-IA Studio v${ver} (.ZIP)...`);
+  showToast(`Preparando pacote Ienvia v${ver} (.ZIP)...`);
   try {
-    const savedAs = await apiBlobDownload('/api/system/download-motor', `ZAP-IA-Studio-v${ver}.zip`);
+    const savedAs = await apiBlobDownload('/api/system/download-motor', `Ienvia-v${ver}.zip`);
     showToast(`Download concluído: ${savedAs}`);
   } catch (err) {
     showToast(err.message, true);
@@ -438,7 +438,7 @@ window.switchTab = function switchTab(rawTabId) {
   });
 
   const mobTitle = document.getElementById('mobCurrentHubTitle');
-  if (mobTitle) mobTitle.textContent = HUB_TITLE_MAP[hub] || 'ZAP-IA';
+  if (mobTitle) mobTitle.textContent = HUB_TITLE_MAP[hub] || 'Ienvia';
 
   document.querySelectorAll('.tab-pane').forEach((pane) => {
     pane.classList.toggle('active', pane.id === `tab-${tabId}`);
@@ -704,7 +704,7 @@ function checkClientSideDueFollowUps(seedOnly = false) {
       playHandoffChime();
       const msg = `Hora do retorno agendado (S19) com ${c.name || 'Cliente'}!`;
       showToast(msg);
-      fireDesktopNotification('ZAP-IA • Retorno Agendado (S19)', msg, c.chatId);
+      fireDesktopNotification('Ienvia • Retorno Agendado (S19)', msg, c.chatId);
     }
   }
 }
@@ -861,7 +861,7 @@ async function refreshLiveStateOnly() {
         const first = newHumans[0];
         const msg = `${first.name || 'Cliente'} aguarda atendimento humano no CRM!`;
         showToast(msg);
-        fireDesktopNotification('ZAP-IA • Passagem Humana', msg, first.chatId);
+        fireDesktopNotification('Ienvia • Passagem Humana', msg, first.chatId);
       }
       checkClientSideDueFollowUps(false);
 
@@ -927,13 +927,13 @@ function connectWebSocket() {
         playHandoffChime();
         const msg = `${payload?.contactName || 'Cliente'} aguarda você no CRM!`;
         showToast(`Passagem humana: ${msg}`);
-        fireDesktopNotification('ZAP-IA • Passagem Humana', msg, payload?.chatId || null);
+        fireDesktopNotification('Ienvia • Passagem Humana', msg, payload?.chatId || null);
         refreshLiveStateOnly();
       } else if (event === 'followup_due') {
         playHandoffChime();
         const msg = `Hora do retorno agendado (S19) com ${payload?.contactName || 'Cliente'}!`;
         showToast(msg);
-        fireDesktopNotification('ZAP-IA • Retorno Agendado (S19)', msg, payload?.chatId || null);
+        fireDesktopNotification('Ienvia • Retorno Agendado (S19)', msg, payload?.chatId || null);
         refreshLiveStateOnly();
       } else if (event === 'crm_updated' || event === 'logs_updated') {
         refreshLiveStateOnly();
@@ -1188,7 +1188,7 @@ window.dismissSaasOnboarding = function dismissSaasOnboarding() {
 };
 
 function applyBrandingToDom(branding = {}) {
-  const appName = branding.appName || 'ZAP-IA Studio';
+  const appName = /^(?:zap-ia(?: studio)?)$/i.test(String(branding.appName || '').trim()) ? 'Ienvia' : (branding.appName || 'Ienvia');
   const appSub = branding.appSubtitle || 'Atendente Universal';
   const titleEl = document.getElementById('brandTitleEl');
   const subEl = document.getElementById('brandSubEl');
@@ -1525,11 +1525,11 @@ function renderWaState() {
         <div style="font-weight:700; color:var(--accent-bright); font-size:15px;">☁️ Painel na Nuvem Ativo e Sincronizado!</div>
         <div style="font-size:12.5px; color:var(--text-secondary); max-width:440px; line-height:1.5;">
           Você já pode usar <strong>Simulador, Treinamento, Áudios Estratégicos, Catálogo, PIX e CRM</strong> normalmente por aqui.<br/>
-          Para conectar até <strong>${getAccountMaxSlots()} Chip(s) WhatsApp</strong> ao vivo, inicie o <strong>Motor ZAP-IA</strong> no seu celular (Termux) ou computador (Windows/Linux) logado em <strong>@${escapeHtml(state.currentUser?.username || 'sua-conta')}</strong>.
+          Para conectar até <strong>${getAccountMaxSlots()} Chip(s) WhatsApp</strong> ao vivo, inicie o <strong>Motor Ienvia</strong> no seu celular (Termux) ou computador (Windows/Linux) logado em <strong>@${escapeHtml(state.currentUser?.username || 'sua-conta')}</strong>.
         </div>
         ${lastKnownPhone ? `<div style="font-size:11.5px; color:var(--text-muted);">Último número deste slot: <strong>+${escapeHtml(lastKnownPhone)}</strong></div>` : ''}
         <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="downloadLatestMotorZip()">
-          Baixar Motor ZAP-IA v${escapeHtml(state.appVersion || '5.6.0')} (.ZIP)
+          Baixar Motor Ienvia v${escapeHtml(state.appVersion || '5.6.0')} (.ZIP)
         </button>
       `;
     } else {
@@ -1655,8 +1655,8 @@ function buildChatGptSuperPromptText(customBrief = '') {
     ? `DADOS DO NEGÓCIO QUE QUERO TREINAR AGORA:\n${customBrief}`
     : `DADOS DO NEGÓCIO QUE QUERO TREINAR AGORA:\n[ESCREVA OU MANDE ÁUDIO AQUI CONTANDO SOBRE SUA EMPRESA, O QUE VENDE, PREÇOS, FORMAS DE PAGAMENTO E REGRAS — OU PEÇA PARA A IA TE FAZER 4 PERGUNTAS RÁPIDAS ANTES DE GERAR!]`;
 
-  return `Você é um Engenheiro Sênior de Atendimento Comercial Humanizado no WhatsApp especialista no sistema ZAP-IA Studio.
-Sua missão é criar um arquivo JSON completo no padrão oficial "zapia-blueprint-v1" para treinar o Cérebro Único do nosso atendente no WhatsApp.
+  return `Você é um Engenheiro Sênior de Atendimento Comercial Humanizado no WhatsApp especialista no sistema Ienvia.
+Sua missão é criar um arquivo JSON completo no padrão oficial "ienvia-blueprint-v1" para treinar o Cérebro Único do nosso atendente no WhatsApp.
 
 REGRAS OBRIGATÓRIAS DE POSTURA DO ATENDENTE (ARQUITETURA CÉREBRO ÚNICO MULTI-CHIP v5.6):
 1. O atendente NUNCA, sob nenhuma hipótese, pode dizer ou insinuar que é IA, robô, bot, assistente virtual ou automação. Deve conversar 100% como uma pessoa real no WhatsApp (mensagens curtas de 1 a 3 parágrafos breves, sem listas numeradas artificiais).
@@ -1671,7 +1671,7 @@ REGRAS OBRIGATÓRIAS DE POSTURA DO ATENDENTE (ARQUITETURA CÉREBRO ÚNICO MULTI-
 ESTRUTURA JSON EXATA QUE VOCÊ DEVE RETORNAR (retorne APENAS um único bloco \`\`\`json válido, sem comentários // dentro do JSON):
 
 {
-  "schema": "zapia-blueprint-v1",
+  "schema": "ienvia-blueprint-v1",
   "version": "1.0",
   "profile": {
     "name": "Nome Comercial da Empresa",
@@ -1756,7 +1756,7 @@ window.copyFullVibeCoderSpecMd = async function copyFullVibeCoderSpecMd() {
 
 window.downloadSampleBlueprintJson = function downloadSampleBlueprintJson() {
   const sample = {
-    schema: 'zapia-blueprint-v1',
+    schema: 'ienvia-blueprint-v1',
     version: '1.0',
     profile: {
       name: 'Exemplo — Loja / Clínica Modelo',
@@ -1812,7 +1812,7 @@ window.downloadSampleBlueprintJson = function downloadSampleBlueprintJson() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'modelo-treinamento-zapia.json';
+  a.download = 'modelo-treinamento-ienvia.json';
   document.body.appendChild(a);
   a.click();
   a.remove();
@@ -4679,7 +4679,7 @@ window.downloadSingleContactVcf = async function downloadSingleContactVcf(encode
 
 window.downloadAllContactsVcf = async function downloadAllContactsVcf() {
   try {
-    await apiBlobDownload('/api/crm/contacts.vcf', 'agenda_contatos_zapia.vcf');
+    await apiBlobDownload('/api/crm/contacts.vcf', 'agenda_contatos_ienvia.vcf');
     showToast('📲 Agenda completa (.VCF) baixada!');
   } catch (err) {
     showToast(err.message, true);
@@ -5609,7 +5609,7 @@ function bindEvents() {
   // White-Label Brand Modal & Som de Alerta
   document.getElementById('btnOpenBrandModal')?.addEventListener('click', () => {
     const br = state.settings?.branding || {};
-    document.getElementById('brandNameInput').value = br.appName || 'ZAP-IA Studio';
+    document.getElementById('brandNameInput').value = (/^(?:zap-ia(?: studio)?)$/i.test(String(br.appName || '').trim()) ? 'Ienvia' : (br.appName || 'Ienvia'));
     document.getElementById('brandSubtitleInput').value = br.appSubtitle || 'Atendente Universal';
     document.getElementById('brandModal').classList.add('open');
   });
@@ -5618,7 +5618,7 @@ function bindEvents() {
     e.preventDefault();
     const branding = {
       ...(state.settings?.branding || {}),
-      appName: document.getElementById('brandNameInput').value.trim() || 'ZAP-IA Studio',
+      appName: document.getElementById('brandNameInput').value.trim() || 'Ienvia',
       appSubtitle: document.getElementById('brandSubtitleInput').value.trim() || 'Atendente Universal'
     };
     try {
@@ -5683,7 +5683,7 @@ function bindEvents() {
               <div>
                 <strong style="font-size:13.5px; color:var(--text-main);">📱 ${escapeHtml(d.deviceName || 'Aparelho Online')}</strong>
                 <div style="font-size:11.5px; color:var(--text-secondary); margin-top:2px;">
-                  ${escapeHtml(d.platform || 'Motor ZAP-IA')}${d.activeSlots?.length ? ` • Já hospeda: ${escapeHtml(d.activeSlots.join(', '))}` : ' • Livre'}
+                  ${escapeHtml(d.platform || 'Motor Ienvia')}${d.activeSlots?.length ? ` • Já hospeda: ${escapeHtml(d.activeSlots.join(', '))}` : ' • Livre'}
                 </div>
               </div>
               <span class="btn btn-primary btn-sm" style="pointer-events:none;">Conectar aqui</span>
@@ -7823,7 +7823,7 @@ function buildWelcomeKitMessage(username, displayName, knownPassword = '') {
   const panelUrl = isLocal ? window.location.origin : `${window.location.origin}/painel`;
   const passLine = knownPassword ? `🔑 *Senha inicial:* ${knownPassword}` : `🔑 *Senha:* (a senha definida para sua conta)`;
   return [
-    `🚀 *Bem-vindo(a) ao ZAP-IA Studio — ${displayName || username}!*`,
+    `🚀 *Bem-vindo(a) ao Ienvia — ${displayName || username}!*`,
     ``,
     `Seu painel isolado de Atendimento Humano com IA e CRM já está liberado:`,
     `🌐 *Link do Painel:* ${panelUrl}`,
@@ -7928,7 +7928,7 @@ function bindCloudAuthAndAdminEvents() {
       return;
     }
     if (Notification.permission === 'granted') {
-      fireDesktopNotification('ZAP-IA Studio', 'Notificações em segundo plano estão ativas neste aparelho!');
+      fireDesktopNotification('Ienvia', 'Notificações em segundo plano estão ativas neste aparelho!');
       showToast('Notificações já estão ativas! Enviamos um alerta de teste.');
       return;
     }
@@ -7936,7 +7936,7 @@ function bindCloudAuthAndAdminEvents() {
       const perm = await Notification.requestPermission();
       syncDesktopNotifyLabel();
       if (perm === 'granted') {
-        fireDesktopNotification('ZAP-IA Studio', 'Pronto! Você receberá alertas de passagem humana e retornos S19.');
+        fireDesktopNotification('Ienvia', 'Pronto! Você receberá alertas de passagem humana e retornos S19.');
         showToast('Notificações em segundo plano ativadas!');
       } else {
         showToast('Permissão de notificação negada no navegador.', true);

@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title ZAP-IA Studio -- Inicializador Automatico (Zero Instalacao)
+title Ienvia -- Inicializador Automatico (Zero Instalacao)
 cd /d "%~dp0"
 
 if not exist "%~dp0package.json" (
@@ -14,7 +14,7 @@ if not exist "%~dp0package.json" (
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\setup_windows_portable.ps1" -StartApp
 if %errorlevel% neq 0 (
     echo.
-    echo [ERRO] Nao foi possivel iniciar o ZAP-IA Studio automaticamente.
+    echo [ERRO] Nao foi possivel iniciar o Ienvia automaticamente.
     echo Verifique sua internet ^(na 1a abertura o sistema baixa o motor portatil sozinho^) e tente novamente.
     echo.
     pause

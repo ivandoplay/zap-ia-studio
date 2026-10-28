@@ -318,7 +318,7 @@ app.get('/api/auth/status', async (req, res) => {
               displayName: verified.profile.display_name || verified.profile.username,
               role: verified.profile.role || 'user'
             },
-            branding: { appName: 'ZAP-IA Studio', appSubtitle: 'Atendente Universal Cloud' }
+            branding: { appName: 'Ienvia', appSubtitle: 'Atendente Universal Cloud' }
           });
         }
       } catch (err) {
@@ -328,7 +328,7 @@ app.get('/api/auth/status', async (req, res) => {
           cloudLoginRequired: true,
           blockedError: err.code === 'ACCOUNT_BLOCKED' ? err.message : null,
           pinRequired: false,
-          branding: { appName: 'ZAP-IA Studio', appSubtitle: 'Atendente Universal Cloud' }
+          branding: { appName: 'Ienvia', appSubtitle: 'Atendente Universal Cloud' }
         });
       }
     }
@@ -337,7 +337,7 @@ app.get('/api/auth/status', async (req, res) => {
       mode: 'vercel_cloud',
       cloudLoginRequired: true,
       pinRequired: false,
-      branding: { appName: 'ZAP-IA Studio', appSubtitle: 'Atendente Universal Cloud' }
+      branding: { appName: 'Ienvia', appSubtitle: 'Atendente Universal Cloud' }
     });
   }
 
@@ -351,7 +351,7 @@ app.get('/api/auth/status', async (req, res) => {
       cloudLoginRequired: true,
       workerStatus: workerSt,
       pinRequired: false,
-      branding: storage.data.settings.branding || { appName: 'ZAP-IA Studio', appSubtitle: 'Motor WhatsApp Local' }
+      branding: storage.data.settings.branding || { appName: 'Ienvia', appSubtitle: 'Motor WhatsApp Local' }
     });
   }
 
@@ -362,7 +362,7 @@ app.get('/api/auth/status', async (req, res) => {
     currentUser: workerSt.user || null,
     workerStatus: workerSt,
     pinRequired: pinEnabled,
-    branding: storage.data.settings.branding || { appName: 'ZAP-IA Studio', appSubtitle: 'Atendente Universal' }
+    branding: storage.data.settings.branding || { appName: 'Ienvia', appSubtitle: 'Atendente Universal' }
   });
 });
 
@@ -562,7 +562,7 @@ app.use('/api', async (req, res, next) => {
   // Modo Local (Termux / Windows PC): exige login da conta se o modo nuvem estiver ativo
   const workerSt = cloudWorker.getStatus();
   if (workerSt.configured && !workerSt.loggedIn) {
-    return res.status(401).json({ ok: false, authRequired: true, error: 'Conecte sua conta ZAP-IA Studio para continuar.' });
+    return res.status(401).json({ ok: false, authRequired: true, error: 'Conecte sua conta Ienvia para continuar.' });
   }
 
   const configuredPin = String(storage.data.settings.securityPin || '').trim();
@@ -824,7 +824,7 @@ const MOTOR_EXCLUDED_SEGMENTS = new Set([
   '.DS_Store'
 ]);
 
-function collectCleanMotorZipEntries(includeMasterPack = false) {
+function collectCleanMotorZipEntries(includeMasterPack = false, zipRoot = 'ZAP-IA-Studio') {
   const entries = [];
   const walkIntoZipPrefix = (absDir, zipPrefix) => {
     if (!fs.existsSync(absDir)) return;
@@ -846,26 +846,26 @@ function collectCleanMotorZipEntries(includeMasterPack = false) {
   };
 
   // 1. Camada Institucional Externa (ZAP-IA-Studio/INICIAR_NO_WINDOWS.bat, INICIAR_NO_LINUX.sh, INICIAR_NO_TERMUX.sh, MANUAL_OFICIAL.html, LEIA-ME.txt, Ferramentas_Extras/*)
-  walkIntoZipPrefix(path.join(ROOT_DIR, 'dist_kit'), 'ZAP-IA-Studio');
+  walkIntoZipPrefix(path.join(ROOT_DIR, 'dist_kit'), zipRoot);
 
   // 2. Núcleo Técnico Encapsulado (ZAP-IA-Studio/sistema/*)
   for (const sysFile of MOTOR_SYSTEM_ROOT_FILES) {
     const abs = path.join(ROOT_DIR, sysFile);
     if (fs.existsSync(abs) && fs.statSync(abs).isFile()) {
       entries.push({
-        path: `ZAP-IA-Studio/sistema/${sysFile}`,
+        path: `${zipRoot}/sistema/${sysFile}`,
         content: fs.readFileSync(abs)
       });
     }
   }
 
   for (const subDir of ['src', 'api', 'public', 'scripts', 'dist_kit']) {
-    walkIntoZipPrefix(path.join(ROOT_DIR, subDir), `ZAP-IA-Studio/sistema/${subDir}`);
+    walkIntoZipPrefix(path.join(ROOT_DIR, subDir), `${zipRoot}/sistema/${subDir}`);
   }
 
   // 3. Pacote privado Lizandro vai exclusivamente para o Admin Master; clientes recebem motor 100% limpo
   if (includeMasterPack) {
-    walkIntoZipPrefix(path.join(ROOT_DIR, 'data', 'training_packs'), 'ZAP-IA-Studio/sistema/data/training_packs');
+    walkIntoZipPrefix(path.join(ROOT_DIR, 'data', 'training_packs'), `${zipRoot}/sistema/data/training_packs`);
   }
 
   return entries;
@@ -917,7 +917,7 @@ app.get('/api/public/motor-update.zip', (_req, res) => {
       return res.status(500).json({ ok: false, error: 'Pacote do motor indisponível neste ambiente.' });
     }
     const zipBuffer = createZipBuffer(entries);
-    const filename = `ZAP-IA-Studio-v${APP_VERSION}.zip`;
+    const filename = `Ienvia-v${APP_VERSION}.zip`;
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Length', String(zipBuffer.length));
@@ -934,12 +934,12 @@ app.get('/api/system/download-motor', (req, res) => {
       ? req.realMasterProfile?.role === 'master' && !req.cloudAuth?.isRemoteImpersonation
       : (cloudWorker.getStatus().user?.role === 'master' || !cloudWorker.getStatus().configured);
 
-    const entries = collectCleanMotorZipEntries(Boolean(isMasterCaller));
+    const entries = collectCleanMotorZipEntries(Boolean(isMasterCaller), 'Ienvia');
     if (entries.length < 10) {
       return res.status(500).json({ ok: false, error: 'Pacote do motor indisponível neste ambiente.' });
     }
     const zipBuffer = createZipBuffer(entries);
-    const filename = `ZAP-IA-Studio-v${APP_VERSION}.zip`;
+    const filename = `Ienvia-v${APP_VERSION}.zip`;
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Content-Length', String(zipBuffer.length));
@@ -1981,8 +1981,8 @@ app.get('/api/crm/contacts.vcf', (req, res) => {
   const list = Object.values(storage.data.contacts || {}).filter((c) => !savedOnly || c.savedContact);
   const vcfContent = list.map((c) => buildContactVCard(c)).join('\r\n');
   res.setHeader('Content-Type', 'text/vcard; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="agenda_contatos_zapia.vcf"');
-  res.send(vcfContent || buildContactVCard({ name: 'ZAP-IA Agenda Vazia', phone: '' }));
+  res.setHeader('Content-Disposition', 'attachment; filename="agenda_contatos_ienvia.vcf"');
+  res.send(vcfContent || buildContactVCard({ name: 'Ienvia Agenda Vazia', phone: '' }));
 });
 
 app.put('/api/crm/:chatId', (req, res) => {
@@ -2139,7 +2139,7 @@ app.get('/api/crm/:chatId/export.txt', (req, res) => {
   if (!contact) return res.status(404).json({ ok: false, error: 'Conversa não encontrada.' });
   const bizName = storage.getBusiness()?.attendantName || storage.getBusiness()?.name || 'Atendimento';
   const header = [
-    `Histórico de Conversa — ZAP-IA Studio`,
+    `Histórico de Conversa — Ienvia`,
     `Contato: ${contact.name || 'Cliente'} (+${contact.phone || 'N/D'})`,
     contact.company ? `Empresa: ${contact.company}` : null,
     `Exportado em: ${new Date().toLocaleString('pt-BR')}`,
@@ -3277,7 +3277,7 @@ app.get('/api/system/backup.json', (_req, res) => {
   const snap = storage.exportFullSystemSnapshot();
   const dateTag = new Date().toISOString().slice(0, 10);
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="zapia-backup-geral-${dateTag}.json"`);
+  res.setHeader('Content-Disposition', `attachment; filename="ienvia-backup-geral-${dateTag}.json"`);
   res.send(JSON.stringify(snap, null, 2));
 });
 
@@ -3482,13 +3482,13 @@ if (!IS_VERCEL && server) {
   const PORT = Number(process.env.PORT) || 3000;
   server.on('error', (err) => {
     if (err?.code === 'EADDRINUSE') {
-      console.error(`\n[!] Ja existe um Motor ZAP-IA Studio ativo na porta ${PORT}. Feche a outra janela antes de abrir uma nova.\n`);
+      console.error(`\n[!] Ja existe um Motor Ienvia ativo na porta ${PORT}. Feche a outra janela antes de abrir uma nova.\n`);
       process.exit(1);
     }
   });
   server.listen(PORT, '0.0.0.0', async () => {
     console.log(`\n======================================================`);
-    console.log(`🚀 ${storage.data.settings.branding?.appName || 'ZAP-IA Studio'} rodando na porta ${PORT}`);
+    console.log(`🚀 ${storage.data.settings.branding?.appName || 'Ienvia'} rodando na porta ${PORT}`);
     console.log(`👉 Painel Local: http://localhost:${PORT}`);
     console.log(`======================================================\n`);
     storage.addLog('info', `Sistema iniciado na porta ${PORT}. Pronto para uso!`);
@@ -3498,7 +3498,7 @@ if (!IS_VERCEL && server) {
       if (!restored) {
         await cloudWorker.promptTerminalLoginIfInteractive();
       } else {
-        console.log(`☁️  [Nuvem ZAP-IA] Conectado automaticamente à conta @${cloudWorker.user?.username}!`);
+        console.log(`☁️  [Nuvem Ienvia] Conectado automaticamente à conta @${cloudWorker.user?.username}!`);
       }
     } else {
       whatsappManager.autoRestoreIfSessionExists().catch(() => {});
@@ -3529,7 +3529,7 @@ if (!IS_VERCEL && server) {
   async function gracefulFlushAndExit(exitCode = 0, label = '') {
     if (shuttingDown) return;
     shuttingDown = true;
-    if (label) console.log(`\n⏹️  [ZAP-IA] ${label}`);
+    if (label) console.log(`\n⏹️  [Ienvia] ${label}`);
     try {
       if (storage.saveTimer) {
         clearTimeout(storage.saveTimer);

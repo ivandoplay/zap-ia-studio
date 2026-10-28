@@ -8,7 +8,11 @@ BASE_URL="${ZAPIA_BASE_URL:-https://zap-ia-studio.vercel.app}"
 if [ -f "./INICIAR_NO_LINUX.sh" ] && [ -d "./sistema" ]; then
   TARGET_ROOT="$(pwd)"
 else
-  TARGET_ROOT="$HOME/ZAP-IA-Studio"
+  if [ -d "$HOME/ZAP-IA-Studio/sistema" ]; then
+    TARGET_ROOT="$HOME/ZAP-IA-Studio" # Preserva instalações anteriores.
+  else
+    TARGET_ROOT="$HOME/Ienvia"
+  fi
 fi
 TARGET_APP="$TARGET_ROOT/sistema"
 TMP_ZIP="${TMPDIR:-/tmp}/zapia_motor_update_$$.zip"
@@ -19,7 +23,7 @@ if [ -x "$TARGET_APP/.runtime/node/bin/node" ]; then
 fi
 
 echo "=============================================================="
-echo "  ZAP-IA STUDIO -- ATUALIZADOR & INSTALADOR OFICIAL (1 COMANDO)"
+echo "  IENVIA -- ATUALIZADOR & INSTALADOR OFICIAL (1 COMANDO)"
 echo "=============================================================="
 
 # 1. Se ainda nao houver Node.js nem no sistema nem no .runtime portatil:
@@ -162,7 +166,7 @@ if [ "${ZAPIA_NO_START:-0}" = "1" ]; then
   exit 0
 fi
 
-echo "[3/3] Iniciando Motor ZAP-IA Studio atualizado..."
+echo "[3/3] Iniciando Motor Ienvia atualizado..."
 if [ -d "/data/data/com.termux/files/usr" ]; then
   exec bash "$TARGET_ROOT/INICIAR_NO_TERMUX.sh"
 else

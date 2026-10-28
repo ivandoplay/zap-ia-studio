@@ -494,7 +494,7 @@ function createDefaultDatabase() {
       botEnabled: true,
       securityPin: '',
       branding: {
-        appName: 'ZAP-IA Studio',
+        appName: 'Ienvia',
         appSubtitle: 'Atendente Universal',
         soundAlertOnHandoff: true
       },
@@ -1686,7 +1686,7 @@ export class Storage {
 
   importFullSystemSnapshot(parsed = {}) {
     if (!parsed || typeof parsed !== 'object' || (!parsed.business && !parsed.contacts && !parsed.settings)) {
-      throw new Error('Arquivo JSON inválido: não parece ser um backup do ZAP-IA Studio.');
+      throw new Error('Arquivo JSON inválido: não parece ser um backup do Ienvia.');
     }
     if (parsed.embeddedVoiceFiles && typeof parsed.embeddedVoiceFiles === 'object') {
       const SAFE_VOICE_EXT = /\.(ogg|opus|mp3|m4a|wav|webm|aac)$/i;

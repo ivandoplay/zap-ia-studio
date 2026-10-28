@@ -17,6 +17,15 @@ export const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');
 export const AUTH_DIR = path.join(DATA_DIR, 'wa_auth');
 const DB_FILE = path.join(DATA_DIR, 'database.json');
 
+// Cache de mídia da nuvem é separado por conta; nomes legados não são prova de posse.
+export function tenantCloudMediaCachePath(filename, userId) {
+  const name = path.basename(String(filename || ''));
+  const id = String(userId || '');
+  if (!id || !name || name === '.' || name === '..' || /[\\/\0]/.test(name)) return null;
+  const owner = crypto.createHash('sha256').update(id).digest('hex');
+  return path.join(UPLOADS_DIR, '.cloud-cache', owner, name);
+}
+
 for (const dir of [DATA_DIR, UPLOADS_DIR, AUTH_DIR]) {
   try {
     if (!fs.existsSync(dir)) {
@@ -1673,7 +1682,12 @@ export class Storage {
     const embeddedVoiceFiles = {};
     for (const v of (biz.voiceLibrary || [])) {
       if (!v?.filename) continue;
-      const fp = path.join(UPLOADS_DIR, v.filename);
+      const scopedFp = v.url && /^https?:\/\//i.test(v.url)
+        ? tenantCloudMediaCachePath(v.filename, this.userId)
+        : null;
+      // Preserva backups de arquivos legados enquanto dá preferência ao cache
+      // que foi baixado para esta conta.
+      const fp = scopedFp && fs.existsSync(scopedFp) ? scopedFp : path.join(UPLOADS_DIR, v.filename);
       if (fs.existsSync(fp)) {
         try {
           const st = fs.statSync(fp);

@@ -27,6 +27,7 @@ import {
   createCleanDatabaseForNewTenant,
   localStorageInstance,
   storage,
+  tenantCloudMediaCachePath,
   mergeContactMessagesUnion
 } from './storage.js';
 import { calibrateTrueClock, trueNowIso, trueNowMs } from './trueClock.js';
@@ -913,12 +914,17 @@ export async function ensureLocalMediaCached(filename, remoteUrl = '') {
   try { safeName = path.basename(filename || new URL(remoteUrl).pathname); } catch { return null; }
   if (!safeName || safeName === '.' || safeName === '..') return null;
   if (remoteUrl && !authorizedCloudMediaUrl(remoteUrl, safeName)) return null;
-  const localPath = path.join(UPLOADS_DIR, safeName);
+  // Sem URL, conservar o comportamento dos arquivos locais. Com URL, nunca
+  // reutilizar o arquivo legado compartilhado de uma conta anterior.
+  const localPath = remoteUrl
+    ? tenantCloudMediaCachePath(safeName, storage.userId)
+    : path.join(UPLOADS_DIR, safeName);
+  if (!localPath) return null;
   if (fs.existsSync(localPath)) return localPath;
   if (!remoteUrl) return null;
   const data = await fetchCloudMediaBuffer(remoteUrl, safeName);
   if (!data) return null;
-  try { fs.writeFileSync(localPath, data); return localPath; }
+  try { fs.mkdirSync(path.dirname(localPath), { recursive: true }); fs.writeFileSync(localPath, data); return localPath; }
   catch { return null; }
 }
 

@@ -2309,12 +2309,10 @@ class WhatsAppSlotEngine {
     for (let idx = 0; idx < files.length; idx++) {
       const mf = files[idx];
       if (!mf?.filename) continue;
-      let filePath = path.join(UPLOADS_DIR, mf.filename);
-      if (!fs.existsSync(filePath) && mf.url && /^https?:\/\//i.test(mf.url)) {
-        const cached = await ensureLocalMediaCached(mf.filename, mf.url);
-        if (cached) filePath = cached;
-      }
-      if (!fs.existsSync(filePath)) continue;
+      const filePath = mf.url && /^https?:\/\//i.test(mf.url)
+        ? await ensureLocalMediaCached(mf.filename, mf.url)
+        : path.join(UPLOADS_DIR, mf.filename);
+      if (!filePath || !fs.existsSync(filePath)) continue;
 
       const buffer = fs.readFileSync(filePath);
       const caption = idx === 0 ? baseCaption : '';
@@ -2359,7 +2357,7 @@ class WhatsAppSlotEngine {
         text: isAudioFile
           ? `🎤 [Nota de voz enviada: ${item.name}]`
           : `[Arquivo ${idx + 1}/${files.length} enviado: ${item.name}]`,
-        mediaUrl: `/uploads/${mf.filename}`
+        mediaUrl: mf.url || `/uploads/${mf.filename}`
       });
     }
 
@@ -2867,12 +2865,10 @@ class WhatsAppSlotEngine {
     if (!vItem || !vItem.filename) {
       throw new Error('Áudio estratégico não encontrado na biblioteca.');
     }
-    let filePath = path.join(UPLOADS_DIR, vItem.filename);
-    if (!fs.existsSync(filePath) && vItem.url && /^https?:\/\//i.test(vItem.url)) {
-      const cached = await ensureLocalMediaCached(vItem.filename, vItem.url);
-      if (cached) filePath = cached;
-    }
-    if (!fs.existsSync(filePath)) {
+    const filePath = vItem.url && /^https?:\/\//i.test(vItem.url)
+      ? await ensureLocalMediaCached(vItem.filename, vItem.url)
+      : path.join(UPLOADS_DIR, vItem.filename);
+    if (!filePath || !fs.existsSync(filePath)) {
       throw new Error('Arquivo físico .ogg deste áudio não foi encontrado em data/uploads.');
     }
 

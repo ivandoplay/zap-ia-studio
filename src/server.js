@@ -2994,12 +2994,10 @@ app.post('/api/voice-library/transcribe', memUpload.single('audio'), async (req,
     if (!audioBuf && req.body?.existingId) {
       const existing = storage.getVoiceLibrary().find((v) => v.id === req.body.existingId);
       if (existing?.filename) {
-        let fp = path.join(UPLOADS_DIR, existing.filename);
-        if (!fs.existsSync(fp) && existing.url && /^https?:\/\//i.test(existing.url)) {
-          const cached = await ensureLocalMediaCached(existing.filename, existing.url);
-          if (cached) fp = cached;
-        }
-        if (fs.existsSync(fp)) {
+        const fp = existing.url && /^https?:\/\//i.test(existing.url)
+          ? await ensureLocalMediaCached(existing.filename, existing.url)
+          : path.join(UPLOADS_DIR, existing.filename);
+        if (fp && fs.existsSync(fp)) {
           audioBuf = fs.readFileSync(fp);
           origName = existing.filename;
         }

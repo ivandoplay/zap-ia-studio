@@ -796,8 +796,10 @@ export async function flushTenantStoreToCloud(client, userId, tenantStore, opts 
           ? (c.historyClearedAt || remoteData?.historyClearedAt || null)
           : (remoteData?.historyClearedAt || null);
       if (effectiveClearedAt) c.historyClearedAt = effectiveClearedAt;
-      if (remoteData?.messages?.length) {
-        c.messages = mergeContactMessagesUnion(c.messages, remoteData.messages, effectiveClearedAt);
+      // A fronteira de limpeza vale mesmo quando o outro aparelho já gravou
+      // uma lista vazia; caso contrário um cache antigo ressuscita as mensagens.
+      if (effectiveClearedAt || remoteData?.messages?.length) {
+        c.messages = mergeContactMessagesUnion(c.messages, remoteData?.messages || [], effectiveClearedAt);
         const lastReal = [...(c.messages || [])].reverse().find((m) => m.role !== 'internal_note');
         if (lastReal?.timestamp && (!c.lastMessageAt || lastReal.timestamp > c.lastMessageAt)) {
           c.lastMessageAt = lastReal.timestamp;
@@ -1887,10 +1889,12 @@ class CloudWorkerBridge {
               ? (cloudContact.historyClearedAt || prevLocal?.historyClearedAt || null)
               : (prevLocal?.historyClearedAt || null);
           if (effectiveClearedAt) cloudContact.historyClearedAt = effectiveClearedAt;
-          if (prevLocal?.messages?.length) {
+          if (effectiveClearedAt || prevLocal?.messages?.length) {
             const beforeCount = Array.isArray(cloudContact.messages) ? cloudContact.messages.length : 0;
-            cloudContact.messages = mergeContactMessagesUnion(cloudContact.messages, prevLocal.messages, effectiveClearedAt);
-            if (cloudContact.messages.length > beforeCount) {
+            cloudContact.messages = mergeContactMessagesUnion(cloudContact.messages, prevLocal?.messages || [], effectiveClearedAt);
+            // Também sincroniza para a nuvem quando a barreira local é mais
+            // recente ou removeu mensagens, inclusive com cache local vazio.
+            if (cloudContact.messages.length !== beforeCount || (effectiveClearedAt || null) !== (row.data?.historyClearedAt || null)) {
               healedIds.push(row.chat_id);
               const lastReal = [...cloudContact.messages].reverse().find((m) => m.role !== 'internal_note');
               if (lastReal?.timestamp && (!cloudContact.lastMessageAt || lastReal.timestamp > cloudContact.lastMessageAt)) {

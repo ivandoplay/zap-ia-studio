@@ -1174,7 +1174,19 @@ export class Storage {
       ? Boolean(patch.savedContact)
       : (Boolean(existing.savedContact) || Boolean(patch.forceName));
 
-    if (patch.forceName || patch.savedContact) {
+    // Recriar ou salvar a ficha pode liberar o tombstone da conversa, mas não
+    // pode liberar mensagens históricas anteriores à exclusão. Transfere a
+    // barreira temporal para a ficha antes de remover o tombstone.
+    const explicitSave = Boolean(patch.forceName || patch.savedContact);
+    const deletionFloorMs = explicitSave
+      ? Math.max(
+          this.getDeletedChatTombstoneMs(targetKey, candidatePhone || existing.phone || ''),
+          this.getDeletedChatTombstoneMs(chatId, candidatePhone || existing.phone || '')
+        )
+      : 0;
+    const requestedHistoryClearedAt = patch.historyClearedAt !== undefined ? patch.historyClearedAt : (existing.historyClearedAt || null);
+    const historyFloorMs = Math.max(new Date(requestedHistoryClearedAt || 0).getTime() || 0, deletionFloorMs ? deletionFloorMs + 2000 : 0);
+    if (explicitSave) {
       this.clearDeletedChatTombstone(targetKey, candidatePhone || existing.phone || '');
     }
 
@@ -1184,7 +1196,7 @@ export class Storage {
       chatId: targetKey,
       savedContact: nextSavedContact,
       waBlocked: patch.waBlocked !== undefined ? Boolean(patch.waBlocked) : Boolean(existing.waBlocked),
-      historyClearedAt: patch.historyClearedAt !== undefined ? patch.historyClearedAt : (existing.historyClearedAt || null),
+      historyClearedAt: historyFloorMs ? new Date(historyFloorMs).toISOString() : requestedHistoryClearedAt,
       avatarUrl: patch.avatarUrl !== undefined ? String(patch.avatarUrl || '') : (existing.avatarUrl || ''),
       company: patch.company !== undefined ? String(patch.company || '').trim() : (existing.company || ''),
       email: patch.email !== undefined ? String(patch.email || '').trim() : (existing.email || ''),
@@ -1241,10 +1253,8 @@ export class Storage {
       const telKey = slotId === 'slot_1' ? `tel:${digits}` : `${slotId}::tel:${digits}`;
       map[telKey] = ts;
     }
-    const keys = Object.keys(map);
-    if (keys.length > 800) {
-      for (const oldKey of keys.slice(0, keys.length - 650)) delete map[oldKey];
-    }
+    // Não descartar exclusões antigas por contagem: isso permitiria que um
+    // próximo lote de histórico recriasse conversas apagadas.
     this.workspaceDirty = true;
   }
 

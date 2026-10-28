@@ -68,6 +68,7 @@ import { createZipBuffer, extractZipBuffer } from './zipReader.js';
 import { verifySignedManifest } from './updateSignature.js';
 import { UPDATE_PUBLIC_KEY } from './updatePublicKey.js';
 import { recoverInterruptedUpdate } from './updateTransaction.js';
+import { isTrustedBrowserOrigin, rejectUntrustedBrowserRequest } from './browserOrigin.js';
 import { IS_VERCEL, MEDIA_BUCKET, SUPABASE_URL, isCloudConfigured } from './cloudConfig.js';
 import { scopedSendChatId } from './cloudSendScope.js';
 import { getSafeCommandStatus } from './commandStatus.js';
@@ -121,36 +122,19 @@ const APP_VERSION = (() => {
 const server = IS_VERCEL ? null : http.createServer(app);
 const wss = IS_VERCEL ? null : new WebSocketServer({ server, path: '/ws' });
 
-function isTrustedBrowserOrigin(origin) {
-  if (!origin) return true; // Requisições diretas (mesma origem GET/CLI/Node)
-  try {
-    const u = new URL(origin);
-    const h = u.hostname.toLowerCase();
-    if (
-      h === 'localhost' ||
-      h === '127.0.0.1' ||
-      h === '[::1]' ||
-      h === '::1' ||
-      h.endsWith('.vercel.app') ||
-      h.endsWith('.e2b.app') ||
-      h.endsWith('.local') ||
-      /^192\.168\.\d{1,3}\.\d{1,3}$/.test(h) ||
-      /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(h) ||
-      /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(h)
-    ) {
-      return true;
-    }
-  } catch {}
-  return false;
-}
-
-// Bloqueia ataques Drive-By Localhost CORS de páginas externas maliciosas contra o motor local (porta 3000)
-app.use(
-  cors({
-    origin: (origin, cb) => cb(null, isTrustedBrowserOrigin(origin)),
-    credentials: false
-  })
-);
+// CORS sozinho não impede um formulário externo de executar ações no motor.
+// Recusamos a requisição antes de processar a rota, inclusive para uploads.
+app.use((req, res, next) => {
+  if ((req.path === '/api' || req.path.startsWith('/api/') || req.path === '/uploads' || req.path.startsWith('/uploads/')) &&
+      rejectUntrustedBrowserRequest(req, { cloud: IS_VERCEL })) {
+    return res.status(403).json({ ok: false, error: 'Origem do navegador não autorizada.' });
+  }
+  next();
+});
+app.use(cors((req, cb) => cb(null, {
+  origin: req.headers.origin && isTrustedBrowserOrigin(req.headers.origin, req.headers.host, { cloud: IS_VERCEL }) ? req.headers.origin : false,
+  credentials: false
+})));
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -244,7 +228,7 @@ if (!IS_VERCEL) {
 if (wss) {
   wss.on('connection', (ws, req) => {
     // Proteção Anti-CSWSH (Cross-Site WebSocket Hijacking) contra sites externos acessando ws://localhost:3000/ws
-    if (!isTrustedBrowserOrigin(req.headers?.origin || '')) {
+    if (!isTrustedBrowserOrigin(req.headers?.origin || '', req.headers?.host || '', { cloud: false })) {
       ws.close(4003, 'Untrusted origin');
       return;
     }

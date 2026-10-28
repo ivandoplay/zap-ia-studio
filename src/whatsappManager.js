@@ -778,7 +778,11 @@ class WhatsAppSlotEngine {
         this.markHistoryBootstrapCompleted({ initialHistoryReceived: true, chatsAdded, msgsImported, syncType: payload.syncType });
       }
       this.broadcastFn('crm_updated', {});
-      this.notifyHistoryWaiters({ chatsAdded, msgsImported });
+    }
+    // A identificação da requisição permite distinguir a resposta desta busca
+    // de um lote não relacionado que chegou simultaneamente no mesmo chip.
+    if (chatsAdded > 0 || msgsImported > 0 || contacts?.length > 0 || payload.peerDataRequestSessionId) {
+      this.notifyHistoryWaiters({ chatsAdded, msgsImported, syncType: payload.syncType, peerDataRequestSessionId: payload.peerDataRequestSessionId || '' });
     }
   }
 
@@ -1328,6 +1332,9 @@ class WhatsAppSlotEngine {
     const chunkArrivalPromise = new Promise((resolve) => {
       let timer = null;
       const done = (info) => {
+        // Um lote ON_DEMAND pode ser a resposta de outra conversa, não da
+        // solicitação geral de histórico inicial deste chip.
+        if (!info?.timedOut && info?.syncType === proto.HistorySync.HistorySyncType.ON_DEMAND) return;
         if (timer) clearTimeout(timer);
         this.historySyncWaiters.delete(done);
         resolve(info || {});
@@ -1487,27 +1494,50 @@ class WhatsAppSlotEngine {
       };
     }
 
+    // O WhatsApp pode enviar outros lotes no mesmo chip enquanto aguardamos.
+    // Somente o identificador devolvido por fetchMessageHistory confirma que
+    // um lote responde a esta solicitação específica; zero mensagens não prova
+    // que todo o histórico da conversa foi recebido.
+    let finishWait;
+    let requestId = '';
+    let requestIdKnown = false;
+    const earlyEvents = [];
     const waitChunk = new Promise((resolve) => {
-      let timer = null;
-      const done = (info) => {
-        if (timer) clearTimeout(timer);
+      let timer;
+      let finished = false;
+      const done = (info = {}) => {
+        if (finished) return;
+        if (!info.timedOut && !info.cancelled) {
+          if (!requestIdKnown) { earlyEvents.push(info); return; }
+          if (!requestId || !info.peerDataRequestSessionId || info.peerDataRequestSessionId !== requestId) return;
+        }
+        finished = true;
+        clearTimeout(timer);
         this.historySyncWaiters.delete(done);
-        resolve(info || {});
+        resolve(info);
       };
+      finishWait = done;
       this.historySyncWaiters.add(done);
       timer = setTimeout(() => done({ timedOut: true }), 5000);
     });
 
     const anchorTsMs = anchorMsg.waTimestampMs || new Date(anchorMsg.timestamp || Date.now()).getTime();
-    await this.sock.fetchMessageHistory(
-      Math.min(50, Math.max(10, Number(count) || 50)),
-      {
-        remoteJid: contact.chatId,
-        fromMe: Boolean(anchorMsg.waFromMe ?? (anchorMsg.role !== 'user')),
-        id: anchorMsg.waMsgId
-      },
-      anchorTsMs
-    );
+    try {
+      requestId = String(await this.sock.fetchMessageHistory(
+        Math.min(50, Math.max(10, Number(count) || 50)),
+        {
+          remoteJid: contact.chatId,
+          fromMe: Boolean(anchorMsg.waFromMe ?? (anchorMsg.role !== 'user')),
+          id: anchorMsg.waMsgId
+        },
+        anchorTsMs
+      ) || '');
+      requestIdKnown = true;
+      for (const event of earlyEvents) finishWait(event);
+    } catch (err) {
+      finishWait({ cancelled: true });
+      throw err;
+    }
 
     const historyEvent = await waitChunk;
     const updatedKey = storage.findSiblingContactKey(chatId) || key;

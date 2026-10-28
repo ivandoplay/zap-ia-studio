@@ -27,8 +27,12 @@ try {
   const noResponse = await slot.syncAllConversationsFromPhone({waitMs:10});
   assert.equal(noResponse.historyResponseReceived, false, 'Timeout não deve ser apresentado como histórico recebido.');
   assert.equal(noResponse.waitingForHistory, true);
-  const promise = slot.syncAllConversationsFromPhone({waitMs:300});
-  setTimeout(()=>slot.notifyHistoryWaiters({chatsAdded:1,msgsImported:2}),5);
+  let syncFinished = false;
+  const promise = slot.syncAllConversationsFromPhone({waitMs:300}).then((x)=>{ syncFinished=true; return x; });
+  setTimeout(()=>slot.notifyHistoryWaiters({chatsAdded:0,msgsImported:2,syncType:6,peerDataRequestSessionId:'busca-individual'}),5);
+  await new Promise(r=>setTimeout(r,15));
+  assert.equal(syncFinished, false, 'Resposta de conversa individual não deve concluir sincronização geral.');
+  slot.notifyHistoryWaiters({chatsAdded:1,msgsImported:2,syncType:3});
   const received = await promise;
   assert.equal(received.historyResponseReceived, true);
   assert.equal(received.waitingForHistory, false);

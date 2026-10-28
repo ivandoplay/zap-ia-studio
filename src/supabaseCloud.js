@@ -29,6 +29,7 @@ import {
   mergeContactMessagesUnion
 } from './storage.js';
 import { calibrateTrueClock, trueNowIso, trueNowMs } from './trueClock.js';
+import { enableHistoryJournal, isHistoryJournalEnabled, countJournalFiles } from './historyJournal.js';
 
 const CLOUD_SESSION_FILE = path.join(DATA_DIR, 'cloud_session.json');
 const DEVICE_IDENTITY_FILE = path.join(DATA_DIR, 'device_identity.json');
@@ -2469,8 +2470,16 @@ class CloudWorkerBridge {
           };
           break;
         }
+        case 'history_journal_enable': {
+          if (!this.user?.id || IS_VERCEL) throw new Error('Diário local disponível apenas no motor vinculado à conta.');
+          enableHistoryJournal(path.join(DATA_DIR, 'history-journal'), this.user.id);
+          result = { ok: true, journalEnabled: true };
+          break;
+        }
         case 'history_runtime_diagnostics': {
           // Diagnóstico agregado, sem telefones, conteúdo de mensagens ou credenciais.
+          const journalRoot = path.join(DATA_DIR, 'history-journal');
+          const journalEnabled = Boolean(this.user?.id && !IS_VERCEL && isHistoryJournalEnabled(journalRoot, this.user.id));
           const slots = WA_SLOT_IDS.map((slotId) => {
             const engine = this.whatsappManager.getSlot?.(slotId);
             const cards = Object.entries(localStorageInstance.data.contacts || {})
@@ -2483,6 +2492,8 @@ class CloudWorkerBridge {
               hasSavedSession: Boolean(engine?.hasSavedSession?.()),
               bootstrapMarker: Boolean(engine?.hasCompletedHistoryBootstrap?.()),
               lastHistoryProtocolStatus: engine?.lastHistoryProtocolStatus || null,
+              journalFileCount: journalEnabled ? countJournalFiles(journalRoot, this.user.id, slotId) : 0,
+              lastJournalError: engine?.lastHistoryJournalError || null,
               processedHistoryChunks: Array.isArray(engine?.sock?.authState?.creds?.processedHistoryMessages)
                 ? engine.sock.authState.creds.processedHistoryMessages.length : 0,
               contacts: cards.length,
@@ -2493,7 +2504,7 @@ class CloudWorkerBridge {
           });
           let sqliteAvailable = false;
           try { await import('node:sqlite'); sqliteAvailable = true; } catch {}
-          result = { ok: true, nodeVersion: process.versions.node, sqliteAvailable, slots };
+          result = { ok: true, nodeVersion: process.versions.node, sqliteAvailable, journalEnabled, slots };
           break;
         }
         case 'wa_sync_history': {

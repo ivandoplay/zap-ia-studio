@@ -35,6 +35,7 @@ const PROTECTED_SISTEMA_PREFIXES = [
   'data/wa_auth/',
   'data/uploads/',
   'data/tenants/',
+  'data/history-journal/',
   'node_modules/',
   '.runtime/',
   '.git/'

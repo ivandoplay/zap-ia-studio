@@ -12,8 +12,11 @@ import {
   proto
 } from '@whiskeysockets/baileys';
 import { useCompactWaAuthState } from './waCompactAuth.js';
+import { isHistoryJournalEnabled, writeHistoryJournal } from './historyJournal.js';
 import {
   AUTH_DIR,
+  DATA_DIR,
+  IS_VERCEL_RUNTIME,
   UPLOADS_DIR,
   WA_SLOT_IDS,
   normalizeSlotId,
@@ -241,6 +244,7 @@ class WhatsAppSlotEngine {
     this.connectionWaiters = new Set();
     this.historySyncWaiters = new Set();
     this.lastHistoryProtocolStatus = null;
+    this.lastHistoryJournalError = null;
     this.pendingFullHistoryRequest = null;
     this.syncInProgress = false;
     this.avatarFetchCache = new Map(); // chatId -> ts
@@ -666,6 +670,22 @@ class WhatsAppSlotEngine {
   }
 
   ingestHistorySyncPayload(payload = {}) {
+    // Uma cópia opcional e local dos lotes recebidos protege contra o recorte
+    // de 120 mensagens do cache atual. Não altera a nuvem nem expõe os dados.
+    // Este diário ainda não é uma interface de leitura e não prova completude.
+    const hasContent = ['chats', 'contacts', 'messages'].some(k => Array.isArray(payload[k]) && payload[k].length);
+    if (hasContent && !IS_VERCEL_RUNTIME && !storage.inMemory && storage.userId) {
+      try {
+        const root = path.join(DATA_DIR, 'history-journal');
+        if (isHistoryJournalEnabled(root, storage.userId)) {
+          writeHistoryJournal({ root, userId: storage.userId, slotId: this.slotId, payload });
+          this.lastHistoryJournalError = null;
+        }
+      } catch (err) {
+        this.lastHistoryJournalError = { at: trueNowIso(), code: String(err?.code || 'WRITE_FAILED') };
+        storage.addLog('error', `[${this.getSlotConfig().label}] Não foi possível guardar o lote local de histórico. Confira o espaço e as permissões do motor.`);
+      }
+    }
     const { chats = [], contacts = [], messages = [], lidPnMappings = [] } = payload;
     const ownerSelfName = this.getOwnerSelfName();
 

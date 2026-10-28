@@ -2482,6 +2482,7 @@ class CloudWorkerBridge {
               status: engine?.status || 'disconnected',
               hasSavedSession: Boolean(engine?.hasSavedSession?.()),
               bootstrapMarker: Boolean(engine?.hasCompletedHistoryBootstrap?.()),
+              lastHistoryProtocolStatus: engine?.lastHistoryProtocolStatus || null,
               processedHistoryChunks: Array.isArray(engine?.sock?.authState?.creds?.processedHistoryMessages)
                 ? engine.sock.authState.creds.processedHistoryMessages.length : 0,
               contacts: cards.length,

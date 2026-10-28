@@ -240,6 +240,7 @@ class WhatsAppSlotEngine {
     this.lastConnectedLogPhone = '';
     this.connectionWaiters = new Set();
     this.historySyncWaiters = new Set();
+    this.lastHistoryProtocolStatus = null;
     this.syncInProgress = false;
     this.avatarFetchCache = new Map(); // chatId -> ts
     this.scheduledSendingLock = false;
@@ -500,6 +501,28 @@ class WhatsAppSlotEngine {
     for (const resolve of [...this.historySyncWaiters]) {
       try { resolve(info); } catch {}
     }
+  }
+
+  recordHistoryProtocolResponse(msg) {
+    // As respostas de operação de pares só podem vir da própria conta.
+    // A biblioteca emite messages.upsert antes de verificar certos protocolos;
+    // portanto, validamos também aqui antes de aceitar qualquer diagnóstico.
+    if (msg?.key?.fromMe !== true || !msg?.key?.remoteJid || !this.isSelfJid(msg.key.remoteJid)) return false;
+    const protocol = unwrapMessageContent(msg.message)?.protocolMessage;
+    if (protocol?.type !== proto.Message.ProtocolMessage.Type.PEER_DATA_OPERATION_REQUEST_RESPONSE_MESSAGE) return false;
+    const response = protocol.peerDataOperationRequestResponseMessage;
+    if (response?.peerDataOperationRequestType !== proto.Message.PeerDataOperationRequestType.FULL_HISTORY_SYNC_ON_DEMAND) return false;
+    const enums = proto.Message.PeerDataOperationRequestResponseMessage.PeerDataOperationResult.FullHistorySyncOnDemandResponseCode;
+    let found = false;
+    for (const item of response.peerDataOperationResult || []) {
+      const code = item?.fullHistorySyncOnDemandRequestResponse?.responseCode;
+      if (!Number.isInteger(code) || code < 0 || code > 6) continue;
+      const name = Object.keys(enums).find(k => enums[k] === code) || 'UNKNOWN';
+      // Apenas estado/código; não armazenar texto, telefones nem identificadores.
+      this.lastHistoryProtocolStatus = { code, name, receivedAt: trueNowIso() };
+      found = true;
+    }
+    return found;
   }
 
   ingestContactRecords(contacts = [], { deferSave = false } = {}) {
@@ -1205,6 +1228,7 @@ class WhatsAppSlotEngine {
         if (type !== 'notify' && type !== 'append') return;
         const isHistoryAppend = type === 'append';
         for (const msg of messages || []) {
+          this.recordHistoryProtocolResponse(msg);
           this.handleIncomingRawMessage(msg, { isHistoryAppend }).catch(err => {
             console.error('[WA] Erro ao processar mensagem:', err);
             storage.addLog('error', `Erro ao processar mensagem: ${err.message}`);

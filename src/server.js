@@ -2437,7 +2437,8 @@ app.post(['/api/crm/:chatId/send', '/api/crm/:chatId/reply'], async (req, res) =
         req.cloudAuth.client,
         req.cloudAuth.authUser.id,
         'send_crm_reply',
-        { chatId, text, quotedMsgId }
+        { chatId, text, quotedMsgId },
+        2500
       );
       // CRÍTICO: NUNCA sujar o snapshot pré-comando da Vercel após o Motor já ter salvo a mensagem nova no Supabase!
       storage.workspaceDirty = false;
@@ -2845,7 +2846,8 @@ app.post('/api/crm/:chatId/send-attachment', memUpload.single('file'), async (re
             mimeType: resolvedMime,
             originalName: displayFileName,
             caption
-          }
+          },
+          2500
         );
         // CRÍTICO: NUNCA sujar o snapshot pré-comando da Vercel após o Motor já ter salvo o anexo novo no Supabase!
         storage.workspaceDirty = false;
@@ -3091,7 +3093,8 @@ app.post('/api/crm/:chatId/send-library-voice', async (req, res) => {
         req.cloudAuth.client,
         req.cloudAuth.authUser.id,
         'send_crm_library_voice',
-        { chatId, voiceId }
+        { chatId, voiceId },
+        2500
       );
       storage.workspaceDirty = false;
       storage.dirtyContactIds.clear();
@@ -3175,7 +3178,8 @@ app.post('/api/crm/:chatId/send-audio', memUpload.single('audio'), async (req, r
           mediaUrl: cloudUrl,
           durationSec: canonical.durationSec,
           waveform: canonical.waveform
-        }
+        },
+        2500
       );
       storage.workspaceDirty = false;
       storage.dirtyContactIds.clear();

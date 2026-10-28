@@ -26,6 +26,7 @@ import {
   normalizeWaSlotsSettings,
   createCleanDatabaseForNewTenant,
   localStorageInstance,
+  storage,
   mergeContactMessagesUnion
 } from './storage.js';
 import { calibrateTrueClock, trueNowIso, trueNowMs } from './trueClock.js';
@@ -866,32 +867,59 @@ export async function uploadMediaBufferToCloud(client, userId, filename, buffer,
   return data?.publicUrl || null;
 }
 
-/**
- * No Motor Termux/PC: garante que um arquivo enviado pela Vercel exista localmente em `data/uploads/` antes do envio via Baileys.
- */
-export async function ensureLocalMediaCached(filename, remoteUrl = '') {
-  if (!filename && !remoteUrl) return null;
-  const safeName = path.basename(filename || new URL(remoteUrl).pathname);
-  const localPath = path.join(UPLOADS_DIR, safeName);
-  if (fs.existsSync(localPath)) return localPath;
-
-  const targetUrl =
-    remoteUrl && /^https?:\/\//i.test(remoteUrl)
-      ? remoteUrl
-      : null;
-
-  if (!targetUrl) return null;
-
+// URLs de mídia vêm de dados de clientes/comandos e não podem apontar para
+// outros servidores, serviços internos ou arquivos de outra conta.
+const CLOUD_MEDIA_MAX_BYTES = 35 * 1024 * 1024;
+function authorizedCloudMediaUrl(remoteUrl, expectedFilename = '') {
   try {
-    const resp = await fetch(targetUrl, { signal: AbortSignal.timeout(25_000) });
-    if (!resp.ok) return null;
-    const arr = await resp.arrayBuffer();
-    fs.writeFileSync(localPath, Buffer.from(arr));
-    return localPath;
-  } catch (err) {
-    console.error('[CloudMedia] Falha ao baixar mídia da nuvem para cache local:', err.message);
+    const u = new URL(remoteUrl);
+    const base = new URL(SUPABASE_URL);
+    if (u.origin !== base.origin || u.username || u.password || u.hash) return null;
+    const prefix = `/storage/v1/object/public/${MEDIA_BUCKET}/`;
+    if (!u.pathname.startsWith(prefix)) return null;
+    const parts = u.pathname.slice(prefix.length).split('/').map(decodeURIComponent);
+    const currentUserId = String(storage.userId || '');
+    if (parts.length !== 2 || !currentUserId || parts[0] !== currentUserId) return null;
+    if (!parts[1] || parts[1] === '.' || parts[1] === '..' || /[\\/\0]/.test(parts[1])) return null;
+    if (expectedFilename && parts[1] !== path.basename(expectedFilename)) return null;
+    return u.href;
+  } catch { return null; }
+}
+
+export async function fetchCloudMediaBuffer(remoteUrl, expectedFilename = '') {
+  const safeUrl = authorizedCloudMediaUrl(remoteUrl, expectedFilename);
+  if (!safeUrl) return null;
+  try {
+    const resp = await fetch(safeUrl, { redirect: 'error', signal: AbortSignal.timeout(25_000) });
+    if (!resp.ok || Number(resp.headers.get('content-length') || 0) > CLOUD_MEDIA_MAX_BYTES) return null;
+    if (!resp.body) return null;
+    const chunks = []; let total = 0;
+    for await (const chunk of resp.body) {
+      total += chunk.length;
+      if (total > CLOUD_MEDIA_MAX_BYTES) return null;
+      chunks.push(Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks, total);
+  } catch {
+    console.error('[CloudMedia] Não foi possível baixar mídia autorizada.');
     return null;
   }
+}
+
+/** Garante cache local de mídia autorizada antes do envio no motor. */
+export async function ensureLocalMediaCached(filename, remoteUrl = '') {
+  if (!filename && !remoteUrl) return null;
+  let safeName;
+  try { safeName = path.basename(filename || new URL(remoteUrl).pathname); } catch { return null; }
+  if (!safeName || safeName === '.' || safeName === '..') return null;
+  if (remoteUrl && !authorizedCloudMediaUrl(remoteUrl, safeName)) return null;
+  const localPath = path.join(UPLOADS_DIR, safeName);
+  if (fs.existsSync(localPath)) return localPath;
+  if (!remoteUrl) return null;
+  const data = await fetchCloudMediaBuffer(remoteUrl, safeName);
+  if (!data) return null;
+  try { fs.writeFileSync(localPath, data); return localPath; }
+  catch { return null; }
 }
 
 /**

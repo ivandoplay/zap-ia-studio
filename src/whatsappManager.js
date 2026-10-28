@@ -34,7 +34,7 @@ import {
 import { generateSmartReply, buildExecutiveHandoffDossier } from './aiEngine.js';
 import { formatPixMessageWithQr } from './pix.js';
 import { convertToCanonicalWhatsAppVoice, WHATSAPP_VOICE_MIMETYPE, isNativeOggOpus } from './audioProcessor.js';
-import { ensureLocalMediaCached } from './supabaseCloud.js';
+import { ensureLocalMediaCached, fetchCloudMediaBuffer } from './supabaseCloud.js';
 import { observeServerTimestamp, trueNowIso, trueNowMs } from './trueClock.js';
 
 // Garante que Notas de Voz subam no bucket nativo /mms/ptt do WhatsApp (idêntico à gravação no celular)
@@ -2696,8 +2696,8 @@ class WhatsAppSlotEngine {
         const fp = path.join(UPLOADS_DIR, path.basename(msg.mediaUrl));
         if (fs.existsSync(fp)) buf = fs.readFileSync(fp);
       } else if (/^https?:\/\//i.test(msg.mediaUrl)) {
-        const res = await fetch(msg.mediaUrl, { signal: AbortSignal.timeout(25_000) });
-        if (res.ok) buf = Buffer.from(await res.arrayBuffer());
+        buf = await fetchCloudMediaBuffer(msg.mediaUrl);
+        if (!buf) throw new Error('Não foi possível validar ou baixar a mídia desta conta.');
       }
       if (buf) {
         await this.sendManualAttachment({

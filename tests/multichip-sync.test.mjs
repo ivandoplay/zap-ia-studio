@@ -18,7 +18,7 @@ fs.writeFileSync(path.join(temp,'zapia_history_sync.json'), JSON.stringify({comp
 assert.equal(two.hasCompletedHistoryBootstrap(), false, 'O histórico do chip 1 e marcador antigo não devem bloquear o chip 2');
 two.ingestChatRecords([{id:'5586999999999@s.whatsapp.net',conversationTimestamp:1700000000}], {deferSave:true});
 assert.ok(store.data.contacts['slot_2::5586999999999@s.whatsapp.net']);
-assert.equal(two.hasCompletedHistoryBootstrap(), true);
+assert.equal(two.hasCompletedHistoryBootstrap(), false, 'Uma conversa isolada não confirma que o histórico inicial chegou');
 two.ingestContactRecords([{id:'5586999999999@s.whatsapp.net', name:'Nome do chip dois'}], {deferSave:true});
 assert.equal(store.data.contacts['5586999999999@s.whatsapp.net'].name,'Chip um','Contatos do chip 2 não podem alterar o chip 1');
 assert.equal(store.data.contacts['slot_2::5586999999999@s.whatsapp.net'].name,'Nome do chip dois');

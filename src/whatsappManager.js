@@ -470,14 +470,14 @@ class WhatsAppSlotEngine {
 
   hasCompletedHistoryBootstrap() {
     try {
+      const fp = this.getHistorySyncMetaFile();
+      const parsed = fs.existsSync(fp) ? JSON.parse(fs.readFileSync(fp, 'utf-8')) : null;
+      // Marcadores antigos podiam ser criados apenas porque uma mensagem nova chegou.
+      // Nos chips adicionais, só um lote inicial efetivamente recebido serve de evidência.
+      if (this.slotId !== 'slot_1') return parsed?.initialHistoryReceived === true;
+      // Mantém a compatibilidade com o Chip 1 já estabelecido.
       if (Object.entries(storage.data.contacts || {}).some(([key, card]) =>
         normalizeSlotId(card?.slotId || parseContactChannelKey(key).slotId) === this.slotId)) return true;
-      // Metadados de versões antigas podiam marcar o Chip 2/3 como concluído
-      // usando a contagem global do Chip 1; sem conversas deste chip, tentar novamente.
-      if (this.slotId !== 'slot_1') return false;
-      const fp = this.getHistorySyncMetaFile();
-      if (!fs.existsSync(fp)) return false;
-      const parsed = JSON.parse(fs.readFileSync(fp, 'utf-8'));
       return Boolean(parsed?.completedAt);
     } catch {
       return false;
@@ -766,8 +766,16 @@ class WhatsAppSlotEngine {
 
     if (chatsAdded > 0 || msgsImported > 0 || contacts?.length > 0) {
       storage.saveSoon();
-      if (chatsAdded > 0 || msgsImported > 0) {
-        this.markHistoryBootstrapCompleted({ chatsAdded, msgsImported });
+      // ON_DEMAND pode ser apenas uma conversa; não prova que o histórico inicial chegou.
+      // Mesmo para um lote inicial, o marcador significa apenas que houve recebimento,
+      // não que o WhatsApp disponibilizou todas as conversas ou todas as mensagens.
+      const initialTypes = [
+        proto.HistorySync.HistorySyncType.INITIAL_BOOTSTRAP,
+        proto.HistorySync.HistorySyncType.FULL,
+        proto.HistorySync.HistorySyncType.RECENT
+      ];
+      if ((chatsAdded > 0 || msgsImported > 0) && initialTypes.includes(payload.syncType)) {
+        this.markHistoryBootstrapCompleted({ initialHistoryReceived: true, chatsAdded, msgsImported, syncType: payload.syncType });
       }
       this.broadcastFn('crm_updated', {});
       this.notifyHistoryWaiters({ chatsAdded, msgsImported });
@@ -1295,26 +1303,26 @@ class WhatsAppSlotEngine {
   }
 
   /**
-   * Recupera todas as conversas 1:1 e histórico recente diretamente do celular conectado
-   * MESMO QUANDO A SESSÃO JÁ ESTAVA PAREADA ANTES (sem precisar desconectar nem ler QR Code de novo!).
+   * Solicita conversas e histórico ao aparelho já conectado, sem refazer o pareamento.
+   * O WhatsApp pode não responder, responder depois ou fornecer apenas parte do histórico.
    */
   async syncAllConversationsFromPhone({ force = false, waitMs = 6500 } = {}) {
     const ready = await this.waitUntilConnected(7000);
     if (!ready || !this.sock) {
       throw new Error('O WhatsApp precisa estar conectado para sincronizar as conversas do aparelho.');
     }
-    if (this.syncInProgress && !force) {
+    const countSlotContacts = () => Object.entries(storage.data.contacts || {}).filter(([key, card]) =>
+      normalizeSlotId(card?.slotId || parseContactChannelKey(key).slotId) === this.slotId
+    ).length;
+    if (this.syncInProgress) {
       return {
         ok: true,
         alreadyRunning: true,
-        totalConversations: Object.keys(storage.data.contacts || {}).length
+        totalConversations: countSlotContacts()
       };
     }
 
     this.syncInProgress = true;
-    const countSlotContacts = () => Object.entries(storage.data.contacts || {}).filter(([key, card]) =>
-      normalizeSlotId(card?.slotId || parseContactChannelKey(key).slotId) === this.slotId
-    ).length;
     const beforeCount = countSlotContacts();
 
     const chunkArrivalPromise = new Promise((resolve) => {
@@ -1328,6 +1336,8 @@ class WhatsAppSlotEngine {
       timer = setTimeout(() => done({ timedOut: true }), waitMs);
     });
 
+    let historyRequestSent = false;
+    let historyRequestError = '';
     try {
       // Passo 1: Resync de Snapshots do App-State apenas quando solicitado manualmente (force=true),
       // evitando downloads pesados em mmg.whatsapp.net a cada reconexão de rede móvel!
@@ -1360,8 +1370,10 @@ class WhatsAppSlotEngine {
               }
             }
           });
+          historyRequestSent = true;
         } catch (err) {
-          console.warn('[WA Sync] Aviso em FULL_HISTORY_SYNC_ON_DEMAND:', err?.message || err);
+          historyRequestError = String(err?.message || err);
+          console.warn('[WA Sync] Falha ao solicitar FULL_HISTORY_SYNC_ON_DEMAND:', historyRequestError);
         }
 
         // Passo 3: Se o celular já havia enviado pacotes INITIAL_BOOTSTRAP / RECENT antes desta versão, pede regeneração imediata dos chunks!
@@ -1389,7 +1401,13 @@ class WhatsAppSlotEngine {
         }
       }
 
-      await chunkArrivalPromise;
+      const historyEvent = await chunkArrivalPromise;
+      const historyResponseReceived = !historyEvent.timedOut;
+      if (!historyRequestSent && !historyResponseReceived) {
+        throw new Error(historyRequestError
+          ? `Não foi possível solicitar o histórico ao WhatsApp: ${historyRequestError}`
+          : 'Este motor não conseguiu solicitar o histórico ao WhatsApp.');
+      }
       this.loadLidMappingsFromDisk();
 
       // Reconcilia telefones e nomes recém-descobertos em todos os contatos existentes
@@ -1422,17 +1440,18 @@ class WhatsAppSlotEngine {
 
       const afterCount = countSlotContacts();
       const syncedNew = Math.max(0, afterCount - beforeCount);
-      if (afterCount > 0) {
-        this.markHistoryBootstrapCompleted({ totalConversations: afterCount });
-      }
       storage.addLog(
         'whatsapp',
-        `Sincronização de conversas concluída: ${afterCount} conversa(s) ativa(s) no CRM${syncedNew > 0 ? ` (+${syncedNew} importadas do aparelho)` : ''}.`
+        historyResponseReceived
+          ? `[${this.getSlotConfig().label}] Lote de histórico recebido: ${afterCount} conversa(s) no CRM${syncedNew > 0 ? ` (+${syncedNew} importadas)` : ''}. Outros lotes ainda podem chegar.`
+          : `[${this.getSlotConfig().label}] Solicitação de histórico enviada; nenhuma resposta recebida no tempo de espera. Existem ${afterCount} conversa(s) no CRM. O WhatsApp ainda pode responder depois.`
       );
       return {
         ok: true,
         totalConversations: afterCount,
-        syncedNew
+        syncedNew,
+        historyResponseReceived,
+        waitingForHistory: !historyResponseReceived
       };
     } finally {
       this.syncInProgress = false;
@@ -1490,12 +1509,14 @@ class WhatsAppSlotEngine {
       anchorTsMs
     );
 
-    await waitChunk;
+    const historyEvent = await waitChunk;
     const updatedKey = storage.findSiblingContactKey(chatId) || key;
     const updated = storage.data.contacts[updatedKey] || contact;
     return {
       ok: true,
       addedCount: Math.max(0, (updated?.messages?.length || 0) - beforeMsgCount),
+      historyResponseReceived: !historyEvent.timedOut,
+      waitingForHistory: Boolean(historyEvent.timedOut),
       contact: updated
     };
   }

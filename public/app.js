@@ -8197,13 +8197,17 @@ window.triggerFullWhatsAppHistorySync = async function triggerFullWhatsAppHistor
     } else {
       await refreshLiveStateOnly();
     }
-    const added = Number(res.addedContacts) || 0;
-    const total = Number(res.afterCount) || (state.contacts || []).length;
+    const slotAdded = Array.isArray(res.slots) ? res.slots.reduce((sum, slot) => sum + (Number(slot.syncedNew) || 0), 0) : 0;
+    const added = Number(res.addedContacts ?? res.syncedNew ?? slotAdded) || 0;
+    const total = Number(res.afterCount ?? res.totalContacts) || (state.contacts || []).length;
+    const stillWaiting = Boolean(res.waitingForHistory || res.slots?.some(slot => slot.waitingForHistory || slot.alreadyRunning));
     showToast(res.partial
       ? '⚠️ Solicitação parcial: pelo menos um chip não conseguiu sincronizar. Tente novamente.'
       : (added > 0
-        ? `✅ ${added} nova(s) conversa(s) importada(s)! Total no CRM: ${total}.`
-        : `📥 Solicitação enviada. O WhatsApp pode demorar a disponibilizar o histórico (${total} conversa(s) no CRM).`), Boolean(res.partial));
+        ? `✅ ${added} conversa(s) importada(s); outros lotes podem chegar depois. Total no CRM: ${total}.`
+        : (stillWaiting
+          ? `⏳ Aguardando o WhatsApp enviar o histórico (${total} conversa(s) no CRM).`
+          : `📥 Solicitação processada; o WhatsApp ainda pode enviar outros lotes (${total} conversa(s) no CRM).`)), Boolean(res.partial));
     // O celular pode enviar blocos extras de histórico nos segundos seguintes; atualiza automaticamente!
     setTimeout(() => { refreshLiveStateOnly().catch(() => {}); }, 3800);
     setTimeout(() => { refreshLiveStateOnly().catch(() => {}); }, 8500);
@@ -8234,11 +8238,11 @@ window.fetchOlderChatMessages = async function fetchOlderChatMessages(encodedCha
       applyReturnedContactToState(res.contact, chatId);
     }
     await refreshLiveStateOnly();
-    const added = Number(res.countAdded) || 0;
+    const added = Number(res.addedCount ?? res.countAdded) || 0;
     showToast(
       added > 0
         ? `📥 ${added} mensagem(ns) anterior(es) carregada(s) do WhatsApp!`
-        : '📥 Solicitação enviada ao celular! Se houver mensagens mais antigas arquivadas no aparelho, elas aparecerão em instantes.'
+        : '⏳ Solicitação enviada. O WhatsApp pode disponibilizar mensagens antigas depois, mas a resposta não é garantida.'
     );
     setTimeout(() => { refreshLiveStateOnly().catch(() => {}); }, 3500);
   } catch (err) {

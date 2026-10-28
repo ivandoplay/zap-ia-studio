@@ -1,6 +1,6 @@
 {
   "name": "zap-ia-studio",
-  "version": "5.8.10",
+  "version": "5.8.11",
   "description": "ZAP-IA Studio — Vitrine 3D e correções de sincronização Multi-Chip",
   "type": "module",
   "main": "src/server.js",

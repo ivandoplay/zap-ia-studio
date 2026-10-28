@@ -328,19 +328,52 @@ function deduplicateContactsMap(rawContacts = {}) {
   });
 
   const mergedByKey = [];
+  // Índices mantêm exatamente o primeiro item correspondente da implementação anterior,
+  // sem comparar cada ficha contra todas as outras a cada sincronização.
+  const jidIndex = new Map();
+  const phoneIndex = new Map();
+  const phoneSignature = (phone) => {
+    if (!isLikelyRealPhone(phone)) return '';
+    const d = normalizePhoneDigits(phone);
+    const ddd = d.startsWith('55') && d.length >= 12 ? d.slice(2, 4) : d.slice(0, 2);
+    return `${ddd}:${d.slice(-8)}`;
+  };
+  const indexKey = (slot, value) => `${slot}\u0000${value}`;
+  const updateIndex = (map, key, index, add) => {
+    if (!key) return;
+    let indices = map.get(key);
+    if (add) {
+      if (!indices) map.set(key, indices = new Set());
+      indices.add(index);
+    } else if (indices) {
+      indices.delete(index);
+      if (!indices.size) map.delete(key);
+    }
+  };
+  const indexItem = (entry, index, add) => {
+    const slot = normalizeSlotId(entry.slotId || parseContactChannelKey(entry.chatId).slotId);
+    updateIndex(jidIndex, indexKey(slot, entry.chatId), index, add);
+    const phone = phoneSignature(entry.phone);
+    if (phone) updateIndex(phoneIndex, indexKey(slot, phone), index, add);
+  };
+  const firstIndex = (indices) => {
+    let first = Infinity;
+    if (indices) for (const index of indices) if (index < first) first = index;
+    return first;
+  };
   for (const item of entries) {
     const itemSlot = normalizeSlotId(item.slotId || parseContactChannelKey(item.chatId).slotId);
-    const existingIdx = mergedByKey.findIndex(other => {
-      const otherSlot = normalizeSlotId(other.slotId || parseContactChannelKey(other.chatId).slotId);
-      if (otherSlot !== itemSlot) return false; // Isolamento absoluto por Chip: mesmo cliente em chips distintos gera 2 cards separados!
-      return (
-        other.chatId === item.chatId ||
-        (isLikelyRealPhone(other.phone) && isLikelyRealPhone(item.phone) && phonesMatch(other.phone, item.phone))
-      );
-    });
+    const phone = phoneSignature(item.phone);
+    const matchIndex = Math.min(
+      firstIndex(jidIndex.get(indexKey(itemSlot, item.chatId))),
+      phone ? firstIndex(phoneIndex.get(indexKey(itemSlot, phone))) : Infinity
+    );
+    const existingIdx = Number.isFinite(matchIndex) ? matchIndex : -1;
 
     if (existingIdx === -1) {
-      mergedByKey.push({ ...item, slotId: itemSlot });
+      const added = { ...item, slotId: itemSlot };
+      mergedByKey.push(added);
+      indexItem(added, mergedByKey.length - 1, true);
       continue;
     }
 
@@ -404,6 +437,7 @@ function deduplicateContactsMap(rawContacts = {}) {
       ? dedupedMsgs.filter((m) => (new Date(m?.timestamp || 0).getTime() || 0) > clearedMs)
       : dedupedMsgs;
 
+    indexItem(prev, existingIdx, false);
     mergedByKey[existingIdx] = {
       ...prev,
       ...item,
@@ -441,6 +475,7 @@ function deduplicateContactsMap(rawContacts = {}) {
           ? item.lastMessageAt
           : prev.lastMessageAt
     };
+    indexItem(mergedByKey[existingIdx], existingIdx, true);
   }
 
   return Object.fromEntries(mergedByKey.map(c => [c.chatId, c]));

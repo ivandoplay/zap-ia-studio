@@ -201,10 +201,11 @@
 
     .hero-grid {
       display: grid;
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
       gap: 36px;
       align-items: center;
     }
+    .hero-grid > * { min-width: 0; }
 
     @media (min-width: 980px) {
       .hero { padding: 64px 0 84px; }
@@ -226,9 +227,11 @@
       font-size: 13px;
       font-weight: 600;
       margin-bottom: 18px;
+      max-width: 100%;
     }
 
     .status-dot {
+      flex-shrink: 0;
       width: 8px;
       height: 8px;
       border-radius: 50%;
@@ -261,8 +264,11 @@
 
     .hero-ctas .btn {
       min-height: 46px;
+      max-width: 100%;
       padding: 11px 18px;
       font-size: 14.5px;
+      white-space: normal;
+      text-align: center;
     }
 
     .hero-proof-row {
@@ -913,7 +919,7 @@
           <h2 class="demo-title">Veja como uma conversa pode acontecer.</h2>
 
           <p class="hero-lead">
-            Enquanto concorrentes demoram horas ou irritam leads com menus de <em>"Digite 1 para vendas"</em>, o ZAP-IA Studio conversa em português natural, envia seus áudios reais com ondas sonoras, manda fotos e PIX do catálogo e te chama no WhatsApp pessoal com um resumo de 3 linhas na hora de fechar.
+            Com o motor conectado e a IA configurada, o ZAP-IA Studio pode conversar em português, enviar suas gravações de voz, fotos e PIX do catálogo e avisar você quando for hora de assumir um atendimento.
           </p>
 
           <div class="hero-ctas">
@@ -944,10 +950,10 @@
         <div class="sim-shell" aria-label="Demonstração interativa de atendimento no WhatsApp">
           <div class="sim-top-controls">
             <div class="niche-bar" role="tablist" aria-label="Escolha um segmento para simular">
-              <button type="button" role="tab" aria-selected="true" class="niche-pill active" data-niche="veiculos">Loja de Veículos</button>
-              <button type="button" role="tab" aria-selected="false" class="niche-pill" data-niche="clinica">Clínica &amp; Estética</button>
-              <button type="button" role="tab" aria-selected="false" class="niche-pill" data-niche="solo">Profissional Solo (1ª pessoa)</button>
-              <button type="button" role="tab" aria-selected="false" class="niche-pill" data-niche="catalogo">Atacado &amp; PIX</button>
+              <button type="button" role="tab" id="niche-veiculos" aria-controls="simThreadArea" tabindex="0" aria-selected="true" class="niche-pill active" data-niche="veiculos">Loja de Veículos</button>
+              <button type="button" role="tab" id="niche-clinica" aria-controls="simThreadArea" tabindex="-1" aria-selected="false" class="niche-pill" data-niche="clinica">Clínica &amp; Estética</button>
+              <button type="button" role="tab" id="niche-solo" aria-controls="simThreadArea" tabindex="-1" aria-selected="false" class="niche-pill" data-niche="solo">Profissional Solo (1ª pessoa)</button>
+              <button type="button" role="tab" id="niche-catalogo" aria-controls="simThreadArea" tabindex="-1" aria-selected="false" class="niche-pill" data-niche="catalogo">Atacado &amp; PIX</button>
             </div>
             <div class="demo-view-switch" role="group" aria-label="Alternar visão">
               <button type="button" class="demo-mode-btn active" data-view="chat">Visão do Cliente no WhatsApp</button>
@@ -966,7 +972,7 @@
             <span class="chip-tag" id="simChipBadge">Chip 1 · Principal</span>
           </div>
 
-          <div class="wa-thread" id="simThreadArea"></div>
+          <div class="wa-thread" id="simThreadArea" role="tabpanel" aria-labelledby="niche-veiculos" tabindex="0"></div>
         </div>
       </div>
     </section>
@@ -1054,7 +1060,7 @@
                 <label for="calcTicket">Valor médio por venda / contrato (R$)</label>
                 <strong id="calcTicketVal">R$ 450</strong>
               </div>
-              <input type="range" id="calcTicket" min="80" max="5000" step="20" value="450" />
+              <input type="range" id="calcTicket" min="80" max="5000" step="10" value="450" />
             </div>
 
             <div class="slider-group" style="margin-bottom:0;">
@@ -1069,9 +1075,9 @@
           <div class="calc-result" aria-live="polite">
             <div>
               <div style="font-size:13px; color:var(--text-muted); margin-bottom:6px;">Estimativa ilustrativa de receita por mês*</div>
-              <div class="calc-big-number" id="calcMonthlyMoney">R$ 9.112</div>
+              <div class="calc-big-number" id="calcMonthlyMoney">R$ 9.000</div>
               <div style="font-size:14px; color:var(--text-sec); margin-top:6px;" id="calcBreakdownText">
-                Cerca de <strong>20 vendas recuperadas/mês</strong> entre <strong>112 atendimentos</strong> que antes ficavam esperando resposta.
+                Cerca de <strong>20 vendas recuperadas/mês</strong> entre <strong>113 atendimentos</strong> que antes ficavam esperando resposta.
               </div>
             </div>
             <div style="font-size:12px; color:var(--text-muted); border-top:1px solid var(--border); padding-top:12px;">
@@ -1086,7 +1092,7 @@
     <section class="section">
       <div class="container">
         <div class="section-head">
-          <h2>Por que empresas trocam chatbots comuns pelo ZAP-IA Studio</h2>
+          <h2>Como o ZAP-IA Studio pode ajudar no atendimento</h2>
         </div>
 
         <div class="comp-wrap">
@@ -1096,39 +1102,39 @@
                 <th>Critério na prática</th>
                 <th>Atender tudo sozinho</th>
                 <th>Bot de menu ("Digite 1")</th>
-                <th class="highlight">ZAP-IA Studio v5.7</th>
+                <th class="highlight">ZAP-IA Studio</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td>Tempo de 1ª resposta às 22h ou domingo</td>
-                <td>Horas depois (lead já comprou)</td>
-                <td>Imediato, porém robótico</td>
-                <td class="highlight">Segundos, com conversa natural</td>
+                <td>Depende da disponibilidade da pessoa</td>
+                <td>Depende do fluxo configurado</td>
+                <td class="highlight">Automática enquanto o motor estiver conectado</td>
               </tr>
               <tr>
                 <td>Áudio com a voz real da empresa</td>
-                <td>Grava repetido 50x por dia</td>
-                <td>Não envia nota de voz real</td>
+                <td>Pode exigir gravações repetidas</td>
+                <td>Varia conforme a ferramenta</td>
                 <td class="highlight">Envia OGG/Opus com ondas sonoras</td>
               </tr>
               <tr>
                 <td>Entende áudio e foto de comprovante</td>
                 <td>Sim</td>
-                <td>Trava o fluxo</td>
+                <td>Depende das integrações</td>
                 <td class="highlight">Ouve áudios e analisa imagens</td>
               </tr>
               <tr>
                 <td>Múltiplos chips e rodízio entre chips</td>
                 <td>Confusão entre celulares</td>
-                <td>Cobra caro por cada número</td>
+                <td>Varia conforme o fornecedor</td>
                 <td class="highlight">Até 3 chips + fila única por horário</td>
               </tr>
               <tr>
                 <td>Quando você responde pelo celular</td>
                 <td>—</td>
-                <td>Atropela o cliente junto com você</td>
-                <td class="highlight">Pausa sozinho na hora (fromMe)</td>
+                <td>Depende da configuração</td>
+                <td class="highlight">Pode pausar a IA após sua resposta pelo celular</td>
               </tr>
             </tbody>
           </table>
@@ -1170,7 +1176,7 @@
               <ul class="plan-list">
                 <li><span class="plan-check">✓</span><span><strong>Até 2 números de WhatsApp</strong> simultâneos</span></li>
                 <li><span class="plan-check">✓</span><span>Fila unificada por horário com filtro por chip</span></li>
-                <li><span class="plan-check">✓</span><span>Chave de IA individual ligada/desligada por chip</span></li>
+                <li><span class="plan-check">✓</span><span>IA pode ser ativada ou desativada por chip</span></li>
                 <li><span class="plan-check">✓</span><span>Rodízio Inteligente nos disparos</span></li>
                 <li><span class="plan-check">✓</span><span>Alertas centralizados no Chip 1 Principal</span></li>
               </ul>
@@ -1187,7 +1193,7 @@
                 <li><span class="plan-check">✓</span><span><strong>Até 3 números de WhatsApp</strong> simultâneos</span></li>
                 <li><span class="plan-check">✓</span><span>Suporte a 1 ou múltiplos aparelhos online</span></li>
                 <li><span class="plan-check">✓</span><span>Rodízio entre chips triplo + Coach IA de Funil</span></li>
-                <li><span class="plan-check">✓</span><span>Importação automática de conversas antigas</span></li>
+                <li><span class="plan-check">✓</span><span>Importação do histórico disponível pelo WhatsApp, sem garantia de completude</span></li>
                 <li><span class="plan-check">✓</span><span>Acompanhamento de implantação e treinamento</span></li>
               </ul>
             </div>
@@ -1219,7 +1225,7 @@
           </details>
           <details class="faq-item">
             <summary>Como funcionam os 2 ou 3 chips na mesma conta?</summary>
-            <p>Você pode conectar até 3 números no mesmo aparelho ou distribuir entre aparelhos diferentes. Todas as conversas caem organizadas por horário no mesmo CRM, identificadas pela etiqueta de cada chip, e os avisos de fechamento chegam centralizados no seu WhatsApp pessoal.</p>
+            <p>Você pode conectar até 3 números no mesmo aparelho ou distribuir entre aparelhos diferentes. As conversas recebidas pelo motor aparecem no CRM por horário, identificadas por chip. Os avisos podem ser centralizados no número configurado; a importação do histórico depende do WhatsApp.</p>
           </details>
         </div>
       </div>
@@ -1379,7 +1385,7 @@
               '<div class="dossier-line"><strong>3. Próxima jogada:</strong> ' + sc.dossier.jogada + '</div>' +
             '</div>' +
             '<div style="font-size:12.5px; color:var(--text-muted); padding:6px 4px;">' +
-              'A IA já pausou automaticamente nesta conversa para você entrar só na hora do fechamento, sabendo tudo em 5 segundos.' +
+              'Neste exemplo, a IA pausou a conversa para você avaliar o resumo e assumir o atendimento.' +
             '</div>';
           return;
         }
@@ -1435,16 +1441,31 @@
         }
       }
 
-      document.querySelectorAll('.niche-pill').forEach(function (btn) {
+      const nicheTabs = Array.from(document.querySelectorAll('.niche-pill'));
+      nicheTabs.forEach(function (btn, index) {
         btn.addEventListener('click', function () {
-          document.querySelectorAll('.niche-pill').forEach(function (b) {
+          nicheTabs.forEach(function (b) {
             b.classList.remove('active');
             b.setAttribute('aria-selected', 'false');
+            b.tabIndex = -1;
           });
           btn.classList.add('active');
           btn.setAttribute('aria-selected', 'true');
+          btn.tabIndex = 0;
+          document.getElementById('simThreadArea').setAttribute('aria-labelledby', btn.id);
           activeNiche = btn.getAttribute('data-niche');
           renderSimulation();
+        });
+        btn.addEventListener('keydown', function (event) {
+          let next = index;
+          if (event.key === 'ArrowRight') next = (index + 1) % nicheTabs.length;
+          else if (event.key === 'ArrowLeft') next = (index - 1 + nicheTabs.length) % nicheTabs.length;
+          else if (event.key === 'Home') next = 0;
+          else if (event.key === 'End') next = nicheTabs.length - 1;
+          else return;
+          event.preventDefault();
+          nicheTabs[next].focus();
+          nicheTabs[next].click();
         });
       });
 

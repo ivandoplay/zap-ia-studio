@@ -256,6 +256,34 @@ async function api(url, options = {}, _retried = false) {
   return data;
 }
 
+// Um aceite da fila não é uma entrega: acompanha o comando sem reenviar a mensagem.
+const trackedCrmCommands = new Set();
+async function watchQueuedCrmSend(result) {
+  const id = result?.queued && result?.commandId;
+  if (!id || trackedCrmCommands.has(id)) return;
+  trackedCrmCommands.add(id);
+  try {
+    for (let attempt = 0; attempt < 21; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, Math.min(3000 * (attempt + 1), 10000)));
+      let status;
+      try { status = await api(`/api/cloud/commands/${encodeURIComponent(id)}/status`); }
+      catch { continue; } // rede oscilando: não gera outro envio
+      if (status.status === 'done') {
+        showToast(status.confirmed ? 'Um envio foi confirmado pelo motor WhatsApp.' : 'O motor concluiu a operação, mas não confirmou o envio. Confira a conversa.', !status.confirmed);
+        refreshLiveStateOnly().catch(() => {});
+        return;
+      }
+      if (status.status === 'error') {
+        showToast('O motor relatou um erro em um envio. Confira a conversa antes de reenviar para evitar duplicidade.', true);
+        return;
+      }
+    }
+    showToast('Ainda não foi possível confirmar o envio. Confira a conversa antes de reenviar.', true);
+  } finally {
+    trackedCrmCommands.delete(id);
+  }
+}
+
 async function apiBlobDownload(url, fallbackFilename = 'download.bin', _retried = false) {
   if (
     state.cloudSession?.expiresAt &&
@@ -6618,6 +6646,7 @@ function bindEvents() {
             const res = await api(`/api/crm/${encodeURIComponent(chatId)}/send-audio`, { method: 'POST', body: fd });
             if (res.contact) applyReturnedContactToState(res.contact, chatId);
             showToast(res.queued ? 'Áudio em processamento. Confira a conversa antes de reenviar.' : res.sentRealWhatsApp ? '🎤 Nota de Voz enviada no WhatsApp!' : '🎤 Nota de Voz registrada na conversa.');
+            watchQueuedCrmSend(res).catch(() => {});
             refreshLiveStateOnly().catch(() => {});
           } catch (err) {
             showToast(err.message, true);
@@ -6705,6 +6734,7 @@ function bindEvents() {
         clearComposerQuote();
         if (res.contact) applyReturnedContactToState(res.contact, chatId);
         showToast(res.queued ? 'Mensagem em processamento. Confira a conversa antes de reenviar.' : res.sentRealWhatsApp ? 'Mensagem enviada no WhatsApp!' : 'Mensagem registrada na conversa.');
+        watchQueuedCrmSend(res).catch(() => {});
         refreshLiveStateOnly().catch(() => {});
       }
     } catch (err) {
@@ -6729,6 +6759,7 @@ function bindEvents() {
       });
       if (res.contact) applyReturnedContactToState(res.contact, chatId);
       showToast(res.queued ? 'Áudio em processamento. Confira a conversa antes de reenviar.' : 'Nota de voz enviada no WhatsApp!');
+      watchQueuedCrmSend(res).catch(() => {});
       refreshLiveStateOnly().catch(() => {});
     } catch (err) {
       showToast(err.message, true);
@@ -6985,9 +7016,10 @@ function bindEvents() {
         body: JSON.stringify({ voiceId })
       });
       if (res.contact) applyReturnedContactToState(res.contact, chatId);
+      showToast(res.queued ? 'Áudio em processamento. Confira a conversa antes de reenviar.' : res.sentRealWhatsApp ? '🎤 Nota de Voz enviada com ondas sonoras reais!' : '🎤 Nota de Voz registrada na ficha.');
+      watchQueuedCrmSend(res).catch(() => {});
       await refreshLiveStateOnly();
       openLeadModal(encodeURIComponent(res.contact?.chatId || chatId));
-      showToast(res.queued ? 'Áudio em processamento. Confira a conversa antes de reenviar.' : res.sentRealWhatsApp ? '🎤 Nota de Voz enviada com ondas sonoras reais!' : '🎤 Nota de Voz registrada na ficha.');
     } catch (err) {
       showToast(err.message, true);
     }
@@ -7042,9 +7074,10 @@ function bindEvents() {
         body: fd
       });
       if (res.contact) applyReturnedContactToState(res.contact, chatId);
+      showToast(res.queued ? 'Áudio em processamento. Confira a conversa antes de reenviar.' : res.sentRealWhatsApp ? '🎤 Nota de Voz enviada com sucesso!' : '🎤 Nota de Voz registrada na ficha.');
+      watchQueuedCrmSend(res).catch(() => {});
       await refreshLiveStateOnly();
       openLeadModal(encodeURIComponent(res.contact?.chatId || chatId));
-      showToast(res.queued ? 'Áudio em processamento. Confira a conversa antes de reenviar.' : res.sentRealWhatsApp ? '🎤 Nota de Voz enviada com sucesso!' : '🎤 Nota de Voz registrada na ficha.');
     } catch (err) {
       showToast(err.message, true);
     }
@@ -7148,9 +7181,10 @@ function bindEvents() {
       });
       input.value = '';
       if (res.contact) applyReturnedContactToState(res.contact, chatId);
+      showToast(res.queued ? 'Mensagem em processamento. Confira a conversa antes de reenviar.' : res.sentRealWhatsApp ? 'Mensagem enviada no WhatsApp!' : 'Mensagem registrada no painel.');
+      watchQueuedCrmSend(res).catch(() => {});
       await refreshLiveStateOnly();
       openLeadModal(encodeURIComponent(res.contact?.chatId || chatId));
-      showToast(res.queued ? 'Mensagem em processamento. Confira a conversa antes de reenviar.' : res.sentRealWhatsApp ? 'Mensagem enviada no WhatsApp!' : 'Mensagem registrada no painel.');
     } catch (err) {
       showToast(err.message, true);
     }
@@ -8006,6 +8040,7 @@ function bindCloudAuthAndAdminEvents() {
       if (replyInp && caption) replyInp.value = '';
       if (out.contact) applyReturnedContactToState(out.contact, chatId);
       showToast(out.queued ? 'Anexo em processamento. Confira a conversa antes de reenviar.' : out.sentRealWhatsApp ? 'Anexo enviado no WhatsApp!' : 'Anexo registrado na conversa!');
+      watchQueuedCrmSend(out).catch(() => {});
       refreshLiveStateOnly().catch(() => {});
     } catch (err) {
       showToast(err.message, true);

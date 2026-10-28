@@ -67,6 +67,7 @@ import { convertToCanonicalWhatsAppVoice, resolveFfmpegPath } from './audioProce
 import { createZipBuffer } from './zipReader.js';
 import { IS_VERCEL, MEDIA_BUCKET, SUPABASE_URL, isCloudConfigured } from './cloudConfig.js';
 import { scopedSendChatId } from './cloudSendScope.js';
+import { getSafeCommandStatus } from './commandStatus.js';
 const { whatsappManager } = IS_VERCEL
   ? { whatsappManager: null }
   : await import('./whatsappManager.js');
@@ -530,6 +531,11 @@ app.use('/api', async (req, res, next) => {
         return tenantStorageContext.run(supportCtx.tenantStore, () => next());
       }
 
+      // Consulta de um envio já enfileirado não carrega nem altera o workspace inteiro.
+      if (req.method === 'GET' && /^\/cloud\/commands\/[^/]+\/status\/?$/.test(req.path)) {
+        req.cloudAuth = { client: verified.client, authUser: verified.authUser, profile: verified.profile, isRemoteImpersonation: false };
+        return next();
+      }
       const tenantStore = await loadTenantContextFromCloud(verified.client, verified.authUser, verified.profile, {
         scopedContactId: scopedSendChatId(req.method, req.path)
       });
@@ -599,6 +605,20 @@ app.use('/api', async (req, res, next) => {
   }
 
   return next();
+});
+
+// Consulta autenticada e por tenant: não expõe payloads ou conteúdo de conversas.
+app.get('/api/cloud/commands/:commandId/status', async (req, res) => {
+  if (!req.cloudAuth?.client || !req.cloudAuth?.authUser?.id) return res.status(404).json({ ok: false, error: 'Envio não encontrado.' });
+  if (!UUID_RE.test(req.params.commandId)) return res.status(400).json({ ok: false, error: 'Identificador de envio inválido.' });
+  try {
+    const status = await getSafeCommandStatus(req.cloudAuth.client, req.cloudAuth.authUser.id, req.params.commandId);
+    if (!status) return res.status(404).json({ ok: false, error: 'Envio não encontrado.' });
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({ ok: true, ...status });
+  } catch {
+    return res.status(503).json({ ok: false, error: 'Não foi possível consultar o envio agora.' });
+  }
 });
 
 // ======================== GERENCIAMENTO DE CONTAS (EXCLUSIVO ADMIN MASTER) ========================

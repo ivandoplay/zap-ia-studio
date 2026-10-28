@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import { getSafeCommandStatus } from '../src/commandStatus.js';
+const id='d7f6575f-e5db-4097-9be4-1f03ff923ac9';
+let filters=[];
+const makeClient=(row,error=null)=>({from(table){assert.equal(table,'zapia_commands');return {select(fields){assert.equal(fields,'id,action,status,confirmed:result->sentRealWhatsApp');return this},eq(k,v){filters.push([k,v]);return this},async maybeSingle(){return {data:row,error}}}}});
+let o=await getSafeCommandStatus(makeClient({id,action:'send_crm_reply',status:'processing',result:{contact:{phone:'sigiloso'}}}),'tenant-a',id);
+assert.deepEqual(o,{id,status:'processing',confirmed:false});assert.deepEqual(filters,[['user_id','tenant-a'],['id',id]]);
+filters=[];o=await getSafeCommandStatus(makeClient({id,action:'send_crm_reply',status:'done',confirmed:true}),'tenant-a',id);
+assert.deepEqual(o,{id,status:'done',confirmed:true});
+o=await getSafeCommandStatus(makeClient({id,action:'send_crm_reply',status:'done',result:{}}),'tenant-a',id);assert.equal(o.confirmed,false);
+o=await getSafeCommandStatus(makeClient({id,action:'send_crm_reply',status:'error',error_text:'Falha simulada',result:{}}),'tenant-a',id);assert.deepEqual(o,{id,status:'error',confirmed:false});
+assert.equal(await getSafeCommandStatus(makeClient(null),'tenant-a',id),null);
+assert.equal(await getSafeCommandStatus(makeClient({id,action:'update_motor_now',status:'done'}),'tenant-a',id),null);
+await assert.rejects(()=>getSafeCommandStatus(makeClient(null,{message:'falha simulada'}),'tenant-a',id),/Não foi possível consultar/);
+console.log('OK: estado do envio sem conteúdo de conversas, vinculado ao usuário e id.');

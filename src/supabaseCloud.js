@@ -30,6 +30,7 @@ import {
 } from './storage.js';
 import { calibrateTrueClock, trueNowIso, trueNowMs } from './trueClock.js';
 import { enableHistoryJournal, isHistoryJournalEnabled, countJournalFiles } from './historyJournal.js';
+import { backupSlotAuth } from './pairingSafety.js';
 
 const CLOUD_SESSION_FILE = path.join(DATA_DIR, 'cloud_session.json');
 const DEVICE_IDENTITY_FILE = path.join(DATA_DIR, 'device_identity.json');
@@ -2468,6 +2469,19 @@ class CloudWorkerBridge {
             slotState: st.slots?.[targetSlotId] || st,
             waState: st
           };
+          break;
+        }
+        case 'wa_backup_slot_auth': {
+          const engine = this.whatsappManager.getSlot(targetSlotId);
+          const expectedPhone = String(p.expectedPhone || '').replace(/\D/g, '');
+          const actualPhone = String(engine?.connectedUser?.phone || '').replace(/\D/g, '');
+          if (!this.user?.id || !['slot_2','slot_3'].includes(targetSlotId) || engine?.status !== 'connected' ||
+              !expectedPhone || expectedPhone !== actualPhone) {
+            throw new Error('Número ou chip conectado não corresponde ao solicitado; nada foi desconectado.');
+          }
+          const backup = backupSlotAuth({ authRoot: AUTH_DIR, recoveryRoot: path.join(DATA_DIR, 'recovery-before-pairing'),
+            userId: this.user.id, slotId: targetSlotId, authDir: engine.authDir });
+          result = { ok: true, slotId: targetSlotId, filesCopied: backup.copiedFiles };
           break;
         }
         case 'history_journal_enable': {

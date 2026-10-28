@@ -36,6 +36,7 @@ const PROTECTED_SISTEMA_PREFIXES = [
   'data/uploads/',
   'data/tenants/',
   'data/history-journal/',
+  'data/recovery-before-pairing/',
   'node_modules/',
   '.runtime/',
   '.git/'

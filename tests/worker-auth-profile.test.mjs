@@ -1,0 +1,8 @@
+import assert from 'node:assert/strict';assert.equal(process.env.ZAPIA_ISOLATED_TEST,'1');process.env.VERCEL='1';process.env.SUPABASE_URL='http://127.0.0.1:1';process.env.SUPABASE_ANON_KEY='teste';
+const {cloudWorker}=await import('../src/supabaseCloud.js');const uid='11111111-1111-4111-8111-111111111111';let phase='missing',connects=0,logouts=0,pulls=0;
+cloudWorker.client={from(){return {select(){return this},eq(){return this},async maybeSingle(){if(phase==='missing')return {data:null,error:null};if(phase==='error')return {data:null,error:{message:'falha sintética'}};return {data:{user_id:uid,username:'teste',role:'user',is_active:phase==='active'},error:null}}}}};
+cloudWorker.logoutWorker=async()=>{logouts++};cloudWorker.ensurePerUserWhatsAppAuthDir=()=>{};cloudWorker.pullCloudIntoLocal=async()=>{pulls++};cloudWorker.startBackgroundLoops=()=>{};cloudWorker.pushRuntimeHeartbeat=async()=>{};cloudWorker.whatsappManager={autoRestoreIfSessionExists:async()=>{connects++}};cloudWorker.broadcastFn=null;
+for(const x of ['missing','error']){phase=x;assert.equal(await cloudWorker.activateWorkerSession({id:uid}),false);assert.equal(connects,0);assert.equal(logouts,0,'falha temporária não pode apagar sessão');assert.equal(pulls,0)}
+phase='blocked';assert.equal(await cloudWorker.activateWorkerSession({id:uid}),false);assert.equal(logouts,1);assert.equal(connects,0);
+phase='active';assert.equal(await cloudWorker.activateWorkerSession({id:uid}),true);assert.equal(connects,1);assert.equal(pulls,1);
+console.log('OK: motor só ativa perfil existente e ativo; falha de consulta preserva sessão.');

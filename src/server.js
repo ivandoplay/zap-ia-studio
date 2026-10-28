@@ -312,11 +312,13 @@ app.get('/api/auth/status', async (req, res) => {
           });
         }
       } catch (err) {
-        return res.json({
-          ok: true,
+        const temporaryError = err.code === 'ACCOUNT_PROFILE_UNAVAILABLE';
+        return res.status(temporaryError ? 503 : 200).json({
+          ok: !temporaryError,
           mode: 'vercel_cloud',
           cloudLoginRequired: true,
-          blockedError: err.code === 'ACCOUNT_BLOCKED' ? err.message : null,
+          temporaryError,
+          blockedError: temporaryError || err.code === 'ACCOUNT_BLOCKED' || err.code === 'ACCOUNT_NOT_REGISTERED' ? err.message : null,
           pinRequired: false,
           branding: { appName: 'Ienvia', appSubtitle: 'Atendente Universal Cloud' }
         });
@@ -381,6 +383,9 @@ app.post('/api/auth/login', async (req, res) => {
       user: authRes.user
     });
   } catch (err) {
+    if (err.code === 'ACCOUNT_PROFILE_UNAVAILABLE') {
+      return res.status(503).json({ ok: false, error: err.message });
+    }
     entry.fails += 1;
     if (entry.fails >= 6) {
       entry.blockedUntil = Date.now() + 60_000;
@@ -392,10 +397,14 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 app.post('/api/auth/refresh', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   try {
     const out = await refreshCloudSession(req.body?.refreshToken);
     return res.json({ ok: true, ...out });
   } catch (err) {
+    if (err.code === 'ACCOUNT_PROFILE_UNAVAILABLE') {
+      return res.status(503).json({ ok: false, error: err.message, retrySession: err.retrySession });
+    }
     return res.status(401).json({ ok: false, authRequired: true, error: err.message });
   }
 });

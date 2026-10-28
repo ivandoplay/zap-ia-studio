@@ -344,9 +344,28 @@ export function buildCloudMultiSlotWaState({
 /**
  * Login com Usuário + Senha (sem exibir e-mail técnico para o cliente).
  */
+function requireActiveRegisteredProfile(profile, error, userId) {
+  if (error) {
+    const err = new Error('Não foi possível validar o perfil da conta. Tente novamente.');
+    err.code = 'ACCOUNT_PROFILE_UNAVAILABLE';
+    err.statusCode = 503;
+    throw err;
+  }
+  if (!profile || profile.user_id !== userId) {
+    const err = new Error('Conta sem perfil autorizado. Procure o administrador.');
+    err.code = 'ACCOUNT_NOT_REGISTERED';
+    throw err;
+  }
+  if (profile.is_active !== true) {
+    const err = new Error('Esta conta está bloqueada pelo administrador.');
+    err.code = 'ACCOUNT_BLOCKED';
+    throw err;
+  }
+  return profile;
+}
+
 export async function signInWithUsernamePassword(usernameInput, password) {
   const email = usernameToAuthEmail(usernameInput);
-  const cleanUser = normalizeUsername(usernameInput);
   if (!email || !password) {
     throw new Error('Informe seu usuário e senha.');
   }
@@ -362,33 +381,12 @@ export async function signInWithUsernamePassword(usernameInput, password) {
   }
 
   const authed = createAnonClient(data.session.access_token);
-  let { data: profile } = await authed
+  const { data: profileData, error: profileError } = await authed
     .from('zapia_users')
     .select('*')
     .eq('user_id', data.user.id)
     .maybeSingle();
-
-  if (!profile) {
-    const meta = data.user.user_metadata || {};
-    const newProfile = {
-      user_id: data.user.id,
-      username: meta.username || cleanUser || 'usuario',
-      display_name: meta.display_name || cleanUser || 'Usuário',
-      role: 'user',
-      is_active: true,
-      last_seen_at: new Date().toISOString()
-    };
-    const { data: inserted } = await authed
-      .from('zapia_users')
-      .upsert(newProfile, { onConflict: 'user_id' })
-      .select('*')
-      .maybeSingle();
-    profile = inserted || newProfile;
-  }
-
-  if (profile.is_active === false) {
-    throw new Error('Esta conta está temporariamente bloqueada pelo administrador.');
-  }
+  const profile = requireActiveRegisteredProfile(profileData, profileError, data.user.id);
 
   await authed
     .from('zapia_users')
@@ -493,23 +491,29 @@ export async function refreshCloudSession(refreshToken) {
   if (error || !data?.session || !data?.user) {
     throw new Error('Sessão expirada. Faça login novamente.');
   }
+  const refreshedSession = {
+    accessToken: data.session.access_token,
+    refreshToken: data.session.refresh_token,
+    expiresAt: data.session.expires_at
+  };
   const authed = createAnonClient(data.session.access_token);
-  const { data: profile } = await authed
+  const { data: profileData, error: profileError } = await authed
     .from('zapia_users')
     .select('*')
     .eq('user_id', data.user.id)
     .maybeSingle();
-
-  if (profile && profile.is_active === false) {
-    throw new Error('Esta conta está bloqueada pelo administrador.');
+  let profile;
+  try {
+    profile = requireActiveRegisteredProfile(profileData, profileError, data.user.id);
+  } catch (err) {
+    // Auth pode ter rotacionado o refresh token antes da consulta falhar. Preserve
+    // somente na falha temporária, sem declarar autorização nem expor perfil.
+    if (err.code === 'ACCOUNT_PROFILE_UNAVAILABLE') err.retrySession = refreshedSession;
+    throw err;
   }
 
   return {
-    session: {
-      accessToken: data.session.access_token,
-      refreshToken: data.session.refresh_token,
-      expiresAt: data.session.expires_at
-    },
+    session: refreshedSession,
     user: {
       id: data.user.id,
       username: profile?.username || normalizeUsername(data.user.email || ''),
@@ -528,26 +532,14 @@ export async function verifyCloudAccessToken(accessToken) {
   if (error || !data?.user) return null;
 
   const authed = createAnonClient(accessToken);
-  const { data: profile } = await authed
+  const { data: profileData, error: profileError } = await authed
     .from('zapia_users')
     .select('*')
     .eq('user_id', data.user.id)
     .maybeSingle();
 
-  if (profile && profile.is_active === false) {
-    const blockedErr = new Error('Conta bloqueada pelo administrador.');
-    blockedErr.code = 'ACCOUNT_BLOCKED';
-    throw blockedErr;
-  }
-
-  // Zero-Trust: role NUNCA é lida de user_metadata (editável pelo cliente), somente da tabela protegida zapia_users!
-  const effectiveProfile = profile || {
-    user_id: data.user.id,
-    username: normalizeUsername(data.user.email || '') || 'usuario',
-    display_name: data.user.user_metadata?.display_name || 'Usuário',
-    role: 'user',
-    is_active: true
-  };
+  // Perfil é obrigatório; erro de consulta não equivale a uma conta ativa.
+  const effectiveProfile = requireActiveRegisteredProfile(profileData, profileError, data.user.id);
 
   return {
     client: authed,
@@ -1233,12 +1225,15 @@ export async function createManagedUser({
   }
 
   const email = usernameToAuthEmail(cleanUsername);
-  const { data: existingRow } = await admin
+  const { data: existingRow, error: lookupError } = await admin
     .from('zapia_users')
     .select('user_id')
     .eq('username', cleanUsername)
     .maybeSingle();
 
+  if (lookupError) {
+    throw new Error('Não foi possível consultar os cadastros. Tente novamente.');
+  }
   if (existingRow) {
     throw new Error(`Já existe uma conta com o usuário "${cleanUsername}".`);
   }
@@ -1267,17 +1262,13 @@ export async function createManagedUser({
   // Conta secundária nasce 100% LIMPA para qualquer nicho
   const cleanDb = createCleanDatabaseForNewTenant(cleanDisplay);
 
-  await Promise.all([
-    admin.from('zapia_users').upsert({
-      user_id: uid,
-      username: cleanUsername,
-      display_name: cleanDisplay,
-      customer_phone: cleanPhone,
-      admin_notes: cleanNotes,
-      role: 'user',
-      max_wa_slots: cleanMaxSlots,
-      is_active: true
-    }, { onConflict: 'user_id' }),
+  // Auth já foi criado e não há transação entre Auth e Postgres. Não apagamos
+  // automaticamente: uma falha pode ser ambígua ou haver atividade concorrente.
+  // Criar o perfil ativo por último impede acesso com workspace incompleto.
+  const partialError = () => new Error(
+    `Cadastro incompleto: a conta @${cleanUsername} foi criada no Auth (ID ${uid}), mas não foi provisionada integralmente. Não tente recriar; regularize o cadastro no Supabase.`
+  );
+  const initialRows = await Promise.allSettled([
     admin.from('zapia_workspaces').upsert({
       user_id: uid,
       business: cleanDb.business,
@@ -1302,6 +1293,24 @@ export async function createManagedUser({
       updated_at: trueNowIso()
     }, { onConflict: 'user_id' })
   ]);
+  if (initialRows.some(result => result.status === 'rejected' || result.value?.error)) {
+    throw partialError();
+  }
+  try {
+    const { error: profileError } = await admin.from('zapia_users').upsert({
+      user_id: uid,
+      username: cleanUsername,
+      display_name: cleanDisplay,
+      customer_phone: cleanPhone,
+      admin_notes: cleanNotes,
+      role: 'user',
+      max_wa_slots: cleanMaxSlots,
+      is_active: true
+    }, { onConflict: 'user_id' });
+    if (profileError) throw partialError();
+  } catch {
+    throw partialError();
+  }
 
   return {
     userId: uid,
@@ -1604,7 +1613,7 @@ class CloudWorkerBridge {
     }
     const ok = await this.activateWorkerSession(data.user);
     if (!ok) {
-      throw new Error('Esta conta está bloqueada pelo administrador.');
+      throw new Error('Não foi possível validar o perfil da conta ou ela está bloqueada.');
     }
     return this.getStatus();
   }
@@ -1698,18 +1707,21 @@ class CloudWorkerBridge {
 
   async activateWorkerSession(authUser) {
     await calibrateTrueClock();
-    const { data: profile } = await this.client
+    const { data: profile, error: profileError } = await this.client
       .from('zapia_users')
       .select('*')
       .eq('user_id', authUser.id)
       .maybeSingle();
 
-    if (profile && profile.is_active === false) {
+    // Falha de rede ou perfil ausente nunca deve virar uma sessão autorizada.
+    // Não apagar a sessão em erro de consulta: ela pode ser válida após reconexão.
+    if (profileError || !profile || profile.user_id !== authUser.id) return false;
+    if (profile.is_active !== true) {
       await this.logoutWorker();
       return false;
     }
 
-    const maxWaSlots = clampMaxWaSlots(profile?.max_wa_slots, profile?.role);
+    const maxWaSlots = clampMaxWaSlots(profile.max_wa_slots, profile.role);
     this.user = {
       id: authUser.id,
       username: profile?.username || normalizeUsername(authUser.email || ''),

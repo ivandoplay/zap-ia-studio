@@ -206,6 +206,12 @@ async function tryRefreshCloudToken() {
       body: JSON.stringify({ refreshToken: state.cloudSession.refreshToken })
     });
     const d = await r.json().catch(() => ({}));
+    // Se o Auth rotacionou o token mas a consulta do perfil falhou, preserva
+    // a sessão para nova tentativa sem tratar a conta como autorizada.
+    if (r.status === 503 && d.retrySession) {
+      saveCloudSession({ ...d.retrySession, user: state.cloudSession.user });
+      return false;
+    }
     if (r.ok && d.ok && d.session) {
       saveCloudSession({ ...d.session, user: d.user || state.cloudSession.user });
       if (d.user) state.currentUser = d.user;
@@ -551,7 +557,7 @@ async function loadBootstrap() {
       .then((r) => r.json())
       .catch(() => ({}));
 
-    if (authStatus?.cloudLoginRequired && state.cloudSession?.refreshToken) {
+    if (authStatus?.cloudLoginRequired && !authStatus?.temporaryError && state.cloudSession?.refreshToken) {
       const refreshed = await tryRefreshCloudToken();
       if (refreshed) {
         authStatus = await fetch('/api/auth/status', {

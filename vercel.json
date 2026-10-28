@@ -5,7 +5,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 60,
-      "includeFiles": "{src/**,public/**,scripts/**,dist_kit/**,release/**,data/training_packs/**,package.json,package-lock.json,.npmrc,.env.example,LEIA-ME_COMO_USAR.md,*.bat,*.sh}"
+      "includeFiles": "{src/**,public/**,scripts/**,dist_kit/**,data/training_packs/**,package.json,package-lock.json,.npmrc,.env.example,LEIA-ME_COMO_USAR.md,*.bat,*.sh}"
     }
   },
   "redirects": [

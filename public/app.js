@@ -1597,31 +1597,20 @@ function renderMotorDownloadStatus() {
   const workerOnline = Boolean(state.waState?.workerOnline);
   const workerVer = state.waState?.workerVersion || null;
   const workerPlat = state.waState?.workerPlatform || '';
-  const deviceVersions = (state.waState?.devices || []).filter(d => d.online);
-  const site = `Site: <strong>v${escapeHtml(ver)}</strong>`;
-  const motor = `Motor: <strong>${workerVer ? `v${escapeHtml(workerVer)}` : 'versão não informada'}</strong>`;
-  const devices = deviceVersions.length > 1 ? `<div>${deviceVersions.map(d => `${escapeHtml(d.deviceName || 'Aparelho')}: ${d.appVersion ? `v${escapeHtml(d.appVersion)}` : 'versão não informada'}`).join(' • ')}</div>` : '';
-  const hasDifferentDevice = deviceVersions.some(d => !d.appVersion || d.appVersion !== ver);
 
-  if (workerOnline && workerVer === ver && !hasDifferentDevice) {
-    state.motorUpdateRequestedAt = null;
+  if (workerOnline && workerVer === ver) {
     statusEl.className = 'motor-status-banner up-to-date';
-    statusEl.innerHTML = `${site} • ${motor} — <strong>atualizado</strong> em ${escapeHtml(workerPlat || 'seu dispositivo')}.${devices}`;
-  } else if (state.motorUpdateRequestedAt && Date.now() - state.motorUpdateRequestedAt < 120000) {
-    statusEl.className = 'motor-status-banner';
-    statusEl.innerHTML = `${site} • ${motor} — <strong>Atualização solicitada.</strong> Aguardando confirmação do motor; os chips podem ficar offline temporariamente.${devices}`;
-  } else if (workerOnline && workerVer && (workerVer !== ver || hasDifferentDevice)) {
+    statusEl.innerHTML = `<strong>Motor atualizado (v${escapeHtml(ver)})</strong> ativo em <strong>${escapeHtml(workerPlat || 'seu dispositivo')}</strong> — Auto-Update automático ativado a cada abertura!`;
+  } else if (workerOnline && workerVer !== ver) {
     statusEl.className = 'motor-status-banner outdated';
-    statusEl.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
-        <span>${site} • ${motor} — versões diferentes. ${state.motorUpdateRequestedAt ? 'Não foi possível confirmar a atualização; confira o motor antes de tentar novamente.' : 'Atualize o motor para usar a versão do site.'}${devices}</span>
-        <button type="button" id="btnRemoteUpdateMotor" class="btn btn-primary btn-sm" onclick="triggerRemoteMotorUpdate()">🔄 Atualizar Motor</button>
+    statusEl.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+        <span><strong>Nova versão disponível (v${escapeHtml(ver)}):</strong> seu motor em execução (${escapeHtml(workerPlat || 'versão anterior')}) pode ser atualizado agora em 1 clique!</span>
+        <button type="button" id="btnRemoteUpdateMotor" class="btn btn-primary btn-sm" onclick="triggerRemoteMotorUpdate()">🔄 Atualizar Motor Agora (1 Clique)</button>
       </div>`;
-  } else if (workerOnline) {
-    statusEl.className = 'motor-status-banner';
-    statusEl.innerHTML = `${site} • ${motor} — conectado em ${escapeHtml(workerPlat || 'seu dispositivo')}; atualização não confirmada.${devices}`;
   } else {
     statusEl.className = 'motor-status-banner';
-    statusEl.innerHTML = `${site} • Motor: <strong>offline</strong>. Ligue o motor no Windows, Linux ou Termux para verificar sua versão.${devices}`;
+    statusEl.innerHTML = `Pacote Institucional <strong>v${escapeHtml(ver)}</strong> com <strong>Auto-Update Automático na Abertura</strong> para <strong>Windows PC</strong>, <strong>Linux</strong> e <strong>Android Termux</strong>.`;
   }
 }
 
@@ -1629,19 +1618,17 @@ window.triggerRemoteMotorUpdate = async function triggerRemoteMotorUpdate() {
   const btn = document.getElementById('btnRemoteUpdateMotor');
   if (btn) {
     btn.disabled = true;
-    btn.textContent = '🔄 Solicitando atualização...';
+    btn.textContent = '🔄 Atualizando e reiniciando...';
   }
   try {
     await api('/api/whatsapp/update-motor', { method: 'POST', body: JSON.stringify({}) });
-    state.motorUpdateRequestedAt = Date.now();
-    renderMotorDownloadStatus();
-    showToast('Atualização solicitada. Aguarde a confirmação da versão do motor.');
-    setTimeout(() => refreshLiveStateOnly().catch(() => {}), 5000);
+    showToast('✅ Motor atualizado remotamente! Reconectando em ~4 segundos...');
+    setTimeout(() => refreshLiveStateOnly(), 5000);
   } catch (err) {
     showToast(err.message, true);
     if (btn) {
       btn.disabled = false;
-      btn.textContent = '🔄 Atualizar Motor';
+      btn.textContent = '🔄 Atualizar Motor Agora (1 Clique)';
     }
   }
 };

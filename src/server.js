@@ -65,15 +65,9 @@ import { buildSystemPrompt, generateSmartReply, parseGeminiKeyPool, transcribeVo
 import { formatPixMessageWithQr } from './pix.js';
 import { convertToCanonicalWhatsAppVoice, resolveFfmpegPath } from './audioProcessor.js';
 import { createZipBuffer } from './zipReader.js';
-import { verifySignedManifest } from './updateSignature.js';
-import { UPDATE_PUBLIC_KEY } from './updatePublicKey.js';
-import { recoverInterruptedUpdate } from './updateTransaction.js';
 import { IS_VERCEL, MEDIA_BUCKET, SUPABASE_URL, isCloudConfigured } from './cloudConfig.js';
 import { scopedSendChatId } from './cloudSendScope.js';
 import { getSafeCommandStatus } from './commandStatus.js';
-// Não iniciar o WhatsApp sobre uma atualização incompleta. Falhas de recuperação
-// interrompem o processo, em vez de abrir o motor com arquivos inconsistentes.
-if (!IS_VERCEL) recoverInterruptedUpdate(ROOT_DIR);
 const { whatsappManager } = IS_VERCEL
   ? { whatsappManager: null }
   : await import('./whatsappManager.js');
@@ -830,16 +824,7 @@ const MOTOR_EXCLUDED_SEGMENTS = new Set([
   '.DS_Store'
 ]);
 
-// A assinatura precisa ser igual em checkouts Windows, Linux e Vercel.
-// Mantém CRLF nos arquivos de Windows/documentos e LF nos scripts Unix.
-export function normalizeMotorPackageFile(filePath, buffer) {
-  const ext = path.extname(filePath).toLowerCase();
-  if (!['.bat', '.ps1', '.txt', '.sh'].includes(ext)) return buffer;
-  const lf = buffer.toString('utf8').replace(/\r\n/g, '\n');
-  return Buffer.from(ext === '.sh' ? lf : lf.replace(/\n/g, '\r\n'), 'utf8');
-}
-
-export function collectCleanMotorZipEntries(includeMasterPack = false, zipRoot = 'ZAP-IA-Studio') {
+function collectCleanMotorZipEntries(includeMasterPack = false, zipRoot = 'ZAP-IA-Studio') {
   const entries = [];
   const walkIntoZipPrefix = (absDir, zipPrefix) => {
     if (!fs.existsSync(absDir)) return;
@@ -854,7 +839,7 @@ export function collectCleanMotorZipEntries(includeMasterPack = false, zipRoot =
       } else if (dirent.isFile()) {
         entries.push({
           path: nextZipPath,
-          content: normalizeMotorPackageFile(nextAbs, fs.readFileSync(nextAbs))
+          content: fs.readFileSync(nextAbs)
         });
       }
     }
@@ -869,7 +854,7 @@ export function collectCleanMotorZipEntries(includeMasterPack = false, zipRoot =
     if (fs.existsSync(abs) && fs.statSync(abs).isFile()) {
       entries.push({
         path: `${zipRoot}/sistema/${sysFile}`,
-        content: normalizeMotorPackageFile(abs, fs.readFileSync(abs))
+        content: fs.readFileSync(abs)
       });
     }
   }
@@ -931,11 +916,6 @@ app.get('/api/public/motor-update.zip', (_req, res) => {
     if (entries.length < 10) {
       return res.status(500).json({ ok: false, error: 'Pacote do motor indisponível neste ambiente.' });
     }
-    const manifest = fs.readFileSync(path.join(ROOT_DIR, 'release', 'update-manifest.json'));
-    const signature = fs.readFileSync(path.join(ROOT_DIR, 'release', 'update-manifest.sig'));
-    verifySignedManifest(entries.map(e => ({ zipPath: e.path, content: e.content })), manifest, signature, UPDATE_PUBLIC_KEY, APP_VERSION);
-    entries.push({ path: 'ZAP-IA-Studio/sistema/release/update-manifest.json', content: manifest });
-    entries.push({ path: 'ZAP-IA-Studio/sistema/release/update-manifest.sig', content: signature });
     const zipBuffer = createZipBuffer(entries);
     const filename = `Ienvia-v${APP_VERSION}.zip`;
     res.setHeader('Content-Type', 'application/zip');

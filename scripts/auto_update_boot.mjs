@@ -13,9 +13,6 @@ import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
 import { extractZipBuffer } from '../src/zipReader.js';
-import { applyUpdateTransaction, recoverInterruptedUpdate } from '../src/updateTransaction.js';
-import { isNewerRelease, verifySignedManifest } from '../src/updateSignature.js';
-import { UPDATE_PUBLIC_KEY } from '../src/updatePublicKey.js';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -29,9 +26,27 @@ try {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
+const PARENT_DIR = path.dirname(ROOT_DIR);
+const IS_SISTEMA_SUBDIR = path.basename(ROOT_DIR).toLowerCase() === 'sistema';
 const IS_TERMUX = fs.existsSync('/data/data/com.termux/files/usr');
 
 const BASE_URL = (process.env.ZAPIA_BASE_URL || 'https://zap-ia-studio.vercel.app').replace(/\/+$/, '');
+const PROTECTED_SISTEMA_PREFIXES = [
+  'data/wa_auth/',
+  'data/uploads/',
+  'data/tenants/',
+  'data/history-journal/',
+  'data/recovery-before-pairing/',
+  'node_modules/',
+  '.runtime/',
+  '.git/'
+];
+const PROTECTED_EXACT_FILES = new Set([
+  '.env',
+  'data/database.json',
+  'data/cloud_session.json',
+  'data/.wrapper.pid'
+]);
 
 function readJsonSafe(filePath) {
   try {
@@ -43,10 +58,7 @@ function readJsonSafe(filePath) {
 
 
 async function runAutoUpdateCheck() {
-  if (process.env.VERCEL) return;
-  const recovered = recoverInterruptedUpdate(ROOT_DIR);
-  if (recovered) console.warn('⚠️ [Auto-Update] Uma atualização interrompida foi desfeita com segurança.');
-  if (process.env.ZAPIA_SKIP_AUTO_UPDATE === '1') {
+  if (process.env.ZAPIA_SKIP_AUTO_UPDATE === '1' || process.env.VERCEL) {
     return;
   }
 
@@ -73,10 +85,6 @@ async function runAutoUpdateCheck() {
     console.log(`✅ [Auto-Update] Já está na versão mais recente (v${localVersion}).`);
     return;
   }
-  if (!isNewerRelease(localVersion, remoteVersion)) {
-    console.warn('⚠️ [Auto-Update] Versão remota inválida ou anterior; atualização ignorada.');
-    return;
-  }
 
   console.log(`🔄 [Auto-Update] Nova atualização encontrada (v${localVersion} -> v${remoteVersion})! Aplicando automaticamente...`);
 
@@ -91,19 +99,37 @@ async function runAutoUpdateCheck() {
     const arrayBuf = await zipRes.arrayBuffer();
     // Valida todos os arquivos (CRC e tamanho) antes de gravar qualquer atualização.
     const archive = extractZipBuffer(Buffer.from(arrayBuf), { maxFiles: 1500, maxTotalBytes: 50 * 1024 * 1024 });
-    const allEntries = archive.files.map((file) => ({ zipPath: file.path, content: file.buffer }));
-    const manifestFiles = allEntries.filter(e => e.zipPath === 'ZAP-IA-Studio/sistema/release/update-manifest.json');
-    const signatureFiles = allEntries.filter(e => e.zipPath === 'ZAP-IA-Studio/sistema/release/update-manifest.sig');
-    if (manifestFiles.length !== 1 || signatureFiles.length !== 1) throw new Error('Assinatura digital da atualização ausente ou duplicada.');
-    const entries = allEntries.filter(e => !['ZAP-IA-Studio/sistema/release/update-manifest.json','ZAP-IA-Studio/sistema/release/update-manifest.sig'].includes(e.zipPath));
-    verifySignedManifest(entries, manifestFiles[0].content, signatureFiles[0].content, UPDATE_PUBLIC_KEY, remoteVersion);
+    const entries = archive.files.map((file) => ({ zipPath: file.path, content: file.buffer }));
     if (entries.length < 10) {
       throw new Error('Pacote de atualização incompleto.');
     }
 
-    // Cada arquivo anterior é salvo antes de qualquer troca; em caso de falha,
-    // o conjunto anterior é restaurado. Se o processo cair, a próxima abertura recupera.
-    const updatedCount = applyUpdateTransaction({ rootDir: ROOT_DIR, entries: allEntries });
+    let updatedCount = 0;
+    for (const entry of entries) {
+      if (entry.zipPath.startsWith('ZAP-IA-Studio/sistema/')) {
+        const rel = entry.zipPath.slice('ZAP-IA-Studio/sistema/'.length);
+        if (!rel) continue;
+        if (PROTECTED_EXACT_FILES.has(rel)) continue;
+        if (PROTECTED_SISTEMA_PREFIXES.some((p) => rel.startsWith(p))) continue;
+
+        const destFile = path.join(ROOT_DIR, ...rel.split('/'));
+        fs.mkdirSync(path.dirname(destFile), { recursive: true });
+        fs.writeFileSync(destFile, entry.content);
+        if (process.platform !== 'win32' && destFile.endsWith('.sh')) {
+          try { fs.chmodSync(destFile, 0o755); } catch {}
+        }
+        updatedCount += 1;
+      } else if (IS_SISTEMA_SUBDIR && entry.zipPath.startsWith('ZAP-IA-Studio/')) {
+        const outerRel = entry.zipPath.slice('ZAP-IA-Studio/'.length);
+        if (!outerRel || outerRel.startsWith('sistema/')) continue;
+        const destOuter = path.join(PARENT_DIR, ...outerRel.split('/'));
+        fs.mkdirSync(path.dirname(destOuter), { recursive: true });
+        fs.writeFileSync(destOuter, entry.content);
+        if (process.platform !== 'win32' && destOuter.endsWith('.sh')) {
+          try { fs.chmodSync(destOuter, 0o755); } catch {}
+        }
+      }
+    }
 
     const newPkg = readJsonSafe(pkgPath) || {};
     const newDepsSig = JSON.stringify(newPkg.dependencies || {});

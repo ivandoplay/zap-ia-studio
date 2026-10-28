@@ -1,4 +1,4 @@
-const CACHE_NAME = 'zapia-studio-shell-v44';
+const CACHE_NAME = 'zapia-studio-shell-v45';
 const SHELL_ASSETS = ['/', '/painel', '/painel.html', '/styles.css', '/app.js', '/manifest.json', '/icon-v2.svg', '/ienvia-icon-v2.png', '/ienvia-logo-v2.png'];
 
 self.addEventListener('install', (event) => {

@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';import crypto from 'node:crypto';
+import { isNewerRelease, makeSignedManifest, verifySignedManifest } from '../src/updateSignature.js';
+assert.equal(isNewerRelease('5.8.16','5.8.17'),true);assert.equal(isNewerRelease('5.8.16','5.8.15'),false);assert.equal(isNewerRelease('5.8.16','5.8.16'),false);assert.equal(isNewerRelease('5.8.16','inválida'),false);
+const {privateKey,publicKey}=crypto.generateKeyPairSync('ed25519');
+const entries=[{zipPath:'ZAP-IA-Studio/sistema/package.json',content:Buffer.from('{"version":"1.2.3"}')},{zipPath:'ZAP-IA-Studio/sistema/src/a.js',content:Buffer.from('seguro')}];
+const signed=makeSignedManifest(entries,'1.2.3',privateKey);
+assert.equal(verifySignedManifest(entries,signed.manifest,signed.signature,publicKey,'1.2.3'),true);
+const altered=entries.map(x=>({...x}));altered[1].content=Buffer.from('alterado');assert.throws(()=>verifySignedManifest(altered,signed.manifest,signed.signature,publicKey,'1.2.3'),/integridade|conteúdo/i);
+assert.throws(()=>verifySignedManifest(entries,signed.manifest,Buffer.alloc(64),publicKey,'1.2.3'),/assinatura/i);
+assert.throws(()=>verifySignedManifest(entries,signed.manifest,signed.signature,publicKey,'1.2.4'),/versão/i);
+assert.throws(()=>verifySignedManifest([...entries,entries[0]],signed.manifest,signed.signature,publicKey,'1.2.3'),/duplicad/i);
+assert.throws(()=>verifySignedManifest(entries.slice(0,1),signed.manifest,signed.signature,publicKey,'1.2.3'),/arquivos|incompleto/i);
+console.log('OK: assinatura válida aceita; adulteração, assinatura inválida, versão incorreta, repetição e arquivo ausente rejeitados.');

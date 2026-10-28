@@ -157,7 +157,10 @@ export function extractZipBuffer(buffer, options = {}) {
   let totalUncompressed = 0;
   let ptr = cdOffset;
 
-  for (let idx = 0; idx < totalEntries && ptr < cdOffset + cdSize; idx++) {
+  for (let idx = 0; idx < totalEntries; idx++) {
+    if (ptr + 46 > cdOffset + cdSize) {
+      throw new Error('Central Directory do ZIP incompleto ou corrompido.');
+    }
     const sig = buffer.readUInt32LE(ptr);
     if (sig !== 0x02014b50) {
       throw new Error('Assinatura inválida no cabeçalho do Central Directory.');
@@ -165,6 +168,7 @@ export function extractZipBuffer(buffer, options = {}) {
 
     const flags = buffer.readUInt16LE(ptr + 8);
     const compressionMethod = buffer.readUInt16LE(ptr + 10);
+    const expectedCrc = buffer.readUInt32LE(ptr + 16);
     const compressedSize = buffer.readUInt32LE(ptr + 20);
     const uncompressedSize = buffer.readUInt32LE(ptr + 24);
     const fileNameLen = buffer.readUInt16LE(ptr + 28);
@@ -174,6 +178,9 @@ export function extractZipBuffer(buffer, options = {}) {
     const localHeaderOffset = buffer.readUInt32LE(ptr + 42);
 
     const nameStart = ptr + 46;
+    if (nameStart + fileNameLen + extraLen + commentLen > cdOffset + cdSize) {
+      throw new Error('Entrada do Central Directory truncada ou corrompida.');
+    }
     const rawNameBuf = buffer.subarray(nameStart, nameStart + fileNameLen);
     const rawName = rawNameBuf.toString('utf8');
     ptr = nameStart + fileNameLen + extraLen + commentLen;
@@ -239,9 +246,16 @@ export function extractZipBuffer(buffer, options = {}) {
       // Proteção nativa C++ contra Zip Bomb com cabeçalho falsificado (CVE/OWASP Resource Exhaustion)
       contentBuf = zlib.inflateRawSync(compSlice, { maxOutputLength: remainingBudget });
     } else {
-      continue;
+      throw new Error(`Método de compressão não suportado em ${normalizedPath}.`);
     }
 
+    // Detecta corrupção acidental; CRC não autentica a origem do pacote.
+    if (contentBuf.length !== uncompressedSize) {
+      throw new Error(`Tamanho descompactado inconsistente em ${normalizedPath}.`);
+    }
+    if (crc32Buffer(contentBuf) !== expectedCrc) {
+      throw new Error(`Falha de integridade CRC no arquivo ${normalizedPath}.`);
+    }
     totalUncompressed += contentBuf.length;
 
     files.push({

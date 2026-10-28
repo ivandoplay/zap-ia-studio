@@ -12,7 +12,7 @@ import dns from 'node:dns';
 import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
-import zlib from 'node:zlib';
+import { extractZipBuffer } from '../src/zipReader.js';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -56,61 +56,6 @@ function readJsonSafe(filePath) {
   }
 }
 
-function extractZipBuffer(buf) {
-  if (!buf || buf.length < 22) {
-    throw new Error('Pacote de atualização vazio ou incompleto.');
-  }
-  let eocd = -1;
-  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) {
-    if (buf.readUInt32LE(i) === 0x06054b50) {
-      eocd = i;
-      break;
-    }
-  }
-  if (eocd === -1) {
-    throw new Error('Assinatura ZIP (EOCD) não encontrada.');
-  }
-
-  const total = Math.min(buf.readUInt16LE(eocd + 10), 1500);
-  const cdSize = buf.readUInt32LE(eocd + 12);
-  const cdOffset = buf.readUInt32LE(eocd + 16);
-  let ptr = cdOffset;
-  let totalBytes = 0;
-  const maxUpdateBytes = 50 * 1024 * 1024;
-  const files = [];
-
-  for (let i = 0; i < total && ptr < cdOffset + cdSize; i++) {
-    if (buf.readUInt32LE(ptr) !== 0x02014b50) {
-      throw new Error('Cabeçalho Central Directory inválido.');
-    }
-    const method = buf.readUInt16LE(ptr + 10);
-    const compSize = buf.readUInt32LE(ptr + 20);
-    const nameLen = buf.readUInt16LE(ptr + 28);
-    const extraLen = buf.readUInt16LE(ptr + 30);
-    const commentLen = buf.readUInt16LE(ptr + 32);
-    const localOff = buf.readUInt32LE(ptr + 42);
-    const rawName = buf.subarray(ptr + 46, ptr + 46 + nameLen).toString('utf8');
-    ptr += 46 + nameLen + extraLen + commentLen;
-
-    const cleanRel = rawName
-      .replace(/\\/g, '/')
-      .split('/')
-      .filter((s) => s && s !== '.' && s !== '..')
-      .join('/');
-    if (!cleanRel || rawName.endsWith('/')) continue;
-
-    const lNameLen = buf.readUInt16LE(localOff + 26);
-    const lExtraLen = buf.readUInt16LE(localOff + 28);
-    const dataStart = localOff + 30 + lNameLen + lExtraLen;
-    const slice = buf.subarray(dataStart, dataStart + compSize);
-    const remaining = maxUpdateBytes - totalBytes;
-    if (remaining <= 0) throw new Error('Limite de segurança do pacote excedido.');
-    const content = method === 0 ? slice : zlib.inflateRawSync(slice, { maxOutputLength: remaining });
-    totalBytes += content.length;
-    files.push({ zipPath: cleanRel, content });
-  }
-  return files;
-}
 
 async function runAutoUpdateCheck() {
   if (process.env.ZAPIA_SKIP_AUTO_UPDATE === '1' || process.env.VERCEL) {
@@ -152,7 +97,9 @@ async function runAutoUpdateCheck() {
       throw new Error(`HTTP ${zipRes.status} ao baixar pacote de atualização.`);
     }
     const arrayBuf = await zipRes.arrayBuffer();
-    const entries = extractZipBuffer(Buffer.from(arrayBuf));
+    // Valida todos os arquivos (CRC e tamanho) antes de gravar qualquer atualização.
+    const archive = extractZipBuffer(Buffer.from(arrayBuf), { maxFiles: 1500, maxTotalBytes: 50 * 1024 * 1024 });
+    const entries = archive.files.map((file) => ({ zipPath: file.path, content: file.buffer }));
     if (entries.length < 10) {
       throw new Error('Pacote de atualização incompleto.');
     }

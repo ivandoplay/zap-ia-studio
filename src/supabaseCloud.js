@@ -2469,6 +2469,32 @@ class CloudWorkerBridge {
           };
           break;
         }
+        case 'history_runtime_diagnostics': {
+          // Diagnóstico agregado, sem telefones, conteúdo de mensagens ou credenciais.
+          const slots = WA_SLOT_IDS.map((slotId) => {
+            const engine = this.whatsappManager.getSlot?.(slotId);
+            const cards = Object.entries(localStorageInstance.data.contacts || {})
+              .filter(([key, card]) => normalizeSlotId(card?.slotId || parseContactChannelKey(key).slotId) === slotId)
+              .map(([, card]) => card);
+            const counts = cards.map(c => Array.isArray(c?.messages) ? c.messages.length : 0);
+            return {
+              slotId,
+              status: engine?.status || 'disconnected',
+              hasSavedSession: Boolean(engine?.hasSavedSession?.()),
+              bootstrapMarker: Boolean(engine?.hasCompletedHistoryBootstrap?.()),
+              processedHistoryChunks: Array.isArray(engine?.sock?.authState?.creds?.processedHistoryMessages)
+                ? engine.sock.authState.creds.processedHistoryMessages.length : 0,
+              contacts: cards.length,
+              contactsWithMessages: counts.filter(Boolean).length,
+              messagesInCache: counts.reduce((a, b) => a + b, 0),
+              maxMessagesInCache: counts.reduce((a, b) => Math.max(a, b), 0)
+            };
+          });
+          let sqliteAvailable = false;
+          try { await import('node:sqlite'); sqliteAvailable = true; } catch {}
+          result = { ok: true, nodeVersion: process.versions.node, sqliteAvailable, slots };
+          break;
+        }
         case 'wa_sync_history': {
           const out = await this.whatsappManager.syncAllConversationsFromPhone({
             force: true,

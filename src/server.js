@@ -166,6 +166,21 @@ app.use(
   },
   express.static(UPLOADS_DIR)
 );
+app.get(['/venda', '/venda.html'], (req, res) => res.redirect(302, `${IS_VERCEL ? '/' : '/vitrine'}${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`));
+app.get(['/painel', '/app'], (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(ROOT_DIR, 'public', 'painel.html'));
+});
+app.get('/vitrine', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(ROOT_DIR, 'public', 'index.html'));
+});
+if (!IS_VERCEL) {
+  app.get('/', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
+    res.sendFile(path.join(ROOT_DIR, 'public', 'painel.html'));
+  });
+}
 app.use(
   express.static(path.join(ROOT_DIR, 'public'), {
     etag: true,
@@ -176,13 +191,9 @@ app.use(
     }
   })
 );
-app.get('/venda', (_req, res) => {
-  res.setHeader('Cache-Control', 'no-cache');
-  res.sendFile(path.join(ROOT_DIR, 'public', 'venda.html'));
-});
 app.get('/', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
-  res.sendFile(path.join(ROOT_DIR, 'public', 'index.html'));
+  res.sendFile(path.join(ROOT_DIR, 'public', IS_VERCEL ? 'index.html' : 'painel.html'));
 });
 
 // Upload em disco para Catálogo (até 5 Fotos/PDFs por item — whitelist estrita anti-XSS)

@@ -8,10 +8,30 @@
       "includeFiles": "{src/**,public/**,scripts/**,dist_kit/**,data/training_packs/**,package.json,package-lock.json,.npmrc,.env.example}"
     }
   },
-  "rewrites": [
+  "redirects": [
     {
       "source": "/venda",
-      "destination": "/venda.html"
+      "destination": "/",
+      "permanent": false
+    },
+    {
+      "source": "/venda.html",
+      "destination": "/",
+      "permanent": false
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/painel",
+      "destination": "/painel.html"
+    },
+    {
+      "source": "/app",
+      "destination": "/painel.html"
+    },
+    {
+      "source": "/vitrine",
+      "destination": "/index.html"
     },
     {
       "source": "/api/(.*)",
@@ -42,13 +62,13 @@
       ]
     },
     {
-      "source": "/venda",
+      "source": "/painel",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache" }
       ]
     },
     {
-      "source": "/venda.html",
+      "source": "/painel.html",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache" }
       ]

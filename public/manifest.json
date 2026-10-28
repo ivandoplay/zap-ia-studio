@@ -2,7 +2,7 @@
   "name": "ZAP-IA Studio — Atendimento Universal no WhatsApp",
   "short_name": "ZAP-IA Studio",
   "description": "Plataforma Universal de Atendimento Inteligente no WhatsApp com Multi-IA, Treinamento Turbo e CRM.",
-  "start_url": "/",
+  "start_url": "/painel",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",

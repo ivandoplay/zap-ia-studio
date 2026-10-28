@@ -1,5 +1,5 @@
-const CACHE_NAME = 'zapia-studio-shell-v35';
-const SHELL_ASSETS = ['/', '/venda.html', '/styles.css', '/app.js', '/manifest.json', '/icon.svg'];
+const CACHE_NAME = 'zapia-studio-shell-v36';
+const SHELL_ASSETS = ['/', '/painel', '/painel.html', '/styles.css', '/app.js', '/manifest.json', '/icon.svg'];
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();

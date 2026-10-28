@@ -7785,7 +7785,8 @@ window.exitClientSupportMode = async function exitClientSupportMode() {
 };
 
 function buildWelcomeKitMessage(username, displayName, knownPassword = '') {
-  const panelUrl = window.location.origin;
+  const isLocal = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1');
+  const panelUrl = isLocal ? window.location.origin : `${window.location.origin}/painel`;
   const passLine = knownPassword ? `🔑 *Senha inicial:* ${knownPassword}` : `🔑 *Senha:* (a senha definida para sua conta)`;
   return [
     `🚀 *Bem-vindo(a) ao ZAP-IA Studio — ${displayName || username}!*`,
@@ -8317,7 +8318,7 @@ function computeCurrentSaasSalesUrl() {
   if (p3 !== '347') q.set('p3', p3);
 
   const qs = q.toString();
-  return `${origin}/venda${qs ? `?${qs}` : ''}`;
+  return `${origin}${qs ? `/?${qs}` : ''}`;
 }
 
 function renderSaasCommercialGrowthHub() {
@@ -8386,8 +8387,10 @@ window.copySaasSalesUrl = async function copySaasSalesUrl() {
 };
 
 window.openSaasSalesUrl = function openSaasSalesUrl() {
-  const localPath = computeCurrentSaasSalesUrl().replace(/^https?:\/\/[^/]+/, '');
-  window.open(localPath || '/venda', '_blank', 'noopener');
+  const isLocal = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1');
+  const qs = computeCurrentSaasSalesUrl().split('?')[1] || '';
+  const target = isLocal ? `/vitrine${qs ? `?${qs}` : ''}` : `/${qs ? `?${qs}` : ''}`;
+  window.open(target, '_blank', 'noopener');
 };
 
 window.copySalesPlaybookScript = async function copySalesPlaybookScript(key) {

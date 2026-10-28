@@ -5,7 +5,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 60,
-      "includeFiles": "{src/**,public/**,scripts/**,dist_kit/**,data/training_packs/**,package.json,package-lock.json,.npmrc,.env.example,LEIA-ME_COMO_USAR.md,1_Instalar_No_Windows.bat,2_Iniciar_Atendente_IA.bat,3_Criar_Atalho_Area_de_Trabalho.bat,4_Instalar_No_Termux.sh,5_Iniciar_No_Termux.sh}"
+      "includeFiles": "{src/**,public/**,scripts/**,dist_kit/**,data/training_packs/**,package.json,package-lock.json,.npmrc,.env.example,LEIA-ME_COMO_USAR.md,*.bat,*.sh}"
     }
   },
   "redirects": [

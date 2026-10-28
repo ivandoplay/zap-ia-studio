@@ -5,6 +5,8 @@ import path from 'node:path';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
 import { createZipBuffer } from '../src/zipReader.js';
+import { makeSignedManifest } from '../src/updateSignature.js';
+import crypto from 'node:crypto';
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ienvia-update-integridade-'));
 const target = 'ZAP-IA-Studio/sistema/arquivo-teste.txt';
@@ -13,7 +15,10 @@ const files = [
   { path: target, content: 'TEXTO ORIGINAL' },
   ...Array.from({length:9}, (_,i)=>({path:`ZAP-IA-Studio/sistema/extra${i}.txt`,content:'ok'}))
 ];
-const originalZip = createZipBuffer(files);
+const {privateKey,publicKey}=crypto.generateKeyPairSync('ed25519');
+const signed=makeSignedManifest(files.map(f=>({zipPath:f.path,content:Buffer.from(f.content)})),'99.0.0',privateKey);
+const complete=[...files,{path:'ZAP-IA-Studio/sistema/release/update-manifest.json',content:signed.manifest},{path:'ZAP-IA-Studio/sistema/release/update-manifest.sig',content:signed.signature}];
+const originalZip = createZipBuffer(complete);
 const zip = Buffer.from(originalZip);
 let servedZip = zip;
 const centralOffset = zip.readUInt32LE(zip.length-22+16);
@@ -34,6 +39,9 @@ try {
  await fs.mkdir(path.join(root,'scripts'));await fs.mkdir(path.join(root,'src'));await fs.mkdir(path.join(root,'data'));
  await fs.copyFile(new URL('../scripts/auto_update_boot.mjs',import.meta.url),path.join(root,'scripts','auto_update_boot.mjs'));
  await fs.copyFile(new URL('../src/zipReader.js',import.meta.url),path.join(root,'src','zipReader.js'));
+ await fs.copyFile(new URL('../src/updateTransaction.js',import.meta.url),path.join(root,'src','updateTransaction.js'));
+ await fs.copyFile(new URL('../src/updateSignature.js',import.meta.url),path.join(root,'src','updateSignature.js'));
+ await fs.writeFile(path.join(root,'src','updatePublicKey.js'),`export const UPDATE_PUBLIC_KEY = ${JSON.stringify(publicKey.export({type:'spki',format:'pem'}))};`);
  await fs.writeFile(path.join(root,'package.json'),JSON.stringify({type:'module',version:'1.0.0'}));
  await fs.writeFile(path.join(root,'arquivo-teste.txt'),'MANTER ORIGINAL');
  await fs.writeFile(path.join(root,'data','database.json'),'DADOS SINTÉTICOS');
@@ -48,6 +56,9 @@ try {
  assert.equal(JSON.parse(await fs.readFile(path.join(root,'package.json'),'utf8')).version,'1.0.0');
  assert.equal(await fs.readFile(path.join(root,'arquivo-teste.txt'),'utf8'),'MANTER ORIGINAL');
  assert.equal(await fs.readFile(path.join(root,'data','database.json'),'utf8'),'DADOS SINTÉTICOS');
+ servedZip=createZipBuffer(complete.map(f=>f.path===target?{...f,content:'ARQUIVO ALTERADO'}:f));
+ output=await runUpdate();assert.match(output,/não foi possível concluir/i);
+ assert.equal(await fs.readFile(path.join(root,'arquivo-teste.txt'),'utf8'),'MANTER ORIGINAL');
  servedZip=originalZip;
  output=await runUpdate();assert.match(output,/atualizado automaticamente/i);
  assert.equal(JSON.parse(await fs.readFile(path.join(root,'package.json'),'utf8')).version,'99.0.0');

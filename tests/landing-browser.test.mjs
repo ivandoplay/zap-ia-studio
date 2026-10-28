@@ -47,6 +47,8 @@ try {
   assert.equal(await page.locator('#cloudLoginTitle').textContent(),'Ienvia');
   await page.evaluate(() => applyBrandingToDom({appName:'ZAP-IA Studio'}));assert.equal(await page.locator('#brandTitleEl').textContent(),'Ienvia');
   await page.evaluate(() => applyBrandingToDom({appName:'Marca do Cliente'}));assert.equal(await page.locator('#brandTitleEl').textContent(),'Marca do Cliente');
+  await page.evaluate(() => {state.appVersion='5.8.16';state.waState={workerOnline:true,workerVersion:'5.8.11',workerPlatform:'PC de teste',devices:[]};renderMotorDownloadStatus();});
+  const updateStatus=await page.locator('#dashMotorVersionStatus').innerText();assert.match(updateStatus,/Site.*5\.8\.16/);assert.match(updateStatus,/Motor.*5\.8\.11/);
   await page.getByLabel('Usuário',{exact:true}).fill('teste');await page.getByLabel('Senha',{exact:true}).fill('senha-ficticia');
   await page.getByRole('button',{name:'Mostrar ou ocultar senha'}).click();assert.equal(await page.locator('#cloudLoginPass').getAttribute('type'),'text');
   assert.deepEqual(errors,[]);await page.close();

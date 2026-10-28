@@ -64,10 +64,16 @@ import { NICHE_TEMPLATES } from './templates.js';
 import { buildSystemPrompt, generateSmartReply, parseGeminiKeyPool, transcribeVoiceBufferWithAi, analyzeCrmFunnelCoach } from './aiEngine.js';
 import { formatPixMessageWithQr } from './pix.js';
 import { convertToCanonicalWhatsAppVoice, resolveFfmpegPath } from './audioProcessor.js';
-import { createZipBuffer } from './zipReader.js';
+import { createZipBuffer, extractZipBuffer } from './zipReader.js';
+import { verifySignedManifest } from './updateSignature.js';
+import { UPDATE_PUBLIC_KEY } from './updatePublicKey.js';
+import { recoverInterruptedUpdate } from './updateTransaction.js';
 import { IS_VERCEL, MEDIA_BUCKET, SUPABASE_URL, isCloudConfigured } from './cloudConfig.js';
 import { scopedSendChatId } from './cloudSendScope.js';
 import { getSafeCommandStatus } from './commandStatus.js';
+// Não iniciar o WhatsApp sobre uma atualização incompleta. Falhas de recuperação
+// interrompem o processo, em vez de abrir o motor com arquivos inconsistentes.
+if (!IS_VERCEL) recoverInterruptedUpdate(ROOT_DIR);
 const { whatsappManager } = IS_VERCEL
   ? { whatsappManager: null }
   : await import('./whatsappManager.js');
@@ -824,7 +830,16 @@ const MOTOR_EXCLUDED_SEGMENTS = new Set([
   '.DS_Store'
 ]);
 
-function collectCleanMotorZipEntries(includeMasterPack = false, zipRoot = 'ZAP-IA-Studio') {
+// A assinatura precisa ser igual em checkouts Windows, Linux e Vercel.
+// Mantém CRLF nos arquivos de Windows/documentos e LF nos scripts Unix.
+export function normalizeMotorPackageFile(filePath, buffer) {
+  const ext = path.extname(filePath).toLowerCase();
+  if (!['.bat', '.ps1', '.txt', '.sh'].includes(ext)) return buffer;
+  const lf = buffer.toString('utf8').replace(/\r\n/g, '\n');
+  return Buffer.from(ext === '.sh' ? lf : lf.replace(/\n/g, '\r\n'), 'utf8');
+}
+
+export function collectCleanMotorZipEntries(includeMasterPack = false, zipRoot = 'ZAP-IA-Studio') {
   const entries = [];
   const walkIntoZipPrefix = (absDir, zipPrefix) => {
     if (!fs.existsSync(absDir)) return;
@@ -839,7 +854,7 @@ function collectCleanMotorZipEntries(includeMasterPack = false, zipRoot = 'ZAP-I
       } else if (dirent.isFile()) {
         entries.push({
           path: nextZipPath,
-          content: fs.readFileSync(nextAbs)
+          content: normalizeMotorPackageFile(nextAbs, fs.readFileSync(nextAbs))
         });
       }
     }
@@ -854,7 +869,7 @@ function collectCleanMotorZipEntries(includeMasterPack = false, zipRoot = 'ZAP-I
     if (fs.existsSync(abs) && fs.statSync(abs).isFile()) {
       entries.push({
         path: `${zipRoot}/sistema/${sysFile}`,
-        content: fs.readFileSync(abs)
+        content: normalizeMotorPackageFile(abs, fs.readFileSync(abs))
       });
     }
   }
@@ -911,12 +926,20 @@ app.post('/api/whatsapp/update-motor', async (req, res) => {
 
 app.get('/api/public/motor-update.zip', (_req, res) => {
   try {
-    // Pacote público limpo (sem pacotes privados nem dados de contas) para atualização em 1 comando no Termux/Linux
-    const entries = collectCleanMotorZipEntries(false);
-    if (entries.length < 10) {
-      return res.status(500).json({ ok: false, error: 'Pacote do motor indisponível neste ambiente.' });
+    // O artefato é montado e assinado antes do deploy, não a partir dos
+    // arquivos que o ambiente da Vercel pode alterar durante o build.
+    const zipBuffer = fs.readFileSync(path.join(ROOT_DIR, 'release', 'motor-update.zip'));
+    const archive = extractZipBuffer(zipBuffer);
+    const manifestPath = 'ZAP-IA-Studio/sistema/release/update-manifest.json';
+    const signaturePath = 'ZAP-IA-Studio/sistema/release/update-manifest.sig';
+    const manifests = archive.files.filter(f => f.path === manifestPath);
+    const signatures = archive.files.filter(f => f.path === signaturePath);
+    if (manifests.length !== 1 || signatures.length !== 1 || archive.files.length < 12) {
+      throw new Error('Pacote assinado incompleto ou repetido.');
     }
-    const zipBuffer = createZipBuffer(entries);
+    const entries = archive.files.filter(f => f.path !== manifestPath && f.path !== signaturePath)
+      .map(f => ({ zipPath: f.path, content: f.buffer }));
+    verifySignedManifest(entries, manifests[0].buffer, signatures[0].buffer, UPDATE_PUBLIC_KEY, APP_VERSION);
     const filename = `Ienvia-v${APP_VERSION}.zip`;
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);

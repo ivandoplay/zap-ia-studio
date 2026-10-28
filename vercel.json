@@ -10,6 +10,10 @@
   },
   "rewrites": [
     {
+      "source": "/venda",
+      "destination": "/venda.html"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index.js"
     }
@@ -33,6 +37,18 @@
     },
     {
       "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache" }
+      ]
+    },
+    {
+      "source": "/venda",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache" }
+      ]
+    },
+    {
+      "source": "/venda.html",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache" }
       ]

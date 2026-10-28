@@ -30,8 +30,8 @@
 
       <div class="saas-login-pills">
         <span class="saas-login-pill">Inbox Ao Vivo 360º</span>
+        <span class="saas-login-pill">Multi-Chip 3x</span>
         <span class="saas-login-pill">Voz Humana OGG</span>
-        <span class="saas-login-pill">Cérebro Único</span>
         <span class="saas-login-pill">Isolamento Multi-Tenant</span>
       </div>
 
@@ -58,8 +58,9 @@
         </button>
       </form>
 
-      <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border); font-size:11.5px; color:var(--text-muted); text-align:center;">
-        Acesso exclusivo para assinantes e contas autorizadas.
+      <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border); font-size:12px; color:var(--text-muted); text-align:center; display:flex; flex-direction:column; gap:6px;">
+        <span>Acesso exclusivo para assinantes e contas autorizadas.</span>
+        <a href="/venda" style="color:var(--accent-bright); font-weight:600; text-decoration:none; padding:4px 0;">Ainda não é assinante? Ver demonstração ao vivo e planos</a>
       </div>
     </div>
   </div>
@@ -1804,6 +1805,10 @@
             <p>Gerencie assinantes, acompanhe o progresso de ativação, acesse qualquer cliente em Modo Suporte em 1 clique e controle acessos manualmente.</p>
           </div>
           <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="openSaasSalesUrl()">
+              <svg class="icon-svg" style="width:14px; height:14px;" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+              <span>Vitrine de Vendas (/venda)</span>
+            </button>
             <button type="button" id="btnRefreshManagedUsers" class="btn btn-secondary btn-sm">Atualizar</button>
             <button type="button" id="btnOpenCreateClientModal" class="btn btn-primary btn-sm" onclick="document.getElementById('createClientModal')?.classList.add('open')">
               <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
@@ -1868,6 +1873,78 @@
             </div>
           </div>
         </details>
+
+        <!-- CENTRAL COMERCIAL & PLAYBOOK DE CRESCIMENTO SAAS (EXCLUSIVA ADMIN MASTER) -->
+        <div class="panel saas-growth-hub" style="margin-top:16px;">
+          <div class="panel-header" style="margin-bottom:12px;">
+            <div>
+              <h2 class="panel-title">Central Comercial &amp; Playbook de Vendas do seu SaaS</h2>
+              <p class="panel-desc" style="margin-top:3px;">
+                Configure sua página pública de vendas (<code>/venda</code>), copie scripts prontos de abordagem/fechamento e aplique alavancas práticas de aquisição recorrente.
+              </p>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="openSaasSalesUrl()">Abrir Página /venda</button>
+              <button type="button" class="btn btn-primary btn-sm" onclick="copySaasSalesUrl()">Copiar Link de Vendas</button>
+            </div>
+          </div>
+
+          <div class="saas-url-builder">
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" for="salesPageCloserPhone">WhatsApp de Fechamento</label>
+              <input type="text" id="salesPageCloserPhone" value="558681303979" placeholder="Ex: 5586999998888" inputmode="numeric" />
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" for="salesPrice1">1 Chip (R$/mês)</label>
+              <input type="number" id="salesPrice1" value="147" min="1" max="9999" />
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" for="salesPrice2">2 Chips (R$/mês)</label>
+              <input type="number" id="salesPrice2" value="247" min="1" max="9999" />
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label" for="salesPrice3">3 Chips (R$/mês)</label>
+              <input type="number" id="salesPrice3" value="347" min="1" max="9999" />
+            </div>
+          </div>
+
+          <div class="saas-url-preview-bar">
+            <code id="salesPageGeneratedUrl" style="font-size:12px; color:var(--accent-bright); word-break:break-all;">https://zap-ia-studio.vercel.app/venda</code>
+          </div>
+
+          <div style="margin-top:16px;">
+            <strong style="font-size:13px; display:block; margin-bottom:8px;">Scripts Comerciais Prontos (Copy de Conversão Direta no WhatsApp)</strong>
+            <div id="saasPlaybookScriptsGrid" class="sales-scripts-grid"></div>
+          </div>
+
+          <details style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;">
+            <summary style="cursor:pointer; font-weight:700; font-size:13px; color:var(--text-main);">
+              5 Alavancas Práticas para Escalar Assinaturas Mensais (Playbook de Aquisição)
+            </summary>
+            <div class="growth-lever-grid" style="margin-top:12px;">
+              <div class="growth-lever-card">
+                <strong>1. Auditoria Noturna "Cliente Oculto" (20h30–22h)</strong>
+                <p>Mande mensagem para 15 clínicas ou lojas da sua cidade após as 20h30 perguntando preço. No dia seguinte, mostre ao dono quantas horas levou para responderem e envie sua demonstração <code>/venda</code>.</p>
+              </div>
+              <div class="growth-lever-card">
+                <strong>2. Parceria com Gestores de Tráfego Local (20% Recorrente)</strong>
+                <p>Todo gestor de tráfego sofre quando gera leads e o cliente demora para responder no WhatsApp. Ofereça comissão recorrente para ele indicar o ZAP-IA Studio aos clientes de tráfego dele.</p>
+              </div>
+              <div class="growth-lever-card">
+                <strong>3. Vídeo Curto "Tela Dividida" (Voz OGG + Dossiê)</strong>
+                <p>Grave 35 segundos mostrando um lead mandando áudio de um lado e o ZAP-IA respondendo com nota de voz de ondas verdes + enviando o Dossiê de 3 Linhas no seu celular pessoal.</p>
+              </div>
+              <div class="growth-lever-card">
+                <strong>4. Upsell Multi-Chip na Carteira Atual (1 → 2 ou 3 Chips)</strong>
+                <p>Ofereça aos assinantes de 1 Chip um segundo número exclusivo para prospecção ativa com <strong>Rodízio Inteligente Anti-Ban</strong> por +R$ 100/mês.</p>
+              </div>
+              <div class="growth-lever-card">
+                <strong>5. Programa "Indique 1 Lojista = 1 Mês Abonado"</strong>
+                <p>Quando um cliente bater as primeiras vendas pelo painel, ofereça isenção da próxima mensalidade a cada amigo empresário indicado que ativar um plano.</p>
+              </div>
+            </div>
+          </details>
+        </div>
       </section>
     </main>
   </div>

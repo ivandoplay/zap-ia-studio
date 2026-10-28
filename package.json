@@ -1,7 +1,7 @@
 {
   "name": "zap-ia-studio",
-  "version": "5.6.0",
-  "description": "ZAP-IA Studio v5.6.0 Multi-Chip & Multi-Device SaaS Edition — Até 3 WhatsApps Simultâneos por Conta, Roteamento Atômico Multi-Aparelho, Rodízio Anti-Ban, Cérebro Único, CRM Pro 3 Colunas, Vercel + Supabase RLS",
+  "version": "5.7.0",
+  "description": "ZAP-IA Studio v5.7.0 Commercial SaaS Flagship Edition — Multi-Chip até 3 WhatsApps, Multi-Aparelho, Vitrine Interativa /venda, Central Comercial SaaS, UI/UX Pro Max & Cérebro Único",
   "type": "module",
   "main": "src/server.js",
   "scripts": {

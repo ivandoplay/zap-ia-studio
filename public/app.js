@@ -3277,12 +3277,15 @@ function renderActiveInboxConversation() {
     sentBadge.style.display = 'none';
   }
 
-  // Skill #2: Dossiê Executivo de 3 Linhas
+  // Skill #2: Dossiê Executivo de 3 Linhas + Cópia Rápida em 1 Clique (v5.7.0)
   const dossierEl = document.getElementById('inboxDossierBanner');
   if (c.handoffDossier && (c.handoffDossier.scenario || c.handoffDossier.trigger)) {
     dossierEl.style.display = '';
     dossierEl.innerHTML = `
-      <div style="font-weight:700; margin-bottom:4px;">📋 Dossiê Executivo de Passagem (3 Linhas)</div>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px;">
+        <span style="font-weight:700;">📋 Dossiê Executivo de Passagem (3 Linhas)</span>
+        <button type="button" class="btn btn-secondary btn-sm" style="min-height:26px; padding:2px 9px; font-size:11px;" onclick="copyActiveLeadDossier()">Copiar Dossiê</button>
+      </div>
       <div><strong>1. Cenário:</strong> ${escapeHtml(c.handoffDossier.scenario || 'N/D')}</div>
       <div><strong>2. Gatilho:</strong> ${escapeHtml(c.handoffDossier.trigger || 'N/D')}</div>
       <div><strong>3. Próxima jogada:</strong> ${escapeHtml(c.handoffDossier.nextMove || 'N/D')}</div>
@@ -8246,11 +8249,178 @@ window.fetchOlderChatMessages = async function fetchOlderChatMessages(encodedCha
   }
 };
 
+window.copyActiveLeadDossier = async function copyActiveLeadDossier() {
+  const c = (state.contacts || []).find((x) => x.chatId === state.selectedInboxChatId);
+  if (!c || !c.handoffDossier) return;
+  const slotMeta = getSlotUiMeta(getContactSlotId(c));
+  const text = [
+    `📋 DOSSIÊ DE PASSAGEM — ${c.name || 'Cliente'} (${formatContactSubtitle(c)})`,
+    `📱 Canal: ${slotMeta.label}`,
+    `1. Cenário: ${c.handoffDossier.scenario || 'N/D'}`,
+    `2. Gatilho: ${c.handoffDossier.trigger || 'N/D'}`,
+    `3. Próxima jogada: ${c.handoffDossier.nextMove || 'N/D'}`
+  ].join('\n');
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('📋 Dossiê Executivo copiado para a área de transferência!');
+  } catch {
+    showToast('Não foi possível copiar automaticamente neste navegador.', true);
+  }
+};
+
+// ======================== CENTRAL COMERCIAL & PLAYBOOK DE VENDAS SAAS (v5.7.0) ========================
+
+const SAAS_SALES_PLAYBOOK_SCRIPTS = [
+  {
+    key: 'oculto',
+    title: '1. Abordagem Direta (Demora no WhatsApp)',
+    canProactive: true,
+    buildText: (salesUrl) =>
+      `Olá, {{nome}}! Tudo bem? Vi o trabalho de vocês e notei um ponto onde muita loja boa perde venda à noite e no horário de almoço: o tempo da primeira resposta no WhatsApp.\n\nMontei uma demonstração ao vivo de como atender em segundos com a própria voz da empresa (sem menu "digite 1") e receber só o resumo pronto na hora de fechar:\n${salesUrl}\n\nSe fizer sentido pra sua operação hoje, me fala que libero um teste guiado com você.`
+  },
+  {
+    key: 'objecao_robo',
+    title: '2. Quebra de Objeção ("Meus clientes odeiam robô")',
+    canProactive: false,
+    buildText: (salesUrl) =>
+      `Concordo 100% contigo — menu de "digite 1 ou 2" espanta cliente bom na primeira linha.\n\nPor isso aqui funciona diferente: você grava os áudios uma única vez com a sua voz e o sistema envia como nota de voz real (com as ondas verdes nativas do WhatsApp), respeitando o tempo humano de digitação. E se você responder qualquer mensagem pelo celular, ele pausa sozinho na hora.\n\nTesta o simulador interativo aqui rapidinho pra ver na prática: ${salesUrl}`
+  },
+  {
+    key: 'trafego_parceria',
+    title: '3. Convite p/ Gestores de Tráfego (Parceria 20%)',
+    canProactive: true,
+    buildText: (salesUrl) =>
+      `Fala, {{nome}}! Tudo certo? Sei que uma das maiores dores de quem roda tráfego hoje é gerar lead qualificado e o cliente demorar 2 horas pra responder no WhatsApp.\n\nTenho uma plataforma própria que atende em segundos com voz humana, catálogo e CRM 360º (até 3 chips na mesma conta), e estou abrindo parceria com 20% recorrente todo mês por cliente indicado.\n\nDá uma olhada na vitrine ao vivo: ${salesUrl}`
+  },
+  {
+    key: 'upsell_multichip',
+    title: '4. Upgrade 1 Chip → 2 ou 3 Chips (Base Ativa)',
+    canProactive: false,
+    buildText: () =>
+      `Oi! Passando pra te avisar que liberamos a atualização Multi-Chip na plataforma: agora você consegue conectar até 3 números de WhatsApp na mesma conta, ver tudo na mesma fila por horário e ligar o Rodízio Inteligente Anti-Ban para abordar clientes sem sobrecarregar seu número principal.\n\nQuer que eu já libere o 2º Chip no seu painel hoje pra você testar?`
+  }
+];
+
+function computeCurrentSaasSalesUrl() {
+  const origin = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')
+    ? 'https://zap-ia-studio.vercel.app'
+    : window.location.origin;
+  const wa = (document.getElementById('salesPageCloserPhone')?.value || '558681303979').replace(/\D/g, '') || '558681303979';
+  const p1 = String(document.getElementById('salesPrice1')?.value || '147').replace(/\D/g, '') || '147';
+  const p2 = String(document.getElementById('salesPrice2')?.value || '247').replace(/\D/g, '') || '247';
+  const p3 = String(document.getElementById('salesPrice3')?.value || '347').replace(/\D/g, '') || '347';
+
+  const q = new URLSearchParams();
+  if (wa !== '558681303979') q.set('wa', wa);
+  if (p1 !== '147') q.set('p1', p1);
+  if (p2 !== '247') q.set('p2', p2);
+  if (p3 !== '347') q.set('p3', p3);
+
+  const qs = q.toString();
+  return `${origin}/venda${qs ? `?${qs}` : ''}`;
+}
+
+function renderSaasCommercialGrowthHub() {
+  const codeEl = document.getElementById('salesPageGeneratedUrl');
+  const gridEl = document.getElementById('saasPlaybookScriptsGrid');
+  if (!codeEl || !gridEl) return;
+
+  const url = computeCurrentSaasSalesUrl();
+  codeEl.textContent = url;
+
+  gridEl.innerHTML = SAAS_SALES_PLAYBOOK_SCRIPTS.map((s) => {
+    const txt = s.buildText(url);
+    return `
+      <div class="sales-script-card">
+        <div>
+          <strong style="font-size:12.5px; color:var(--text-main); display:block; margin-bottom:6px;">${escapeHtml(s.title)}</strong>
+          <p>${escapeHtml(txt)}</p>
+        </div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-primary btn-sm" onclick="copySalesPlaybookScript('${escapeJsArg(s.key)}')">Copiar Script</button>
+          ${s.canProactive ? `<button type="button" class="btn btn-secondary btn-sm" onclick="loadSalesScriptIntoProactive('${escapeJsArg(s.key)}')">Levar p/ Disparador</button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function initSaasCommercialGrowthHub() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('zapia_saas_sales_cfg') || 'null');
+    if (saved) {
+      if (saved.wa && document.getElementById('salesPageCloserPhone')) document.getElementById('salesPageCloserPhone').value = saved.wa;
+      if (saved.p1 && document.getElementById('salesPrice1')) document.getElementById('salesPrice1').value = saved.p1;
+      if (saved.p2 && document.getElementById('salesPrice2')) document.getElementById('salesPrice2').value = saved.p2;
+      if (saved.p3 && document.getElementById('salesPrice3')) document.getElementById('salesPrice3').value = saved.p3;
+    }
+  } catch {}
+
+  for (const id of ['salesPageCloserPhone', 'salesPrice1', 'salesPrice2', 'salesPrice3']) {
+    document.getElementById(id)?.addEventListener('input', () => {
+      try {
+        localStorage.setItem(
+          'zapia_saas_sales_cfg',
+          JSON.stringify({
+            wa: document.getElementById('salesPageCloserPhone')?.value || '',
+            p1: document.getElementById('salesPrice1')?.value || '',
+            p2: document.getElementById('salesPrice2')?.value || '',
+            p3: document.getElementById('salesPrice3')?.value || ''
+          })
+        );
+      } catch {}
+      renderSaasCommercialGrowthHub();
+    });
+  }
+  renderSaasCommercialGrowthHub();
+}
+
+window.copySaasSalesUrl = async function copySaasSalesUrl() {
+  const url = computeCurrentSaasSalesUrl();
+  try {
+    await navigator.clipboard.writeText(url);
+    showToast('✅ Link da página de vendas copiado!');
+  } catch {
+    showToast(url);
+  }
+};
+
+window.openSaasSalesUrl = function openSaasSalesUrl() {
+  const localPath = computeCurrentSaasSalesUrl().replace(/^https?:\/\/[^/]+/, '');
+  window.open(localPath || '/venda', '_blank', 'noopener');
+};
+
+window.copySalesPlaybookScript = async function copySalesPlaybookScript(key) {
+  const item = SAAS_SALES_PLAYBOOK_SCRIPTS.find((x) => x.key === key);
+  if (!item) return;
+  const txt = item.buildText(computeCurrentSaasSalesUrl());
+  try {
+    await navigator.clipboard.writeText(txt);
+    showToast('✅ Script comercial copiado! Pronto para colar no WhatsApp.');
+  } catch {
+    showToast('Não foi possível copiar automaticamente.', true);
+  }
+};
+
+window.loadSalesScriptIntoProactive = function loadSalesScriptIntoProactive(key) {
+  const item = SAAS_SALES_PLAYBOOK_SCRIPTS.find((x) => x.key === key);
+  if (!item) return;
+  const txt = item.buildText(computeCurrentSaasSalesUrl());
+  const proTxt = document.getElementById('dashProactiveText');
+  const batchTxt = document.getElementById('batchMessageTextarea');
+  if (proTxt) proTxt.value = txt;
+  if (batchTxt) batchTxt.value = txt;
+  switchTab('dashboard');
+  proTxt?.focus();
+  showToast('🚀 Script carregado no Disparador Proativo e na Fila Segura!');
+};
+
 // Inicialização
 initTheme();
 initPwa();
 bindEvents();
 bindCloudAuthAndAdminEvents();
+initSaasCommercialGrowthHub();
 
 // Deep-link de aba via URL hash (#crm, #treinamento, #audios, #contas...)
 const initialHash = (window.location.hash || '').replace('#', '');

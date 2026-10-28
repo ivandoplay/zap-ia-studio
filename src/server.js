@@ -176,6 +176,10 @@ app.use(
     }
   })
 );
+app.get('/venda', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(ROOT_DIR, 'public', 'venda.html'));
+});
 app.get('/', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(ROOT_DIR, 'public', 'index.html'));

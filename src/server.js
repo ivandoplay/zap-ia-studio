@@ -66,6 +66,7 @@ import { formatPixMessageWithQr } from './pix.js';
 import { convertToCanonicalWhatsAppVoice, resolveFfmpegPath } from './audioProcessor.js';
 import { createZipBuffer } from './zipReader.js';
 import { IS_VERCEL, MEDIA_BUCKET, SUPABASE_URL, isCloudConfigured } from './cloudConfig.js';
+import { scopedSendChatId } from './cloudSendScope.js';
 const { whatsappManager } = IS_VERCEL
   ? { whatsappManager: null }
   : await import('./whatsappManager.js');
@@ -529,7 +530,9 @@ app.use('/api', async (req, res, next) => {
         return tenantStorageContext.run(supportCtx.tenantStore, () => next());
       }
 
-      const tenantStore = await loadTenantContextFromCloud(verified.client, verified.authUser, verified.profile);
+      const tenantStore = await loadTenantContextFromCloud(verified.client, verified.authUser, verified.profile, {
+        scopedContactId: scopedSendChatId(req.method, req.path)
+      });
       req.cloudAuth = {
         client: verified.client,
         authUser: verified.authUser,
@@ -2441,8 +2444,10 @@ app.post(['/api/crm/:chatId/send', '/api/crm/:chatId/reply'], async (req, res) =
       storage.dirtyContactIds.clear();
       return res.json({
         ok: true,
-        contact: out.contact || storage.data.contacts[chatId],
-        sentRealWhatsApp: true
+        contact: out.queued ? undefined : (out.contact || storage.data.contacts[chatId]),
+        queued: Boolean(out.queued),
+        commandId: out.commandId || undefined,
+        sentRealWhatsApp: !out.queued
       });
     }
 
@@ -2847,8 +2852,10 @@ app.post('/api/crm/:chatId/send-attachment', memUpload.single('file'), async (re
         storage.dirtyContactIds.clear();
         return res.json({
           ok: true,
-          contact: out.contact || storage.data.contacts[chatId],
-          sentRealWhatsApp: true
+          contact: out.queued ? undefined : (out.contact || storage.data.contacts[chatId]),
+          queued: Boolean(out.queued),
+          commandId: out.commandId || undefined,
+          sentRealWhatsApp: !out.queued
         });
       }
     } else {
@@ -3090,9 +3097,11 @@ app.post('/api/crm/:chatId/send-library-voice', async (req, res) => {
       storage.dirtyContactIds.clear();
       return res.json({
         ok: true,
-        contact: out.contact || storage.data.contacts[chatId],
+        contact: out.queued ? undefined : (out.contact || storage.data.contacts[chatId]),
+        queued: Boolean(out.queued),
+        commandId: out.commandId || undefined,
         business: storage.getBusiness(),
-        sentRealWhatsApp: true
+        sentRealWhatsApp: !out.queued
       });
     }
 
@@ -3172,8 +3181,10 @@ app.post('/api/crm/:chatId/send-audio', memUpload.single('audio'), async (req, r
       storage.dirtyContactIds.clear();
       return res.json({
         ok: true,
-        contact: out.contact || storage.data.contacts[chatId],
-        sentRealWhatsApp: true
+        contact: out.queued ? undefined : (out.contact || storage.data.contacts[chatId]),
+        queued: Boolean(out.queued),
+        commandId: out.commandId || undefined,
+        sentRealWhatsApp: !out.queued
       });
     }
 

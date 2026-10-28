@@ -31,6 +31,7 @@ import {
 import { calibrateTrueClock, trueNowIso, trueNowMs } from './trueClock.js';
 import { enableHistoryJournal, isHistoryJournalEnabled, countJournalFiles } from './historyJournal.js';
 import { backupSlotAuth } from './pairingSafety.js';
+import { fetchScopedCloudContact } from './cloudSendScope.js';
 
 const CLOUD_SESSION_FILE = path.join(DATA_DIR, 'cloud_session.json');
 const DEVICE_IDENTITY_FILE = path.join(DATA_DIR, 'device_identity.json');
@@ -611,13 +612,13 @@ export async function fetchAllCloudContacts(client, uid, { since = '', fields = 
   return rows;
 }
 
-export async function loadTenantContextFromCloud(client, authUser, profile) {
+export async function loadTenantContextFromCloud(client, authUser, profile, { scopedContactId = null } = {}) {
   const uid = authUser.id;
   const isMaster = profile?.role === 'master';
 
   const [wsRes, contactsRes, rtRes, slotsRes, devicesRes] = await Promise.all([
     client.from('zapia_workspaces').select('*').eq('user_id', uid).maybeSingle(),
-    fetchAllCloudContacts(client, uid, { fields: 'chat_id, data' }).then(data => ({ data })),
+    (scopedContactId ? fetchScopedCloudContact(client, uid, scopedContactId) : fetchAllCloudContacts(client, uid, { fields: 'chat_id, data' })).then(data => ({ data })),
     client.from('zapia_wa_runtime').select('*').eq('user_id', uid).maybeSingle(),
     client.from('zapia_wa_slots').select('*').eq('user_id', uid),
     client.from('zapia_worker_devices').select('*').eq('user_id', uid).order('heartbeat_at', { ascending: false })
@@ -668,6 +669,7 @@ export async function loadTenantContextFromCloud(client, authUser, profile) {
 
   const maxWaSlots = clampMaxWaSlots(profile?.max_wa_slots, profile?.role);
   tenantStore.cloudClient = client;
+  tenantStore.partialContactSnapshot = Boolean(scopedContactId);
   tenantStore.maxWaSlots = maxWaSlots;
   tenantStore.waRuntime = buildCloudMultiSlotWaState({
     rtRow: rtRes.data,
@@ -691,7 +693,7 @@ export async function flushTenantStoreToCloud(client, userId, tenantStore, opts 
 
   // Apenas requests de API Web inferem deleção por ausência de chave no mapa completo;
   // Em workers Multi-Dispositivo (Furo #3), NUNCA inferimos DELETE implícito para um aparelho não apagar conversas de outro!
-  if (!isWorkerSync) {
+  if (!isWorkerSync && !tenantStore.partialContactSnapshot) {
     const currentKeys = new Set(Object.keys(tenantStore.data.contacts || {}));
     for (const prevKey of tenantStore.initialContactKeys || []) {
       if (!currentKeys.has(prevKey)) {
@@ -1076,6 +1078,7 @@ export async function dispatchCommandToWorker(client, userId, action, payload = 
   return {
     ok: true,
     queued: true,
+    commandId: cmd.id,
     slotId: resolvedSlotId,
     targetDeviceId: resolvedTargetDeviceId,
     message: 'Comando enviado ao Motor WhatsApp e em processamento.'

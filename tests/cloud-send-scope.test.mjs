@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { scopedSendChatId, fetchScopedCloudContact } from '../src/cloudSendScope.js';
+import { flushTenantStoreToCloud } from '../src/supabaseCloud.js';
+const raw='slot_2::151802163011701@lid', encoded=encodeURIComponent(raw);
+for (const action of ['send','reply','send-attachment','send-audio','send-library-voice']) assert.equal(scopedSendChatId('POST',`/crm/${encoded}/${action}`),raw);
+for (const [method,url] of [['GET',`/crm/${encoded}/send`],['POST',`/crm/${encoded}/delete`],['POST','/cloud/poll'],['POST','/crm/%2F/send'],['POST','/crm/%ZZ/send']]) assert.equal(scopedSendChatId(method,url),null);
+let filters=[];const chain={select(x){assert.equal(x,'chat_id, data');return this},eq(k,v){filters.push([k,v]);return this},maybeSingle:async()=>({data:{chat_id:raw,data:{messages:[]}},error:null})};
+const found=await fetchScopedCloudContact({from(n){assert.equal(n,'zapia_contacts');return chain}},'tenant-a',raw);assert.equal(found.length,1);assert.deepEqual(filters,[['user_id','tenant-a'],['chat_id',raw]]);
+const bad={from(){return {select(){return this},eq(){return this},async maybeSingle(){return {data:null,error:{message:'falha simulada'}}}}}};await assert.rejects(()=>fetchScopedCloudContact(bad,'tenant-a',raw),/falha simulada/);
+let requests=0;const store={partialContactSnapshot:true,data:{contacts:{}},initialContactKeys:new Set(['outro-chip','outra-conversa']),deletedContactIds:new Set(),dirtyContactIds:new Set(),workspaceDirty:false};
+await flushTenantStoreToCloud({from(){requests++;throw Error('Nenhuma conversa deve ser apagada')}},'tenant-a',store);assert.equal(requests,0);assert.equal(store.deletedContactIds.size,0);
+console.log('OK: consulta escopada por conta e conversa; snapshot parcial não apaga outras fichas.');

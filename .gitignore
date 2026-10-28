@@ -10,6 +10,7 @@ Thumbs.db
 data/database.json
 data/database.json.tmp
 data/cloud_session.json
+data/device_identity.json
 data/wa_auth/
 data/uploads/
 .agents/

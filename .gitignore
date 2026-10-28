@@ -18,3 +18,7 @@ data/uploads/
 uploads/
 .tmp_*
 *.log
+
+# Backups locais e identificação de propriedade do cache nunca são publicados
+data/recovery-before-cloud-sync/
+data/worker_db_owner.json

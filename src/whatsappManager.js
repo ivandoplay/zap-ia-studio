@@ -470,7 +470,11 @@ class WhatsAppSlotEngine {
 
   hasCompletedHistoryBootstrap() {
     try {
-      if (Object.keys(storage.data.contacts || {}).length >= 1) return true;
+      if (Object.entries(storage.data.contacts || {}).some(([key, card]) =>
+        normalizeSlotId(card?.slotId || parseContactChannelKey(key).slotId) === this.slotId)) return true;
+      // Metadados de versões antigas podiam marcar o Chip 2/3 como concluído
+      // usando a contagem global do Chip 1; sem conversas deste chip, tentar novamente.
+      if (this.slotId !== 'slot_1') return false;
       const fp = this.getHistorySyncMetaFile();
       if (!fs.existsSync(fp)) return false;
       const parsed = JSON.parse(fs.readFileSync(fp, 'utf-8'));
@@ -524,15 +528,17 @@ class WhatsAppSlotEngine {
       }
 
       // Enriquecer conversas que JÁ existem no CRM (nunca cria fantasmas vazios da agenda telefônica!)
+      const slotLid = lid ? this.toStorageKey(lid) : '';
+      const slotRaw = rawId ? this.toStorageKey(rawId) : '';
       const existingKey =
-        (lid && storage.data.contacts[lid] ? lid : null) ||
-        (rawId && storage.data.contacts[rawId] ? rawId : null) ||
-        (isLikelyRealPhone(phone) ? storage.findSiblingContactKey(lid || rawId, phone) : null);
+        (slotLid && storage.data.contacts[slotLid] ? slotLid : null) ||
+        (slotRaw && storage.data.contacts[slotRaw] ? slotRaw : null) ||
+        (isLikelyRealPhone(phone) ? storage.findSiblingContactKey(slotLid || slotRaw, phone) : null);
 
       if (existingKey && storage.data.contacts[existingKey]) {
         const bestName = candidateName || this.lookupBestContactName(existingKey, phone);
         storage.upsertContact(
-          lid || existingKey,
+          slotLid || existingKey,
           {
             ...(isLikelyRealPhone(phone) ? { phone } : {}),
             ...(bestName ? { name: bestName } : {})
@@ -1306,7 +1312,10 @@ class WhatsAppSlotEngine {
     }
 
     this.syncInProgress = true;
-    const beforeCount = Object.keys(storage.data.contacts || {}).length;
+    const countSlotContacts = () => Object.entries(storage.data.contacts || {}).filter(([key, card]) =>
+      normalizeSlotId(card?.slotId || parseContactChannelKey(key).slotId) === this.slotId
+    ).length;
+    const beforeCount = countSlotContacts();
 
     const chunkArrivalPromise = new Promise((resolve) => {
       let timer = null;
@@ -1386,6 +1395,7 @@ class WhatsAppSlotEngine {
       // Reconcilia telefones e nomes recém-descobertos em todos os contatos existentes
       const ownerSelfName = this.getOwnerSelfName();
       for (const [jid, card] of Object.entries({ ...(storage.data.contacts || {}) })) {
+        if (normalizeSlotId(card?.slotId || parseContactChannelKey(jid).slotId) !== this.slotId) continue;
         if (this.isSelfJid(jid)) {
           storage.deleteContact(jid);
           continue;
@@ -1410,7 +1420,7 @@ class WhatsAppSlotEngine {
       storage.saveSoon();
       this.broadcastFn('crm_updated', {});
 
-      const afterCount = Object.keys(storage.data.contacts || {}).length;
+      const afterCount = countSlotContacts();
       const syncedNew = Math.max(0, afterCount - beforeCount);
       if (afterCount > 0) {
         this.markHistoryBootstrapCompleted({ totalConversations: afterCount });
@@ -3396,12 +3406,15 @@ class WhatsAppMultiSlotManager {
     if (!connected.length) {
       return this.slots.slot_1.syncAllConversationsFromPhone({ force, waitMs });
     }
-    let totalContacts = 0;
-    for (const s of connected) {
-      const r = await s.syncAllConversationsFromPhone({ force, waitMs }).catch(() => ({ totalContacts: 0 }));
-      totalContacts = Math.max(totalContacts, Number(r?.totalContacts) || 0);
-    }
-    return { ok: true, totalContacts: Object.keys(storage.data.contacts || {}).length };
+    const results = await Promise.allSettled(connected.map((slot) =>
+      slot.syncAllConversationsFromPhone({ force, waitMs })
+    ));
+    const slots = results.map((result, index) => result.status === 'fulfilled'
+      ? { slotId: connected[index].slotId, ok: true, ...result.value }
+      : { slotId: connected[index].slotId, ok: false, error: String(result.reason?.message || result.reason) });
+    if (slots.every((slot) => !slot.ok)) throw new Error('Não foi possível solicitar o histórico dos chips conectados.');
+    return { ok: true, partial: slots.some((slot) => !slot.ok), slots, totalContacts: Object.keys(storage.data.contacts || {}).length };
+
   }
 
   async fetchOlderMessagesForChat(chatId, count = 50) {

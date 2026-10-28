@@ -589,13 +589,33 @@ export async function loadTenantContextAsMasterSupport(targetUserId) {
 /**
  * Carrega o workspace isolado da conta logada a partir do Supabase (usado em cada request Serverless na Vercel).
  */
+// Paginação por chave evita o limite padrão de 1.000 linhas da API e mantém os chips separados.
+export async function fetchAllCloudContacts(client, uid, { since = '', fields = 'chat_id, data, updated_at' } = {}) {
+  const rows = [];
+  let after = '';
+  for (;;) {
+    let q = client.from('zapia_contacts').select(fields).eq('user_id', uid).order('chat_id', { ascending: true }).limit(500);
+    if (since) q = q.gt('updated_at', since);
+    if (after) q = q.gt('chat_id', after);
+    const { data, error } = await q;
+    if (error) throw new Error(`Falha ao carregar conversas: ${error.message}`);
+    if (!Array.isArray(data)) throw new Error('Resposta inválida ao carregar conversas.');
+    rows.push(...data);
+    if (data.length < 500) break;
+    const next = data[data.length - 1]?.chat_id;
+    if (!next || next <= after) throw new Error('Paginação de conversas não avançou.');
+    after = next;
+  }
+  return rows;
+}
+
 export async function loadTenantContextFromCloud(client, authUser, profile) {
   const uid = authUser.id;
   const isMaster = profile?.role === 'master';
 
   const [wsRes, contactsRes, rtRes, slotsRes, devicesRes] = await Promise.all([
     client.from('zapia_workspaces').select('*').eq('user_id', uid).maybeSingle(),
-    client.from('zapia_contacts').select('chat_id, data').eq('user_id', uid).order('last_message_at', { ascending: false }).limit(2000),
+    fetchAllCloudContacts(client, uid, { fields: 'chat_id, data' }).then(data => ({ data })),
     client.from('zapia_wa_runtime').select('*').eq('user_id', uid).maybeSingle(),
     client.from('zapia_wa_slots').select('*').eq('user_id', uid),
     client.from('zapia_worker_devices').select('*').eq('user_id', uid).order('heartbeat_at', { ascending: false })
@@ -679,7 +699,11 @@ export async function flushTenantStoreToCloud(client, userId, tenantStore, opts 
   }
 
   const tasks = [];
-
+  const pendingDirty = [...tenantStore.dirtyContactIds];
+  const pendingDeletes = [...tenantStore.deletedContactIds];
+  const pendingWorkspace = tenantStore.workspaceDirty;
+  let configHashToConfirm = '';
+  try {
   if (tenantStore.workspaceDirty) {
     const currentConfigHash = computeWorkspaceConfigHash(tenantStore.data);
     const onlyTelemetryChanged =
@@ -697,23 +721,7 @@ export async function flushTenantStoreToCloud(client, userId, tenantStore, opts 
             p_proactive_queue: Array.isArray(tenantStore.data.proactiveQueue) ? tenantStore.data.proactiveQueue : []
           })
           .then(({ error }) => {
-            if (error) {
-              // Fallback seguro caso RPC oscile
-              return client.from('zapia_workspaces').upsert(
-                {
-                  user_id: userId,
-                  business: tenantStore.data.business,
-                  settings: tenantStore.data.settings,
-                  stats: tenantStore.data.stats,
-                  logs: (tenantStore.data.logs || []).slice(0, 150),
-                  simulator_history: (tenantStore.data.simulatorHistory || []).slice(-60),
-                  proactive_queue: Array.isArray(tenantStore.data.proactiveQueue) ? tenantStore.data.proactiveQueue : [],
-                  custom_pack: tenantStore.data.customPacks || {},
-                  updated_at: trueNowIso()
-                },
-                { onConflict: 'user_id' }
-              );
-            }
+            if (error) throw new Error(`Falha ao salvar telemetria: ${error.message}`);
           })
       );
     } else {
@@ -733,9 +741,7 @@ export async function flushTenantStoreToCloud(client, userId, tenantStore, opts 
           { onConflict: 'user_id' }
         )
       );
-      if (typeof opts?.onConfigFlushed === 'function') {
-        opts.onConfigFlushed(currentConfigHash);
-      }
+      configHashToConfirm = currentConfigHash;
     }
     tenantStore.workspaceDirty = false;
   }
@@ -762,30 +768,32 @@ export async function flushTenantStoreToCloud(client, userId, tenantStore, opts 
     // Proteção Anti-Sobrescrita Multi-Dispositivo (Vercel <-> Termux <-> PC):
     // Faz união CRDT em blocos de até 80 conversas sujas (sem o limite antigo de 15 conversas!)
     const remoteMap = new Map();
-    if (dirtyIds.length <= 240) {
+    {
       for (let i = 0; i < dirtyIds.length; i += 80) {
         const chunkIds = dirtyIds.slice(i, i + 80);
         try {
-          const { data: remoteRows } = await client
+          const { data: remoteRows, error: remoteError } = await client
             .from('zapia_contacts')
             .select('chat_id, data')
             .eq('user_id', userId)
             .in('chat_id', chunkIds);
+          if (remoteError) throw new Error(remoteError.message);
           if (Array.isArray(remoteRows)) {
             for (const r of remoteRows) {
               remoteMap.set(r.chat_id, r.data);
             }
           }
-        } catch {
-          // Segue normalmente caso falhe leitura auxiliar
+        } catch (err) {
+          throw new Error(`Falha ao reconciliar conversas: ${err.message}`);
         }
       }
     }
 
     const rows = [];
     for (const cid of dirtyIds) {
-      const c = tenantStore.data.contacts[cid];
-      if (!c) continue;
+      const currentContact = tenantStore.data.contacts[cid];
+      if (!currentContact) continue;
+      const c = structuredClone(currentContact);
       const remoteData = remoteMap.get(cid);
       const effectiveClearedAt =
         (c.historyClearedAt || '') >= (remoteData?.historyClearedAt || '')
@@ -816,8 +824,17 @@ export async function flushTenantStoreToCloud(client, userId, tenantStore, opts 
   }
 
   if (tasks.length > 0) {
-    await Promise.all(tasks);
+    const results = await Promise.all(tasks);
+    const failed = results.find((result) => result?.error);
+    if (failed) throw new Error(failed.error.message || 'Falha ao sincronizar com a nuvem.');
     tenantStore.initialContactKeys = new Set(Object.keys(tenantStore.data.contacts || {}));
+    if (configHashToConfirm && typeof opts?.onConfigFlushed === 'function') opts.onConfigFlushed(configHashToConfirm);
+  }
+  } catch (err) {
+    if (pendingWorkspace) tenantStore.workspaceDirty = true;
+    for (const id of pendingDirty) if (tenantStore.data.contacts[id]) tenantStore.dirtyContactIds.add(id);
+    for (const id of pendingDeletes) if (!tenantStore.data.contacts[id]) tenantStore.deletedContactIds.add(id);
+    throw err;
   }
 }
 
@@ -1784,31 +1801,49 @@ class CloudWorkerBridge {
   }
 
   async pullCloudIntoLocal(initial = false) {
+    if (this.pullInFlight) {
+      this.pullPending = true;
+      return this.pullInFlight;
+    }
+    this.pullInFlight = (async () => {
+      do {
+        this.pullPending = false;
+        await this.performCloudPull(initial);
+        initial = false;
+      } while (this.pullPending);
+    })();
+    try { return await this.pullInFlight; }
+    finally { this.pullInFlight = null; }
+  }
+
+  async performCloudPull(initial = false) {
     if (!this.client || !this.user?.id) return;
     const uid = this.user.id;
 
-    const contactsQuery = initial || !this.lastSyncedContactsIso
-      ? this.client
-          .from('zapia_contacts')
-          .select('chat_id, data, updated_at')
-          .eq('user_id', uid)
-          .order('last_message_at', { ascending: false })
-          .limit(2000)
-      : this.client
-          .from('zapia_contacts')
-          .select('chat_id, data, updated_at')
-          .eq('user_id', uid)
-          .gt('updated_at', this.lastSyncedContactsIso);
+    const since = initial || !this.lastSyncedContactsIso ? '' : this.lastSyncedContactsIso;
+    const contactsQuery = fetchAllCloudContacts(this.client, uid, { since }).then(data => ({ data }));
 
     const [wsRes, contactsRes] = await Promise.all([
       this.client.from('zapia_workspaces').select('*').eq('user_id', uid).maybeSingle(),
       contactsQuery
     ]);
 
+    if (wsRes.error) throw new Error(`Falha ao carregar configurações: ${wsRes.error.message}`);
+    const ownerFile = path.join(DATA_DIR, 'worker_db_owner.json');
+    let sameLocalOwner = false;
+    try { sameLocalOwner = JSON.parse(fs.readFileSync(ownerFile, 'utf8')).userId === uid; } catch {}
+    // Preserva uma cópia local antes de substituir o cache. Nunca exporta nem envia esta cópia.
+    if (initial && Object.keys(localStorageInstance.data.contacts || {}).length) {
+      const backupDir = path.join(DATA_DIR, 'recovery-before-cloud-sync');
+      fs.mkdirSync(backupDir, { recursive: true, mode: 0o700 });
+      const backupPath = path.join(backupDir, `backup-${Date.now()}-${crypto.randomBytes(4).toString('hex')}.json`);
+      fs.writeFileSync(backupPath, JSON.stringify(localStorageInstance.data), { mode: 0o600, flag: 'wx' });
+    }
     let contactsChanged = false;
     const healedIds = [];
-    if (Array.isArray(contactsRes?.data) && contactsRes.data.length > 0) {
-      const prevLocalContacts = { ...(localStorageInstance.data.contacts || {}) };
+    if (initial || (Array.isArray(contactsRes?.data) && contactsRes.data.length > 0)) {
+      // Um banco legado sem identificação de dono não pode misturar dados entre contas.
+      const prevLocalContacts = !initial || sameLocalOwner ? { ...(localStorageInstance.data.contacts || {}) } : {};
       const prevMutate = localStorageInstance.onMutate;
       localStorageInstance.onMutate = null;
       try {
@@ -1816,13 +1851,17 @@ class CloudWorkerBridge {
           localStorageInstance.data.contacts = {};
         }
         let maxIso = this.lastSyncedContactsIso;
-        for (const row of contactsRes.data) {
+        let earliestSkippedIso = '';
+        for (const row of contactsRes.data || []) {
           if (row?.updated_at && (!maxIso || row.updated_at > maxIso)) {
             maxIso = row.updated_at;
           }
           if (!row?.chat_id || !row?.data) continue;
           // Não sobrescreve contato que possui mutação local pendente de upload
-          if (!initial && localStorageInstance.dirtyContactIds.has(row.chat_id)) continue;
+          if (!initial && localStorageInstance.dirtyContactIds.has(row.chat_id)) {
+            if (row.updated_at && (!earliestSkippedIso || row.updated_at < earliestSkippedIso)) earliestSkippedIso = row.updated_at;
+            continue;
+          }
 
           const prevLocal = prevLocalContacts[row.chat_id];
           const cloudContact = { ...row.data };
@@ -1845,7 +1884,13 @@ class CloudWorkerBridge {
           localStorageInstance.data.contacts[row.chat_id] = cloudContact;
           contactsChanged = true;
         }
-        if (maxIso) this.lastSyncedContactsIso = maxIso;
+        if (maxIso) {
+          // Uma linha ignorada por edição local precisa ser lida novamente após o flush.
+          const skippedMs = Date.parse(earliestSkippedIso);
+          this.lastSyncedContactsIso = earliestSkippedIso && Number.isFinite(skippedMs)
+            ? new Date(skippedMs - 1).toISOString()
+            : maxIso;
+        }
         if (!initial && contactsChanged) {
           localStorageInstance.initialContactKeys = new Set(Object.keys(localStorageInstance.data.contacts || {}));
           localStorageInstance.writeNow();
@@ -1909,6 +1954,10 @@ class CloudWorkerBridge {
           localStorageInstance.onMutate = prevMutate;
         }
 
+        if (initial) {
+          fs.writeFileSync(ownerFile, JSON.stringify({ userId: uid }), { mode: 0o600 });
+        }
+
         // Faz cache em segundo plano dos áudios estratégicos da nuvem para envio rápido no Baileys
         for (const v of localStorageInstance.getVoiceLibrary()) {
           if (v?.filename && v?.url && /^https?:\/\//i.test(v.url)) {
@@ -1926,6 +1975,9 @@ class CloudWorkerBridge {
       this.syncTimer = null;
       this.flushLocalToCloud().catch((err) => {
         console.error('[CloudWorker] Erro ao sincronizar dados com Supabase:', err.message);
+        if (!this.syncTimer && this.client && this.user?.id) {
+          this.syncTimer = setTimeout(() => { this.syncTimer = null; this.scheduleLocalToCloudSync(); }, 5000);
+        }
       });
     }, 450);
   }

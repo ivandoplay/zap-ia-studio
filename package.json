@@ -1,7 +1,7 @@
 {
   "name": "zap-ia-studio",
-  "version": "5.8.0",
-  "description": "ZAP-IA Studio v5.8.0 Spatial 3D Flagship Edition — Experiência Principal 3D WebGL + GSAP ScrollTrigger na Raiz (/), Painel Assinante (/painel), Multi-Chip até 3 WhatsApps & Cérebro Único",
+  "version": "5.8.1",
+  "description": "ZAP-IA Studio — Vitrine 3D e correções de sincronização Multi-Chip",
   "type": "module",
   "main": "src/server.js",
   "scripts": {

@@ -463,16 +463,24 @@ function attachAtomicCloudFlush(res, tenantStore) {
 
   res.json = (body) => {
     ensureFlushed()
-      .catch((e) => console.error('[CloudFlush] Erro ao salvar estado:', e.message))
-      .finally(() => origJson(body));
+      .then(() => origJson(body))
+      .catch((e) => {
+        console.error('[CloudFlush] Erro ao salvar estado:', e.message);
+        res.status(503);
+        origJson({ ok: false, error: 'Não foi possível salvar na nuvem. Tente novamente.' });
+      });
     return res;
   };
 
   res.send = (body) => {
     if (flushed) return origSend(body);
     ensureFlushed()
-      .catch((e) => console.error('[CloudFlush] Erro ao salvar estado:', e.message))
-      .finally(() => origSend(body));
+      .then(() => origSend(body))
+      .catch((e) => {
+        console.error('[CloudFlush] Erro ao salvar estado:', e.message);
+        res.status(503);
+        origJson({ ok: false, error: 'Não foi possível salvar na nuvem. Tente novamente.' });
+      });
     return res;
   };
 }

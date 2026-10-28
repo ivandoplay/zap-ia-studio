@@ -8199,11 +8199,11 @@ window.triggerFullWhatsAppHistorySync = async function triggerFullWhatsAppHistor
     }
     const added = Number(res.addedContacts) || 0;
     const total = Number(res.afterCount) || (state.contacts || []).length;
-    showToast(
-      added > 0
+    showToast(res.partial
+      ? '⚠️ Solicitação parcial: pelo menos um chip não conseguiu sincronizar. Tente novamente.'
+      : (added > 0
         ? `✅ ${added} nova(s) conversa(s) importada(s)! Total no CRM: ${total}.`
-        : `✅ Conversas sincronizadas (${total} no CRM). Novos blocos do celular continuarão chegando em segundo plano!`
-    );
+        : `📥 Solicitação enviada. O WhatsApp pode demorar a disponibilizar o histórico (${total} conversa(s) no CRM).`), Boolean(res.partial));
     // O celular pode enviar blocos extras de histórico nos segundos seguintes; atualiza automaticamente!
     setTimeout(() => { refreshLiveStateOnly().catch(() => {}); }, 3800);
     setTimeout(() => { refreshLiveStateOnly().catch(() => {}); }, 8500);

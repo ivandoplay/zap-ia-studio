@@ -18,6 +18,7 @@ try {
    if(!u.startsWith(base))return route.abort();return route.continue();
   });
   await page.goto(base+'/',{waitUntil:'load'});
+  const logo=page.locator('.ienvia-wordmark');assert.equal(await logo.getAttribute('src'),'/ienvia-logo-v2.png');assert.equal(await logo.evaluate(i=>i.complete && i.naturalWidth>0),true);
   for(const selector of ['.hero-copy','.hero-visual','#heroPrimaryWaBtn','.sim-shell']){
    const r=await page.locator(selector).boundingBox();assert(r && r.x>=0 && r.x+r.width<=width+0.5,`${selector} cortado em ${width}px: ${JSON.stringify(r)}`);
   }
@@ -42,6 +43,7 @@ try {
   assert.equal(await page.locator('#orbitStage').evaluate(e=>e.classList.contains('has-webgl')),false);
   const panelLink=page.getByRole('link',{name:/Já sou cliente/});assert.equal(await panelLink.getAttribute('href'),'/painel');
   await page.goto(base+'/painel',{waitUntil:'load'});await page.locator('#cloudLoginScreen.open').waitFor();
+  for(const selector of ['#cloudLoginScreen .brand-mark img','.sidebar .brand-mark img','.mob-topbar-brand .brand-mark img']){const img=page.locator(selector);assert.equal(await img.getAttribute('src'),'/ienvia-icon-v2.png');assert.equal(await img.evaluate(i=>i.complete && i.naturalWidth>0),true);}
   assert.equal(await page.locator('#cloudLoginTitle').textContent(),'Ienvia');
   await page.evaluate(() => applyBrandingToDom({appName:'ZAP-IA Studio'}));assert.equal(await page.locator('#brandTitleEl').textContent(),'Ienvia');
   await page.evaluate(() => applyBrandingToDom({appName:'Marca do Cliente'}));assert.equal(await page.locator('#brandTitleEl').textContent(),'Marca do Cliente');

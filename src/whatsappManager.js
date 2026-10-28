@@ -3255,6 +3255,11 @@ class WhatsAppMultiSlotManager {
     return this.getSlot(slotId);
   }
 
+  // O painel local precisa esperar pelo chip da conversa, nunca por outro chip conectado.
+  async waitUntilConnected(timeoutMs = 6500, chatId = '') {
+    return this.getSlotForChat(chatId).waitUntilConnected(timeoutMs);
+  }
+
   getConnectedSlots() {
     return WA_SLOT_IDS.map((id) => this.slots[id]).filter((s) => s && s.status === 'connected' && s.sock);
   }

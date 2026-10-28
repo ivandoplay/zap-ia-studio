@@ -2448,7 +2448,7 @@ app.post(['/api/crm/:chatId/send', '/api/crm/:chatId/reply'], async (req, res) =
 
     const cleanTargetJid = chatId.replace(/^demo_/, '');
     if (!usesCloudBridge(req) && !chatId.startsWith('demo_')) {
-      const ready = await whatsappManager.waitUntilConnected(7000);
+      const ready = await whatsappManager.waitUntilConnected(7000, chatId);
       if (!ready) {
         return res.status(503).json({
           ok: false,
@@ -2665,7 +2665,7 @@ app.post('/api/crm/:chatId/send-item', async (req, res) => {
     }
 
     if (!usesCloudBridge(req) && !chatId.startsWith('demo_')) {
-      const ready = await whatsappManager.waitUntilConnected(7000);
+      const ready = await whatsappManager.waitUntilConnected(7000, chatId);
       if (!ready) {
         return res.status(503).json({
           ok: false,
@@ -2711,7 +2711,7 @@ app.post('/api/crm/:chatId/send-pix', async (req, res) => {
     }
 
     if (!usesCloudBridge(req) && !chatId.startsWith('demo_')) {
-      const ready = await whatsappManager.waitUntilConnected(7000);
+      const ready = await whatsappManager.waitUntilConnected(7000, chatId);
       if (!ready) {
         return res.status(503).json({
           ok: false,
@@ -2858,7 +2858,7 @@ app.post('/api/crm/:chatId/send-attachment', memUpload.single('file'), async (re
 
     const cleanTargetJid = chatId.replace(/^demo_/, '');
     if (!usesCloudBridge(req) && !chatId.startsWith('demo_')) {
-      const ready = await whatsappManager.waitUntilConnected(7000);
+      const ready = await whatsappManager.waitUntilConnected(7000, chatId);
       if (!ready) {
         return res.status(503).json({
           ok: false,
@@ -3097,7 +3097,7 @@ app.post('/api/crm/:chatId/send-library-voice', async (req, res) => {
     }
 
     if (!usesCloudBridge(req) && !chatId.startsWith('demo_')) {
-      const ready = await whatsappManager.waitUntilConnected(7000);
+      const ready = await whatsappManager.waitUntilConnected(7000, chatId);
       if (!ready) {
         return res.status(503).json({
           ok: false,
@@ -3178,7 +3178,7 @@ app.post('/api/crm/:chatId/send-audio', memUpload.single('audio'), async (req, r
     }
 
     if (!usesCloudBridge(req) && !chatId.startsWith('demo_')) {
-      const ready = await whatsappManager.waitUntilConnected(7000);
+      const ready = await whatsappManager.waitUntilConnected(7000, chatId);
       if (!ready) {
         return res.status(503).json({
           ok: false,

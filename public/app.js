@@ -8201,13 +8201,16 @@ window.triggerFullWhatsAppHistorySync = async function triggerFullWhatsAppHistor
     const added = Number(res.addedContacts ?? res.syncedNew ?? slotAdded) || 0;
     const total = Number(res.afterCount ?? res.totalContacts) || (state.contacts || []).length;
     const stillWaiting = Boolean(res.waitingForHistory || res.slots?.some(slot => slot.waitingForHistory || slot.alreadyRunning));
-    showToast(res.partial
+    const rejected = Boolean(res.historyRejected || res.slots?.some(slot => slot.historyRejected));
+    showToast(rejected
+      ? '⚠️ O WhatsApp recusou o pedido de histórico completo em pelo menos um chip. O histórico integral não foi confirmado.'
+      : res.partial
       ? '⚠️ Solicitação parcial: pelo menos um chip não conseguiu sincronizar. Tente novamente.'
       : (added > 0
         ? `✅ ${added} conversa(s) importada(s); outros lotes podem chegar depois. Total no CRM: ${total}.`
         : (stillWaiting
           ? `⏳ Aguardando o WhatsApp enviar o histórico (${total} conversa(s) no CRM).`
-          : `📥 Solicitação processada; o WhatsApp ainda pode enviar outros lotes (${total} conversa(s) no CRM).`)), Boolean(res.partial));
+          : `📥 Solicitação processada; o WhatsApp ainda pode enviar outros lotes (${total} conversa(s) no CRM).`)), Boolean(res.partial || rejected));
     // O celular pode enviar blocos extras de histórico nos segundos seguintes; atualiza automaticamente!
     setTimeout(() => { refreshLiveStateOnly().catch(() => {}); }, 3800);
     setTimeout(() => { refreshLiveStateOnly().catch(() => {}); }, 8500);

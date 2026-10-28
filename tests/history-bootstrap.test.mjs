@@ -43,6 +43,26 @@ try {
   slot.sock.sendPeerDataOperationMessage = async () => { throw new Error('falha simulada'); };
   await assert.rejects(slot.syncAllConversationsFromPhone({waitMs:10}), /Não foi possível solicitar o histórico/);
   assert.equal(slot.syncInProgress, false, 'Falha não pode travar solicitações futuras.');
+
+  slot.isSelfJid=(jid)=>jid==='proprio@lid';
+  slot.sock.sendPeerDataOperationMessage = async (request) => {
+    if (request.fullHistorySyncOnDemandRequest) {
+      const id=request.fullHistorySyncOnDemandRequest.requestMetadata.requestId;
+      const emit=(requestId)=>slot.recordHistoryProtocolResponse({key:{fromMe:true,remoteJid:'proprio@lid'},message:{protocolMessage:{
+        type:17,peerDataOperationRequestResponseMessage:{peerDataOperationRequestType:6,
+          peerDataOperationResult:[{fullHistorySyncOnDemandRequestResponse:{requestMetadata:{requestId},responseCode:4}}]}
+      }}});
+      setTimeout(()=>emit('outra-solicitacao'),2);
+      setTimeout(()=>emit(id),8);
+    }
+    return 'stanza-falso';
+  };
+  const refused=await slot.syncAllConversationsFromPhone({waitMs:300});
+  assert.equal(refused.historyRejected,true,'Recusa correlacionada não deve parecer sucesso.');
+  assert.equal(refused.historyProtocolCode,4);
+  assert.equal(refused.historyResponseReceived,false,'Recusa não é lote recebido.');
+  assert.equal(refused.waitingForHistory,false);
+  assert.equal(slot.pendingFullHistoryRequest,null);
   console.log('OK: histórico inicial por chip e distinção entre resposta recebida e espera.');
 } finally {
   fs.rmSync(dir,{recursive:true,force:true});

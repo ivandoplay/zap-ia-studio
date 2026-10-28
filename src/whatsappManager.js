@@ -241,6 +241,7 @@ class WhatsAppSlotEngine {
     this.connectionWaiters = new Set();
     this.historySyncWaiters = new Set();
     this.lastHistoryProtocolStatus = null;
+    this.pendingFullHistoryRequest = null;
     this.syncInProgress = false;
     this.avatarFetchCache = new Map(); // chatId -> ts
     this.scheduledSendingLock = false;
@@ -520,6 +521,14 @@ class WhatsAppSlotEngine {
       const name = Object.keys(enums).find(k => enums[k] === code) || 'UNKNOWN';
       // Apenas estado/código; não armazenar texto, telefones nem identificadores.
       this.lastHistoryProtocolStatus = { code, name, receivedAt: trueNowIso() };
+      const pending = this.pendingFullHistoryRequest;
+      const metadataId = item.fullHistorySyncOnDemandRequestResponse?.requestMetadata?.requestId;
+      const stanzaId = response.stanzaId;
+      const matches = pending && ((metadataId && metadataId === pending.metadataId) ||
+        (stanzaId && pending.stanzaId && stanzaId === pending.stanzaId));
+      // Código de aceitação não é lote de histórico; aguardamos o evento de lote.
+      // Só uma recusa explicitamente correlacionada encerra a espera geral.
+      if (matches && code !== 0) this.notifyHistoryWaiters({ protocolRejected: true, protocolCode: code });
       found = true;
     }
     return found;
@@ -1386,10 +1395,12 @@ class WhatsAppSlotEngine {
       // Passo 2: Solicita ao aparelho principal (via PeerDataOperation) o pacote completo de conversas e mensagens recentes!
       if (typeof this.sock.sendPeerDataOperationMessage === 'function') {
         try {
-          await this.sock.sendPeerDataOperationMessage({
+          const metadataId = uid('history');
+          this.pendingFullHistoryRequest = { metadataId, stanzaId: '' };
+          const stanzaId = await this.sock.sendPeerDataOperationMessage({
             peerDataOperationRequestType: proto.Message.PeerDataOperationRequestType.FULL_HISTORY_SYNC_ON_DEMAND,
             fullHistorySyncOnDemandRequest: {
-              requestMetadata: { requestId: `zapia_${Date.now()}` },
+              requestMetadata: { requestId: metadataId },
               historySyncConfig: {
                 storageQuotaMb: 10240,
                 inlineInitialPayloadInE2EeMsg: true,
@@ -1401,6 +1412,9 @@ class WhatsAppSlotEngine {
               }
             }
           });
+          if (this.pendingFullHistoryRequest?.metadataId === metadataId) {
+            this.pendingFullHistoryRequest.stanzaId = String(stanzaId || '');
+          }
           historyRequestSent = true;
         } catch (err) {
           historyRequestError = String(err?.message || err);
@@ -1433,8 +1447,9 @@ class WhatsAppSlotEngine {
       }
 
       const historyEvent = await chunkArrivalPromise;
-      const historyResponseReceived = !historyEvent.timedOut;
-      if (!historyRequestSent && !historyResponseReceived) {
+      const historyRejected = Boolean(historyEvent.protocolRejected);
+      const historyResponseReceived = !historyEvent.timedOut && !historyRejected;
+      if (!historyRequestSent && !historyResponseReceived && !historyRejected) {
         throw new Error(historyRequestError
           ? `Não foi possível solicitar o histórico ao WhatsApp: ${historyRequestError}`
           : 'Este motor não conseguiu solicitar o histórico ao WhatsApp.');
@@ -1473,18 +1488,23 @@ class WhatsAppSlotEngine {
       const syncedNew = Math.max(0, afterCount - beforeCount);
       storage.addLog(
         'whatsapp',
-        historyResponseReceived
-          ? `[${this.getSlotConfig().label}] Lote de histórico recebido: ${afterCount} conversa(s) no CRM${syncedNew > 0 ? ` (+${syncedNew} importadas)` : ''}. Outros lotes ainda podem chegar.`
-          : `[${this.getSlotConfig().label}] Solicitação de histórico enviada; nenhuma resposta recebida no tempo de espera. Existem ${afterCount} conversa(s) no CRM. O WhatsApp ainda pode responder depois.`
+        historyRejected
+          ? `[${this.getSlotConfig().label}] O WhatsApp recusou o pedido de histórico completo (código ${historyEvent.protocolCode}). As conversas já existentes foram preservadas.`
+          : historyResponseReceived
+            ? `[${this.getSlotConfig().label}] Lote de histórico recebido: ${afterCount} conversa(s) no CRM${syncedNew > 0 ? ` (+${syncedNew} importadas)` : ''}. Outros lotes ainda podem chegar.`
+            : `[${this.getSlotConfig().label}] Solicitação de histórico enviada; nenhuma resposta recebida no tempo de espera. Existem ${afterCount} conversa(s) no CRM. O WhatsApp ainda pode responder depois.`
       );
       return {
         ok: true,
         totalConversations: afterCount,
         syncedNew,
         historyResponseReceived,
-        waitingForHistory: !historyResponseReceived
+        historyRejected,
+        historyProtocolCode: historyRejected ? historyEvent.protocolCode : null,
+        waitingForHistory: !historyResponseReceived && !historyRejected
       };
     } finally {
+      this.pendingFullHistoryRequest = null;
       this.syncInProgress = false;
     }
   }
@@ -3493,7 +3513,7 @@ class WhatsAppMultiSlotManager {
       ? { slotId: connected[index].slotId, ok: true, ...result.value }
       : { slotId: connected[index].slotId, ok: false, error: String(result.reason?.message || result.reason) });
     if (slots.every((slot) => !slot.ok)) throw new Error('Não foi possível solicitar o histórico dos chips conectados.');
-    return { ok: true, partial: slots.some((slot) => !slot.ok), slots, totalContacts: Object.keys(storage.data.contacts || {}).length };
+    return { ok: true, partial: slots.some((slot) => !slot.ok || slot.historyRejected), slots, totalContacts: Object.keys(storage.data.contacts || {}).length };
 
   }
 

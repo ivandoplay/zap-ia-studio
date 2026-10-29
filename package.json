@@ -1,6 +1,6 @@
 {
   "name": "ienvia",
-  "version": "5.8.25",
+  "version": "5.8.26",
   "description": "Ienvia — Atendimento inteligente e CRM para WhatsApp",
   "type": "module",
   "main": "src/server.js",

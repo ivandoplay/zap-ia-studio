@@ -512,14 +512,15 @@ function createDefaultDatabase() {
         geminiApiKey: process.env.GEMINI_API_KEY || '',
         geminiKeyPool: '',
         geminiModel: 'gemini-3.5-flash-lite',
-        autoFallbackProvider: 'groq',
+        autoFallbackProvider: 'none',
         promptShieldEnabled: true,
         openaiApiKey: process.env.OPENAI_API_KEY || '',
         openaiModel: 'gpt-4o-mini',
         groqApiKey: process.env.GROQ_API_KEY || '',
-        groqModel: 'llama-3.3-70b-versatile',
+        groqModel: 'openai/gpt-oss-20b',
+        audioTranscriptionApiKey: '',
         openrouterApiKey: process.env.OPENROUTER_API_KEY || '',
-        openrouterModel: 'deepseek/deepseek-chat',
+        openrouterModel: 'openrouter/free',
         temperature: 0.35,
         maxHistoryMessages: 20
       },
@@ -1744,6 +1745,7 @@ export class Storage {
       geminiKeyPool: incAi.geminiKeyPool || curAi.geminiKeyPool || '',
       openaiApiKey: incAi.openaiApiKey || curAi.openaiApiKey || '',
       groqApiKey: incAi.groqApiKey || curAi.groqApiKey || '',
+      audioTranscriptionApiKey: incAi.audioTranscriptionApiKey || curAi.audioTranscriptionApiKey || '',
       openrouterApiKey: incAi.openrouterApiKey || curAi.openrouterApiKey || ''
     };
 

@@ -594,7 +594,7 @@ export async function transcribeVoiceBufferWithAi(audioBuffer, mimeType = 'audio
     return String(out.text || '').trim();
   }
 
-  const groqKey = (aiSettings.groqApiKey || process.env.GROQ_API_KEY || '').trim();
+  const groqKey = (aiSettings.audioTranscriptionApiKey || aiSettings.groqApiKey || process.env.GROQ_API_KEY || '').trim();
   if (groqKey) {
     return (
       await transcribeAudioOpenAICompatible({
@@ -754,7 +754,26 @@ async function callGeminiWithPool({ apiKeys, model, systemPrompt, history, userT
   };
 }
 
-async function callOpenAICompatible({ providerName, baseUrl, apiKey, model, systemPrompt, history, userText, media, temperature }) {
+async function transcribeIncomingAudioForProvider(creds, media) {
+  let endpoint = '';
+  let apiKey = '';
+  let model = '';
+  if (creds.provider === 'openai') {
+    endpoint = 'https://api.openai.com/v1/audio/transcriptions';
+    apiKey = creds.apiKey;
+    model = 'whisper-1';
+  } else {
+    endpoint = 'https://api.groq.com/openai/v1/audio/transcriptions';
+    apiKey = creds.provider === 'groq' ? creds.apiKey : creds.audioTranscriptionApiKey;
+    model = 'whisper-large-v3-turbo';
+  }
+  if (!apiKey) throw new Error('Configure uma chave Groq de transcrição para entender áudios com este provedor.');
+  return (await transcribeAudioOpenAICompatible({
+    endpoint, apiKey, model, audioBuffer: media.buffer, mimeType: media.mimeType
+  })).trim();
+}
+
+async function callOpenAICompatible({ providerName, baseUrl, apiKey, model, systemPrompt, history, userText, media, temperature, audioTranscriptionApiKey = '' }) {
   let effectiveUserText = userText || '';
 
   if (media && media.buffer && media.mimeType?.startsWith('audio/')) {
@@ -780,8 +799,19 @@ async function callOpenAICompatible({ providerName, baseUrl, apiKey, model, syst
       effectiveUserText = transcript.trim()
         ? `[Conteúdo falado no áudio do contato]: "${transcript}"\n${effectiveUserText}`.trim()
         : '[[Áudio sem fala compreensível — aplique PAUSA_SILENCIOSA]]';
+    } else if (audioTranscriptionApiKey) {
+      const transcript = await transcribeAudioOpenAICompatible({
+        endpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
+        apiKey: audioTranscriptionApiKey,
+        model: 'whisper-large-v3-turbo',
+        audioBuffer: media.buffer,
+        mimeType: media.mimeType
+      });
+      effectiveUserText = transcript.trim()
+        ? `[Conteúdo falado no áudio do contato]: "${transcript}"\n${effectiveUserText}`.trim()
+        : '[[Áudio sem fala compreensível — aplique PAUSA_SILENCIOSA]]';
     } else {
-      return '[[PAUSA_SILENCIOSA:Provedor atual sem transcrição nativa de áudio — aguardando revisão humana]]';
+      return '[[PAUSA_SILENCIOSA:Configure uma chave Groq de transcrição de áudio para este provedor]]';
     }
   }
 
@@ -846,6 +876,9 @@ async function callOpenAICompatible({ providerName, baseUrl, apiKey, model, syst
 
     if (!res.ok) {
       const errText = await res.text();
+      if (providerName === 'groq' && res.status === 404 && /model_not_found|does not exist|do not have access/i.test(errText)) {
+        throw new Error(`O Groq recusou o modelo "${model}" (model_not_found). Confira o ID e se ele está disponível para sua conta em console.groq.com/docs/models; modelos marcados Enterprise exigem acesso comercial.`);
+      }
       throw new Error(`Erro na API ${providerName.toUpperCase()} (${res.status}): ${errText.slice(0, 280)}`);
     }
 
@@ -934,13 +967,15 @@ function generateDemoResponse({ profile, userText = '', history = [], media = nu
 }
 
 export function getProviderCredentialsByName(providerName, aiSettings = {}) {
+  const audioTranscriptionApiKey = (aiSettings.audioTranscriptionApiKey || aiSettings.groqApiKey || '').trim();
   if (providerName === 'gemini') {
     const keys = parseGeminiKeyPool(aiSettings);
     return {
       provider: 'gemini',
       apiKey: keys[0] || '',
       apiKeys: keys,
-      model: aiSettings.geminiModel || 'gemini-3.5-flash-lite'
+      model: aiSettings.geminiModel || 'gemini-3.5-flash-lite',
+      audioTranscriptionApiKey
     };
   }
   if (providerName === 'openai') {
@@ -948,26 +983,33 @@ export function getProviderCredentialsByName(providerName, aiSettings = {}) {
       provider: 'openai',
       apiKey: (aiSettings.openaiApiKey || process.env.OPENAI_API_KEY || '').trim(),
       model: aiSettings.openaiModel || 'gpt-4o-mini',
-      baseUrl: 'https://api.openai.com/v1'
+      baseUrl: 'https://api.openai.com/v1',
+      audioTranscriptionApiKey
     };
   }
   if (providerName === 'groq') {
+    const configuredGroqModel = String(aiSettings.groqModel || '').trim();
+    const groqModel = !configuredGroqModel || configuredGroqModel === 'llama-3.3-70b-versatile'
+      ? 'openai/gpt-oss-20b'
+      : configuredGroqModel;
     return {
       provider: 'groq',
       apiKey: (aiSettings.groqApiKey || process.env.GROQ_API_KEY || '').trim(),
-      model: aiSettings.groqModel || 'llama-3.3-70b-versatile',
-      baseUrl: 'https://api.groq.com/openai/v1'
+      model: groqModel,
+      baseUrl: 'https://api.groq.com/openai/v1',
+      audioTranscriptionApiKey
     };
   }
   if (providerName === 'openrouter') {
     return {
       provider: 'openrouter',
       apiKey: (aiSettings.openrouterApiKey || process.env.OPENROUTER_API_KEY || '').trim(),
-      model: aiSettings.openrouterModel || 'deepseek/deepseek-chat',
-      baseUrl: 'https://openrouter.ai/api/v1'
+      model: aiSettings.openrouterModel || 'openrouter/free',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      audioTranscriptionApiKey
     };
   }
-  return { provider: 'gemini', apiKey: '', apiKeys: [], model: 'gemini-3.5-flash-lite' };
+  return { provider: 'gemini', apiKey: '', apiKeys: [], model: 'gemini-3.5-flash-lite', audioTranscriptionApiKey };
 }
 
 export function getActiveProviderCredentials(aiSettings = {}) {
@@ -1003,7 +1045,8 @@ async function runProviderCall(creds, { systemPrompt, history, userText, media, 
     history,
     userText,
     media,
-    temperature
+    temperature,
+    audioTranscriptionApiKey: creds.audioTranscriptionApiKey
   });
 
   return {
@@ -1184,14 +1227,26 @@ export async function generateSmartReply({
   const temperature = Number(settings.ai?.temperature ?? 0.35);
   let execOut = null;
   let usedFallback = false;
+  let effectiveUserText = userText;
+  let effectiveMedia = media;
+
+  // Faça STT uma única vez antes do chat. Assim, um fallback não envia nem
+  // transcreve o mesmo áudio novamente se o provedor primário falhar.
+  if (media?.buffer && media.mimeType?.startsWith('audio/') && creds.provider !== 'gemini') {
+    const transcript = await transcribeIncomingAudioForProvider(creds, media);
+    effectiveUserText = transcript
+      ? `[Conteúdo falado no áudio do contato]: "${transcript}"\n${userText || ''}`.trim()
+      : '[[Áudio sem fala compreensível — aplique PAUSA_SILENCIOSA]]';
+    effectiveMedia = null;
+  }
 
   try {
     execOut = await withAiConcurrencyBulkhead(() =>
       runProviderCall(creds, {
         systemPrompt,
         history: trimmedHistory,
-        userText,
-        media,
+        userText: effectiveUserText,
+        media: effectiveMedia,
         temperature
       })
     );
@@ -1205,8 +1260,8 @@ export async function generateSmartReply({
           runProviderCall(backupCreds, {
             systemPrompt,
             history: trimmedHistory,
-            userText,
-            media,
+            userText: effectiveUserText,
+            media: effectiveMedia,
             temperature
           })
         );

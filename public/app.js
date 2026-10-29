@@ -931,7 +931,9 @@ async function syncInboxRealtime() {
 window.addEventListener('ienvia:inbox-changed', () => {
   if (document.hidden || state.runtimeMode !== 'vercel_cloud' || state.actAsUser) return;
   if (inboxRealtimeWakeTimer) return;
-  const delay = Math.max(100, 1200 - (Date.now() - lastInboxRealtimeWake));
+  // Realtime deve atualizar a caixa quase imediatamente; ainda agrupamos rajadas
+  // para evitar uma chamada de poll por cada linha/evento da mesma conversa.
+  const delay = Math.max(50, 250 - (Date.now() - lastInboxRealtimeWake));
   inboxRealtimeWakeTimer = setTimeout(() => {
     inboxRealtimeWakeTimer = null;
     lastInboxRealtimeWake = Date.now();
@@ -2086,7 +2088,7 @@ function renderStatsAndLogs() {
   const provMap = {
     gemini: `Gemini (${ai.geminiModel || 'gemini-3.5-flash-lite'})`,
     openai: `OpenAI (${ai.openaiModel || 'gpt-4o-mini'})`,
-    groq: `Groq (${ai.groqModel || 'llama-3.3'})`,
+    groq: `Groq (${ai.groqModel || 'openai/gpt-oss-20b'})`,
     openrouter: `OpenRouter (${ai.openrouterModel || 'custom'})`
   };
   document.getElementById('activeEngineBadge').textContent = provMap[ai.provider] || 'Gemini';
@@ -2764,29 +2766,35 @@ function renderAiSettings() {
   document.getElementById('geminiApiKey').value = ai.geminiApiKey || '';
   document.getElementById('geminiKeyPool').value = ai.geminiKeyPool || '';
   document.getElementById('geminiModel').value = ai.geminiModel || 'gemini-3.5-flash-lite';
-  document.getElementById('autoFallbackProvider').value = ai.autoFallbackProvider || 'groq';
+  const fallbackSelect = document.getElementById('autoFallbackProvider');
+  const configuredFallback = ai.autoFallbackProvider || 'none';
+  fallbackSelect.value = configuredFallback === activeProv ? 'none' : configuredFallback;
   document.getElementById('openaiApiKey').value = ai.openaiApiKey || '';
   document.getElementById('openaiModel').value = ai.openaiModel || 'gpt-4o-mini';
   document.getElementById('groqApiKey').value = ai.groqApiKey || '';
-  document.getElementById('groqModel').value = ai.groqModel || 'llama-3.3-70b-versatile';
+  document.getElementById('groqModel').value = (!ai.groqModel || ai.groqModel === 'llama-3.3-70b-versatile') ? 'openai/gpt-oss-20b' : ai.groqModel;
+  document.getElementById('audioTranscriptionApiKey').value = ai.audioTranscriptionApiKey || ai.groqApiKey || '';
   document.getElementById('openrouterApiKey').value = ai.openrouterApiKey || '';
-  document.getElementById('openrouterModel').value = ai.openrouterModel || 'deepseek/deepseek-chat';
+  document.getElementById('openrouterModel').value = ai.openrouterModel || 'openrouter/free';
   document.getElementById('aiTemperature').value = ai.temperature ?? 0.35;
   document.getElementById('aiMaxHistory').value = ai.maxHistoryMessages ?? 20;
 }
 
 function collectAiSettingsFromForm() {
   const selectedCard = document.querySelector('.provider-option.selected');
+  const selectedProvider = selectedCard ? selectedCard.dataset.provider : 'gemini';
+  const selectedFallback = document.getElementById('autoFallbackProvider').value;
   return {
-    provider: selectedCard ? selectedCard.dataset.provider : 'gemini',
+    provider: selectedProvider,
     geminiApiKey: document.getElementById('geminiApiKey').value.trim(),
     geminiKeyPool: document.getElementById('geminiKeyPool').value.trim(),
     geminiModel: document.getElementById('geminiModel').value,
-    autoFallbackProvider: document.getElementById('autoFallbackProvider').value,
+    autoFallbackProvider: selectedFallback === selectedProvider ? 'none' : selectedFallback,
     openaiApiKey: document.getElementById('openaiApiKey').value.trim(),
     openaiModel: document.getElementById('openaiModel').value.trim(),
     groqApiKey: document.getElementById('groqApiKey').value.trim(),
     groqModel: document.getElementById('groqModel').value.trim(),
+    audioTranscriptionApiKey: document.getElementById('audioTranscriptionApiKey').value.trim(),
     openrouterApiKey: document.getElementById('openrouterApiKey').value.trim(),
     openrouterModel: document.getElementById('openrouterModel').value.trim(),
     temperature: Number(document.getElementById('aiTemperature').value || 0.35),

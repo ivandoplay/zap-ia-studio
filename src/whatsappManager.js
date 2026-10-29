@@ -247,7 +247,7 @@ class WhatsAppSlotEngine {
     this.lastHistoryProtocolStatus = null;
     this.lastHistoryJournalError = null;
     // Apenas contagens agregadas: nunca registrar texto, telefone ou IDs.
-    this.liveMessageDiagnostics = { eventos: 0, mensagens: 0, ignoradasJid: 0, ignoradasConteudo: 0, gravadasEntrada: 0, gravadasSaida: 0, erros: 0, ultimoEventoEm: null };
+    this.liveMessageDiagnostics = { eventos: 0, mensagens: 0, notify: 0, append: 0, outros: 0, ignoradasJid: 0, ignoradasGrupo: 0, ignoradasProprio: 0, ignoradasAusente: 0, ignoradasOutros: 0, ignoradasConteudo: 0, gravadasEntrada: 0, gravadasSaida: 0, erros: 0, ultimoEventoEm: null };
     this.pendingFullHistoryRequest = null;
     this.syncInProgress = false;
     this.avatarFetchCache = new Map(); // chatId -> ts
@@ -1260,6 +1260,7 @@ class WhatsAppSlotEngine {
       sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (mySeq !== this.socketSeq || this.sock !== sock) return;
         this.liveMessageDiagnostics.eventos++;
+        this.liveMessageDiagnostics[type === 'notify' ? 'notify' : type === 'append' ? 'append' : 'outros']++;
         this.liveMessageDiagnostics.mensagens += Array.isArray(messages) ? messages.length : 0;
         this.liveMessageDiagnostics.ultimoEventoEm = trueNowIso();
         if (type !== 'notify' && type !== 'append') return;
@@ -1628,7 +1629,16 @@ class WhatsAppSlotEngine {
     const destJid = msg?.message?.deviceSentMessage?.destinationJid;
     const destinacaoEmOutroJid = Boolean(destJid && this.isSelfJid(msg?.key?.remoteJid));
     const rawRemoteJid = destinacaoEmOutroJid ? destJid : msg?.key?.remoteJid;
-    if (!this.isValid1to1ChatJid(rawRemoteJid)) { this.liveMessageDiagnostics.ignoradasJid++; return; }
+    if (!this.isValid1to1ChatJid(rawRemoteJid)) {
+      const j = String(rawRemoteJid || '');
+      const d = this.liveMessageDiagnostics;
+      d.ignoradasJid++;
+      if (!j) d.ignoradasAusente++;
+      else if (j.endsWith('@g.us') || j.endsWith('@broadcast') || j.endsWith('@newsletter')) d.ignoradasGrupo++;
+      else if (this.isSelfJid(j)) d.ignoradasProprio++;
+      else d.ignoradasOutros++;
+      return;
+    }
     const remoteJid = this.toStorageKey(rawRemoteJid);
 
     const unwrapped = unwrapMessageContent(msg.message);

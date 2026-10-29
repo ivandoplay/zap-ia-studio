@@ -2593,6 +2593,7 @@ class CloudWorkerBridge {
               lastHistoryProtocolStatus: engine?.lastHistoryProtocolStatus || null,
               journalFileCount: journalEnabled ? countJournalFiles(journalRoot, this.user.id, slotId) : 0,
               lastJournalError: engine?.lastHistoryJournalError || null,
+              liveMessageDiagnostics: engine?.getLiveMessageDiagnostics?.() || null,
               processedHistoryChunks: Array.isArray(engine?.sock?.authState?.creds?.processedHistoryMessages)
                 ? engine.sock.authState.creds.processedHistoryMessages.length : 0,
               contacts: cards.length,

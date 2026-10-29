@@ -246,6 +246,8 @@ class WhatsAppSlotEngine {
     this.historySyncWaiters = new Set();
     this.lastHistoryProtocolStatus = null;
     this.lastHistoryJournalError = null;
+    // Apenas contagens agregadas: nunca registrar texto, telefone ou IDs.
+    this.liveMessageDiagnostics = { eventos: 0, mensagens: 0, ignoradasJid: 0, ignoradasConteudo: 0, gravadasEntrada: 0, gravadasSaida: 0, erros: 0, ultimoEventoEm: null };
     this.pendingFullHistoryRequest = null;
     this.syncInProgress = false;
     this.avatarFetchCache = new Map(); // chatId -> ts
@@ -265,6 +267,8 @@ class WhatsAppSlotEngine {
     }, 15_000);
     if (this.scheduledMsgTimer.unref) this.scheduledMsgTimer.unref();
   }
+
+  getLiveMessageDiagnostics() { return { ...this.liveMessageDiagnostics }; }
 
   toStorageKey(rawJid = '') {
     return buildContactChannelKey(this.slotId, rawJid);
@@ -1255,11 +1259,15 @@ class WhatsAppSlotEngine {
 
       sock.ev.on('messages.upsert', async ({ messages, type }) => {
         if (mySeq !== this.socketSeq || this.sock !== sock) return;
+        this.liveMessageDiagnostics.eventos++;
+        this.liveMessageDiagnostics.mensagens += Array.isArray(messages) ? messages.length : 0;
+        this.liveMessageDiagnostics.ultimoEventoEm = trueNowIso();
         if (type !== 'notify' && type !== 'append') return;
         const isHistoryAppend = type === 'append';
         for (const msg of messages || []) {
           this.recordHistoryProtocolResponse(msg);
           this.handleIncomingRawMessage(msg, { isHistoryAppend }).catch(err => {
+            this.liveMessageDiagnostics.erros++;
             console.error('[WA] Erro ao processar mensagem:', err);
             storage.addLog('error', `Erro ao processar mensagem: ${err.message}`);
           });
@@ -1618,12 +1626,13 @@ class WhatsAppSlotEngine {
 
   async handleIncomingRawMessage(msg, { isHistoryAppend = false } = {}) {
     const destJid = msg?.message?.deviceSentMessage?.destinationJid;
-    const rawRemoteJid = (destJid && this.isSelfJid(msg?.key?.remoteJid)) ? destJid : msg?.key?.remoteJid;
-    if (!this.isValid1to1ChatJid(rawRemoteJid)) return;
+    const destinacaoEmOutroJid = Boolean(destJid && this.isSelfJid(msg?.key?.remoteJid));
+    const rawRemoteJid = destinacaoEmOutroJid ? destJid : msg?.key?.remoteJid;
+    if (!this.isValid1to1ChatJid(rawRemoteJid)) { this.liveMessageDiagnostics.ignoradasJid++; return; }
     const remoteJid = this.toStorageKey(rawRemoteJid);
 
     const unwrapped = unwrapMessageContent(msg.message);
-    if (!unwrapped) return;
+    if (!unwrapped) { this.liveMessageDiagnostics.ignoradasConteudo++; return; }
 
     // Processa reações reais e exclusões/edições de protocolo em tempo real no CRM
     if (unwrapped.reactionMessage) {
@@ -1677,7 +1686,9 @@ class WhatsAppSlotEngine {
         }
       : undefined;
 
-    const bestPhone = this.resolvePhoneFromMessage(msg);
+    // Em deviceSentMessage, key.remoteJid pode ser a própria conta. Nesse
+    // caso, o telefone da ficha deve vir do destinatário, nunca do dono.
+    const bestPhone = destinacaoEmOutroJid ? this.resolvePhoneFromJid(rawRemoteJid) : this.resolvePhoneFromMessage(msg);
     const ownerSelfName = this.getOwnerSelfName();
     const rawPushName = String(msg.pushName || '').trim();
     const rawWaTsMs = toEpochMs(msg.messageTimestamp);
@@ -1699,7 +1710,7 @@ class WhatsAppSlotEngine {
       (unwrapped.documentMessage.mimetype?.includes('pdf') || /\.pdf$/i.test(unwrapped.documentMessage.fileName || ''))
     );
 
-    if (!textContent && !hasAudio && !hasImage && !hasVideo && !hasAnyDoc) return;
+    if (!textContent && !hasAudio && !hasImage && !hasVideo && !hasAnyDoc) { this.liveMessageDiagnostics.ignoradasConteudo++; return; }
 
     // 2. Verificar se a mensagem foi enviada pelo PRÓPRIO DONO no celular/WhatsApp Web (fromMe)
     if (msg.key.fromMe) {
@@ -1782,6 +1793,7 @@ class WhatsAppSlotEngine {
         },
         { historical: isOldHistoricalMsg, ownerSelfName }
       );
+      this.liveMessageDiagnostics.gravadasSaida++;
       if (!isOldHistoricalMsg) {
         this.fetchContactAvatarIfNeeded(remoteJid).catch(() => {});
       }
@@ -1946,6 +1958,7 @@ class WhatsAppSlotEngine {
       },
       { historical: isOldHistoricalMsg, ownerSelfName }
     );
+    this.liveMessageDiagnostics.gravadasEntrada++;
     if (!isOldHistoricalMsg) {
       this.fetchContactAvatarIfNeeded(remoteJid).catch(() => {});
     }

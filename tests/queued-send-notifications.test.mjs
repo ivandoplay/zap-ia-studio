@@ -12,7 +12,7 @@ async function run(outcomes, input={queued:true,commandId:'cmd'}) {
  return {alerts,urls,delays,refreshes};
 }
 let r=await run([{status:'pending'},{status:'processing'},{status:'done',confirmed:true}]);
-assert.equal(r.alerts[0][0],'Um envio foi confirmado pelo motor WhatsApp.');assert.equal(r.urls.length,3);assert.equal(r.refreshes,1);assert.deepEqual(r.delays,[3000,6000,9000]);assert(r.urls.every(u=>u==='/api/cloud/commands/cmd/status'));
+assert.equal(r.alerts[0][0],'Um envio foi confirmado pelo motor WhatsApp.');assert.equal(r.urls.length,3);assert.equal(r.refreshes,1);assert.deepEqual(r.delays,[1000,1000,1000]);assert(r.urls.every(u=>u==='/api/cloud/commands/cmd/status'));
 r=await run([{status:'done',confirmed:false}]);assert.match(r.alerts[0][0],/não confirmou/);assert.equal(r.alerts[0][1],true);
 r=await run([{status:'error',error:'dados'}]);assert.match(r.alerts[0][0],/Confira a conversa antes de reenviar/);assert(!r.alerts[0][0].includes('dados'));
 r=await run([new Error('rede')]);assert.equal(r.urls.length,21);assert.match(r.alerts[0][0],/não foi possível confirmar/);assert(r.delays.every(ms=>ms<=10000));

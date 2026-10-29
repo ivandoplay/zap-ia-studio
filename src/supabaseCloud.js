@@ -2029,7 +2029,9 @@ class CloudWorkerBridge {
 
   scheduleLocalToCloudSync() {
     if (!this.client || !this.user?.id) return;
-    if (this.syncTimer) clearTimeout(this.syncTimer);
+    // Não reinicie o prazo a cada alteração: importações contínuas não podem
+    // deixar mensagens ao vivo esperando indefinidamente para subir à nuvem.
+    if (this.syncTimer) return;
     this.syncTimer = setTimeout(() => {
       this.syncTimer = null;
       this.flushLocalToCloud().catch((err) => {
@@ -2225,7 +2227,7 @@ class CloudWorkerBridge {
           slotUpserts.push({
             user_id: this.user.id,
             slot_id: sid,
-            device_id: localSlot.status === 'disconnected' && !this.whatsappManager.hasSavedSession?.(sid) ? null : myDevId,
+            device_id: localSlot.status === 'disconnected' && !this.whatsappManager.hasSavedSession?.(sid) ? '' : myDevId,
             device_label: this.deviceIdentity.deviceName,
             label: localSlot.label || `Chip ${sid.slice(-1)}`,
             ai_enabled: localSlot.aiEnabled !== false,
@@ -2533,7 +2535,7 @@ class CloudWorkerBridge {
                 {
                   user_id: this.user.id,
                   slot_id: targetSlotId,
-                  device_id: null,
+                  device_id: '',
                   device_label: '',
                   status: 'disconnected',
                   qr_data_url: '',

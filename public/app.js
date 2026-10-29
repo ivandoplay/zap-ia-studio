@@ -56,6 +56,7 @@ function saveCloudSession(sessionObj) {
     if (sessionObj) localStorage.setItem('zapia_cloud_auth', JSON.stringify(sessionObj));
     else localStorage.removeItem('zapia_cloud_auth');
   } catch {}
+  Promise.resolve().then(() => syncInboxRealtime()).catch(() => {});
 }
 
 function loadSavedActAs() {
@@ -73,6 +74,7 @@ function saveActAs(targetObj) {
     if (targetObj) sessionStorage.setItem('zapia_act_as', JSON.stringify(targetObj));
     else sessionStorage.removeItem('zapia_act_as');
   } catch {}
+  Promise.resolve().then(() => syncInboxRealtime()).catch(() => {});
 }
 
 const state = {
@@ -270,7 +272,8 @@ async function watchQueuedCrmSend(result) {
   trackedCrmCommands.add(id);
   try {
     for (let attempt = 0; attempt < 21; attempt++) {
-      await new Promise(resolve => setTimeout(resolve, Math.min(3000 * (attempt + 1), 10000)));
+      // Consulta o resultado mais cedo, sem nunca reenviar a mensagem.
+      await new Promise(resolve => setTimeout(resolve, attempt < 10 ? 1000 : 5000));
       let status;
       try { status = await api(`/api/cloud/commands/${encodeURIComponent(id)}/status`); }
       catch { continue; } // rede oscilando: não gera outro envio
@@ -893,7 +896,51 @@ async function refreshLiveStateOnly() {
   return liveRefreshInFlight;
 }
 
+// A notificação apenas antecipa o poll autenticado; não usa dados do evento.
+// Polling continua ativo como contingência para rede, reconexão e abas em suporte.
+let inboxRealtimeConfig = null;
+let inboxRealtimeConfigToken = '';
+let inboxRealtimeConfigRequest = null;
+let inboxRealtimeWakeTimer = null;
+let lastInboxRealtimeWake = 0;
+async function syncInboxRealtime() {
+  const rt = window.ienviaInboxRealtime;
+  if (!rt) return;
+  if (state.runtimeMode !== 'vercel_cloud' || !state.cloudSession?.accessToken || state.actAsUser) {
+    inboxRealtimeConfig = null;
+    inboxRealtimeConfigToken = '';
+    await rt.stop();
+    return;
+  }
+  const token = state.cloudSession.accessToken;
+  if (!inboxRealtimeConfig || inboxRealtimeConfigToken !== token) {
+    if (!inboxRealtimeConfigRequest || inboxRealtimeConfigRequest.token !== token) {
+      const request = { token, promise: api('/api/cloud/realtime-config') };
+      inboxRealtimeConfigRequest = request;
+      request.promise.finally(() => {
+        if (inboxRealtimeConfigRequest === request) inboxRealtimeConfigRequest = null;
+      }).catch(() => {});
+    }
+    const config = await inboxRealtimeConfigRequest.promise;
+    if (state.cloudSession?.accessToken !== token || state.actAsUser || state.runtimeMode !== 'vercel_cloud') return;
+    inboxRealtimeConfig = config;
+    inboxRealtimeConfigToken = token;
+  }
+  await rt.start({ ...inboxRealtimeConfig, token });
+}
+window.addEventListener('ienvia:inbox-changed', () => {
+  if (document.hidden || state.runtimeMode !== 'vercel_cloud' || state.actAsUser) return;
+  if (inboxRealtimeWakeTimer) return;
+  const delay = Math.max(100, 1200 - (Date.now() - lastInboxRealtimeWake));
+  inboxRealtimeWakeTimer = setTimeout(() => {
+    inboxRealtimeWakeTimer = null;
+    lastInboxRealtimeWake = Date.now();
+    refreshLiveStateOnly().catch(() => {});
+  }, delay);
+});
+
 function startCloudPoller() {
+  syncInboxRealtime().catch(() => {});
   if (cloudPollTimer) clearTimeout(cloudPollTimer);
   checkClientSideDueFollowUps(true);
   const tick = async () => {

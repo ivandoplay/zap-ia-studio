@@ -69,7 +69,7 @@ import { verifySignedManifest } from './updateSignature.js';
 import { UPDATE_PUBLIC_KEY } from './updatePublicKey.js';
 import { recoverInterruptedUpdate } from './updateTransaction.js';
 import { isTrustedBrowserOrigin, rejectUntrustedBrowserRequest } from './browserOrigin.js';
-import { IS_VERCEL, MEDIA_BUCKET, SUPABASE_URL, isCloudConfigured } from './cloudConfig.js';
+import { IS_VERCEL, MEDIA_BUCKET, SUPABASE_URL, SUPABASE_ANON_KEY, isCloudConfigured } from './cloudConfig.js';
 import { scopedSendChatId } from './cloudSendScope.js';
 import { importarDestinatarios } from './campanhaImportacao.js';
 import { importarXlsx } from './campanhaXlsx.js';
@@ -538,7 +538,7 @@ app.use('/api', async (req, res, next) => {
 
       // Estas operações não leem nem alteram o workspace; evitam carregar conversas privadas.
       if ((req.path === '/campaigns' || req.path.startsWith('/campaigns/')) ||
-          (req.method === 'GET' && /^\/cloud\/commands\/[^/]+\/status\/?$/.test(req.path))) {
+          (req.method === 'GET' && (req.path === '/cloud/realtime-config' || /^\/cloud\/commands\/[^/]+\/status\/?$/.test(req.path)))) {
         req.cloudAuth = { client: verified.client, authUser: verified.authUser, profile: verified.profile, isRemoteImpersonation: false };
         return next();
       }
@@ -903,6 +903,15 @@ app.get('/api/bootstrap', async (req, res) => {
     logs: storage.data.logs,
     simulatorHistory: storage.data.simulatorHistory || []
   });
+});
+
+// Somente configuração pública. A assinatura Realtime usa o JWT do usuário e RLS.
+app.get('/api/cloud/realtime-config', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  if (!IS_VERCEL || !req.cloudAuth?.authUser?.id || req.cloudAuth?.isRemoteImpersonation) {
+    return res.status(403).json({ok:false});
+  }
+  return res.json({ok:true,url:SUPABASE_URL,key:SUPABASE_ANON_KEY,userId:req.cloudAuth.authUser.id});
 });
 
 app.get('/api/cloud/poll', (req, res) => {

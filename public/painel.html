@@ -10,6 +10,7 @@
   <link rel="manifest" href="/manifest.json" />
   <link rel="icon" href="/icon-v2.svg" type="image/svg+xml" />
   <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/campanhas.css" />
 </head>
 <body>
   <a href="#mainContentArea" class="skip-link">Pular para o conteúdo principal</a>
@@ -163,6 +164,8 @@
         </span>
       </button>
 
+      <button type="button" class="nav-btn" data-tab="campanhas"><span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l18-7-4 16-5-6-5 3 1-5z"></path></svg><span>Campanhas</span></span></button>
+
       <div id="navMasterGroupLabel" class="nav-group-label" style="display:none;">Plataforma</div>
 
       <button type="button" id="navMasterUsersBtn" class="nav-btn" data-tab="contas" style="display:none;">
@@ -273,7 +276,35 @@
           <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
           <span>Anti-Ban &amp; Segurança</span>
         </button>
+        <button type="button" class="hub-subnav-btn" data-subtab="campanhas" onclick="switchTab('campanhas')"><span>Campanhas</span></button>
       </nav>
+      <section id="tab-campanhas" class="tab-pane">
+  <div class="page-header"><div><h1>Campanhas</h1><p>Organize mensagens e acompanhe cada envio pelos seus chips conectados.</p></div><button type="button" id="campNova" class="btn btn-primary">Nova campanha</button></div>
+  <div class="camp-notice">Envie somente para pessoas que autorizaram o contato. Variações e intervalos não garantem que o WhatsApp não aplique restrições. Se alguém pedir para não receber mais mensagens, remova as próximas etapas manualmente. Nos pedidos identificados como resposta à campanha, a IA dá uma resposta cordial sem bloquear automaticamente; com a IA desligada, não há resposta automática. Contatos já ignorados continuam protegidos.</div>
+  <div class="camp-grid">
+    <div class="camp-panel"><div class="camp-heading"><div><h2>Suas campanhas</h2><p>Acompanhe o progresso e a próxima ação.</p></div><button type="button" class="btn btn-secondary btn-sm" id="campAtualizar">Atualizar</button></div><div id="campLista" aria-live="polite">Carregando campanhas…</div></div>
+    <div class="camp-panel" id="campDetalhe"><div class="camp-empty"><strong>Selecione uma campanha</strong><p>Veja o andamento, os controles e os envios que precisem de conferência.</p></div></div>
+  </div>
+  <div class="camp-panel camp-folders"><div class="camp-heading"><div><h2>Pastas de mídia</h2><p>Em cada bloco, uma imagem ou um áudio é escolhido da pasta para cada pessoa.</p></div></div>
+    <div class="camp-row"><label>Nome da pasta<input id="campPastaNome" maxlength="120" placeholder="Ex.: Áudios de boas-vindas"></label><label>Tipo<select id="campPastaTipo"><option value="imagem">Imagens</option><option value="audio">Áudios</option></select></label><button id="campPastaCriar" type="button" class="btn btn-secondary">Criar pasta</button></div>
+    <div class="camp-row"><label>Pasta<select id="campPastaSelecionada"><option value="">Selecione uma pasta</option></select></label><label>Arquivos<input id="campPastaArquivos" type="file" multiple accept="image/jpeg,image/png,image/webp,audio/ogg,audio/mpeg,audio/mp4,audio/wav,audio/webm"></label><button id="campPastaEnviar" type="button" class="btn btn-secondary">Adicionar arquivos</button></div><p id="campPastaStatus" class="camp-hint" aria-live="polite"></p><div id="campPastaConteudo" class="camp-hint"></div>
+  </div>
+  <div class="camp-panel" id="campEditor" hidden>
+    <div class="camp-heading"><div><h2 id="campEditorTitulo">Nova campanha</h2><p>Salve como rascunho para revisar tudo antes de iniciar.</p></div><button type="button" id="campFechar" class="btn btn-secondary btn-sm">Fechar</button></div>
+    <form id="campFormulario">
+      <fieldset><legend>1. Identificação e destinatários</legend><label>Nome da campanha<input id="campNome" required maxlength="120" placeholder="Ex.: Novidades de novembro"></label>
+        <div id="campImportacao"><p class="camp-hint">Cole uma lista de números, um por linha, ou importe CSV, XLSX ou TXT (até 4 MB). Para CSV e XLSX use cabeçalhos como <strong>telefone</strong>, <strong>nome</strong> e outras colunas; use <code>{{nome}}</code> ou <code>{{coluna}}</code> nos textos.</p><div class="camp-two"><label>Lista colada<textarea id="campNumeros" rows="4" placeholder="(86) 99999-9999&#10;(86) 98888-8888"></textarea></label><label>Arquivo CSV, Excel ou TXT<input id="campArquivo" type="file" accept=".csv,.xlsx,.txt"><span class="camp-hint">CSV: escolha o separador usado no arquivo.</span><select id="campSeparador"><option value=",">Vírgula (,)</option><option value=";">Ponto e vírgula (;)</option><option value="&#9;">Tabulação</option></select></label></div><button type="button" id="campImportar" class="btn btn-secondary">Conferir destinatários</button><p id="campImportarStatus" class="camp-hint" aria-live="polite">Nenhuma lista conferida.</p><div id="campAmostra" class="camp-hint"></div></div>
+        <p id="campEdicaoAviso" class="camp-hint" hidden>Os destinatários já incluídos são preservados. Alterações valem apenas para etapas que ainda não foram iniciadas.</p>
+      </fieldset>
+      <fieldset><legend>2. Mensagens e pastas, na ordem de envio</legend><p class="camp-hint">Arraste não é necessário: use os botões de subir e descer. Cada pessoa recebe os blocos na ordem mostrada.</p><div id="campBlocos"></div><div class="camp-actions"><button type="button" class="btn btn-secondary" id="campAdicionarTexto">+ Texto</button><button type="button" class="btn btn-secondary" id="campAdicionarImagem">+ Pasta de imagens</button><button type="button" class="btn btn-secondary" id="campAdicionarAudio">+ Pasta de áudios</button></div></fieldset>
+      <fieldset><legend>3. Chips e retomada</legend><div class="camp-two"><label>Distribuição<select id="campModoChips"><option value="fixo">Um chip fixo</option><option value="rodizio">Rodízio de chips</option></select></label><label>Após queda<select id="campRetomada"><option value="manual">Retomar manualmente</option><option value="automatica">Retomar automaticamente quando seguro</option></select></label></div><div class="camp-checks" id="campChips"><label><input type="checkbox" value="slot_1" checked> Chip 1</label><label><input type="checkbox" value="slot_2"> Chip 2</label><label><input type="checkbox" value="slot_3"> Chip 3</label></div></fieldset>
+      <fieldset><legend>4. Intervalos e agenda</legend><div class="camp-four"><label>Entre pessoas: mínimo (segundos)<input id="campPessoaMin" type="number" min="0" max="604800" value="20" required></label><label>Máximo (segundos)<input id="campPessoaMax" type="number" min="0" max="604800" value="40" required></label><label>Lote: mínimo de pessoas<input id="campLoteMin" type="number" min="1" max="10000" value="8" required></label><label>Máximo de pessoas<input id="campLoteMax" type="number" min="1" max="10000" value="12" required></label><label>Pausa entre lotes: mínimo (segundos)<input id="campPausaMin" type="number" min="0" max="604800" value="300" required></label><label>Máximo (segundos)<input id="campPausaMax" type="number" min="0" max="604800" value="600" required></label><label>Entre blocos (segundos)<input id="campEtapa" type="number" min="0" max="604800" value="0" required></label><label>Começar a partir de (opcional)<input id="campInicioEm" type="datetime-local"></label></div>
+        <label class="camp-inline"><input id="campRestrito" type="checkbox"> Enviar apenas em dias e horários definidos</label><div id="campJanela" class="camp-four"><label>Das<input id="campInicio" type="time" value="09:00"></label><label>Até<input id="campFim" type="time" value="18:00"></label><label>Fuso horário<input id="campFuso" value="America/Fortaleza" maxlength="80"></label></div><div id="campDias" class="camp-checks"><label><input type="checkbox" value="0" checked> Dom</label><label><input type="checkbox" value="1" checked> Seg</label><label><input type="checkbox" value="2" checked> Ter</label><label><input type="checkbox" value="3" checked> Qua</label><label><input type="checkbox" value="4" checked> Qui</label><label><input type="checkbox" value="5" checked> Sex</label><label><input type="checkbox" value="6" checked> Sáb</label></div>
+      </fieldset>
+      <div class="camp-actions"><button type="submit" class="btn btn-primary" id="campSalvar">Salvar rascunho</button><button type="button" class="btn btn-secondary" id="campCancelar">Cancelar</button></div><p id="campEditorStatus" class="camp-hint" role="status" aria-live="polite"></p>
+    </form>
+  </div>
+</section>
       <!-- ==================== ABA 1: DASHBOARD & CONEXÃO ==================== -->
       <section id="tab-dashboard" class="tab-pane active">
         <div class="page-header">
@@ -2927,5 +2958,6 @@
   <div id="toastStack" class="toast-stack" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <script src="/app.js"></script>
+  <script src="/campanhas.js"></script>
 </body>
 </html>

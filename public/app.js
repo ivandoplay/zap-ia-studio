@@ -387,6 +387,7 @@ const HUB_BY_TAB = {
   simulador: 'cerebro',
   ia: 'config',
   seguranca: 'config',
+  campanhas: 'config',
   contas: 'contas'
 };
 
@@ -454,6 +455,8 @@ window.switchTab = function switchTab(rawTabId) {
     document.querySelector('.content-area')?.scrollTo({ top: 0, behavior: 'instant' });
     window.scrollTo({ top: 0, behavior: 'instant' });
   } catch {}
+
+  if (tabId === 'campanhas') window.carregarCampanhas?.();
 
   if (tabId === 'contas' && state.currentUser?.role === 'master') {
     loadManagedUsers().catch(() => {});

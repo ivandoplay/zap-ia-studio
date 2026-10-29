@@ -2,6 +2,8 @@ import { GoogleGenAI } from '@google/genai';
 import { selectTurnPackContext, generatePackDemoReply } from './trainingPackEngine.js';
 import { storage } from './storage.js';
 import { trueNowIso } from './trueClock.js';
+import { executarGeminiLimitado } from './geminiPrazo.js';
+import { gerarVariacoesCampanha } from './campanhaIA.js';
 
 const TONE_DESCRIPTIONS = {
   consultivo: 'Simpático, consultivo, firme com educação e focado em conduzir com clareza sem pressionar.',
@@ -643,7 +645,7 @@ async function transcribeAudioOpenAICompatible({ endpoint, apiKey, model, audioB
   return json.text || '';
 }
 
-async function invokeSingleGeminiModel({ ai, candidateModel, systemPrompt, history, mediaInstruction, b64, cleanMime, temperature }) {
+async function invokeSingleGeminiModel({ ai, candidateModel, systemPrompt, history, mediaInstruction, b64, cleanMime, temperature, timeoutMs }) {
   const contents = [];
   for (const msg of history) {
     if (!msg.text) continue;
@@ -670,7 +672,7 @@ async function invokeSingleGeminiModel({ ai, candidateModel, systemPrompt, histo
   });
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 14000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await ai.models.generateContent({
       model: candidateModel,
@@ -729,59 +731,27 @@ async function callGeminiWithPool({ apiKeys, model, systemPrompt, history, userT
   const startIdx = geminiPoolCursor % keys.length;
   geminiPoolCursor = (geminiPoolCursor + 1) % 100000;
 
-  let lastError = null;
-  for (let offset = 0; offset < keys.length; offset++) {
-    const keyIdx = (startIdx + offset) % keys.length;
-    const apiKey = keys[keyIdx];
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        timeout: 18000,
-        retryOptions: { attempts: 1 }
-      }
-    });
-
-    for (const candidateModel of candidateModels) {
-      try {
-        const text = await invokeSingleGeminiModel({
-          ai,
-          candidateModel,
-          systemPrompt,
-          history,
-          mediaInstruction,
-          b64,
-          cleanMime,
-          temperature
-        });
-        return {
-          text,
-          actualModel: candidateModel,
-          keyIndexUsed: keyIdx + 1,
-          keyPoolSize: keys.length
-        };
-      } catch (err) {
-        lastError = err;
-        const msg = String(err?.message || '');
-        const status = err?.status || err?.code;
-        const isRecoverable =
-          status === 429 ||
-          status === 404 ||
-          status === 503 ||
-          status === 400 ||
-          /429|quota|404|not_found|no longer available|overloaded|unavailable|abort|timeout|api_key_invalid/i.test(msg);
-        if (!isRecoverable) {
-          throw err;
-        }
-        // Em picos temporários 503 da API Gemini, aguarda 700ms antes do próximo modelo da cascata
-        if (status === 503 || /503|overloaded|unavailable/i.test(msg)) {
-          await new Promise((r) => setTimeout(r, 700));
-        }
-        console.warn(`[Gemini Pool #${keyIdx + 1}/${keys.length}] ${candidateModel} indisponível, tentando próximo...`);
-      }
+  const result = await executarGeminiLimitado({
+    chaves: keys,
+    modelos: candidateModels,
+    indiceInicial: startIdx,
+    invocar: async ({ chave, modelo, timeoutMs }) => {
+      const ai = new GoogleGenAI({
+        apiKey: chave,
+        httpOptions: { timeout: 38000, retryOptions: { attempts: 1 } }
+      });
+      return invokeSingleGeminiModel({
+        ai, candidateModel: modelo, systemPrompt, history, mediaInstruction,
+        b64, cleanMime, temperature, timeoutMs
+      });
     }
-  }
-
-  throw lastError || new Error('Todas as chaves/modelos do Pool Gemini atingiram limite no momento.');
+  });
+  return {
+    text: result.texto,
+    actualModel: result.modelo,
+    keyIndexUsed: result.indiceChave,
+    keyPoolSize: result.totalChaves
+  };
 }
 
 async function callOpenAICompatible({ providerName, baseUrl, apiKey, model, systemPrompt, history, userText, media, temperature }) {
@@ -1043,6 +1013,33 @@ async function runProviderCall(creds, { systemPrompt, history, userText, media, 
     keyIndexUsed: 1,
     keyPoolSize: 1
   };
+}
+
+// Nunca usar uma chave global de ambiente como substituta de chave ausente do tenant.
+function credenciaisDaCampanha(ai={}) {
+  if(!ai || typeof ai!=='object' || Array.isArray(ai))return null;
+  const provider=ai.provider || 'gemini';
+  const campo={gemini:'geminiApiKey',openai:'openaiApiKey',groq:'groqApiKey',openrouter:'openrouterApiKey'}[provider];
+  if(!campo)return null;
+  let chave=typeof ai[campo]==='string'?ai[campo].trim():'';
+  if(provider==='gemini'&&!chave&&typeof ai.geminiKeyPool==='string')chave=ai.geminiKeyPool.split(/[\r\n,;]+/).map(x=>x.trim()).find(x=>x.length>=16)||'';
+  if(chave.length<(provider==='gemini'?16:8))return null;
+  return getProviderCredentialsByName(provider,{...ai,[campo]:chave});
+}
+export function campanhaTemChave(ai={}) {return Boolean(credenciaisDaCampanha(ai)?.apiKey);}
+
+// Geração é explícita e pontual: sem fila oculta e sem usar texto original automaticamente.
+let geracoesCampanhaAtivas = 0;
+export async function gerarVariacoesParaCampanha({settings,texto,quantidade,prompt=''}={}) {
+  return gerarVariacoesCampanha({texto,quantidade,prompt,chamar:async ({systemPrompt,userText,temperature})=>{
+    const creds=credenciaisDaCampanha(settings?.ai || {});
+    if(!creds?.apiKey || geracoesCampanhaAtivas>=2)throw new Error('Provedor indisponível.');
+    geracoesCampanhaAtivas++;
+    try {
+      const out=await runProviderCall(creds,{systemPrompt,userText,history:[],media:null,temperature});
+      return out.rawOutput;
+    } finally {geracoesCampanhaAtivas--;}
+  }});
 }
 
 // Bulkhead Anti-Burst p/ Multi-Chip (até 3 números simultâneos sem estourar cota RPM de API gratuita)

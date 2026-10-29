@@ -33,6 +33,9 @@ import {
 import { calibrateTrueClock, trueNowIso, trueNowMs } from './trueClock.js';
 import { enableHistoryJournal, isHistoryJournalEnabled, countJournalFiles } from './historyJournal.js';
 import { backupSlotAuth } from './pairingSafety.js';
+import { conectarMotorCampanhas } from './campanhaIntegracaoMotor.js';
+import { criarLeitorMediaCampanha } from './campanhaDownload.js';
+import { convertToCanonicalWhatsAppVoice } from './audioProcessor.js';
 import { fetchScopedCloudContact } from './cloudSendScope.js';
 
 const CLOUD_SESSION_FILE = path.join(DATA_DIR, 'cloud_session.json');
@@ -1500,6 +1503,7 @@ class CloudWorkerBridge {
     this.broadcastFn = null;
     this.heartbeatTimer = null;
     this.commandPollTimer = null;
+    this.campaignMotor = null;
     this.syncTimer = null;
     this.realtimeChannel = null;
     this.processingCommands = new Set();
@@ -2363,6 +2367,31 @@ class CloudWorkerBridge {
         this.pruneOldCommands().catch(() => {});
       }
     }, 12_000);
+
+    // A campanha só é iniciada pelo usuário; esta chave permite desativar o motor em emergência.
+    if (process.env.IENVIA_CAMPANHAS_EXPERIMENTAL !== '0' && this.whatsappManager?.slots) {
+      try {
+        const client = this.client, owner = this.user.id;
+        const carregarArquivo = criarLeitorMediaCampanha({client,userId:owner,panelUrl:'https://zap-ia-studio.vercel.app',supabaseUrl:SUPABASE_URL});
+        let motor;
+        const sessaoAtiva = () => this.campaignMotor === motor && this.client === client && this.user?.id === owner;
+        motor = conectarMotorCampanhas({
+          client,userId:owner,workerId:crypto.randomUUID(),deviceId:this.deviceIdentity.deviceId,
+          whatsapp:this.whatsappManager,storage:localStorageInstance,sessaoAtiva,carregarArquivo,
+          maxWaSlots:()=>clampMaxWaSlots(this.user?.maxWaSlots,this.user?.role),
+          converterVoz:convertToCanonicalWhatsAppVoice,
+          registrar:({acao,enviado,jid})=>{
+            if(!sessaoAtiva())return;
+            const slot=this.whatsappManager.slots[acao.slotId];
+            const chatId=slot.toStorageKey(jid),key={id:enviado.key.id,remoteJid:jid,fromMe:true};
+            const text=acao.material.tipo==='texto'?acao.material.texto:acao.material.tipo==='imagem'?'[Imagem enviada pela campanha]':'[Áudio enviado pela campanha]';
+            localStorageInstance.appendContactMessage(chatId,{role:'assistant',text,phone:acao.telefone,contactName:acao.nome,campaignId:acao.campanhaId,waMsgId:enviado.key.id,waMsgKey:key,ack:1,timestamp:trueNowIso()});
+            this.broadcastFn?.('crm_updated',{chatId});
+          },aoErro:()=>console.error('[Campanhas] Falha de processamento. Verifique o estado antes de qualquer reenvio.')
+        });
+        this.campaignMotor=motor;motor.iniciar();
+      } catch(err) { console.error('[Campanhas] Motor experimental não iniciado:',err.message); }
+    }
   }
 
   async pruneOldCommands() {
@@ -2418,6 +2447,9 @@ class CloudWorkerBridge {
   }
 
   stopBackgroundLoops() {
+    const campaignMotor = this.campaignMotor;
+    this.campaignMotor = null;
+    campaignMotor?.parar();
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;

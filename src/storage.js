@@ -1564,6 +1564,11 @@ export class Storage {
       if (msgObj?.waMsgId) {
         const dupById = prev.messages.find((m) => m.waMsgId && m.waMsgId === msgObj.waMsgId);
         if (dupById) {
+          if (typeof msgObj.campaignId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(msgObj.campaignId) && !dupById.campaignId) {
+            dupById.campaignId = msgObj.campaignId;
+            this.dirtyContactIds.add(prev.chatId);
+            if (!opts.deferSave) this.saveSoon();
+          }
           if (msgObj.mediaUrl && !dupById.mediaUrl) {
             dupById.mediaUrl = msgObj.mediaUrl;
             dupById.mediaName = msgObj.mediaName || dupById.mediaName;
@@ -1848,6 +1853,7 @@ export function mergeContactMessagesUnion(authoritativeMsgs = [], rescueMsgs = [
     if (existing) {
       if (r.waMsgId && !existing.waMsgId) existing.waMsgId = r.waMsgId;
       if (r.waMsgKey && !existing.waMsgKey) existing.waMsgKey = r.waMsgKey;
+      if (typeof r.campaignId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(r.campaignId) && !existing.campaignId) existing.campaignId = r.campaignId;
       if (r.quoted && !existing.quoted) existing.quoted = r.quoted;
       if (r.ack && (!existing.ack || Number(r.ack) > Number(existing.ack))) existing.ack = Number(r.ack);
       if (r.reactions && typeof r.reactions === 'object') {

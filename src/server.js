@@ -61,7 +61,7 @@ import {
 } from './storage.js';
 import { trueNowIso } from './trueClock.js';
 import { NICHE_TEMPLATES } from './templates.js';
-import { buildSystemPrompt, generateSmartReply, parseGeminiKeyPool, transcribeVoiceBufferWithAi, analyzeCrmFunnelCoach } from './aiEngine.js';
+import { buildSystemPrompt, generateSmartReply, parseGeminiKeyPool, transcribeVoiceBufferWithAi, analyzeCrmFunnelCoach, campanhaTemChave, gerarVariacoesParaCampanha } from './aiEngine.js';
 import { formatPixMessageWithQr } from './pix.js';
 import { convertToCanonicalWhatsAppVoice, resolveFfmpegPath } from './audioProcessor.js';
 import { createZipBuffer, extractZipBuffer } from './zipReader.js';
@@ -71,6 +71,11 @@ import { recoverInterruptedUpdate } from './updateTransaction.js';
 import { isTrustedBrowserOrigin, rejectUntrustedBrowserRequest } from './browserOrigin.js';
 import { IS_VERCEL, MEDIA_BUCKET, SUPABASE_URL, isCloudConfigured } from './cloudConfig.js';
 import { scopedSendChatId } from './cloudSendScope.js';
+import { importarDestinatarios } from './campanhaImportacao.js';
+import { importarXlsx } from './campanhaXlsx.js';
+import { criarCampanha, editarCampanha, controlarCampanha, detalharCampanha, resolverIncertezaCampanha, listarDestinatariosCampanha, removerDestinatarioCampanha } from './campanhaApi.js';
+import { criarServicoMediaCampanha, limparUploadsExpirados } from './campanhaMediaPrivada.js';
+import { criarProxyMediaCampanha } from './campanhaProxyRemoto.js';
 import { getSafeCommandStatus } from './commandStatus.js';
 // Não iniciar o WhatsApp sobre uma atualização incompleta. Falhas de recuperação
 // interrompem o processo, em vez de abrir o motor com arquivos inconsistentes.
@@ -86,6 +91,7 @@ import {
   deleteManagedUser,
   dispatchCommandToWorker,
   ensureLocalMediaCached,
+  getAdminClient,
   getOrCreateDeviceIdentity,
   listManagedUsers,
   renameLocalDeviceIdentity,
@@ -530,8 +536,9 @@ app.use('/api', async (req, res, next) => {
         return tenantStorageContext.run(supportCtx.tenantStore, () => next());
       }
 
-      // Consulta de um envio já enfileirado não carrega nem altera o workspace inteiro.
-      if (req.method === 'GET' && /^\/cloud\/commands\/[^/]+\/status\/?$/.test(req.path)) {
+      // Estas operações não leem nem alteram o workspace; evitam carregar conversas privadas.
+      if ((req.path === '/campaigns' || req.path.startsWith('/campaigns/')) ||
+          (req.method === 'GET' && /^\/cloud\/commands\/[^/]+\/status\/?$/.test(req.path))) {
         req.cloudAuth = { client: verified.client, authUser: verified.authUser, profile: verified.profile, isRemoteImpersonation: false };
         return next();
       }
@@ -618,6 +625,131 @@ app.get('/api/cloud/commands/:commandId/status', async (req, res) => {
   } catch {
     return res.status(503).json({ ok: false, error: 'Não foi possível consultar o envio agora.' });
   }
+});
+
+// Importação de lista sem gravação nem comunicação com WhatsApp.
+const campaignImportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 4 * 1024 * 1024, files: 1, fields: 3, fieldSize: 2 * 1024 * 1024, parts: 4 }
+});
+app.post('/api/campaigns/import-preview', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  campaignImportUpload.single('file')(req, res, async (erro) => {
+    if (erro) return res.status(erro.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({ok:false,error:'Arquivo ou formulário excede os limites permitidos.'});
+    try {
+      let result;
+      if (req.file) {
+        const ext = path.extname(req.file.originalname || '').toLowerCase();
+        if (ext === '.xlsx') {
+          result = await importarXlsx(req.file.buffer);
+        } else if (ext === '.csv' || ext === '.txt') {
+          const texto = new TextDecoder('utf-8', { fatal: true }).decode(req.file.buffer);
+          result = importarDestinatarios({texto,formato:ext.slice(1),separador:req.body?.separador || ','});
+        } else return res.status(400).json({ok:false,error:'Use arquivo CSV, TXT ou XLSX.'});
+      } else {
+        result = importarDestinatarios({texto:req.body?.texto,formato:req.body?.formato,separador:req.body?.separador || ','});
+      }
+      return res.json({ok:true,...result});
+    } catch {
+      return res.status(400).json({ok:false,error:'Não foi possível ler a lista. Confira o formato e os limites do arquivo.'});
+    }
+  });
+});
+
+// Geração solicitada pelo usuário, sem salvar, enviar ou carregar conversas.
+app.post('/api/campaigns/ai-variations', async (req,res) => {
+  res.setHeader('Cache-Control','no-store');
+  try {
+    let ai;
+    if(IS_VERCEL && req.cloudAuth?.client && !req.cloudAuth?.tenantStore) {
+      const {data,error}=await req.cloudAuth.client.from('zapia_workspaces').select('settings').eq('user_id',req.cloudAuth.authUser.id).maybeSingle();
+      if(error)return res.status(503).json({ok:false,error:'Não foi possível carregar a configuração de IA.'});
+      ai=data?.settings?.ai;
+    } else ai=storage.data.settings?.ai;
+    if(!campanhaTemChave(ai))return res.status(400).json({ok:false,error:'Configure uma chave de IA para esta conta.'});
+    const result=await gerarVariacoesParaCampanha({settings:{ai},texto:req.body?.texto,quantidade:req.body?.quantidade,prompt:req.body?.prompt ?? ''});
+    return res.status(result.ok?200:503).json(result);
+  } catch {
+    return res.status(400).json({ok:false,error:'Confira o texto, a quantidade e o prompt da campanha.'});
+  }
+});
+
+// API experimental de campanhas. As RPCs exigem a sessão do próprio titular.
+function contextoCampanha(req) {
+  if (req.cloudAuth?.isRemoteImpersonation) { const e=new Error('Abra a conta titular para gerenciar campanhas.');e.statusCode=403;throw e; }
+  if (req.cloudAuth?.client && req.cloudAuth?.authUser?.id) return {client:req.cloudAuth.client,user:{id:req.cloudAuth.authUser.id,role:req.cloudAuth.profile?.role,maxWaSlots:clampMaxWaSlots(req.cloudAuth.profile?.max_wa_slots,req.cloudAuth.profile?.role)}};
+  if (!IS_VERCEL && cloudWorker.client && cloudWorker.user?.id) return {client:cloudWorker.client,user:cloudWorker.user};
+  const e=new Error('Conecte a conta Ienvia para gerenciar campanhas.');e.statusCode=503;throw e;
+}
+function falhaCampanha(res,e) {return res.status(e.statusCode||400).json({ok:false,error:e.message||'Não foi possível processar a campanha.'});}
+app.get('/api/campaigns',async (req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  try {
+    const {client,user}=contextoCampanha(req);
+    const {data,error}=await client.from('ienvia_campanhas_controle').select('owner_id,campanha_id,nome,status,proxima_acao_em,pausa_tipo,revisao,plano').eq('owner_id',user.id).order('proxima_acao_em',{ascending:false}).limit(100);
+    if(error||!Array.isArray(data))return res.status(503).json({ok:false,error:'Não foi possível carregar as campanhas.'});
+    if(data.some(x=>x.owner_id!==user.id))return res.status(503).json({ok:false,error:'Resposta de campanhas inválida.'});
+    return res.json({ok:true,campanhas:data});
+  }catch(e){return falhaCampanha(res,e);}
+});
+app.post('/api/campaigns',async (req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  try{const ctx=contextoCampanha(req);const campanha=await criarCampanha({...ctx,plano:req.body?.plano,opcoes:req.body?.opcoes??{},destinatarios:req.body?.destinatarios});return res.status(201).json({ok:true,campanha});}
+  catch(e){return falhaCampanha(res,e);}
+});
+app.put('/api/campaigns/:campaignId',async (req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  try{const ctx=contextoCampanha(req);const campanha=await editarCampanha({...ctx,campanhaId:req.params.campaignId,plano:req.body?.plano,opcoes:req.body?.opcoes});return res.json({ok:true,campanha});}
+  catch(e){return falhaCampanha(res,e);}
+});
+app.post('/api/campaigns/:campaignId/control',async (req,res)=>{
+  res.setHeader('Cache-Control','no-store');
+  try{const ctx=contextoCampanha(req);const campanha=await controlarCampanha({...ctx,campanhaId:req.params.campaignId,acao:req.body?.acao});return res.json({ok:true,campanha});}
+  catch(e){return falhaCampanha(res,e);}
+});
+
+app.get('/api/campaigns/folders',async (req,res)=>{
+ res.setHeader('Cache-Control','no-store');try{const {client,user}=contextoCampanha(req);const {data,error}=await client.from('ienvia_campanha_pastas').select('owner_id,pasta_id,nome,tipo,criada_em').eq('owner_id',user.id).order('criada_em',{ascending:false}).limit(2000);
+  if(error||!Array.isArray(data)||data.some(x=>x.owner_id!==user.id))return res.status(503).json({ok:false,error:'Não foi possível carregar as pastas.'});return res.json({ok:true,pastas:data});}catch(e){return falhaCampanha(res,e);}
+});
+app.post('/api/campaigns/folders',async (req,res)=>{
+ res.setHeader('Cache-Control','no-store');try{const {client,user}=contextoCampanha(req),nome=req.body?.nome,tipo=req.body?.tipo;
+  if(typeof nome!=='string'||!nome.trim()||nome.length>120||!['imagem','audio'].includes(tipo))throw new Error('Nome ou tipo de pasta inválido.');
+  const {data,error}=await client.rpc('ienvia_criar_pasta_campanha',{p_nome:nome.trim(),p_tipo:tipo});
+  if(error||!Array.isArray(data)||data.length!==1||data[0].owner_id!==user.id)return res.status(503).json({ok:false,error:'Não foi possível criar a pasta.'});return res.status(201).json({ok:true,pasta:data[0]});}catch(e){return falhaCampanha(res,e);}
+});
+app.get('/api/campaigns/folders/:folderId/files',async (req,res)=>{
+ res.setHeader('Cache-Control','no-store');try{const {client,user}=contextoCampanha(req);if(!UUID_RE.test(req.params.folderId))throw new Error('Pasta inválida.');
+  const inicio=Number(req.query.inicio??0);if(!Number.isSafeInteger(inicio)||inicio<0||inicio>9900)throw new Error('Página inválida.');
+  const {data,error}=await client.from('ienvia_campanha_arquivos').select('owner_id,arquivo_id,pasta_id,tipo,mime,tamanho,ordem,nome_original,excluindo').eq('owner_id',user.id).eq('pasta_id',req.params.folderId).order('ordem',{ascending:true}).range(inicio,inicio+99);
+  if(error||!Array.isArray(data)||data.some(x=>x.owner_id!==user.id||x.pasta_id!==req.params.folderId))return res.status(503).json({ok:false,error:'Não foi possível carregar os arquivos.'});return res.json({ok:true,arquivos:data});}catch(e){return falhaCampanha(res,e);}
+});
+app.post('/api/campaigns/folders/:folderId/upload-init',async (req,res)=>{
+ res.setHeader('Cache-Control','no-store');try{const {client,user}=contextoCampanha(req);if(!IS_VERCEL)return res.json(await criarProxyMediaCampanha({client,userId:user.id})({tipo:'iniciar',pastaId:req.params.folderId,body:req.body}));const admin=getAdminClient();await limparUploadsExpirados({client,admin,userId:user.id});const service=criarServicoMediaCampanha({client,admin,supabaseUrl:SUPABASE_URL});const upload=await service.iniciar({userId:user.id,pastaId:req.params.folderId,tamanho:req.body?.tamanho});return res.json({ok:true,upload});}catch(e){return falhaCampanha(res,e);}
+});
+app.post('/api/campaigns/folders/:folderId/upload-finalize',async (req,res)=>{
+ res.setHeader('Cache-Control','no-store');try{const {client,user}=contextoCampanha(req);if(!IS_VERCEL)return res.status(201).json(await criarProxyMediaCampanha({client,userId:user.id})({tipo:'finalizar',pastaId:req.params.folderId,body:req.body}));const service=criarServicoMediaCampanha({client,admin:getAdminClient(),supabaseUrl:SUPABASE_URL});const arquivo=await service.finalizar({userId:user.id,pastaId:req.params.folderId,arquivoId:req.body?.arquivoId,nome:req.body?.nome??''});return res.status(201).json({ok:true,arquivo:{arquivo_id:arquivo.arquivo_id,pasta_id:arquivo.pasta_id,tipo:arquivo.tipo,mime:arquivo.mime,tamanho:arquivo.tamanho,ordem:arquivo.ordem,nome_original:arquivo.nome_original}});}catch(e){return falhaCampanha(res,e);}
+});
+
+app.post('/api/campaigns/files/:fileId/delete',async (req,res)=>{
+ res.setHeader('Cache-Control','no-store');try{const {client,user}=contextoCampanha(req);if(req.body?.confirmo!==true)throw new Error('Confirme a exclusão do arquivo.');if(!IS_VERCEL)return res.json(await criarProxyMediaCampanha({client,userId:user.id})({tipo:'excluir',arquivoId:req.params.fileId,body:{confirmo:true}}));const service=criarServicoMediaCampanha({client,admin:getAdminClient(),supabaseUrl:SUPABASE_URL});await service.excluir({userId:user.id,arquivoId:req.params.fileId});return res.json({ok:true});}catch(e){return falhaCampanha(res,e);}
+});
+app.get('/api/campaigns/files/:fileId/ticket',async (req,res)=>{
+ res.setHeader('Cache-Control','no-store');try{const {client,user}=contextoCampanha(req);if(!IS_VERCEL)return res.json(await criarProxyMediaCampanha({client,userId:user.id})({tipo:'ticket',arquivoId:req.params.fileId}));const service=criarServicoMediaCampanha({client,admin:getAdminClient(),supabaseUrl:SUPABASE_URL});const ticket=await service.ticket({userId:user.id,arquivoId:req.params.fileId});return res.json({ok:true,ticket});}catch(e){return falhaCampanha(res,e);}
+});
+
+// Depois das rotas fixas /folders e /files para não interpretá-las como UUID.
+app.get('/api/campaigns/:campaignId',async (req,res)=>{
+ res.setHeader('Cache-Control','no-store');try{const ctx=contextoCampanha(req);const dados=await detalharCampanha({...ctx,campanhaId:req.params.campaignId});return res.json({ok:true,...dados});}catch(e){return falhaCampanha(res,e);}
+});
+app.get('/api/campaigns/:campaignId/recipients',async (req,res)=>{
+ res.setHeader('Cache-Control','no-store');try{const ctx=contextoCampanha(req);const destinatarios=await listarDestinatariosCampanha({...ctx,campanhaId:req.params.campaignId,inicio:Number(req.query.inicio??0)});return res.json({ok:true,destinatarios});}catch(e){return falhaCampanha(res,e);}
+});
+app.post('/api/campaigns/:campaignId/recipients/:recipientId/remove',async (req,res)=>{
+ res.setHeader('Cache-Control','no-store');try{const ctx=contextoCampanha(req);await removerDestinatarioCampanha({...ctx,campanhaId:req.params.campaignId,destinatarioId:req.params.recipientId,confirmo:req.body?.confirmo});return res.json({ok:true});}catch(e){return falhaCampanha(res,e);}
+});
+app.post('/api/campaigns/:campaignId/resolve',async (req,res)=>{
+ res.setHeader('Cache-Control','no-store');try{const ctx=contextoCampanha(req);const etapa=await resolverIncertezaCampanha({...ctx,campanhaId:req.params.campaignId,destinatarioId:req.body?.destinatarioId,etapa:req.body?.etapa,tentativaId:req.body?.tentativaId,decisao:req.body?.decisao,conferi:req.body?.conferi});return res.json({ok:true,etapa});}catch(e){return falhaCampanha(res,e);}
 });
 
 // ======================== GERENCIAMENTO DE CONTAS (EXCLUSIVO ADMIN MASTER) ========================

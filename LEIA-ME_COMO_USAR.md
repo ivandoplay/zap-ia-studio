@@ -57,7 +57,7 @@ Ienvia/
    - Exclusiva para a conta **Admin Master (`jeffersonivan`)**; contas de clientes nunca enxergam esta aba nem dados de outras empresas.
    - **Gestão Comercial Manual:** crie contas 100% limpas para qualquer nicho, copie o **Kit de Boas-Vindas**, acompanhe o progresso de **Setup (`0/4` a `4/4`)** e bloqueie/libere contas em 1 clique.
    - **Modo Suporte Master em 1 Clique (`Acessar Painel`):** entre no painel de qualquer cliente sem precisar da senha dele, com barra superior âmbar **`Voltar para Minha Conta Master`**.
-   - **Isolamento Zero-Trust (`Row Level Security` + Storage Isolado):** cada conta é 100% isolada no banco (`Supabase RLS` com `InitPlan` otimizado) e no bucket de mídia (`zapia-media/<user_id>/`).
+   - **Isolamento de contas:** o banco usa políticas RLS. A mídia legada no bucket `zapia-media` pode ser acessada por quem possui a URL; a mídia de campanhas usa um bucket privado separado.
 
 2. **Conversas & CRM — Inbox 360º em 3 Colunas + Player e Download Universal de Mídias:**
    - **Ouvir Áudios, Ver e Baixar Qualquer Arquivo do Cliente:** escute os áudios enviados pelo cliente direto na bolha (player nativo + botão **Baixar áudio**), abra fotos/comprovantes, assista vídeos MP4 e baixe qualquer documento (`.pdf`, `.xlsx`, `.docx`, `.csv`, `.txt`, `.zip`, `.xml`, etc.) em **1 clique**.
@@ -70,9 +70,18 @@ Ienvia/
 
 ## 3. Resumo dos Diferenciais Comerciais & Proteções Ativas (`v5.6.0`)
 
-- **Conexão Multi-Chip (`Chip 1 Principal`, `Chip 2`, `Chip 3`) & Multi-Aparelho:** conecte até 3 números de WhatsApp simultâneos no mesmo aparelho (PC/Linux/Termux) ou distribua entre aparelhos diferentes (com seletor inteligente quando 2+ aparelhos estão online), pareamento remoto por QR Code ou Código de 8 Dígitos, chave de IA independente por chip, fila unificada por horário e **Rodízio Inteligente Anti-Ban**.
+- **Conexão Multi-Chip (`Chip 1 Principal`, `Chip 2`, `Chip 3`) & Multi-Aparelho:** conecte até 3 números de WhatsApp simultâneos no mesmo aparelho (PC/Linux/Termux) ou distribua entre aparelhos diferentes (com seletor inteligente quando 2+ aparelhos estão online), pareamento remoto por QR Code ou Código de 8 Dígitos, chave de IA independente por chip, fila unificada por horário e **rodízio de chips e intervalos configuráveis** (não garantem ausência de bloqueios).
 - **Alertas Centralizados no `Chip 1 Principal`:** todo aviso de fechamento `[[CHAMAR_HUMANO]]` sai pelo `Chip 1` identificando por qual chip o cliente chamou (com contingência automática nos `Chips 2/3` se o `Chip 1` estiver offline).
 - **Postura 100% Humana (`Skill #1 / H25`):** conversa sempre como uma pessoa real (modo Equipe ou modo Especialista Solo em 1ª pessoa) — **jamais revela ou insinua ser IA, robô, bot ou assistente virtual**.
 - **Biblioteca de Voz Humana Real (`OGG/Opus` + 64 barras de onda sonora + `/mms/ptt`):** notas de voz indistinguíveis de gravação feita na hora no celular, com transcrição automática via Gemini e envio inteligente sem repetição (`Skill S06`).
 - **Dossiê Executivo de 3 Linhas (`S33`), Triagem de Sentimento (`H26`), Objeção Oculta (`S34`), Blindagem Anti-Prompt Injection (`S35`) e Coach de Funil IA (`Skill #10`)**.
-- **Catálogo Multi-Mídia (até 5 arquivos por item) + QR Code PIX PNG & Copia e Cola + Anti-Ban Completo + Retorno Agendado (`S19`) + Auto-Update Automático na Abertura + Backup `.JSON` / Exportação `.CSV`.**
+- **Catálogo Multi-Mídia (até 5 arquivos por item) + QR Code PIX PNG & Copia e Cola + intervalos configuráveis + Retorno Agendado (`S19`) + Auto-Update Automático na Abertura + Backup `.JSON` / Exportação `.CSV`.**
+
+
+## 4. Campanhas
+
+1. Abra **Campanhas > Nova campanha**, nomeie e importe uma lista CSV, XLSX, TXT ou cole os números. Revise a amostra e use apenas contatos que autorizaram o recebimento.
+2. Adicione textos e pastas de imagens ou áudios na ordem desejada. Cada pessoa recebe um arquivo de cada pasta incluída. Para IA, gere as variações e revise-as; para Spintax use, por exemplo, `{Olá|Oi}`. Campos como `{{nome}}` precisam existir na lista.
+3. Escolha chips, intervalos, quantidade de pessoas e pausas entre lotes, horários e forma de retomada. Salve e confirme **Iniciar campanha**. Deixe um motor compatível conectado.
+4. É possível pausar, editar etapas ainda não iniciadas, retomar e pular pausas. Para remover uma pessoa, abra os destinatários da campanha e selecione **Remover**. Quando uma pessoa pedir para parar, confira e remova suas etapas pendentes; a resposta cordial depende da IA ligada e do contexto ser reconhecido, e não equivale à remoção.
+5. Se um envio ficar **A conferir**, não presuma falha nem reenvie: confira a conversa e aguarde, pois o envio pode terminar depois. Só marque como não enviado se tiver certeza. Variações e intervalos não garantem entrega nem evitam bloqueios.

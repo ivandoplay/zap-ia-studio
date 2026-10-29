@@ -35,7 +35,8 @@ import { generateSmartReply, buildExecutiveHandoffDossier } from './aiEngine.js'
 import { formatPixMessageWithQr } from './pix.js';
 import { convertToCanonicalWhatsAppVoice, WHATSAPP_VOICE_MIMETYPE, isNativeOggOpus } from './audioProcessor.js';
 import { ensureLocalMediaCached, fetchCloudMediaBuffer } from './supabaseCloud.js';
-import { observeServerTimestamp, trueNowIso, trueNowMs } from './trueClock.js';
+import { trueNowIso, trueNowMs } from './trueClock.js';
+import { campanhaDaConversa, respostaParadaCampanha } from './campanhaResposta.js';
 
 // Garante que Notas de Voz subam no bucket nativo /mms/ptt do WhatsApp (idêntico à gravação no celular)
 if (MEDIA_PATH_MAP && !MEDIA_PATH_MAP.ptt) {
@@ -1680,9 +1681,8 @@ class WhatsAppSlotEngine {
     const ownerSelfName = this.getOwnerSelfName();
     const rawPushName = String(msg.pushName || '').trim();
     const rawWaTsMs = toEpochMs(msg.messageTimestamp);
-    if (!isHistoryAppend && rawWaTsMs > 1_700_000_000_000) {
-      observeServerTimestamp(rawWaTsMs);
-    }
+    // Mensagens podem chegar atrasadas ou carregar o relógio do aparelho de origem;
+    // esse timestamp não é uma amostra confiável para calibrar o relógio do motor.
     const msgTsMs = rawWaTsMs || trueNowMs();
     const msgIso = new Date(msgTsMs).toISOString();
     const msgAgeMs = Math.max(0, trueNowMs() - msgTsMs);
@@ -2079,7 +2079,7 @@ class WhatsAppSlotEngine {
       const reconnected = await this.waitUntilConnected(8000);
       if (!reconnected || !this.sock) return;
     }
-    if (!storage.data.settings.botEnabled || storage.isContactPaused(chatId, batch.phone)) return;
+    if (!storage.data.settings.botEnabled || !this.isSlotAiEnabled() || storage.isContactPaused(chatId, batch.phone) || storage.isContactIgnored(chatId) || storage.isContactIgnored(batch.phone)) return;
     if (!this.checkRateLimit(chatId)) {
       storage.addLog('alert', `Limite anti-loop atingido para ${batch.contactName}. Ignorando excesso.`);
       return;
@@ -2118,7 +2118,23 @@ class WhatsAppSlotEngine {
       allowDemoFallback: false
     });
 
+    // A configuração pode ter mudado enquanto o provedor de IA respondia.
+    if (!storage.data.settings.botEnabled || !this.isSlotAiEnabled() || storage.isContactPaused(chatId, batch.phone) || storage.isContactIgnored(chatId) || storage.isContactIgnored(batch.phone)) return;
     const { cleanText, actions, providerUsed, modelUsed, activatedSkills, sentiment, shieldTriggered } = aiResult;
+    const campanhaContexto = campanhaDaConversa(priorHistory);
+    const respostaCampanha = respostaParadaCampanha({actions,priorHistory,userText:combinedText});
+    if (respostaCampanha) {
+      // Política escolhida para campanhas: apenas resposta cordial, sem incluir
+      // automaticamente na lista de ignorados nem prometer exclusão inexistente.
+      const enviado = await this.sendHumanizedText(chatId, respostaCampanha, batch.keys, {beforeSend:()=>Boolean(storage.data.settings.botEnabled && this.isSlotAiEnabled() && !storage.isContactPaused(chatId,batch.phone) && !storage.isContactIgnored(chatId) && !storage.isContactIgnored(batch.phone))});
+      if (!enviado) return;
+      storage.appendContactMessage(chatId,{role:'assistant',text:respostaCampanha,campaignId:campanhaContexto});
+      storage.data.stats.totalAiReplies += 1;
+      storage.addLog('alert',`Contato ${batch.contactName} pediu para parar após campanha. Revise e remova manualmente as próximas etapas, se necessário.`);
+      this.broadcastFn('crm_updated',{chatId});
+      this.broadcastFn('logs_updated',{});
+      return;
+    }
     const skillsNote = activatedSkills?.length ? ` | Skills: ${activatedSkills.slice(0, 3).join(', ')}` : '';
 
     // Salva sentimento atual (Skill #3) e tags automáticas inteligentes no CRM
@@ -2166,7 +2182,8 @@ class WhatsAppSlotEngine {
       await this.sendHumanizedText(chatId, cleanText, batch.keys);
       storage.appendContactMessage(chatId, {
         role: 'assistant',
-        text: cleanText
+        text: cleanText,
+        ...(campanhaContexto ? {campaignId:campanhaContexto} : {})
       });
       storage.data.stats.totalAiReplies += 1;
       storage.addLog('ai', `[${providerUsed.toUpperCase()} • ${modelUsed}] Respondeu para ${batch.contactName}${skillsNote}`);
@@ -2259,13 +2276,15 @@ class WhatsAppSlotEngine {
     this.broadcastFn('logs_updated', {});
   }
 
-  async sendHumanizedText(chatId, fullText, keysToRead = []) {
-    if (!this.sock || !fullText) return;
+  async sendHumanizedText(chatId, fullText, keysToRead = [], { beforeSend = null } = {}) {
+    if (!this.sock || !fullText) return false;
+    if (beforeSend !== null && typeof beforeSend !== 'function') throw new Error('Verificação de envio inválida.');
+    const socket = this.sock;
     const antiBan = storage.data.settings.antiBan || {};
 
     if (keysToRead.length > 0) {
       await sleep(randomJitter(Number(antiBan.readDelayMs) || 900));
-      await this.sock.readMessages(keysToRead).catch(() => {});
+      await socket.readMessages(keysToRead).catch(() => {});
     }
 
     let chunks = [fullText];
@@ -2280,16 +2299,20 @@ class WhatsAppSlotEngine {
 
     for (const chunk of chunks) {
       if (antiBan.simulateTyping !== false) {
-        await this.sock.sendPresenceUpdate('composing', chatId).catch(() => {});
+        await socket.sendPresenceUpdate('composing', chatId).catch(() => {});
         const minMs = Number(antiBan.minTypingMs) || 1500;
         const maxMs = Number(antiBan.maxTypingMs) || 5000;
         const calcMs = Math.min(maxMs, Math.max(minMs, chunk.length * 24));
         await sleep(randomJitter(calcMs));
-        await this.sock.sendPresenceUpdate('paused', chatId).catch(() => {});
+        await socket.sendPresenceUpdate('paused', chatId).catch(() => {});
       }
-      const sent = await this.sock.sendMessage(chatId, { text: chunk });
+      if (this.sock !== socket || this.status !== 'connected') return false;
+      if (beforeSend && !await beforeSend()) return false;
+      if (this.sock !== socket || this.status !== 'connected') return false;
+      const sent = await socket.sendMessage(chatId, { text: chunk });
       this.rememberBotMessage(sent);
     }
+    return true;
   }
 
   async sendCatalogMediaFile(chatId, item, senderRole = 'assistant') {
@@ -2607,8 +2630,7 @@ class WhatsAppSlotEngine {
 
     const sent = await this.sock.sendMessage(targetJid, { text }, sendOpts);
     this.rememberBotMessage(sent);
-    const sentWaMs = toEpochMs(sent?.messageTimestamp);
-    if (sentWaMs > 1_700_000_000_000) observeServerTimestamp(sentWaMs);
+    // O timestamp retornado no envio pode vir do relógio local desajustado do aparelho.
     const sentKey = sent?.key?.id
       ? { id: sent.key.id, remoteJid: sent.key.remoteJid || targetJid, fromMe: true }
       : undefined;
@@ -2616,7 +2638,7 @@ class WhatsAppSlotEngine {
       role: 'owner',
       text,
       ack: 1,
-      timestamp: new Date(sentWaMs || trueNowMs()).toISOString(),
+      timestamp: trueNowIso(),
       ...(sent?.key?.id ? { waMsgId: sent.key.id } : {}),
       ...(sentKey ? { waMsgKey: sentKey } : {}),
       ...(storedQuoted ? { quoted: storedQuoted } : {})
@@ -2810,25 +2832,27 @@ class WhatsAppSlotEngine {
    * - Sobe pelo endpoint nativo /mms/ptt;
    * - Entrega OGG/Opus mono VoIP + seconds exatos + 64 barras reais de onda sonora (waveform).
    */
-  async sendCanonicalVoiceNote({ chatId, oggBuffer, durationSec = 5, waveform = null, keysToRead = [] }) {
+  async sendCanonicalVoiceNote({ chatId, oggBuffer, durationSec = 5, waveform = null, keysToRead = [], beforeSend = null }) {
+    if (beforeSend !== null && typeof beforeSend !== 'function') throw new Error('Verificação de envio inválida.');
     if (!this.sock || this.status !== 'connected') {
       const ok = await this.waitUntilConnected(7000);
       if (!ok || !this.sock) {
         throw new Error('O WhatsApp não está conectado no momento.');
       }
     }
+    const socket = this.sock;
     const antiBan = storage.data.settings.antiBan || {};
     if (keysToRead.length > 0) {
       await sleep(randomJitter(Number(antiBan.readDelayMs) || 850));
-      await this.sock.readMessages(keysToRead).catch(() => {});
+      await socket.readMessages(keysToRead).catch(() => {});
     }
 
     if (antiBan.simulateTyping !== false) {
-      await this.sock.sendPresenceUpdate('recording', chatId).catch(() => {});
+      await socket.sendPresenceUpdate('recording', chatId).catch(() => {});
       // Presença "gravando áudio..." proporcional à duração real (entre 2.4s e 8.2s)
       const proportionalMs = Math.min(8200, Math.max(2400, Math.round((Number(durationSec) || 5) * 380)));
       await sleep(randomJitter(proportionalMs));
-      await this.sock.sendPresenceUpdate('paused', chatId).catch(() => {});
+      await socket.sendPresenceUpdate('paused', chatId).catch(() => {});
     }
 
     const waveArray = Array.isArray(waveform) && waveform.length === 64
@@ -2843,16 +2867,16 @@ class WhatsAppSlotEngine {
       waveform: waveArray
     };
 
-    const pttUpload = this.sock.waUploadToServer
-      ? (filePath, opts) => this.sock.waUploadToServer(filePath, { ...opts, mediaType: 'ptt' })
+    const pttUpload = socket.waUploadToServer
+      ? (filePath, opts) => socket.waUploadToServer(filePath, { ...opts, mediaType: 'ptt' })
       : undefined;
 
-    let sent;
-    try {
-      sent = await this.sock.sendMessage(chatId, payload, pttUpload ? { upload: pttUpload } : undefined);
-    } catch {
-      sent = await this.sock.sendMessage(chatId, payload);
-    }
+    if (this.sock !== socket || this.status !== 'connected') throw new Error('A sessão do chip mudou antes do envio.');
+    if (beforeSend) await beforeSend();
+    if (this.sock !== socket || this.status !== 'connected') throw new Error('A sessão do chip mudou antes do envio.');
+    // Uma exceção pode chegar depois de o servidor aceitar o áudio. Repetir aqui
+    // poderia enviar duas notas de voz; deixe o resultado incerto para revisão.
+    const sent = await socket.sendMessage(chatId, payload, pttUpload ? { upload: pttUpload } : undefined);
     this.rememberBotMessage(sent);
     return sent;
   }

@@ -2059,6 +2059,17 @@ class CloudWorkerBridge {
         do {
           this.pendingFlush = false;
           let rewroteLocalMediaUrl = false;
+          const mediaContactIds = new Set(localStorageInstance.dirtyContactIds);
+
+          // Persiste primeiro texto, timestamps e metadados da conversa. Uploads grandes
+          // ficam para depois, para que uma mídia lenta não retenha a mensagem no CRM.
+          await flushTenantStoreToCloud(this.client, this.user.id, localStorageInstance, {
+            isWorkerSync: true,
+            lastConfigHash: this.lastSyncedConfigHash,
+            onConfigFlushed: (nextHash) => { this.lastSyncedConfigHash = nextHash; }
+          });
+          // Inclui conversas que ficaram sujas durante a primeira gravação.
+          for (const cid of localStorageInstance.dirtyContactIds) mediaContactIds.add(cid);
 
           // Sobe eventuais áudios/imagens locais recém-salvos ainda sem URL https:// da nuvem
           for (const v of localStorageInstance.getVoiceLibrary()) {
@@ -2081,7 +2092,7 @@ class CloudWorkerBridge {
           }
 
           // Sobe mídias e arquivos recebidos dos clientes (áudio, foto, vídeo, PDF, planilha, doc, zip...) p/ ouvir/ver/baixar na Vercel!
-          for (const cid of localStorageInstance.dirtyContactIds) {
+          for (const cid of mediaContactIds) {
             const contact = localStorageInstance.data.contacts[cid];
             if (!contact?.messages?.length) continue;
             const recent = contact.messages.slice(-15);
@@ -2117,6 +2128,7 @@ class CloudWorkerBridge {
                   const pubUrl = await uploadMediaBufferToCloud(this.client, this.user.id, fn, fs.readFileSync(fp), mime);
                   if (pubUrl) {
                     m.mediaUrl = pubUrl;
+                    localStorageInstance.dirtyContactIds.add(cid);
                     rewroteLocalMediaUrl = true;
                   }
                 }

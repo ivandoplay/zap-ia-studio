@@ -931,7 +931,9 @@ async function syncInboxRealtime() {
 window.addEventListener('ienvia:inbox-changed', () => {
   if (document.hidden || state.runtimeMode !== 'vercel_cloud' || state.actAsUser) return;
   if (inboxRealtimeWakeTimer) return;
-  const delay = Math.max(100, 1200 - (Date.now() - lastInboxRealtimeWake));
+  // Realtime deve atualizar a caixa quase imediatamente; ainda agrupamos rajadas
+  // para evitar uma chamada de poll por cada linha/evento da mesma conversa.
+  const delay = Math.max(50, 250 - (Date.now() - lastInboxRealtimeWake));
   inboxRealtimeWakeTimer = setTimeout(() => {
     inboxRealtimeWakeTimer = null;
     lastInboxRealtimeWake = Date.now();

@@ -1625,7 +1625,7 @@ class WhatsAppSlotEngine {
     };
   }
 
-  async handleIncomingRawMessage(msg, { isHistoryAppend = false } = {}) {
+  async handleIncomingRawMessage(msg, { isHistoryAppend = false, mediaDownloader = downloadMediaMessage } = {}) {
     const destJid = msg?.message?.deviceSentMessage?.destinationJid;
     const destinacaoEmOutroJid = Boolean(destJid && this.isSelfJid(msg?.key?.remoteJid));
     const rawRemoteJid = destinacaoEmOutroJid ? destJid : msg?.key?.remoteJid;
@@ -1862,6 +1862,30 @@ class WhatsAppSlotEngine {
       { ownerSelfName }
     );
 
+    // Salva e sinaliza primeiro a mensagem e seus metadados; o download do anexo
+    // pode levar vários segundos em redes móveis e não deve atrasar a conversa no CRM.
+    storage.appendContactMessage(
+      remoteJid,
+      {
+        role: 'user',
+        text: displayLabel,
+        waMsgId: msg.key?.id || undefined,
+        ...(cleanWaKey ? { waMsgKey: cleanWaKey } : {}),
+        ...(quotedInfo ? { quoted: quotedInfo } : {}),
+        waFromMe: false,
+        waTimestampMs: msgTsMs,
+        timestamp: msgIso,
+        phone: bestPhone || undefined,
+        contactName: cleanClientName || undefined,
+        historical: isOldHistoricalMsg,
+        skipUnread: isOldHistoricalMsg
+      },
+      { historical: isOldHistoricalMsg, ownerSelfName }
+    );
+    this.liveMessageDiagnostics.gravadasEntrada++;
+    if (!isOldHistoricalMsg) this.fetchContactAvatarIfNeeded(remoteJid).catch(() => {});
+    this.broadcastFn('crm_updated', { chatId: remoteJid });
+
     let downloadedMedia = null;
     let inboundMediaUrl = null;
     let inboundMediaName = null;
@@ -1871,11 +1895,11 @@ class WhatsAppSlotEngine {
     // Só baixa binário pesado de mídia se NÃO for mensagem antiga de histórico (evita baixar centenas de vídeos antigos de meses atrás!)
     if (!isOldHistoricalMsg && (hasAudio || hasImage || hasVideo || hasAnyDoc) && !storage.isContactIgnored(bestPhone) && !storage.isContactIgnored(remoteJid)) {
       try {
-        const buffer = await downloadMediaMessage(
+        const buffer = await mediaDownloader(
           msg,
           'buffer',
           {},
-          { logger, reuploadRequest: this.sock.updateMediaMessage }
+          { logger, reuploadRequest: this.sock?.updateMediaMessage }
         );
         const mimeType = hasAudio
           ? (unwrapped.audioMessage?.mimetype || 'audio/ogg')
@@ -1946,33 +1970,28 @@ class WhatsAppSlotEngine {
       }
     }
 
-    storage.appendContactMessage(
-      remoteJid,
-      {
-        role: 'user',
-        text: displayLabel,
-        waMsgId: msg.key?.id || undefined,
-        ...(cleanWaKey ? { waMsgKey: cleanWaKey } : {}),
-        ...(quotedInfo ? { quoted: quotedInfo } : {}),
-        waFromMe: false,
-        waTimestampMs: msgTsMs,
-        timestamp: msgIso,
-        phone: bestPhone || undefined,
-        contactName: cleanClientName || undefined,
-        historical: isOldHistoricalMsg,
-        skipUnread: isOldHistoricalMsg,
-        ...(inboundMediaUrl ? { mediaUrl: inboundMediaUrl } : {}),
-        ...(inboundMediaName ? { mediaName: inboundMediaName } : {}),
-        ...(inboundMediaMime ? { mediaMime: inboundMediaMime } : {}),
-        ...(inboundMediaSize ? { mediaSize: inboundMediaSize } : {})
-      },
-      { historical: isOldHistoricalMsg, ownerSelfName }
-    );
-    this.liveMessageDiagnostics.gravadasEntrada++;
-    if (!isOldHistoricalMsg) {
-      this.fetchContactAvatarIfNeeded(remoteJid).catch(() => {});
+    // Anexa os bytes e a URL à mensagem já visível, sem criar uma segunda mensagem.
+    // Atualiza os metadados da mensagem original, sem criar uma segunda mensagem.
+    if (inboundMediaUrl) {
+      const targetKey = storage.findSiblingContactKey(remoteJid, bestPhone) || remoteJid;
+      const target = storage.data.contacts[targetKey];
+      const storedMessage = target?.messages?.find((m) =>
+        msg.key?.id
+          ? m.waMsgId === msg.key.id
+          : m.role === 'user' && m.text === displayLabel && m.timestamp === msgIso
+      );
+      if (storedMessage) {
+        Object.assign(storedMessage, {
+          mediaUrl: inboundMediaUrl,
+          mediaName: inboundMediaName,
+          mediaMime: inboundMediaMime,
+          mediaSize: inboundMediaSize
+        });
+        storage.dirtyContactIds.add(targetKey);
+        storage.saveSoon();
+        this.broadcastFn('crm_updated', { chatId: remoteJid });
+      }
     }
-    this.broadcastFn('crm_updated', { chatId: remoteJid });
 
     // Mensagens históricas/antigas sincronizadas nunca acionam resposta automática retroativa da IA!
     if (isOldHistoricalMsg) {

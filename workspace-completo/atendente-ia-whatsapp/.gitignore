@@ -1,0 +1,28 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.vercel/
+.DS_Store
+Thumbs.db
+
+# Dados sensíveis, sessões WhatsApp e sessões de login locais NUNCA vão para o Git
+data/database.json
+data/database.json.tmp
+data/cloud_session.json
+data/device_identity.json
+data/wa_auth/
+data/uploads/
+.agents/
+.runtime/
+uploads/
+.tmp_*
+*.log
+
+# Backups locais e identificação de propriedade do cache nunca são publicados
+data/recovery-before-cloud-sync/
+data/recovery-before-pairing/
+data/worker_db_owner.json
+
+# Diários locais de conversas são dados privados e nunca podem entrar no Git
+data/history-journal/

@@ -1,0 +1,185 @@
+TAP version 13
+# Subtest: lote conta pessoas e pausa depois do número sorteado
+ok 1 - lote conta pessoas e pausa depois do número sorteado
+  ---
+  duration_ms: 1.825765
+  ...
+# Subtest: interrupção durante envio gera incerteza e nunca reenvia automaticamente
+ok 2 - interrupção durante envio gera incerteza e nunca reenvia automaticamente
+  ---
+  duration_ms: 0.602418
+  ...
+# Subtest: pausa e retomada preservam prazo e pular pausa exige espera ativa
+ok 3 - pausa e retomada preservam prazo e pular pausa exige espera ativa
+  ---
+  duration_ms: 0.781901
+  ...
+# Subtest: estado imutável, duplicados e parâmetros inválidos não são aceitos
+ok 4 - estado imutável, duplicados e parâmetros inválidos não são aceitos
+  ---
+  duration_ms: 0.361863
+  ...
+# Subtest: interrupção em áudio nunca reenvia o texto confirmado
+ok 5 - interrupção em áudio nunca reenvia o texto confirmado
+  ---
+  duration_ms: 2.468004
+  ...
+# Subtest: confirmação de etapa incerta exige retomada manual e conserva progresso
+ok 6 - confirmação de etapa incerta exige retomada manual e conserva progresso
+  ---
+  duration_ms: 0.291495
+  ...
+# Subtest: pausa solicitada durante o envio entra em vigor após confirmação
+ok 7 - pausa solicitada durante o envio entra em vigor após confirmação
+  ---
+  duration_ms: 0.227535
+  ...
+# Subtest: listas inválidas, opções inválidas e alterações do material escolhido são rejeitadas
+ok 8 - listas inválidas, opções inválidas e alterações do material escolhido são rejeitadas
+  ---
+  duration_ms: 0.325461
+  ...
+# Subtest: respeita hora local, dias úteis e fim exclusivo
+ok 9 - respeita hora local, dias úteis e fim exclusivo
+  ---
+  duration_ms: 17.127149
+  ...
+# Subtest: encontra o próximo horário permitido com fuso da campanha
+ok 10 - encontra o próximo horário permitido com fuso da campanha
+  ---
+  duration_ms: 18.960442
+  ...
+# Subtest: janela que atravessa meia-noite usa o dia inicial
+ok 11 - janela que atravessa meia-noite usa o dia inicial
+  ---
+  duration_ms: 0.900474
+  ...
+# Subtest: horários, dias, fuso e timestamps incorretos são recusados
+ok 12 - horários, dias, fuso e timestamps incorretos são recusados
+  ---
+  duration_ms: 0.766064
+  ...
+# Subtest: bloqueia importação anônima
+ok 13 - bloqueia importação anônima
+  ---
+  duration_ms: 21.172843
+  ...
+# Subtest: aceita texto colado e não grava dados
+ok 14 - aceita texto colado e não grava dados
+  ---
+  duration_ms: 36.453566
+  ...
+# Subtest: aceita planilha real sintética via upload em memória
+ok 15 - aceita planilha real sintética via upload em memória
+  ---
+  duration_ms: 35.973193
+  ...
+# Subtest: rejeita extensão não suportada e UTF-8 inválido
+ok 16 - rejeita extensão não suportada e UTF-8 inválido
+  ---
+  duration_ms: 8.233302
+  ...
+# Subtest: CSV interpreta campos entre aspas, escape, quebra de linha e BOM
+ok 17 - CSV interpreta campos entre aspas, escape, quebra de linha e BOM
+  ---
+  duration_ms: 1.84958
+  ...
+# Subtest: CSV inválido é rejeitado e separador é explícito
+ok 18 - CSV inválido é rejeitado e separador é explícito
+  ---
+  duration_ms: 0.607595
+  ...
+# Subtest: normaliza números sem assegurar existência no WhatsApp
+ok 19 - normaliza números sem assegurar existência no WhatsApp
+  ---
+  duration_ms: 0.422853
+  ...
+# Subtest: importa CSV por cabeçalho e sinaliza inválidos e repetidos sem descartá-los silenciosamente
+ok 20 - importa CSV por cabeçalho e sinaliza inválidos e repetidos sem descartá-los silenciosamente
+  ---
+  duration_ms: 0.711526
+  ...
+# Subtest: importa lista de texto com um telefone por linha, sem permitir conteúdo ilimitado
+ok 21 - importa lista de texto com um telefone por linha, sem permitir conteúdo ilimitado
+  ---
+  duration_ms: 1.247168
+  ...
+# Subtest: preserva campos adicionais seguros para personalização e recusa cabeçalhos ambíguos
+ok 22 - preserva campos adicionais seguros para personalização e recusa cabeçalhos ambíguos
+  ---
+  duration_ms: 0.561949
+  ...
+# Subtest: Spintax, campos e variações aninhadas não interpretam conteúdo dos contatos
+ok 23 - Spintax, campos e variações aninhadas não interpretam conteúdo dos contatos
+  ---
+  duration_ms: 2.498818
+  ...
+# Subtest: Spintax inválido é rejeitado antes do envio, sem estourar pilha
+ok 24 - Spintax inválido é rejeitado antes do envio, sem estourar pilha
+  ---
+  duration_ms: 0.777876
+  ...
+# Subtest: campos ausentes são identificados e não substituídos silenciosamente
+ok 25 - campos ausentes são identificados e não substituídos silenciosamente
+  ---
+  duration_ms: 0.257282
+  ...
+# Subtest: alternância sequencial e sorteio preservam índices válidos
+ok 26 - alternância sequencial e sorteio preservam índices válidos
+  ---
+  duration_ms: 0.813802
+  ...
+# Subtest: sorteio inclusivo de lote e intervalo valida os limites
+ok 27 - sorteio inclusivo de lote e intervalo valida os limites
+  ---
+  duration_ms: 0.419
+  ...
+# Subtest: importa a primeira planilha XLSX, identifica duplicados e inválidos
+ok 28 - importa a primeira planilha XLSX, identifica duplicados e inválidos
+  ---
+  duration_ms: 35.340305
+  ...
+# Subtest: recusa arquivo inválido, expansão excessiva e entradas duplicadas
+ok 29 - recusa arquivo inválido, expansão excessiva e entradas duplicadas
+  ---
+  duration_ms: 94.259987
+  ...
+# Subtest: recusa coordenadas esparsas excessivas e declarações XML
+ok 30 - recusa coordenadas esparsas excessivas e declarações XML
+  ---
+  duration_ms: 181.27029
+  ...
+# Subtest: motor usa o orçamento ampliado na chamada Gemini real mockada
+ok 31 - motor usa o orçamento ampliado na chamada Gemini real mockada
+  ---
+  duration_ms: 43.837454
+  ...
+# Subtest: permite resposta lenta de 31 segundos antes de abortar
+ok 32 - permite resposta lenta de 31 segundos antes de abortar
+  ---
+  duration_ms: 1.406531
+  ...
+# Subtest: troca de modelo rapidamente para erro recuperável e respeita o prazo restante
+ok 33 - troca de modelo rapidamente para erro recuperável e respeita o prazo restante
+  ---
+  duration_ms: 0.909339
+  ...
+# Subtest: não tenta nova chave ou modelo após esgotar o prazo
+ok 34 - não tenta nova chave ou modelo após esgotar o prazo
+  ---
+  duration_ms: 0.800192
+  ...
+# Subtest: erro permanente encerra sem repetir e chaves não são exibidas
+ok 35 - erro permanente encerra sem repetir e chaves não são exibidas
+  ---
+  duration_ms: 2.10221
+  ...
+1..35
+# tests 35
+# suites 0
+# pass 35
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1670.102312

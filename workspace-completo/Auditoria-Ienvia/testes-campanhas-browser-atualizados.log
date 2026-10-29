@@ -1,0 +1,47 @@
+TAP version 13
+# OK: navegador preserva sessão rotacionada, não autoriza durante erro e evita refresh automático no status temporário.
+# Subtest: /tmp/ienvia-campanha-lab/tests/auth-profile-browser.test.mjs
+ok 1 - /tmp/ienvia-campanha-lab/tests/auth-profile-browser.test.mjs
+  ---
+  duration_ms: 1890.142011
+  ...
+# ======================================================
+# 🚀 Ienvia rodando na porta 3000
+# 👉 Painel Local: http://localhost:3000
+# ======================================================
+# OK: navegador Chromium bloqueia execução de POST e WebSocket de outra origem; painel da própria origem continua funcionando.
+# Subtest: /tmp/ienvia-campanha-lab/tests/browser-origin-playwright.test.mjs
+ok 2 - /tmp/ienvia-campanha-lab/tests/browser-origin-playwright.test.mjs
+  ---
+  duration_ms: 1710.698306
+  ...
+# OK: vitrine e login em 320, 375, 768 e 1440px; navegação por teclado e calculadora.
+# Subtest: /tmp/ienvia-campanha-lab/tests/landing-browser.test.mjs
+ok 3 - /tmp/ienvia-campanha-lab/tests/landing-browser.test.mjs
+  ---
+  duration_ms: 4957.075512
+  ...
+# ======================================================
+# 🚀 Ienvia rodando na porta 3000
+# 👉 Painel Local: http://localhost:3000
+# ======================================================
+# OK: navegação, filtros, conversa, subvisões e layout em 320px
+# OK: navegação, filtros, conversa, subvisões e layout em 375px
+# OK: navegação, filtros, conversa, subvisões e layout em 768px
+# OK: nota privada, imagem, cadastro, catálogo e backup/restauração sintéticos pela interface.
+# OK: navegação, filtros, conversa, subvisões e layout em 1440px
+# OK: paginação de mais de 200 fichas, proteção de texto no nome, e resposta dirigida ao Chip 2 somente simulada; nenhum WhatsApp real foi acessado.
+# Subtest: /tmp/ienvia-campanha-lab/tests/painel-fluxos-playwright.test.mjs
+ok 4 - /tmp/ienvia-campanha-lab/tests/painel-fluxos-playwright.test.mjs
+  ---
+  duration_ms: 13843.089739
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 22406.635161

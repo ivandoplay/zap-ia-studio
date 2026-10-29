@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ienvia v5.0 — Manual Institucional &amp; Guia Oficial de Operação</title>
+  <style>
+    :root {
+      --bg: #0b1120;
+      --surface: #111827;
+      --surface-2: #172033;
+      --border: rgba(148, 163, 184, 0.18);
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #10b981;
+      --accent-soft: rgba(16, 185, 129, 0.13);
+      --code-bg: #060b16;
+    }
+    [data-theme="light"] {
+      --bg: #f1f5f9;
+      --surface: #ffffff;
+      --surface-2: #f8fafc;
+      --border: rgba(15, 23, 42, 0.12);
+      --text: #0f172a;
+      --muted: #475569;
+      --accent: #059669;
+      --accent-soft: rgba(5, 150, 105, 0.1);
+      --code-bg: #0f172a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 36px 20px 64px;
+    }
+    .hero {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px 28px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .brand-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .logo {
+      width: 46px;
+      height: 46px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #10b981, #047857);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    h1 {
+      margin: 6px 0 4px;
+      font-size: 24px;
+      letter-spacing: -0.02em;
+    }
+    .sub {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      max-width: 620px;
+    }
+    .top-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 15px;
+      border-radius: 9px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin: 22px 0 16px;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      padding: 10px 16px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .tab-btn.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .pane {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 26px;
+    }
+    .pane.active { display: block; }
+    h2 {
+      margin: 0 0 8px;
+      font-size: 19px;
+    }
+    h3 {
+      margin: 22px 0 8px;
+      font-size: 15px;
+    }
+    .step-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .step {
+      display: flex;
+      gap: 14px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+    }
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 800;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .code-box {
+      position: relative;
+      background: var(--code-bg);
+      color: #e2e8f0;
+      border-radius: 10px;
+      padding: 14px 16px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12.5px;
+      overflow-x: auto;
+      margin-top: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .tree {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12.5px;
+      white-space: pre;
+      overflow-x: auto;
+    }
+    .note {
+      margin-top: 16px;
+      padding: 12px 15px;
+      border-radius: 10px;
+      border-left: 3px solid var(--accent);
+      background: var(--accent-soft);
+      font-size: 13px;
+    }
+    footer {
+      margin-top: 28px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <div>
+        <div class="brand-row">
+          <div class="logo" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+            </svg>
+          </div>
+          <div>
+            <span class="badge">PACOTE INSTITUCIONAL OFICIAL • v5.0</span>
+            <h1>Ienvia</h1>
+          </div>
+        </div>
+        <p class="sub" style="margin-top:10px;">
+          Plataforma Comercial Multi-Contas de Atendimento Humano com IA, Biblioteca de Voz Real OGG/Opus e Central de Conversas 360º — 100% Portátil para Windows, Linux e Android Termux.
+        </p>
+      </div>
+      <div class="top-actions">
+        <button type="button" class="btn" onclick="toggleTheme()" id="themeBtn">Modo Claro</button>
+        <a class="btn primary" href="https://zap-ia-studio.vercel.app/" target="_blank" rel="noopener noreferrer">Abrir Painel Nuvem 24h</a>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="Escolha sua plataforma">
+      <button type="button" class="tab-btn active" onclick="openPane('win', this)">1. Windows PC (Portátil)</button>
+      <button type="button" class="tab-btn" onclick="openPane('linux', this)">2. Linux (Desktop &amp; VPS)</button>
+      <button type="button" class="tab-btn" onclick="openPane('termux', this)">3. Android Termux (24h)</button>
+      <button type="button" class="tab-btn" onclick="openPane('estrutura', this)">4. Estrutura &amp; Recursos</button>
+    </nav>
+
+    <!-- ABA WINDOWS -->
+    <section id="pane-win" class="pane active">
+      <h2>Execução no Windows 10 ou Windows 11 — Zero Instalação Externa</h2>
+      <p class="sub">Você não precisa instalar Node.js nem nenhum programa no seu computador e não precisa de senha de Administrador.</p>
+
+      <div class="step-list">
+        <div class="step">
+          <span class="step-num">1</span>
+          <div>
+            <strong>Extraia o arquivo .ZIP baixado</strong><br/>
+            Clique com o botão direito sobre o <code>.ZIP</code> &gt; <strong>Extrair Tudo...</strong> e salve a pasta <code>Ienvia</code> em Documentos ou na Área de Trabalho.
+          </div>
+        </div>
+        <div class="step">
+          <span class="step-num">2</span>
+          <div>
+            <strong>Dê 2 cliques em <code>INICIAR_NO_WINDOWS.bat</code></strong><br/>
+            Na <strong>1ª abertura</strong>, o próprio sistema baixa automaticamente o <strong>Node.js v22 LTS Portátil Oficial</strong> (com verificação de integridade SHA-256) dentro de <code>sistema\.runtime\node\</code>, configura as bibliotecas em ~30 segundos e abre a janela limpa do aplicativo. Nas próximas vezes, abre direto em <strong>2 segundos</strong>.
+          </div>
+        </div>
+        <div class="step">
+          <span class="step-num">3</span>
+          <div>
+            <strong>Faça login e conecte seu WhatsApp</strong><br/>
+            Digite seu <code>@usuario</code> e <code>senha</code> na tela inicial e conecte seu aparelho via <strong>QR Code</strong> ou <strong>Código de 8 Dígitos</strong>.
+          </div>
+        </div>
+      </div>
+
+      <div class="note">
+        <strong>Atalho na Área de Trabalho:</strong> se quiser criar o ícone oficial na Área de Trabalho, abra a pasta <code>Ferramentas_Extras</code> e dê 2 cliques em <code>Windows_Criar_Atalho_Desktop.bat</code>.
+      </div>
+    </section>
+
+    <!-- ABA LINUX -->
+    <section id="pane-linux" class="pane">
+      <h2>Execução no Linux (Ubuntu, Mint, Debian, Fedora ou Servidor VPS)</h2>
+      <p class="sub">100% portátil: não pede <code>sudo</code>, funciona em arquiteturas <code>x64</code> e <code>ARM64</code>, tanto em PC com interface gráfica quanto em VPS via SSH.</p>
+
+      <div class="step-list">
+        <div class="step">
+          <span class="step-num">1</span>
+          <div style="width:100%;">
+            <strong>Extraia o pacote e inicie com 1 comando:</strong>
+            <div class="code-box">
+              <button type="button" class="copy-btn" onclick="copyCode(this)">Copiar</button>
+              <code>unzip -o Ienvia-v*.zip -d ~ &amp;&amp; cd ~/Ienvia &amp;&amp; bash INICIAR_NO_LINUX.sh</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <span class="step-num">2</span>
+          <div>
+            <strong>Comportamento Inteligente (Desktop vs Servidor SSH):</strong><br/>
+            • <strong>Em PC Linux com tela:</strong> abre automaticamente a janela do aplicativo em <code>http://localhost:3000</code>.<br/>
+            • <strong>Em VPS / Servidor SSH sem tela:</strong> abre o assistente interativo no próprio terminal pedindo seu <code>@usuario</code>, <code>senha</code> e gerando o <strong>Código de 8 Dígitos do WhatsApp</strong> na hora!
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA TERMUX -->
+    <section id="pane-termux" class="pane">
+      <h2>Execução 24h no Celular Android (Termux Oficial — Custo R$ 0)</h2>
+      <p class="sub">Instale o Termux pelo F-Droid e desative a restrição de bateria do Android (Configurações &gt; Apps &gt; Termux &gt; Bateria &gt; Sem restrições).</p>
+
+      <div class="step-list">
+        <div class="step">
+          <span class="step-num">1</span>
+          <div style="width:100%;">
+            <strong>Na 1ª vez, libere o acesso à pasta Downloads no Termux:</strong>
+            <div class="code-box">
+              <button type="button" class="copy-btn" onclick="copyCode(this)">Copiar</button>
+              <code>termux-setup-storage</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <span class="step-num">2</span>
+          <div style="width:100%;">
+            <strong>Extraia e inicie o Motor 24h (instala tudo sozinho se for a 1ª vez):</strong>
+            <div class="code-box">
+              <button type="button" class="copy-btn" onclick="copyCode(this)">Copiar</button>
+              <code>pkg install -y unzip &amp;&amp; unzip -o ~/storage/downloads/Ienvia-v*.zip -d ~ &amp;&amp; cd ~/Ienvia &amp;&amp; bash INICIAR_NO_TERMUX.sh</code>
+            </div>
+          </div>
+        </div>
+        <div class="step">
+          <span class="step-num">3</span>
+          <div>
+            <strong>Próximas aberturas no Termux:</strong><br/>
+            Sempre que reiniciar o celular, basta rodar: <code>cd ~/Ienvia &amp;&amp; bash INICIAR_NO_TERMUX.sh</code>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA ESTRUTURA -->
+    <section id="pane-estrutura" class="pane">
+      <h2>Organização Institucional do Pacote</h2>
+      <p class="sub">Todos os arquivos técnicos ficam encapsulados dentro de <code>sistema/</code> para manter sua pasta limpa, organizada e fácil de atualizar.</p>
+
+      <div class="tree" style="margin-top:14px;">Ienvia/
+├── INICIAR_NO_WINDOWS.bat        # Inicializador Oficial Windows (Zero Instalação)
+├── INICIAR_NO_LINUX.sh           # Inicializador Oficial Linux Desktop &amp; VPS (Zero sudo)
+├── INICIAR_NO_TERMUX.sh          # Inicializador Oficial Android Termux 24h
+├── MANUAL_OFICIAL.html           # Este Manual Institucional Interativo
+├── LEIA-ME.txt                   # Guia Executivo em Texto Puro
+├── Ferramentas_Extras/           # Criadores de Atalho Desktop &amp; Reparo Rápido
+└── sistema/                      # Núcleo Técnico Isolado (Motor IA, Painel &amp; Sessão Segura)</div>
+
+      <h3>Atualização Rápida sem Perder a Conexão do WhatsApp</h3>
+      <p class="sub">
+        Sempre que houver uma nova versão, clique em <strong>Baixar Motor (.ZIP)</strong> dentro do painel (<a href="https://zap-ia-studio.vercel.app/" target="_blank" rel="noopener noreferrer" style="color:var(--accent);">zap-ia-studio.vercel.app</a>) e extraia na mesma pasta substituindo os arquivos. Suas credenciais em <code>sistema/data/wa_auth</code> e <code>cloud_session.json</code> são preservadas automaticamente!
+      </p>
+    </section>
+
+    <footer>
+      Ienvia v5.0 Institutional Edition • Arquitetura Multi-Contas Cloud + Motor Portátil Universal
+    </footer>
+  </div>
+
+  <script>
+    function openPane(id, btn) {
+      document.querySelectorAll('.pane').forEach(function (p) { p.classList.remove('active'); });
+      document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.remove('active'); });
+      document.getElementById('pane-' + id).classList.add('active');
+      btn.classList.add('active');
+    }
+    function toggleTheme() {
+      var cur = document.documentElement.getAttribute('data-theme');
+      var next = cur === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      document.getElementById('themeBtn').textContent = next === 'light' ? 'Modo Escuro' : 'Modo Claro';
+    }
+    function copyCode(btn) {
+      var text = btn.parentElement.querySelector('code').innerText;
+      navigator.clipboard.writeText(text).then(function () {
+        var old = btn.textContent;
+        btn.textContent = 'Copiado!';
+        setTimeout(function () { btn.textContent = old; }, 1600);
+      });
+    }
+  </script>
+</body>
+</html>

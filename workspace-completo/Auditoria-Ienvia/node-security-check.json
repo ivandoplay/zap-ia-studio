@@ -1,0 +1,45 @@
+{
+  "summary": {
+    "patched": {
+      "22": "22.23.4",
+      "24": "24.22.1",
+      "26": "26.12.1"
+    },
+    "scanned": "/home/user/atendente-ia-whatsapp",
+    "versionIssues": 0,
+    "fixed": 0,
+    "unresolved": 0,
+    "codeHits": 2
+  },
+  "findings": [
+    {
+      "severity": "high",
+      "runtime": true,
+      "file": "(runtime)",
+      "kind": "runtime",
+      "message": "Node running this check is v20.20.2; unsupported line. Use nvm/fnm/volta/n or your installer"
+    },
+    {
+      "severity": "info",
+      "file": "package.json",
+      "kind": "engines",
+      "message": "engines.node \">=20.0.0\" still allows vulnerable versions; consider \">=24.22.1\" (not auto-edited: it is a requirement, not the running version)"
+    },
+    {
+      "severity": "low",
+      "file": "src/pairingSafety.js",
+      "line": 13,
+      "kind": "code:permission",
+      "message": "Permission Model / realpathSync (CVE-2026-106071/106073). Avoid wildcards; do not use realpathSync as the only containment check",
+      "codeHit": true
+    },
+    {
+      "severity": "high",
+      "file": "src/pix.js",
+      "line": 75,
+      "kind": "code:brotli",
+      "message": "Brotli decoding (CVE-2026-111497, RCE). Upgrade Node; cap input size meanwhile",
+      "codeHit": true
+    }
+  ]
+}

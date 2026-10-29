@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {estimarProximaAcao} from '../src/campanhaApi.js';
+test('estimativa respeita pausa e janela semanal sem prometer envio',()=>{const now=Date.parse('2026-10-28T22:00:00Z'),c={status:'ativa',proxima_acao_em:'2026-10-28T22:01:00Z',restricao_horaria:true,fuso:'America/Fortaleza',dias:[1,2,3,4,5],inicio:'09:00:00',fim:'18:00:00'};assert.equal(estimarProximaAcao(c,now),'2026-10-29T12:00:00.000Z');assert.equal(estimarProximaAcao({...c,status:'pausada'},now),null)});

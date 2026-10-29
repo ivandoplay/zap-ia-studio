@@ -1,0 +1,26 @@
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+assert.equal(process.env.IENVIAPG_TESTE_ISOLADO, '1', 'Somente PostgreSQL de laboratório autorizado');
+const base=['-X','-qAt','-v','ON_ERROR_STOP=1','-h','127.0.0.1','-p','55432','-U','postgres','-d','campanha_lab'];
+function psql(sql) {return new Promise((resolve,reject)=>{const p=spawn('psql',[...base,'-c',sql]);let out='',err='';p.stdout.on('data',x=>out+=x);p.stderr.on('data',x=>err+=x);p.on('error',reject);p.on('close',code=>resolve({code,out:out.trim(),err:err.trim()}));});}
+const owner='10000000-0000-0000-0000-000000000001',camp='20000000-0000-0000-0000-000000000002',dest='30000000-0000-0000-0000-000000000002';
+const auth=`SET ROLE authenticated; SELECT set_config('request.jwt.claim.sub','${owner}',false);`;
+const insert=await psql(`${auth} INSERT INTO public.ienvia_campanha_checkpoints(owner_id,campanha_id,destinatario_id,etapa,status) VALUES ('${owner}','${camp}','${dest}',0,'pendente');`);
+assert.equal(insert.code,0,insert.err);
+const reserve=(attempt)=>psql(`${auth} SELECT count(*) FROM public.ienvia_reservar_etapa('${camp}','${dest}',0,'${attempt}','{"texto":"exemplo sintético"}'::jsonb);`);
+const resultados=await Promise.all([reserve('40000000-0000-0000-0000-000000000003'),reserve('40000000-0000-0000-0000-000000000004')]);
+for (const r of resultados) assert.equal(r.code,0,r.err);
+assert.deepEqual(resultados.map(r=>Number(r.out.split('\n').at(-1))).sort(),[0,1]);
+const update=await psql(`${auth} UPDATE public.ienvia_campanha_checkpoints SET status='pendente',tentativa_id=NULL,material=NULL WHERE campanha_id='${camp}';`);
+assert.notEqual(update.code,0,'Atualização direta não deve ser permitida');
+assert.match(update.err,/permission denied/i);
+const camp2='20000000-0000-0000-0000-000000000003';
+const d1='30000000-0000-0000-0000-000000000003',d2='30000000-0000-0000-0000-000000000004';
+const novo=await psql(`${auth} INSERT INTO public.ienvia_campanha_checkpoints(owner_id,campanha_id,destinatario_id,etapa,status) VALUES ('${owner}','${camp2}','${d1}',0,'pendente'),('${owner}','${camp2}','${d2}',0,'pendente');`);
+assert.equal(novo.code,0,novo.err);
+const dois=await Promise.all([psql(`${auth} SELECT count(*) FROM public.ienvia_reservar_etapa('${camp2}','${d1}',0,'40000000-0000-0000-0000-000000000005','{"texto":"1"}'::jsonb);`),psql(`${auth} SELECT count(*) FROM public.ienvia_reservar_etapa('${camp2}','${d2}',0,'40000000-0000-0000-0000-000000000006','{"texto":"2"}'::jsonb);`)]);
+const sucesso=dois.filter(r=>r.code===0&&Number(r.out.split('\n').at(-1))===1);assert.equal(sucesso.length,1,'Só uma ação por campanha pode vencer');
+for(const r of dois.filter(x=>x.code!==0)) assert.match(r.err,/unique constraint/i);
+const contagem=await psql(`${auth} SELECT count(*) FROM public.ienvia_campanha_checkpoints WHERE campanha_id='${camp2}' AND status='em_envio';`);
+assert.equal(Number(contagem.out.split('\n').at(-1)),1);
+console.log('OK: reservas concorrentes para a mesma etapa ou pessoas distintas: só uma ação por campanha; UPDATE direto negado.');

@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+assert.equal(process.env.ZAPIA_ISOLATED_TEST,'1','Use somente cópia sem sessões reais.');
+process.env.SUPABASE_URL='https://db.example.test';process.env.SUPABASE_ANON_KEY='ficticia';process.env.VERCEL='1';delete process.env.IENVIA_CAMPANHAS_EXPERIMENTAL;
+const {cloudWorker:w}=await import('../src/supabaseCloud.js');
+const client={auth:{},rpc:async()=>({data:[],error:null}),from(){return {delete(){return this},eq(){return this},in(){return this},lt(){return this},select(){return this},order(){return this},range:async()=>({data:[],error:null})}},channel(){return {on(){return this},subscribe(){return this}}},removeChannel(){}};
+test('ciclo de vida inicia por padrão e pode ser desligado ou encerrado com a sessão',async()=>{w.client=client;w.user={id:'11111111-1111-4111-8111-111111111111',role:'user',maxWaSlots:1};w.whatsappManager={slots:{},isAnyOwnSlotPhone:()=>false};try{w.startBackgroundLoops();assert.ok(w.campaignMotor);const antigo=w.campaignMotor;w.stopBackgroundLoops();assert.equal(w.campaignMotor,null);await antigo.drenar();process.env.IENVIA_CAMPANHAS_EXPERIMENTAL='0';w.startBackgroundLoops();assert.equal(w.campaignMotor,null);}finally{w.stopBackgroundLoops();delete process.env.IENVIA_CAMPANHAS_EXPERIMENTAL;}});

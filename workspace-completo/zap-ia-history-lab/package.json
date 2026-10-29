@@ -1,0 +1,15 @@
+{
+  "name": "zap-ia-history-lab",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "node-sqlite3-wasm": "^0.8.56"
+  }
+}

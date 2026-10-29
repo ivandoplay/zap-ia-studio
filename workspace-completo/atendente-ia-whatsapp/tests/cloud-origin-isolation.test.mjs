@@ -1,0 +1,5 @@
+import assert from 'node:assert/strict';import http from 'node:http';import {once} from 'node:events';
+process.env.VERCEL='1';process.env.SUPABASE_URL='http://127.0.0.1:1';process.env.SUPABASE_ANON_KEY='falso';
+const {app}=await import('../src/server.js');const server=app.listen(0,'127.0.0.1');await once(server,'listening');const port=server.address().port;
+async function get(host,origin){return new Promise((resolve,reject)=>{const req=http.request({hostname:'127.0.0.1',port,path:'/api/auth/status',headers:{host,origin}},res=>{res.resume();resolve({status:res.statusCode,acao:res.headers['access-control-allow-origin']})});req.on('error',reject);req.end();});}
+try{const same=await get('zap-ia-studio.vercel.app','https://zap-ia-studio.vercel.app');assert.equal(same.status,200);assert.equal(same.acao,'https://zap-ia-studio.vercel.app');const alien=await get('zap-ia-studio.vercel.app','https://outro-projeto.vercel.app');assert.equal(alien.status,403);assert(!alien.acao);console.log('OK: API cloud aceita mesma origem e recusa outra origem Vercel.');}finally{await new Promise(r=>server.close(r));}

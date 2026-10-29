@@ -1,0 +1,282 @@
+TAP version 13
+# OK: navegador preserva sessão rotacionada, não autoriza durante erro e evita refresh automático no status temporário.
+# Subtest: /home/user/ienvia-lab-midias/tests/auth-profile-browser.test.mjs
+ok 1 - /home/user/ienvia-lab-midias/tests/auth-profile-browser.test.mjs
+  ---
+  duration_ms: 770.551571
+  ...
+# OK: HTTP distingue indisponibilidade de autorização e preserva token rotacionado sem liberar acesso.
+# Subtest: /home/user/ienvia-lab-midias/tests/auth-profile-http.test.mjs
+ok 2 - /home/user/ienvia-lab-midias/tests/auth-profile-http.test.mjs
+  ---
+  duration_ms: 291.741518
+  ...
+# OK: login, refresh e verificação recusam perfil ausente, bloqueado ou erro; perfil ativo funciona.
+# Subtest: /home/user/ienvia-lab-midias/tests/auth-profile-security.test.mjs
+ok 3 - /home/user/ienvia-lab-midias/tests/auth-profile-security.test.mjs
+  ---
+  duration_ms: 156.112039
+  ...
+# OK: pacote corrompido recusado; pacote íntegro atualiza preservando dados.
+# Subtest: /home/user/ienvia-lab-midias/tests/auto-update-integrity.test.mjs
+ok 4 - /home/user/ienvia-lab-midias/tests/auto-update-integrity.test.mjs
+  ---
+  duration_ms: 429.428846
+  ...
+# ======================================================
+# 🚀 Ienvia rodando na porta 3000
+# 👉 Painel Local: http://localhost:3000
+# ======================================================
+# OK: HTTP e WebSocket restringem origens; ações entre origens, inclusive formulário simples, são bloqueadas.
+# Subtest: /home/user/ienvia-lab-midias/tests/browser-origin-isolation.test.mjs
+ok 5 - /home/user/ienvia-lab-midias/tests/browser-origin-isolation.test.mjs
+  ---
+  duration_ms: 661.725093
+  ...
+# ======================================================
+# 🚀 Ienvia rodando na porta 3000
+# 👉 Painel Local: http://localhost:3000
+# ======================================================
+# OK: navegador Chromium bloqueia execução de POST e WebSocket de outra origem; painel da própria origem continua funcionando.
+# Subtest: /home/user/ienvia-lab-midias/tests/browser-origin-playwright.test.mjs
+ok 6 - /home/user/ienvia-lab-midias/tests/browser-origin-playwright.test.mjs
+  ---
+  duration_ms: 1039.486089
+  ...
+# OK: portas, localhost/LAN, DNS rebinding, prévias e requisições diretas.
+# Subtest: /home/user/ienvia-lab-midias/tests/browser-origin-policy.test.mjs
+ok 7 - /home/user/ienvia-lab-midias/tests/browser-origin-policy.test.mjs
+  ---
+  duration_ms: 37.366778
+  ...
+# OK: catálogo usa cache da conta e salva URL correta.
+# Subtest: /home/user/ienvia-lab-midias/tests/catalog-media-cache-isolation.test.mjs
+ok 8 - /home/user/ienvia-lab-midias/tests/catalog-media-cache-isolation.test.mjs
+  ---
+  duration_ms: 1269.039586
+  ...
+# OK: cache de mídia remota separado por conta; arquivo legado intacto.
+# Subtest: /home/user/ienvia-lab-midias/tests/cloud-media-cache-isolation.test.mjs
+ok 9 - /home/user/ienvia-lab-midias/tests/cloud-media-cache-isolation.test.mjs
+  ---
+  duration_ms: 110.610363
+  ...
+# [CloudMedia] Não foi possível baixar mídia autorizada.
+# OK: downloads aceitam apenas Storage da própria conta; recusam rede interna, redirecionamento e arquivos excessivos.
+# Subtest: /home/user/ienvia-lab-midias/tests/cloud-media-security.test.mjs
+ok 10 - /home/user/ienvia-lab-midias/tests/cloud-media-security.test.mjs
+  ---
+  duration_ms: 156.192308
+  ...
+# OK: API cloud aceita mesma origem e recusa outra origem Vercel.
+# Subtest: /home/user/ienvia-lab-midias/tests/cloud-origin-isolation.test.mjs
+ok 11 - /home/user/ienvia-lab-midias/tests/cloud-origin-isolation.test.mjs
+  ---
+  duration_ms: 213.929419
+  ...
+# OK: consulta escopada por conta e conversa; snapshot parcial não apaga outras fichas.
+# Subtest: /home/user/ienvia-lab-midias/tests/cloud-send-scope.test.mjs
+ok 12 - /home/user/ienvia-lab-midias/tests/cloud-send-scope.test.mjs
+  ---
+  duration_ms: 480.862799
+  ...
+# OK: HTTP autenticado, não expõe conversa e isola por usuário; suporte indevido bloqueado.
+# Subtest: /home/user/ienvia-lab-midias/tests/command-status-http.test.mjs
+ok 13 - /home/user/ienvia-lab-midias/tests/command-status-http.test.mjs
+  ---
+  duration_ms: 315.195639
+  ...
+# OK: estado do envio sem conteúdo de conversas, vinculado ao usuário e id.
+# Subtest: /home/user/ienvia-lab-midias/tests/command-status.test.mjs
+ok 14 - /home/user/ienvia-lab-midias/tests/command-status.test.mjs
+  ---
+  duration_ms: 30.85262
+  ...
+# OK: encaminhamento não acessa nem envia destino interno.
+# Subtest: /home/user/ienvia-lab-midias/tests/forward-media-security.test.mjs
+ok 15 - /home/user/ienvia-lab-midias/tests/forward-media-security.test.mjs
+  ---
+  duration_ms: 353.458517
+  ...
+# [WA Sync] Falha ao solicitar FULL_HISTORY_SYNC_ON_DEMAND: falha simulada
+# OK: histórico inicial por chip e distinção entre resposta recebida e espera.
+# Subtest: /home/user/ienvia-lab-midias/tests/history-bootstrap.test.mjs
+ok 16 - /home/user/ienvia-lab-midias/tests/history-bootstrap.test.mjs
+  ---
+  duration_ms: 604.921066
+  ...
+# OK: pull aplica fronteira local e programa correção do cache remoto.
+# Subtest: /home/user/ienvia-lab-midias/tests/history-clear-cloud-pull.test.mjs
+ok 17 - /home/user/ienvia-lab-midias/tests/history-clear-cloud-pull.test.mjs
+  ---
+  duration_ms: 93.186438
+  ...
+# OK: reconciliação aplica limpeza remota mesmo com lista de mensagens vazia.
+# Subtest: /home/user/ienvia-lab-midias/tests/history-clear-cloud-reconciliation.test.mjs
+ok 18 - /home/user/ienvia-lab-midias/tests/history-clear-cloud-reconciliation.test.mjs
+  ---
+  duration_ms: 119.45532
+  ...
+# OK: diagnóstico local por chip sem incluir texto das conversas.
+# Subtest: /home/user/ienvia-lab-midias/tests/history-diagnostics.test.mjs
+ok 19 - /home/user/ienvia-lab-midias/tests/history-diagnostics.test.mjs
+  ---
+  duration_ms: 322.352845
+  ...
+# OK: lote realista de 125 gravado no diário antes do cache limitado, sem outros chips.
+# Subtest: /home/user/ienvia-lab-midias/tests/history-journal-ingest-isolated.test.mjs
+ok 20 - /home/user/ienvia-lab-midias/tests/history-journal-ingest-isolated.test.mjs
+  ---
+  duration_ms: 633.560698
+  ...
+# OK: diário local opcional, 5.000 mensagens, isolamento por conta/chip e permissões.
+# Subtest: /home/user/ienvia-lab-midias/tests/history-journal.test.mjs
+ok 21 - /home/user/ienvia-lab-midias/tests/history-journal.test.mjs
+  ---
+  duration_ms: 68.532574
+  ...
+# OK: resposta de protocolo restrita à própria conta e sem conteúdo.
+# Subtest: /home/user/ienvia-lab-midias/tests/history-protocol-status.test.mjs
+ok 22 - /home/user/ienvia-lab-midias/tests/history-protocol-status.test.mjs
+  ---
+  duration_ms: 714.580087
+  ...
+# OK: resposta de histórico correlacionada à solicitação; concorrência, lote vazio e falha.
+# Subtest: /home/user/ienvia-lab-midias/tests/history-request-correlation.test.mjs
+ok 23 - /home/user/ienvia-lab-midias/tests/history-request-correlation.test.mjs
+  ---
+  duration_ms: 729.731099
+  ...
+# OK: exclusão preservada após recriação manual, sem expiração arbitrária e com isolamento por chip.
+# Subtest: /home/user/ienvia-lab-midias/tests/history-tombstone-retention.test.mjs
+ok 24 - /home/user/ienvia-lab-midias/tests/history-tombstone-retention.test.mjs
+  ---
+  duration_ms: 418.458736
+  ...
+# OK: marca Ienvia, instalação e compatibilidade do pacote automático.
+# Subtest: /home/user/ienvia-lab-midias/tests/ienvia-branding.test.mjs
+ok 25 - /home/user/ienvia-lab-midias/tests/ienvia-branding.test.mjs
+  ---
+  duration_ms: 317.651014
+  ...
+# OK: vitrine e login em 320, 375, 768 e 1440px; navegação por teclado e calculadora.
+# Subtest: /home/user/ienvia-lab-midias/tests/landing-browser.test.mjs
+ok 26 - /home/user/ienvia-lab-midias/tests/landing-browser.test.mjs
+  ---
+  duration_ms: 3303.862148
+  ...
+# ======================================================
+# 🚀 Ienvia rodando na porta 3000
+# 👉 Painel Local: http://localhost:3000
+# ======================================================
+# OK: endpoint local com chips 1 e 2, e bloqueio seguro quando chip 3 está offline.
+# Subtest: /home/user/ienvia-lab-midias/tests/local-multichip-send.test.mjs
+ok 27 - /home/user/ienvia-lab-midias/tests/local-multichip-send.test.mjs
+  ---
+  duration_ms: 589.892764
+  ...
+# OK: criação é aprovada apenas com provisionamento completo; falhas são sinalizadas.
+# Subtest: /home/user/ienvia-lab-midias/tests/managed-user-provisioning.test.mjs
+ok 28 - /home/user/ienvia-lab-midias/tests/managed-user-provisioning.test.mjs
+  ---
+  duration_ms: 128.059616
+  ...
+# OK: status do site e motor, offline, versão desconhecida e confirmação sem falso sucesso.
+# Subtest: /home/user/ienvia-lab-midias/tests/motor-update-status.test.mjs
+ok 29 - /home/user/ienvia-lab-midias/tests/motor-update-status.test.mjs
+  ---
+  duration_ms: 38.730098
+  ...
+# OK: isolamento por chip, histórico inicial, paginação de 1.251 conversas e retry seguro.
+# Subtest: /home/user/ienvia-lab-midias/tests/multichip-sync.test.mjs
+ok 30 - /home/user/ienvia-lab-midias/tests/multichip-sync.test.mjs
+  ---
+  duration_ms: 603.256523
+  ...
+# OK: número diferente bloqueia a operação antes do acesso ao cofre.
+# Subtest: /home/user/ienvia-lab-midias/tests/pairing-command-guard.test.mjs
+ok 31 - /home/user/ienvia-lab-midias/tests/pairing-command-guard.test.mjs
+  ---
+  duration_ms: 339.218113
+  ...
+# OK: backup restrito ao chip correto, sem apagar dados ou seguir links.
+# Subtest: /home/user/ienvia-lab-midias/tests/pairing-safety.test.mjs
+ok 32 - /home/user/ienvia-lab-midias/tests/pairing-safety.test.mjs
+  ---
+  duration_ms: 35.070498
+  ...
+# OK: confirmação, falha ambígua, timeout e backoff sem reenviar.
+# Subtest: /home/user/ienvia-lab-midias/tests/queued-send-notifications.test.mjs
+ok 33 - /home/user/ienvia-lab-midias/tests/queued-send-notifications.test.mjs
+  ---
+  duration_ms: 31.925777
+  ...
+# OK: ZIP pronto, assinatura e arquivos atuais conferem; endpoint serve exatamente o artefato.
+# Subtest: /home/user/ienvia-lab-midias/tests/static-release-package.test.mjs
+ok 34 - /home/user/ienvia-lab-midias/tests/static-release-package.test.mjs
+  ---
+  duration_ms: 350.863371
+  ...
+# OK: 70 cenários e 7.500 fichas (49ms).
+# Subtest: /home/user/ienvia-lab-midias/tests/storage-dedup-performance.test.mjs
+ok 35 - /home/user/ienvia-lab-midias/tests/storage-dedup-performance.test.mjs
+  ---
+  duration_ms: 456.676336
+  ...
+# OK: pacotes de contas sintéticas isolados mesmo com IDs iguais e cache master previamente carregado.
+# Subtest: /home/user/ienvia-lab-midias/tests/training-pack-tenant-isolation.test.mjs
+ok 36 - /home/user/ienvia-lab-midias/tests/training-pack-tenant-isolation.test.mjs
+  ---
+  duration_ms: 295.36713
+  ...
+# OK: conteúdo de ZIP é determinístico entre CRLF e LF; binários intactos.
+# Subtest: /home/user/ienvia-lab-midias/tests/update-package-line-endings.test.mjs
+ok 37 - /home/user/ienvia-lab-midias/tests/update-package-line-endings.test.mjs
+  ---
+  duration_ms: 212.912819
+  ...
+# OK: assinatura válida aceita; adulteração, assinatura inválida, versão incorreta, repetição e arquivo ausente rejeitados.
+# Subtest: /home/user/ienvia-lab-midias/tests/update-signature.test.mjs
+ok 38 - /home/user/ienvia-lab-midias/tests/update-signature.test.mjs
+  ---
+  duration_ms: 38.365069
+  ...
+# OK: falha e interrupção recuperam arquivos, dados protegidos permanecem e links são bloqueados.
+# Subtest: /home/user/ienvia-lab-midias/tests/update-transaction.test.mjs
+ok 39 - /home/user/ienvia-lab-midias/tests/update-transaction.test.mjs
+  ---
+  duration_ms: 71.492968
+  ...
+# OK: configuração inclui o manifesto e o arquivo vercel.json no pacote da função.
+# Subtest: /home/user/ienvia-lab-midias/tests/vercel-update-package.test.mjs
+ok 40 - /home/user/ienvia-lab-midias/tests/vercel-update-package.test.mjs
+  ---
+  duration_ms: 32.954981
+  ...
+# OK: voz remota e backup usam arquivo da conta.
+# Subtest: /home/user/ienvia-lab-midias/tests/voice-media-cache-isolation.test.mjs
+ok 41 - /home/user/ienvia-lab-midias/tests/voice-media-cache-isolation.test.mjs
+  ---
+  duration_ms: 404.862438
+  ...
+# OK: motor só ativa perfil existente e ativo; falha de consulta preserva sessão.
+# Subtest: /home/user/ienvia-lab-midias/tests/worker-auth-profile.test.mjs
+ok 42 - /home/user/ienvia-lab-midias/tests/worker-auth-profile.test.mjs
+  ---
+  duration_ms: 92.123598
+  ...
+# OK: ZIPs íntegros aceitos; dados, tamanho, diretório e método inválidos rejeitados.
+# Subtest: /home/user/ienvia-lab-midias/tests/zip-integrity.test.mjs
+ok 43 - /home/user/ienvia-lab-midias/tests/zip-integrity.test.mjs
+  ---
+  duration_ms: 36.862446
+  ...
+1..43
+# tests 43
+# suites 0
+# pass 43
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 17409.231191

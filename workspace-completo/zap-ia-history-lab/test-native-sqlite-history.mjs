@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs'; import os from 'node:os'; import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { SqliteHistoryLab } from './native-sqlite-history.mjs';
+const root=fs.mkdtempSync(path.join(os.tmpdir(),'zapia-sqlite-lab-'));
+try {
+ const f=path.join(root,'hist.db');let db=new SqliteHistoryLab(f);
+ const n=20000, t0=Date.now();
+ const rows=Array.from({length:n},(_,i)=>({waMsgId:`m${String(i).padStart(6,'0')}`,timestamp:new Date(1700000000000+Math.floor(i/3)*1000).toISOString(),role:'user',text:`simulado-${i}`}));
+ for(let i=0;i<n;i+=200) db.add('user-a','slot_2::chat',rows.slice(i,i+200));
+ assert.deepEqual(db.add('user-a','slot_2::chat',[rows[3],{...rows[4],text:'editado',editedAt:'2026-01-01T00:00:00Z'}]),{added:0,ignored:0});
+ db.add('user-a','slot_2::chat',[rows[4]]);
+ db.add('user-b','slot_2::chat',[rows[0]]);db.add('user-a','chat',[rows[0]]);
+ db.close();db=new SqliteHistoryLab(f);
+ assert.equal(db.count('user-a','slot_2::chat'),n);assert.equal(db.count('user-b','slot_2::chat'),1);assert.equal(db.count('user-a','chat'),1);
+ let cursor=null,ids=[];
+ do {let page=db.page('user-a','slot_2::chat',{before:cursor,limit:100});ids.unshift(...page.messages.map(x=>x.waMsgId));cursor=page.nextBefore;}while(cursor);
+ assert.deepEqual(ids,rows.map(x=>x.waMsgId));
+ assert.equal(db.page('user-a','slot_2::chat',{before:{timestamp:Date.parse(rows[5].timestamp),id:rows[5].waMsgId},limit:3}).messages.find(x=>x.waMsgId===rows[4].waMsgId).text,'editado');
+ assert.throws(()=>db.add('user-a','slot_2::chat',[rows[0],{waMsgId:'invalid',timestamp:'inválido'}]),/data válida/);
+ assert.equal(db.count('user-a','slot_2::chat'),n);
+ db.clear('user-a','slot_2::chat',rows[2999].timestamp);
+ assert.equal(db.count('user-a','slot_2::chat'),17000);
+ assert.equal(db.add('user-a','slot_2::chat',[rows[0]]).ignored,1);
+ assert.equal(db.count('user-a','slot_2::chat'),17000);
+ db.close();
+ const p=spawnSync(process.execPath,['--input-type=module','-e',`import {DatabaseSync} from 'node:sqlite';const d=new DatabaseSync(${JSON.stringify(f)});d.exec("BEGIN IMMEDIATE; INSERT INTO messages VALUES ('crash','chat','id',1,'{}');");process.kill(process.pid,'SIGKILL');`],{cwd:process.cwd(),timeout:10000});
+ assert.equal(p.signal,'SIGKILL');
+ db=new SqliteHistoryLab(f);assert.equal(db.count('crash','chat'),0);assert.equal(db.count('user-a','slot_2::chat'),17000);
+ db.close();console.log(`OK: ${n} mensagens em lote e paginação, reinício, chips/contas separados, duplicatas, edição, limpeza e processo interrompido (${((Date.now()-t0)/1000).toFixed(1)} s).`);
+} finally {fs.rmSync(root,{recursive:true,force:true});}

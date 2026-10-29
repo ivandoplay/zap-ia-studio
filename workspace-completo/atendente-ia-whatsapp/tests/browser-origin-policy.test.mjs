@@ -1,0 +1,7 @@
+import assert from 'node:assert/strict';import os from 'node:os';import {isTrustedBrowserOrigin as trusted,rejectUntrustedBrowserRequest as reject} from '../src/browserOrigin.js';
+const local=(o,h)=>trusted(o,h,{cloud:false}),cloud=(o,h)=>trusted(o,h,{cloud:true});
+for(const [o,h] of [['http://localhost:3000','localhost:3000'],['http://127.0.0.1:3000','127.0.0.1:3000'],['http://192.168.1.2:3000','192.168.1.2:3000'],[`http://${os.hostname()}:3000`,`${os.hostname()}:3000`],['https://3000-sandbox.e2b.app','3000-sandbox.e2b.app'],['https://zap-ia-studio.vercel.app','zap-ia-studio.vercel.app']])assert(local(o,h),`${o} deve funcionar na própria origem`);
+for(const [o,h] of [['https://atacante.vercel.app','localhost:3000'],['https://atacante.e2b.app','localhost:3000'],['http://localhost:3001','localhost:3000'],['https://dns-atacante.example','dns-atacante.example'],['null','localhost:3000'],['file://','localhost:3000'],['http://user@localhost:3000','localhost:3000'],['http://localhost:3000/path','localhost:3000']])assert(!local(o,h),`${o} deve ser bloqueado`);
+assert(cloud('https://site-proprio.example','site-proprio.example'));assert(!cloud('https://site-outro.example','site-proprio.example'));
+assert(reject({headers:{'sec-fetch-site':'cross-site'},method:'POST'}));assert(!reject({headers:{'sec-fetch-site':'cross-site'},method:'GET'}));assert(!reject({headers:{},method:'POST'}));
+console.log('OK: portas, localhost/LAN, DNS rebinding, prévias e requisições diretas.');

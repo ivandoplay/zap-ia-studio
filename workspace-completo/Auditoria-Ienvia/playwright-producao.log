@@ -1,0 +1,5 @@
+OK produção somente leitura: vitrine e login em 320px
+OK produção somente leitura: vitrine e login em 375px
+OK produção somente leitura: vitrine e login em 768px
+OK produção somente leitura: vitrine e login em 1440px
+PASSOU: 4/4 tamanhos, sem login nem alterações em produção

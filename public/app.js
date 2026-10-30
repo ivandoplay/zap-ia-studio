@@ -461,6 +461,7 @@ window.switchTab = function switchTab(rawTabId) {
   } catch {}
 
   if (tabId === 'campanhas') window.carregarCampanhas?.();
+  if (tabId === 'ia') renderAiSettings();
 
   if (tabId === 'contas' && state.currentUser?.role === 'master') {
     loadManagedUsers().catch(() => {});
@@ -2767,6 +2768,22 @@ function renderAiSettings() {
   document.getElementById('openrouterModel').value = ai.openrouterModel || 'deepseek/deepseek-chat';
   document.getElementById('aiTemperature').value = ai.temperature ?? 0.35;
   document.getElementById('aiMaxHistory').value = ai.maxHistoryMessages ?? 20;
+
+  // Controle Rápido da IA: botEnabled + iaOffReply
+  const botOn = state.settings?.botEnabled !== false;
+  const toggle = document.getElementById('aiBotEnabledToggle');
+  if (toggle) toggle.checked = botOn;
+  const label = document.getElementById('aiBotEnabledLabel');
+  if (label) label.textContent = botOn ? 'IA Ativa' : 'IA Pausada';
+  const pill = document.getElementById('aiBotStatusPill');
+  if (pill) {
+    pill.className = 'status-pill ' + (botOn ? 'ai-active' : 'ai-off');
+    pill.innerHTML = `<span class="status-dot"></span><span>${botOn ? 'Ativo' : 'Pausado'}</span>`;
+  }
+  const offGroup = document.getElementById('aiOffReplyGroup');
+  if (offGroup) offGroup.style.display = botOn ? 'none' : 'block';
+  const offReply = document.getElementById('aiOffReplyInput');
+  if (offReply) offReply.value = state.settings?.iaOffReply || '';
 }
 
 function collectAiSettingsFromForm() {
@@ -5717,6 +5734,55 @@ function bindEvents() {
       state.waState.botEnabled = enabled;
       renderWaState();
       showToast(enabled ? 'Atendimento automático ativado!' : 'Atendimento automático pausado.');
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+
+  // Toggle da IA na aba Motor de IA (Controle Rápido) — sincroniza com o masterBotToggle
+  window.saveAiBotToggle = async function saveAiBotToggle() {
+    const toggle = document.getElementById('aiBotEnabledToggle');
+    if (!toggle) return;
+    const enabled = toggle.checked;
+    try {
+      await api('/api/wa/toggle-bot', {
+        method: 'POST',
+        body: JSON.stringify({ enabled })
+      });
+      state.waState.botEnabled = enabled;
+      state.settings = { ...(state.settings || {}), botEnabled: enabled };
+      // Atualizar UI
+      const label = document.getElementById('aiBotEnabledLabel');
+      if (label) label.textContent = enabled ? 'IA Ativa' : 'IA Pausada';
+      const pill = document.getElementById('aiBotStatusPill');
+      if (pill) {
+        pill.className = 'status-pill ' + (enabled ? 'ai-active' : 'ai-off');
+        pill.innerHTML = `<span class="status-dot"></span><span>${enabled ? 'Ativo' : 'Pausado'}</span>`;
+      }
+      const offGroup = document.getElementById('aiOffReplyGroup');
+      if (offGroup) offGroup.style.display = enabled ? 'none' : 'block';
+      // Sincronizar masterBotToggle no topbar/dashboard
+      const masterToggle = document.getElementById('masterBotToggle');
+      if (masterToggle) masterToggle.checked = enabled;
+      const masterLabel = document.getElementById('masterBotLabel');
+      if (masterLabel) masterLabel.textContent = enabled ? 'IA Ativa' : 'IA Pausada';
+      renderWaState();
+      showToast(enabled ? 'IA ativada! O atendente automático está no ar.' : 'IA pausada. Mensagens serão registradas no CRM sem resposta automática.');
+    } catch (err) {
+      showToast(err.message, true);
+      toggle.checked = !enabled;
+    }
+  };
+
+  // Salvar mensagem de fallback (iaOffReply) quando IA está desligada
+  document.getElementById('aiOffReplyInput')?.addEventListener('change', async (e) => {
+    try {
+      const res = await api('/api/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ iaOffReply: e.target.value })
+      });
+      state.settings = res.settings;
+      showToast('Mensagem de fallback salva!');
     } catch (err) {
       showToast(err.message, true);
     }

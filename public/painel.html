@@ -913,6 +913,36 @@
           </div>
         </div>
 
+        <!-- CONTROLE RÁPIDO DA IA (botEnabled + iaOffReply) -->
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h2 class="panel-title">Controle Rápido da IA</h2>
+              <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">Ligue ou desligue o atendimento automático e defina a mensagem de fallback.</p>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:16px;">
+            <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:12px 14px; background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:var(--radius-lg);">
+              <div style="display:flex; align-items:center; gap:12px;">
+                <label class="switch" aria-label="Ativar ou pausar respostas automáticas da IA">
+                  <input type="checkbox" id="aiBotEnabledToggle" onchange="saveAiBotToggle()" />
+                  <span class="slider"></span>
+                </label>
+                <div>
+                  <div style="font-weight:600; color:var(--text-main); font-size:14px;" id="aiBotEnabledLabel">IA Ativa</div>
+                  <div style="font-size:11.5px; color:var(--text-muted);">Atendimento automático pelo WhatsApp</div>
+                </div>
+              </div>
+              <span id="aiBotStatusPill" class="status-pill">Ativo</span>
+            </div>
+            <div class="form-group" id="aiOffReplyGroup" style="display:none;">
+              <label class="form-label" for="aiOffReplyInput">Mensagem de Fallback (enviada quando a IA está desligada)</label>
+              <textarea id="aiOffReplyInput" rows="2" placeholder="Ex: Vou passar seu recado para a equipe e ela retornará em breve!"></textarea>
+              <div class="form-hint">Se vazio, a IA desligada apenas registra a mensagem no CRM sem responder. O dono responde manualmente pelo painel.</div>
+            </div>
+          </div>
+        </div>
+
         <div class="panel">
           <h2 class="panel-title" style="margin-bottom:12px;">Escolha o Provedor Principal</h2>
           <div class="provider-grid" id="providerGrid">

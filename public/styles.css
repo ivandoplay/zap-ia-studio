@@ -545,6 +545,25 @@ code {
   background: var(--warning-bright);
 }
 
+/* Status Pill da IA (Controle Rápido) */
+.status-pill.ai-active {
+  border-color: var(--accent-border);
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+}
+.status-pill.ai-active .status-dot {
+  background: var(--accent-bright);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.status-pill.ai-off {
+  border-color: var(--border-strong);
+  color: var(--text-muted);
+  background: var(--bg-card-subtle);
+}
+.status-pill.ai-off .status-dot {
+  background: var(--text-muted);
+}
+
 /* Compact Master IA Switch */
 .master-switch-wrap {
   display: inline-flex;

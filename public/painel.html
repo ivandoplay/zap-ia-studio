@@ -362,31 +362,37 @@
           <div>
             <div class="panel">
               <div class="panel-header">
-                <div>
-                  <h2 class="panel-title">Conexão Multi-Chip WhatsApp</h2>
-                  <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">Conecte até 3 números no mesmo aparelho ou distribua em múltiplos aparelhos.</p>
-                </div>
-                <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                  <button type="button" id="btnAddNewNumber" class="btn btn-secondary btn-sm" onclick="openAddNumberWizard()">➕ Novo Número</button>
-                  <button type="button" id="btnConnectQr" class="btn btn-primary btn-sm">Gerar QR Code</button>
-                  <button type="button" id="btnDisconnectWa" class="btn btn-danger btn-sm" style="display:none;">Desconectar</button>
-                </div>
+              <div>
+                <h2 class="panel-title">Conexão Multi-Chip WhatsApp</h2>
+                <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">Conecte até 3 números no mesmo aparelho ou distribua em múltiplos aparelhos.</p>
               </div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" id="btnConnectQr" class="btn btn-primary btn-sm">📷 Gerar QR Code</button>
+                <button type="button" id="btnDisconnectWa" class="btn btn-danger btn-sm" style="display:none;">Desconectar</button>
+              </div>
+            </div>
 
-              <!-- Seletor de Slots: Chip 1 (Principal), Chip 2 e Chip 3 -->
-              <div id="waSlotsTabBar" class="wa-slots-tabbar" role="tablist" aria-label="Chips de WhatsApp da conta"></div>
+            <!-- Seletor de Slots: Chip 1 (Principal), Chip 2 e Chip 3 -->
+            <div id="waSlotsTabBar" class="wa-slots-tabbar" role="tablist" aria-label="Chips de WhatsApp da conta"></div>
 
-              <!-- Faixa Rápida do Chip Selecionado: Apelido + Chave Individual de IA -->
-              <div id="waSlotConfigStrip" class="wa-slot-config-strip">
-                <div class="wa-slot-nick-wrap">
+            <!-- Faixa Rápida do Chip Selecionado: Apelido + Modo (Nuvem/Local) + IA -->
+            <div id="waSlotConfigStrip" class="wa-slot-config-strip">
+              <div style="display:flex; gap:8px; flex-wrap:wrap; width:100%; align-items:center;">
+                <div class="wa-slot-nick-wrap" style="flex:1; min-width:160px;">
                   <input type="text" id="waSlotLabelInput" maxlength="42" placeholder="Apelido do Chip (ex: Comercial)" aria-label="Apelido identificador deste Chip" />
                   <button type="button" id="btnSaveWaSlotLabel" class="btn btn-secondary btn-sm" onclick="saveCurrentWaSlotConfig()">Salvar</button>
                 </div>
-                <label class="wa-slot-ai-toggle" title="Ativar ou pausar respostas automáticas da IA apenas neste Chip (mantendo o Cérebro Único)">
-                  <input type="checkbox" id="waSlotAiEnabledCheck" checked onchange="saveCurrentWaSlotConfig(true)" />
-                  <span id="waSlotAiEnabledText">IA Ativa neste Chip</span>
-                </label>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                  <span style="font-size:11.5px; color:var(--text-muted);">Mode:</span>
+                  <button type="button" id="btnModeCloud" class="mode-toggle" onclick="setWizMode('cloud')" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius); padding:6px 10px; font-size:12px; cursor:pointer; min-height:36px;" aria-label="Mode nuvem Evolution Go">☁️ Nuvem</button>
+                  <button type="button" id="btnModeLocal" class="mode-toggle" onclick="setWizMode('local')" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius); padding:6px 10px; font-size:12px; cursor:pointer; min-height:36px;" aria-label="Mode motor local">💻 Local</button>
+                </div>
               </div>
+              <label class="wa-slot-ai-toggle" title="Ativar ou pausar respostas automáticas da IA apenas neste Chip (mantendo o Cérebro Único)">
+                <input type="checkbox" id="waSlotAiEnabledCheck" checked onchange="saveCurrentWaSlotConfig(true)" />
+                <span id="waSlotAiEnabledText">IA Ativa neste Chip</span>
+              </label>
+            </div>
 
               <div id="qrStage" class="qr-stage">
                 <p>Clique em <strong>Gerar QR Code</strong> acima ou conecte por código numérico abaixo.</p>
@@ -2145,79 +2151,7 @@
 
   <!-- MODAL: CADASTRAR NOVO CLIENTE SAAS (MASTER) -->
   <!-- MODAL: WIZARD CONECTAR NOVO NÚMERO (Local vs Nuvem) -->
-  <div id="addNumberWizard" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="addNumWizTitle">
-    <div class="modal-dialog" style="max-width:560px;">
-      <div class="modal-head">
-        <h3 id="addNumWizTitle" class="panel-title">Conectar Novo Número WhatsApp</h3>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('addNumberWizard')">Fechar</button>
-      </div>
-      <div class="modal-body" style="display:flex; flex-direction:column; gap:14px;">
-
-        <!-- Etapa 0: Boas-vindas -->
-        <div data-step="0" class="wiz-step">
-          <div style="text-align:center; padding:6px 0 2px;">
-            <div style="font-size:34px; margin-bottom:10px;">📱</div>
-            <p class="panel-desc" style="margin-bottom:4px;">Vamos conectar um novo número ao WhatsApp. O processo é rápido e seguro.</p>
-            <p style="font-size:11.5px; color:var(--text-muted); text-align:center; margin-bottom:4px;">Você pode conectar até 3 números (chips). Escolha abaixo qual chip deseja configurar.</p>
-          </div>
-          <button type="button" class="btn btn-primary" style="width:100%;" onclick="wizGo(1)">Continuar →</button>
-        </div>
-
-        <!-- Etapa 1: Selecionar Chip -->
-        <div data-step="1" class="wiz-step" style="display:none;">
-          <div class="wiz-step-label">🔢 Escolha qual Chip conectar</div>
-          <p class="panel-desc" style="margin-bottom:8px;">Selecione um chip disponível. Se um já estiver conectado, escolha outro para adicionar um número novo.</p>
-          <div id="wizSlotList" style="display:flex; flex-direction:column; gap:8px;"></div>
-          <div style="display:flex; justify-content:space-between; gap:8px; margin-top:8px;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="wizGo(0)">← Voltar</button>
-            <button type="button" class="btn btn-primary btn-sm" onclick="wizGo(2)" id="wizGoToConnect">Continuar →</button>
-          </div>
-        </div>
-
-        <!-- Etapa 2: Conectar WhatsApp -->
-        <div data-step="2" class="wiz-step" style="display:none;">
-          <div class="wiz-step-label">📷 Conectar o WhatsApp</div>
-          <p class="panel-desc" style="margin-bottom:8px;">Escaneie o QR Code com o WhatsApp do número ou use o código de 8 dígitos.</p>
-          <div id="wizChipInfo" style="display:flex; align-items:center; gap:8px; background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:var(--radius); padding:8px 10px; font-size:13px;"></div>
-          <button type="button" class="btn btn-primary btn-sm" style="width:100%;" onclick="wizGenerateQr()">📷 Gerar QR Code</button>
-          <div id="wizQrStage" class="qr-stage" style="min-height:160px; margin-top:10px;"></div>
-          <div style="margin-top:10px;">
-            <label class="form-label" for="wizPairingPhone">Conectar sem câmera (Código de 8 dígitos)</label>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-              <input type="text" id="wizPairingPhone" placeholder="Ex: 5586999998888" style="flex:1; min-width:180px;" inputmode="tel" />
-              <button type="button" class="btn btn-secondary btn-sm" onclick="wizGeneratePairing()">Gerar Código</button>
-            </div>
-          </div>
-          <div style="display:flex; gap:8px; margin-top:8px;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="wizGo(1)">← Voltar</button>
-          </div>
-        </div>
-
-        <!-- Etapa 3: Sucesso -->
-        <div data-step="3" class="wiz-step" style="display:none;">
-          <div class="wiz-step-label">✅ Número Conectado!</div>
-          <div style="text-align:center; padding:6px 0;">
-            <div style="font-size:38px; margin-bottom:10px;">🎉</div>
-            <p class="panel-desc" style="margin-bottom:6px;">O número foi conectado com sucesso ao painel.</p>
-            <div id="wizSuccessInfo" style="display:inline-block; background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:var(--radius); padding:8px 14px; font-size:13px;"></div>
-          </div>
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button type="button" class="btn btn-primary" style="flex:1; min-width:140px;" onclick="switchTab('treinamento');closeModal('addNumberWizard')">🧠 Treinar IA</button>
-            <button type="button" class="btn btn-secondary" onclick="switchTab('simulador');closeModal('addNumberWizard')">🧪 Testar</button>
-          </div>
-          <div style="display:flex; gap:8px;">
-            <button type="button" class="btn btn-secondary btn-sm" style="flex:1;" onclick="wizGo(1)">Conectar outro número</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('addNumberWizard')">Finalizar</button>
-          </div>
-        </div>
-
-        <!-- Barra de progresso -->
-        <div class="wiz-progress" id="wizProgress"></div>
-      </div>
-    </div>
-  </div>
-
-<div id="createClientModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="createClientModalTitle">
+  <div id="createClientModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="createClientModalTitle">
     <div class="modal-dialog" style="max-width:540px;">
       <div class="modal-head">
         <h3 id="createClientModalTitle" class="panel-title">Cadastrar Novo Cliente SaaS</h3>

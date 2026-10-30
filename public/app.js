@@ -514,230 +514,6 @@ window.closeModal = function closeModal(id) {
   document.getElementById(id)?.classList.remove('open');
 };
 
-// ======================== WIZARD: CONECTAR NOVO NÚMERO ========================
-let wizState = { step: 0, slotId: null };
-let wizQrPollTimer = null;
-
-window.openAddNumberWizard = function openAddNumberWizard() {
-  wizState = { step: 0, slotId: null };
-  const modal = document.getElementById('addNumberWizard');
-  if (modal) modal.classList.add('open');
-  stopWizQrPoll();
-  wizRenderProgress(0);
-};
-
-window.wizGo = function wizGo(step) {
-  // Validação: não permite avançar para a etapa 2 sem chip selecionado
-  if (step === 2 && !wizState.slotId) {
-    showToast('Selecione um chip antes de continuar.', true);
-    return;
-  }
-  // Se o chip já está conectado, vai direto para a etapa de sucesso
-  if (step === 2 && wizState.slotId) {
-    const meta = getSlotUiMeta(wizState.slotId);
-    if (meta.status === 'connected') {
-      wizState.step = step;
-      document.querySelectorAll('#addNumberWizard .wiz-step').forEach((el) => {
-        el.style.display = (el.dataset.step === '3') ? 'flex' : 'none';
-      });
-      wizRenderSuccess();
-      wizRenderProgress(3);
-      return;
-    }
-  }
-  wizState.step = step;
-  const steps = document.querySelectorAll('#addNumberWizard .wiz-step');
-  steps.forEach((el) => {
-    el.style.display = (el.dataset.step === String(step)) ? 'flex' : 'none';
-  });
-  if (step === 1) wizRenderSlots();
-  if (step === 2) { wizRenderChipInfo(); wizRenderQrStage(); }
-  if (step === 3) wizRenderSuccess();
-  wizRenderProgress(step);
-};
-
-function wizRenderProgress(step) {
-  const bar = document.getElementById('wizProgress');
-  if (!bar) return;
-  const total = 4;
-  bar.innerHTML = Array.from({ length: total }, (_, i) => {
-    const cls = i < step ? 'done' : (i === step ? 'current' : '');
-    return `<div class="wiz-progress-dot ${cls}"></div>`;
-  }).join('');
-}
-
-function wizRenderSlots() {
-  const list = document.getElementById('wizSlotList');
-  if (!list) return;
-  const metas = WA_SLOT_IDS_UI.map((id) => getSlotUiMeta(id));
-  list.innerHTML = metas.map((m) => {
-    const isSel = wizState.slotId === m.slotId;
-    if (m.locked) {
-      return `
-        <div class="wiz-slot-card locked" style="display:flex; align-items:center; gap:12px; padding:12px 14px; background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:var(--radius); opacity:.6;">
-          <span class="wa-slot-dot" style="background:var(--text-muted);"></span>
-          <div style="flex:1;">
-            <div class="wiz-device-name">🔒 ${escapeHtml(m.label)}</div>
-            <div class="wiz-device-sub">Fora do plano atual</div>
-          </div>
-        </div>`;
-    }
-    const statusLabel = m.status === 'connected'
-      ? `✅ Connected (+${m.connectedUser?.phone || ''})`
-      : m.status === 'qr_ready'
-        ? (m.pairingCode ? 'Código pronto' : 'QR pronto')
-        : 'Disponível';
-    const statusClass = m.status === 'connected' ? 'connected' : (m.status === 'qr_ready' ? 'qr_ready' : '');
-    return `
-      <button type="button" class="wiz-slot-card ${isSel ? 'selected' : ''}" onclick="wizSelectSlot('${escapeJsArg(m.slotId)}')" style="display:flex; align-items:center; gap:12px; padding:12px 14px; background:var(--bg-card-subtle); border:1px solid ${isSel ? 'var(--accent)' : 'var(--border)'}; border-radius:var(--radius); cursor:pointer; transition:border-color 150ms ease, background 150ms ease; text-align:left; width:100%; ${isSel ? 'background:var(--accent-soft);' : ''}">
-        <span class="wa-slot-dot ${statusClass}"></span>
-        <div style="flex:1;">
-          <div class="wiz-device-name">${escapeHtml(m.label)}</div>
-          <div class="wiz-device-sub">${statusLabel}</div>
-        </div>
-        <span style="color:var(--accent-bright); font-size:18px;">${isSel ? '✓' : '→'}</span>
-      </button>`;
-  }).join('');
-}
-
-window.wizSelectSlot = function wizSelectSlot(slotId) {
-  wizState.slotId = slotId;
-  state.selectedWaSlotId = slotId;
-  wizRenderSlots();
-  setTimeout(() => wizGo(2), 250);
-};
-
-function wizRenderChipInfo() {
-  const el = document.getElementById('wizChipInfo');
-  if (!el) return;
-  const slotId = wizState.slotId || state.selectedWaSlotId || 'slot_1';
-  const meta = getSlotUiMeta(slotId);
-  el.innerHTML = `
-    <span class="wa-slot-dot ${escapeHtml(meta.status)}"></span>
-    <div>
-      <strong style="color:var(--text-main);">${escapeHtml(meta.label)}</strong>
-      <span style="color:var(--text-muted); font-size:12px;"> · ${escapeHtml(meta.status)}</span>
-    </div>`;
-}
-
-function wizRenderQrStage() {
-  const stage = document.getElementById('wizQrStage');
-  if (!stage) return;
-  const slotId = wizState.slotId || state.selectedWaSlotId || 'slot_1';
-  const meta = getSlotUiMeta(slotId);
-  if (meta.status === 'connected') {
-    stopWizQrPoll();
-    const phone = meta.connectedUser?.phone || '';
-    stage.innerHTML = `
-      <div style="color:var(--accent-bright); font-weight:700; font-size:15px;">✅ ${escapeHtml(meta.label)} conectado!</div>
-      <div style="font-size:12px; color:var(--text-muted);">Número: +${escapeHtml(phone)}</div>
-    `;
-    setTimeout(() => {
-      if (wizState.step === 2 && document.getElementById('addNumberWizard')?.classList.contains('open')) {
-        wizGo(3);
-      }
-    }, 1500);
-    return;
-  }
-  if (meta.status === 'qr_ready' && meta.qrDataUrl) {
-    startWizQrPoll();
-    stage.innerHTML = `
-      <img src="${meta.qrDataUrl}" alt="QR Code" class="qr-image" />
-      <div style="font-size:12px; color:var(--text-muted);">Escaneie com o WhatsApp do número</div>
-    `;
-    return;
-  }
-  if (meta.status === 'qr_ready' && meta.pairingCode) {
-    startWizQrPoll();
-    stage.innerHTML = `
-      <div class="pairing-code-display">${escapeHtml(meta.pairingCode)}</div>
-      <div style="font-size:12px; color:var(--text-muted);">Digite este código no WhatsApp</div>
-    `;
-    return;
-  }
-  if (meta.status === 'connecting') {
-    startWizQrPoll();
-    stage.innerHTML = `
-      <div style="font-size:22px; margin-bottom:6px;">⏳</div>
-      <div style="font-weight:600; color:var(--text-main);">Conectando...</div>
-    `;
-    return;
-  }
-  stage.innerHTML = `
-    <div style="font-size:22px; margin-bottom:6px;">📷</div>
-    <div style="font-weight:600; color:var(--text-main);">Clique em "Gerar QR Code" abaixo</div>
-    <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Ou use o código de 8 dígitos ao lado</div>
-  `;
-}
-
-function startWizQrPoll() {
-  stopWizQrPoll();
-  wizQrPollTimer = setInterval(() => {
-    if (!document.getElementById('addNumberWizard')?.classList.contains('open')) {
-      stopWizQrPoll();
-      return;
-    }
-    if (wizState.step !== 2) {
-      stopWizQrPoll();
-      return;
-    }
-    wizRenderQrStage();
-  }, 2000);
-}
-
-function stopWizQrPoll() {
-  if (wizQrPollTimer) {
-    clearInterval(wizQrPollTimer);
-    wizQrPollTimer = null;
-  }
-}
-
-window.wizGeneratePairing = async function wizGeneratePairing() {
-  const phone = document.getElementById('wizPairingPhone')?.value.trim();
-  if (!phone) { showToast('Digite o número com 55 + DDD.', true); return; }
-  if (phone.replace(/\D/g, '').length < 10) {
-    return showToast('Digite o número completo com 55 + DDD (ex: 5586999998888).', true);
-  }
-  const slotId = wizState.slotId || state.selectedWaSlotId || 'slot_1';
-  try {
-    const out = await executeSlotConnectRequest({ pairingPhone: phone, slotId });
-    if (out?.deferredChoice) {
-      showToast('Selecione o aparelho na tela suivante.');
-      return;
-    }
-    wizRenderQrStage();
-    showToast('Código de 8 dígitos gerado! Digite no WhatsApp.');
-  } catch (err) {
-    showToast(err.message, true);
-  }
-};
-
-window.wizGenerateQr = async function wizGenerateQr() {
-  const slotId = wizState.slotId || state.selectedWaSlotId || 'slot_1';
-  try {
-    const out = await executeSlotConnectRequest({ pairingPhone: null, slotId });
-    if (out?.deferredChoice) {
-      showToast('Selecione o aparelho na tela suivante.');
-      return;
-    }
-    wizRenderQrStage();
-    showToast('QR Code gerado! Escaneie com o WhatsApp.');
-  } catch (err) {
-    showToast(err.message, true);
-  }
-};
-
-window.wizRenderSuccess = function wizRenderSuccess() {
-  const el = document.getElementById('wizSuccessInfo');
-  if (!el) return;
-  const slotId = wizState.slotId || state.selectedWaSlotId || 'slot_1';
-  const meta = getSlotUiMeta(slotId);
-  el.innerHTML = `
-    <div style="font-weight:600; color:var(--text-main);">${escapeHtml(meta.label)}</div>
-    <div style="font-size:12px; color:var(--text-muted);">+${escapeHtml(meta.connectedUser?.phone || 'Online')}</div>
-  `;
-};
-
 window.copyWebhookUrl = function copyWebhookUrl() {
   const url = document.getElementById('wizWebhookUrl')?.value || '';
   navigator.clipboard?.writeText(url).then(
@@ -1645,6 +1421,30 @@ window.selectWaSlotTab = function selectWaSlotTab(slotId) {
   renderWaState();
 };
 
+let _wizMode = 'local';
+
+window.setWizMode = function setWizMode(mode) {
+  _wizMode = mode;
+  const btnCloud = document.getElementById('btnModeCloud');
+  const btnLocal = document.getElementById('btnModeLocal');
+  const activeBtn = mode === 'cloud' ? btnCloud : btnLocal;
+  const inactiveBtn = mode === 'cloud' ? btnLocal : btnCloud;
+  if (activeBtn) {
+    activeBtn.style.background = 'var(--accent-soft)';
+    activeBtn.style.borderColor = 'var(--accent)';
+    activeBtn.style.color = 'var(--accent-bright)';
+    activeBtn.style.fontWeight = '600';
+  }
+  if (inactiveBtn) {
+    inactiveBtn.style.background = 'var(--bg-input)';
+    inactiveBtn.style.borderColor = 'var(--border)';
+    inactiveBtn.style.color = '';
+    inactiveBtn.style.fontWeight = '';
+  }
+  // Salva o mode junto com o config do slot
+  saveCurrentWaSlotConfig();
+};
+
 window.saveCurrentWaSlotConfig = async function saveCurrentWaSlotConfig(fromToggle = false) {
   const slotId = state.selectedWaSlotId || 'slot_1';
   const meta = getSlotUiMeta(slotId);
@@ -1656,7 +1456,7 @@ window.saveCurrentWaSlotConfig = async function saveCurrentWaSlotConfig(fromTogg
   try {
     const res = await api('/api/wa/slot-config', {
       method: 'POST',
-      body: JSON.stringify({ slotId, label, aiEnabled })
+      body: JSON.stringify({ slotId, label, aiEnabled, mode: _wizMode })
     });
     if (res.waSlots && state.settings) state.settings.waSlots = res.waSlots;
     if (res.waState) state.waState = res.waState;
@@ -6136,9 +5936,6 @@ function bindEvents() {
       });
       if (pending.pairingPhone && !res?.deferredChoice) {
         showToast('Código de 8 dígitos gerado!');
-      }
-      if (document.getElementById('addNumberWizard')?.classList.contains('open') && wizState.step === 2) {
-        wizRenderQrStage();
       }
     } catch (err) {
       showToast(err.message, true);

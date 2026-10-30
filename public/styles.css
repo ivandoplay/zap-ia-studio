@@ -4051,6 +4051,10 @@ mark.chat-search-hit.current {
   flex: 1;
   min-width: 0;
 }
+/* Mode toggle (Cloud / Local) */
+.wa-slot-config-strip .mode-toggle {
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
 .wa-slot-ai-toggle {
   display: inline-flex;
   align-items: center;

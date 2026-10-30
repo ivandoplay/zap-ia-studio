@@ -1559,14 +1559,14 @@ function renderWaState() {
             type="button"
             role="tab"
             aria-selected="${isSel ? 'true' : 'false'}"
-            class="wa-slot-tab ${isSel ? 'active' : ''} ${m.locked ? 'locked' : ''}"
+            class="slot-chip ${isSel ? 'active' : ''} ${m.locked ? 'locked' : ''}"
             onclick="selectWaSlotTab('${m.slotId}')"
           >
-            <div class="wa-slot-tab-top">
+            <div class="slot-chip-top">
               <span class="wa-slot-dot ${m.locked ? '' : escapeHtml(m.status)}"></span>
-              <span class="wa-slot-tab-title">${escapeHtml(m.label)}</span>
+              <span class="slot-chip-title">${escapeHtml(m.label)}</span>
             </div>
-            <div class="wa-slot-tab-sub">${escapeHtml(subText)}</div>
+            <div class="slot-chip-sub">${escapeHtml(subText)}</div>
           </button>
         `;
       })
@@ -1585,6 +1585,17 @@ function renderWaState() {
     const aiTxt = document.getElementById('waSlotAiEnabledText');
     if (aiChk) aiChk.checked = activeSlot.aiEnabled;
     if (aiTxt) aiTxt.textContent = activeSlot.aiEnabled ? 'IA Ativa neste Chip' : 'IA Pausada neste Chip';
+
+    // Atualiza estado ativo do segmented control de modo
+    const modeCloudBtn = document.getElementById('btnModeCloud');
+    const modeLocalBtn = document.getElementById('btnModeLocal');
+    if (_wizMode === 'cloud') {
+      if (modeCloudBtn) modeCloudBtn.classList.add('active');
+      if (modeLocalBtn) modeLocalBtn.classList.remove('active');
+    } else {
+      if (modeCloudBtn) modeCloudBtn.classList.remove('active');
+      if (modeLocalBtn) modeLocalBtn.classList.add('active');
+    }
   }
 
   // Renderiza palco QR / Status do Chip selecionado
@@ -1595,13 +1606,18 @@ function renderWaState() {
     btnDisc.style.display = 'inline-flex';
     btnDisc.textContent = `Desconectar ${activeSlot.shortLabel}`;
     stage.innerHTML = `
-      <div style="color:var(--accent-bright); font-weight:700; font-size:16px;">${escapeHtml(activeSlot.label)} conectado e pronto!</div>
-      <div style="color:var(--text-secondary); font-size:13px;">Número: <strong>${escapeHtml(activeSlot.connectedUser?.name || 'WhatsApp')}</strong> (+${escapeHtml(phone)})</div>
-      ${activeSlot.deviceName ? `<div style="font-size:12px; color:var(--text-secondary);">Rodando em: <strong>📱 ${escapeHtml(activeSlot.deviceName)}</strong></div>` : ''}
-      <div style="font-size:12px; color:var(--text-muted); max-width:410px;">
-        ${activeSlot.slotId === 'slot_1'
-          ? '⭐ <strong>Chip 1 Principal:</strong> todos os alertas de fechamento para seu número pessoal saem centralizados por este chip.'
-          : '✅ Conversas existentes importadas automaticamente e unificadas na fila por horário.'}
+      <div class="stage-connected">
+        <div class="stage-badge">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          ${escapeHtml(activeSlot.label)} conectado
+        </div>
+        <div class="stage-phone">Número: <strong>${escapeHtml(activeSlot.connectedUser?.name || 'WhatsApp')}</strong> (+${escapeHtml(phone)})</div>
+        ${activeSlot.deviceName ? `<div class="stage-device">Rodando em: <strong>${escapeHtml(activeSlot.deviceName)}</strong></div>` : ''}
+        <div class="stage-note">
+          ${activeSlot.slotId === 'slot_1'
+            ? '<strong>Chip 1 Principal:</strong> todos os alertas de fechamento para seu número pessoal saem centralizados por este chip.'
+            : 'Conversas existentes importadas automaticamente e unificadas na fila por horário.'}
+        </div>
       </div>
     `;
   } else if (slSt === 'qr_ready') {
@@ -1610,14 +1626,20 @@ function renderWaState() {
     btnDisc.textContent = 'Cancelar Pareamento';
     if (activeSlot.pairingCode) {
       stage.innerHTML = `
-        <div style="font-size:13.5px; color:var(--text-secondary);">Digite este código de 8 dígitos no WhatsApp do <strong>${escapeHtml(activeSlot.label)}</strong>:</div>
-        <div class="pairing-code-display">${escapeHtml(activeSlot.pairingCode)}</div>
-        <div style="font-size:12px; color:var(--text-muted);">No celular: Aparelhos Conectados &gt; Conectar com número de telefone</div>
+        <div class="stage-qr">
+          <div style="font-size:13px; color:var(--text-secondary);">Digite este código no WhatsApp do <strong>${escapeHtml(activeSlot.label)}</strong>:</div>
+          <div class="pairing-code-display">${escapeHtml(activeSlot.pairingCode)}</div>
+          <div class="stage-pairing-hint">No celular: Aparelhos Conectados &gt; Conectar com número de telefone</div>
+        </div>
       `;
     } else if (activeSlot.qrDataUrl) {
       stage.innerHTML = `
-        <img class="qr-image" src="${activeSlot.qrDataUrl}" alt="QR Code do ${escapeHtml(activeSlot.label)}" />
-        <div style="font-size:12.5px; color:var(--text-secondary);">Aponte a câmera do WhatsApp para conectar em <strong>${escapeHtml(activeSlot.label)}</strong></div>
+        <div class="stage-qr">
+          <div class="qr-frame">
+            <img class="qr-image" src="${activeSlot.qrDataUrl}" alt="QR Code do ${escapeHtml(activeSlot.label)}" />
+          </div>
+          <div class="stage-qr-hint">Aponte a câmera do WhatsApp para conectar em <strong>${escapeHtml(activeSlot.label)}</strong></div>
+        </div>
       `;
     }
   } else if (slSt === 'connecting') {
@@ -1628,41 +1650,50 @@ function renderWaState() {
     activeSlot._connectStart = connStart;
     const connElapsed = Math.floor((Date.now() - connStart) / 1000);
     stage.innerHTML = `
-      <div style="font-weight:600;">Iniciando ponte segura para <strong>${escapeHtml(activeSlot.label)}</strong>...</div>
-      <div style="font-size:12.5px; color:var(--text-secondary);">${escapeHtml(activeSlot.lastError || 'Gerando sessão criptografada isolada, aguarde alguns segundos.')}</div>
-      ${connElapsed > 10 ? `<div style="color:var(--warning-bright); font-size:12px; margin-top:4px;">A conexão está demorando... Se não sucessor em breve, tente novamente.</div>
-        <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="executeSlotConnectRequest({ pairingPhone: null, slotId: state.selectedWaSlotId })">↻ Tentar novamente</button>` : ''}
+      <div class="stage-connecting">
+        <div class="connecting-spinner"></div>
+        <div class="stage-connecting-text">Iniciando ponte segura para <strong>${escapeHtml(activeSlot.label)}</strong>...<br/>${escapeHtml(activeSlot.lastError || 'Gerando sessão criptografada isolada, aguarde alguns segundos.')}</div>
+        ${connElapsed > 10 ? `<div class="stage-connecting-warning">A conexão está demorando... Se não succeeder em breve, tente novamente.</div>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="executeSlotConnectRequest({ pairingPhone: null, slotId: state.selectedWaSlotId })">Tentar novamente</button>` : ''}
+      </div>
     `;
   } else {
     btnConn.style.display = activeSlot.locked ? 'none' : 'inline-flex';
     const hasSavedSession = Boolean(activeSlot.lastKnownUser?.phone);
-    btnConn.textContent = hasSavedSession ? `🔄 Reconectar ${activeSlot.shortLabel}` : `Gerar QR (${activeSlot.shortLabel})`;
+    btnConn.innerHTML = hasSavedSession ? `<svg class="icon-svg" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Reconectar ${activeSlot.shortLabel}` : `<svg class="icon-svg" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3"/><path d="M21 14v.01"/></svg>Gerar QR (${activeSlot.shortLabel})`;
     btnDisc.style.display = 'none';
     const isCloudWorkerOff = state.runtimeMode === 'vercel_cloud' && !state.waState?.workerOnline;
     const lastKnownPhone = activeSlot.lastKnownUser?.phone || '';
     if (isCloudWorkerOff) {
       stage.innerHTML = `
-        <div style="font-weight:700; color:var(--accent-bright); font-size:15px;">☁️ Painel na Nuvem Ativo e Sincronizado!</div>
-        <div style="font-size:12.5px; color:var(--text-secondary); max-width:440px; line-height:1.5;">
-          Você já pode usar <strong>Simulador, Treinamento, Áudios Estratégicos, Catálogo, PIX e CRM</strong> normalmente por aqui.<br/>
-          Para conectar até <strong>${getAccountMaxSlots()} Chip(s) WhatsApp</strong> ao vivo, inicie o <strong>Motor Ienvia</strong> no seu celular (Termux) ou computador (Windows/Linux) logado em <strong>@${escapeHtml(state.currentUser?.username || 'sua-conta')}</strong>.
+        <div class="stage-cloud-off">
+          <div class="stage-cloud-off-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17.5 19a4.5 4.5 0 1 0 0-9 6 6 0 0 0-11.6-1.5A4 4 0 0 0 6 19z"/></svg>
+            Painel na Nuvem Ativo
+          </div>
+          <div class="stage-cloud-off-desc">
+            Você já pode usar <strong>Simulador, Treinamento, Áudios Estratégicos, Catálogo, PIX e CRM</strong> normalmente por aqui.<br/>
+            Para conectar até <strong>${getAccountMaxSlots()} Chip(s) WhatsApp</strong> ao vivo, inicie o <strong>Motor Ienvia</strong> no seu celular (Termux) ou computador (Windows/Linux) logado em <strong>@${escapeHtml(state.currentUser?.username || 'sua-conta')}</strong>.
+          </div>
+          ${lastKnownPhone ? `<div style="font-size:11.5px; color:var(--text-muted);">Último número deste slot: <strong>+${escapeHtml(lastKnownPhone)}</strong></div>` : ''}
+          <button type="button" class="btn btn-secondary btn-sm" onclick="downloadLatestMotorZip()">
+            Baixar Motor Ienvia v${escapeHtml(state.appVersion || '5.6.0')} (.ZIP)
+          </button>
         </div>
-        ${lastKnownPhone ? `<div style="font-size:11.5px; color:var(--text-muted);">Último número deste slot: <strong>+${escapeHtml(lastKnownPhone)}</strong></div>` : ''}
-        <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="downloadLatestMotorZip()">
-          Baixar Motor Ienvia v${escapeHtml(state.appVersion || '5.6.0')} (.ZIP)
-        </button>
       `;
     } else if (lastKnownPhone) {
       stage.innerHTML = `
-        <div style="font-weight:600;"><strong>${escapeHtml(activeSlot.label)}</strong> tinha uma sessão salva</div>
-        <div style="font-size:13px; color:var(--text-secondary); max-width:400px;">
-          Último número: <strong>+${escapeHtml(lastKnownPhone)}</strong>.
-          Clique em <strong>Reconectar</strong> para tentar recuperar a sessão sem precisar de QR Code.
-          ${activeSlot.lastError ? `<div style="color:var(--warning-bright); font-size:12px; margin-top:4px;">Último erro: ${escapeHtml(activeSlot.lastError)}</div>` : ''}
+        <div class="stage-saved">
+          <div class="stage-saved-title"><strong>${escapeHtml(activeSlot.label)}</strong> tinha uma sessão salva</div>
+          <div class="stage-saved-desc">
+            Último número: <strong>+${escapeHtml(lastKnownPhone)}</strong>.
+            Clique em <strong>Reconectar</strong> para tentar recuperar a sessão sem precisar de QR Code.
+            ${activeSlot.lastError ? `<div style="color:var(--warning-bright); font-size:12px; margin-top:4px;">Último erro: ${escapeHtml(activeSlot.lastError)}</div>` : ''}
+          </div>
+          <button type="button" class="btn btn-primary btn-sm" onclick="executeSlotConnectRequest({ pairingPhone: null, slotId: state.selectedWaSlotId })">
+            Reconectar sessão agora
+          </button>
         </div>
-        <button type="button" class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="executeSlotConnectRequest({ pairingPhone: null, slotId: state.selectedWaSlotId })">
-          🔄 Reconectar sessão agora
-        </button>
       `;
       // Dispara reconexão automática após 3s se o usuário não clicar
       if (!state._autoReconnectTimer) {
@@ -1675,11 +1706,11 @@ function renderWaState() {
       }
     } else {
       stage.innerHTML = `
-        <div style="font-weight:600;"><strong>${escapeHtml(activeSlot.label)}</strong> pronto para conectar</div>
-        <div style="font-size:13px; color:var(--text-secondary); max-width:400px;">
-          Clique em <strong>Gerar QR</strong> acima ou digite o número abaixo para receber o código de 8 dígitos neste chip!
+        <div class="stage-default">
+          <div style="font-weight:600;"><strong>${escapeHtml(activeSlot.label)}</strong> pronto para conectar</div>
+          <div>Clique em <strong>Gerar QR</strong> acima ou digite o número abaixo para receber o código de 8 dígitos neste chip!</div>
+          ${activeSlot.lastError ? `<div style="color:var(--warning-bright); font-size:12px;">${escapeHtml(activeSlot.lastError)}</div>` : ''}
         </div>
-        ${activeSlot.lastError ? `<div style="color:var(--warning-bright); font-size:12px;">${escapeHtml(activeSlot.lastError)}</div>` : ''}
       `;
     }
   }
@@ -1690,7 +1721,7 @@ function renderWaState() {
     if (onlineDevs.length > 0) {
       devicesBox.style.display = 'flex';
       devicesBox.innerHTML = `
-        <div style="font-size:11.5px; font-weight:700; color:var(--text-secondary); display:flex; justify-content:space-between; align-items:center;">
+        <div class="devices-title">
           <span>Aparelhos Online nesta Conta (${onlineDevs.length})</span>
           ${onlineDevs.length > 1 ? '<span style="color:var(--accent-bright);">Modo Multi-Aparelho Ativo</span>' : '<span>Até 3 Chips no mesmo aparelho</span>'}
         </div>
@@ -1698,16 +1729,19 @@ function renderWaState() {
           .map((d) => {
             const hosted = metas.filter((m) => m.deviceId === d.deviceId && m.status === 'connected').map((m) => m.shortLabel);
             return `
-              <div class="wa-device-row">
-                <div style="min-width:0; flex:1;">
-                  <strong style="color:var(--text-main);">🟢 ${escapeHtml(d.deviceName || 'Aparelho Online')}</strong>
-                  <div style="font-size:11px; color:var(--text-muted);">
+              <div class="device-row">
+                <div class="device-info">
+                  <div class="device-name">
+                    <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="var(--accent-bright)" stroke-width="3" aria-hidden="true"><circle cx="12" cy="12" r="5"/></svg>
+                    ${escapeHtml(d.deviceName || 'Aparelho Online')}
+                  </div>
+                  <div class="device-status">
                     ${hosted.length ? `Hospedando: ${escapeHtml(hosted.join(', '))}` : 'Pronto p/ receber Chips'}
                     ${d.appVersion ? ` • v${escapeHtml(d.appVersion)}` : ''}
                   </div>
                 </div>
-                <button type="button" class="btn btn-secondary btn-sm" style="min-height:26px; padding:2px 8px; font-size:11px;" onclick="promptRenameWorkerDevice('${escapeJsArg(d.deviceId)}', '${escapeJsArg(d.deviceName || '')}')">
-                  ✏️ Apelido
+                <button type="button" class="btn btn-secondary btn-sm" style="min-height:28px; padding:4px 10px; font-size:11px;" onclick="promptRenameWorkerDevice('${escapeJsArg(d.deviceId)}', '${escapeJsArg(d.deviceName || '')}')">
+                  Apelido
                 </button>
               </div>
             `;

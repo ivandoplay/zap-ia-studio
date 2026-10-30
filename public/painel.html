@@ -360,55 +360,63 @@
         <div class="grid-2">
           <!-- Coluna Esquerda: Conexão WhatsApp + Disparador de Abordagem Ativa M01–M13 -->
           <div>
-            <div class="panel">
+            <div class="panel conn-panel">
               <div class="panel-header">
-              <div>
-                <h2 class="panel-title">Conexão Multi-Chip WhatsApp</h2>
-                <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">Conecte até 3 números no mesmo aparelho ou distribua em múltiplos aparelhos.</p>
-              </div>
-              <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button type="button" id="btnConnectQr" class="btn btn-primary btn-sm">📷 Gerar QR Code</button>
-                <button type="button" id="btnDisconnectWa" class="btn btn-danger btn-sm" style="display:none;">Desconectar</button>
-              </div>
-            </div>
-
-            <!-- Seletor de Slots: Chip 1 (Principal), Chip 2 e Chip 3 -->
-            <div id="waSlotsTabBar" class="wa-slots-tabbar" role="tablist" aria-label="Chips de WhatsApp da conta"></div>
-
-            <!-- Faixa Rápida do Chip Selecionado: Apelido + Modo (Nuvem/Local) + IA -->
-            <div id="waSlotConfigStrip" class="wa-slot-config-strip">
-              <div style="display:flex; gap:8px; flex-wrap:wrap; width:100%; align-items:center;">
-                <div class="wa-slot-nick-wrap" style="flex:1; min-width:160px;">
-                  <input type="text" id="waSlotLabelInput" maxlength="42" placeholder="Apelido do Chip (ex: Comercial)" aria-label="Apelido identificador deste Chip" />
-                  <button type="button" id="btnSaveWaSlotLabel" class="btn btn-secondary btn-sm" onclick="saveCurrentWaSlotConfig()">Salvar</button>
+                <div>
+                  <h2 class="panel-title">Conexão Multi-Chip WhatsApp</h2>
+                  <p class="panel-desc">Conecte até 3 números no mesmo aparelho ou distribua em múltiplos aparelhos.</p>
                 </div>
-                <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-                  <span style="font-size:11.5px; color:var(--text-muted);">Mode:</span>
-                  <button type="button" id="btnModeCloud" class="mode-toggle" onclick="setWizMode('cloud')" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius); padding:6px 10px; font-size:12px; cursor:pointer; min-height:36px;" aria-label="Mode nuvem Evolution Go">☁️ Nuvem</button>
-                  <button type="button" id="btnModeLocal" class="mode-toggle" onclick="setWizMode('local')" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius); padding:6px 10px; font-size:12px; cursor:pointer; min-height:36px;" aria-label="Mode motor local">💻 Local</button>
+                <div class="conn-actions">
+                  <button type="button" id="btnConnectQr" class="btn btn-primary btn-sm">
+                    <svg class="icon-svg" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3"/><path d="M21 14v.01"/><path d="M14 21h.01"/><path d="M17 17h4v4"/></svg>
+                    <span>Gerar QR Code</span>
+                  </button>
+                  <button type="button" id="btnDisconnectWa" class="btn btn-danger btn-sm" style="display:none;">Desconectar</button>
                 </div>
               </div>
-              <label class="wa-slot-ai-toggle" title="Ativar ou pausar respostas automáticas da IA apenas neste Chip (mantendo o Cérebro Único)">
-                <input type="checkbox" id="waSlotAiEnabledCheck" checked onchange="saveCurrentWaSlotConfig(true)" />
-                <span id="waSlotAiEnabledText">IA Ativa neste Chip</span>
-              </label>
-            </div>
 
-              <div id="qrStage" class="qr-stage">
-                <p>Clique em <strong>Gerar QR Code</strong> acima ou conecte por código numérico abaixo.</p>
+              <div id="waSlotsTabBar" class="slot-selector" role="tablist" aria-label="Chips de WhatsApp da conta"></div>
+
+              <div id="waSlotConfigStrip" class="config-bar">
+                <div class="config-row">
+                  <div class="nick-wrap">
+                    <input type="text" id="waSlotLabelInput" maxlength="42" placeholder="Apelido do Chip (ex: Comercial)" aria-label="Apelido identificador deste Chip" />
+                    <button type="button" id="btnSaveWaSlotLabel" class="btn btn-secondary btn-sm" onclick="saveCurrentWaSlotConfig()">Salvar</button>
+                  </div>
+                  <div class="mode-control">
+                    <button type="button" id="btnModeCloud" class="mode-btn" onclick="setWizMode('cloud')" aria-label="Mode nuvem">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17.5 19a4.5 4.5 0 1 0 0-9 6 6 0 0 0-11.6-1.5A4 4 0 0 0 6 19z"/></svg>
+                      <span>Nuvem</span>
+                    </button>
+                    <button type="button" id="btnModeLocal" class="mode-btn" onclick="setWizMode('local')" aria-label="Mode motor local">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
+                      <span>Local</span>
+                    </button>
+                  </div>
+                </div>
+                <label class="ai-toggle" title="Ativar ou pausar respostas automáticas da IA apenas neste Chip (mantendo o Cérebro Único)">
+                  <input type="checkbox" id="waSlotAiEnabledCheck" checked onchange="saveCurrentWaSlotConfig(true)" />
+                  <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                  <span id="waSlotAiEnabledText">IA Ativa neste Chip</span>
+                </label>
               </div>
 
-              <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
-                <label class="form-label" for="pairingPhoneInput">Conectar sem câmera neste Chip (Código de 8 dígitos)</label>
-                <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                  <input type="text" id="pairingPhoneInput" placeholder="Ex: 5586999998888 (com 55 + DDD)" style="flex:1; min-width:180px;" inputmode="tel" autocomplete="tel" />
+              <div id="qrStage" class="status-stage">
+                <div class="stage-default">
+                  <p>Clique em <strong>Gerar QR Code</strong> acima ou conecte por código numérico abaixo.</p>
+                </div>
+              </div>
+
+              <div class="pairing-section">
+                <label class="form-label" for="pairingPhoneInput">Conectar sem câmera (Código de 8 dígitos)</label>
+                <div class="pairing-input-row">
+                  <input type="text" id="pairingPhoneInput" placeholder="Ex: 5586999998888 (com 55 + DDD)" inputmode="tel" autocomplete="tel" />
                   <button type="button" id="btnConnectCode" class="btn btn-secondary">Gerar Código</button>
                 </div>
                 <div class="form-hint">Digite apenas números com código do país (55) e DDD.</div>
               </div>
 
-              <!-- Aparelhos Conectados na Conta (aparece automaticamente quando há Motor online) -->
-              <div id="waOnlineDevicesBox" class="wa-devices-box" style="display:none;"></div>
+              <div id="waOnlineDevicesBox" class="devices-box" style="display:none;"></div>
             </div>
 
             <!-- DOWNLOAD DA ÚLTIMA VERSÃO DO MOTOR (WINDOWS, LINUX & ANDROID TERMUX) -->

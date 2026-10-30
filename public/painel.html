@@ -2146,60 +2146,41 @@
   <!-- MODAL: CADASTRAR NOVO CLIENTE SAAS (MASTER) -->
   <!-- MODAL: WIZARD CONECTAR NOVO NÚMERO (Local vs Nuvem) -->
   <div id="addNumberWizard" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="addNumWizTitle">
-    <div class="modal-dialog" style="max-width:620px;">
+    <div class="modal-dialog" style="max-width:560px;">
       <div class="modal-head">
         <h3 id="addNumWizTitle" class="panel-title">Conectar Novo Número WhatsApp</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('addNumberWizard')">Fechar</button>
       </div>
-      <div class="modal-body" style="display:flex; flex-direction:column; gap:16px;">
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:14px;">
 
         <!-- Etapa 0: Boas-vindas -->
         <div data-step="0" class="wiz-step">
-          <p class="panel-desc" style="margin-bottom:6px;">Vamos conectar um novo número ao Ienvia passo a passo. Antes de tudo, onde esse número vai rodar?</p>
-          <div style="display:flex; gap:12px;">
-            <button type="button" class="btn btn-secondary" style="flex:1;" onclick="wizGo(1,'nuvem')">🌐 Na Nuvem</button>
-            <button type="button" class="btn btn-primary" style="flex:1;" onclick="wizGo(1,'local')">💻 No Local</button>
+          <div style="text-align:center; padding:6px 0 2px;">
+            <div style="font-size:34px; margin-bottom:10px;">📱</div>
+            <p class="panel-desc" style="margin-bottom:4px;">Vamos conectar um novo número ao WhatsApp. O processo é rápido e seguro.</p>
+            <p style="font-size:11.5px; color:var(--text-muted); text-align:center; margin-bottom:4px;">Você pode conectar até 3 números (chips). Escolha abaixo qual chip deseja configurar.</p>
           </div>
-          <p style="font-size:11.5px; color:var(--text-muted); text-align:center;">Nuvem = Evolution Go hospedado. Local = Motor rodando no seu aparelho.</p>
+          <button type="button" class="btn btn-primary" style="width:100%;" onclick="wizGo(1)">Continuar →</button>
         </div>
 
-        <!-- Etapa 1: Qual motor? (Local) -->
+        <!-- Etapa 1: Selecionar Chip -->
         <div data-step="1" class="wiz-step" style="display:none;">
-          <div class="wiz-step-label">💻 Qual Motor você vai usar?</div>
-          <p class="panel-desc" style="margin-bottom:8px;">Selecione o aparelho/motor onde o novo número será conectado.</p>
-          <div id="wizDeviceList" style="display:flex; flex-direction:column; gap:8px;"></div>
+          <div class="wiz-step-label">🔢 Escolha qual Chip conectar</div>
+          <p class="panel-desc" style="margin-bottom:8px;">Selecione um chip disponível. Se um já estiver conectado, escolha outro para adicionar um número novo.</p>
+          <div id="wizSlotList" style="display:flex; flex-direction:column; gap:8px;"></div>
           <div style="display:flex; justify-content:space-between; gap:8px; margin-top:8px;">
             <button type="button" class="btn btn-secondary btn-sm" onclick="wizGo(0)">← Voltar</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="wizGo(2,'nuvem')">🌐 Mudar para Nuvem</button>
-          </div>
-        </div>
-
-        <!-- Etapa 1b: Nuvem (Evolution Go) -->
-        <div data-step="1b" class="wiz-step" style="display:none;">
-          <div class="wiz-step-label">🌐 Configuração na Nuvem (Evolution Go)</div>
-          <p class="panel-desc" style="margin-bottom:8px;">A Evolution Go hospeda o WhatsApp e envia as mensagens para o Ienvia Motor. Para configurar:</p>
-          <ol style="margin:0 0 8px 16px; padding:0; line-height:1.7; color:var(--text-secondary); font-size:13px;">
-            <li>Abra a Evolution Go e crie/acesse sua instância.</li>
-            <li>Conecte o WhatsApp (QR Code) na instância.</li>
-            <li>No painel de configurações da instância, cole o Webhook URL abaixo.</li>
-          </ol>
-          <div style="display:flex; gap:8px; align-items:center; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius); padding:8px 10px;">
-            <input type="text" id="wizWebhookUrl" readonly value="https://zap-ia-studio.vercel.app/api/evolution-webhook/webhook" style="flex:1; font-size:12px;" />
-            <button type="button" class="btn btn-secondary btn-sm" onclick="copyWebhookUrl()">📋 Copiar</button>
-          </div>
-          <div style="display:flex; gap:8px; margin-top:4px;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="wizGo(0)">← Voltar</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="wizGo(1,'local')">💻 Mudar para Local</button>
-            <button type="button" class="btn btn-primary btn-sm" onclick="wizGo(3,'nuvem')">Continuar →</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="wizGo(2)" id="wizGoToConnect">Continuar →</button>
           </div>
         </div>
 
         <!-- Etapa 2: Conectar WhatsApp -->
         <div data-step="2" class="wiz-step" style="display:none;">
-          <div class="wiz-step-label" id="wizConectTitle">📱 Conectar o WhatsApp</div>
-          <p class="panel-desc" style="margin-bottom:8px;">Agora vamos parear o número. Escaneie o QR Code com o WhatsApp ou use o código de 8 dígitos.</p>
+          <div class="wiz-step-label">📷 Conectar o WhatsApp</div>
+          <p class="panel-desc" style="margin-bottom:8px;">Escaneie o QR Code com o WhatsApp do número ou use o código de 8 dígitos.</p>
+          <div id="wizChipInfo" style="display:flex; align-items:center; gap:8px; background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:var(--radius); padding:8px 10px; font-size:13px;"></div>
           <button type="button" class="btn btn-primary btn-sm" style="width:100%;" onclick="wizGenerateQr()">📷 Gerar QR Code</button>
-          <div id="wizQrStage" class="qr-stage" style="min-height:120px; margin-top:10px;"></div>
+          <div id="wizQrStage" class="qr-stage" style="min-height:160px; margin-top:10px;"></div>
           <div style="margin-top:10px;">
             <label class="form-label" for="wizPairingPhone">Conectar sem câmera (Código de 8 dígitos)</label>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -2208,40 +2189,25 @@
             </div>
           </div>
           <div style="display:flex; gap:8px; margin-top:8px;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="wizGo(1,'local')">← Voltar</button>
-            <button type="button" class="btn btn-primary btn-sm" onclick="wizGo(3)">Pular conexão →</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="wizGo(1)">← Voltar</button>
           </div>
         </div>
 
-        <!-- Etapa 3: Configurar IA -->
+        <!-- Etapa 3: Sucesso -->
         <div data-step="3" class="wiz-step" style="display:none;">
-          <div class="wiz-step-label">🤖 Configurar a IA</div>
-          <p class="panel-desc" style="margin-bottom:8px;">Agora vamos configurar o motor de IA que vai atender o número.</p>
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <button type="button" class="btn btn-primary" style="flex:1;" onclick="wizGo(4)">Configurar IA agora →</button>
-            <button type="button" class="btn btn-secondary" onclick="wizGo(4)">Pular</button>
+          <div class="wiz-step-label">✅ Número Conectado!</div>
+          <div style="text-align:center; padding:6px 0;">
+            <div style="font-size:38px; margin-bottom:10px;">🎉</div>
+            <p class="panel-desc" style="margin-bottom:6px;">O número foi conectado com sucesso ao painel.</p>
+            <div id="wizSuccessInfo" style="display:inline-block; background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:var(--radius); padding:8px 14px; font-size:13px;"></div>
           </div>
-        </div>
-
-        <!-- Etapa 4: Concluído -->
-        <div data-step="4" class="wiz-step" style="display:none;">
-          <div class="wiz-step-label">✅ Pronto!</div>
-          <p class="panel-desc" style="margin-bottom:8px;">Seu número está configurado. O próximo passo é treinar a IA e testar no simulador.</p>
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <button type="button" class="btn btn-primary" style="flex:1;" onclick="wizGo(5)">Treinar a IA →</button>
-            <button type="button" class="btn btn-secondary" onclick="wizGo(5)">Testar no Simulador</button>
-            <button type="button" class="btn btn-secondary" onclick="closeModal('addNumberWizard')">Finalizar</button>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-primary" style="flex:1; min-width:140px;" onclick="switchTab('treinamento');closeModal('addNumberWizard')">🧠 Treinar IA</button>
+            <button type="button" class="btn btn-secondary" onclick="switchTab('simulador');closeModal('addNumberWizard')">🧪 Testar</button>
           </div>
-        </div>
-
-        <!-- Etapa 5: Treinar/Testar -->
-        <div data-step="5" class="wiz-step" style="display:none;">
-          <div class="wiz-step-label">🧠 Treinar a IA</div>
-          <p class="panel-desc" style="margin-bottom:8px;">Treine a IA com modelos de resposta para o seu negócio. Depois teste no simulador.</p>
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <button type="button" class="btn btn-primary" style="flex:1;" onclick="switchTab('treinamento');closeModal('addNumberWizard')">Abrir Treinamento</button>
-            <button type="button" class="btn btn-secondary" onclick="switchTab('simulador');closeModal('addNumberWizard')">Testar no Simulador</button>
-            <button type="button" class="btn btn-secondary" onclick="closeModal('addNumberWizard')">Finalizar</button>
+          <div style="display:flex; gap:8px;">
+            <button type="button" class="btn btn-secondary btn-sm" style="flex:1;" onclick="wizGo(1)">Conectar outro número</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('addNumberWizard')">Finalizar</button>
           </div>
         </div>
 
@@ -2251,7 +2217,7 @@
     </div>
   </div>
 
-  <div id="createClientModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="createClientModalTitle">
+<div id="createClientModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="createClientModalTitle">
     <div class="modal-dialog" style="max-width:540px;">
       <div class="modal-head">
         <h3 id="createClientModalTitle" class="panel-title">Cadastrar Novo Cliente SaaS</h3>

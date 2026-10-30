@@ -2847,6 +2847,15 @@ textarea {
   color: var(--text-muted);
 }
 
+/* Wizard: cartões de chip */
+.wiz-slot-card {
+  transition: border-color 150ms ease, background 150ms ease;
+}
+.wiz-slot-card:hover {
+  border-color: var(--accent) !important;
+  background: var(--accent-soft) !important;
+}
+
 /* Command Palette & Auth Screens */
 .cmd-list {
   max-height: 340px;

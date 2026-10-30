@@ -224,31 +224,47 @@ evolutionGoWebhookRouter.post('/webhook', async (req, res) => {
     const userTurn = { role: 'user', text: userText || (media ? '[áudio/imagem]' : ''), ts: Date.now() };
     const nextHistory = [...history, userTurn];
 
-    // Gerar resposta com IA (skills do Ienvia Motor — demo fallback se sem chaves)
-    const reply = await generateSmartReply({
-      profile: tenant.profile,
-      settings: tenant.settings,
-      history: nextHistory.slice(0, -1),
-      userText,
-      media,
-      contactName: phoneNumber,
-      allowDemoFallback: true,
-    });
+    // Verificar se IA está ligada para este número (settings.botEnabled do workspace)
+    const iaEnabled = tenant.settings?.botEnabled !== false;
 
-    // Enviar resposta
-    if (reply.cleanText) {
-      await sendMessage(instanceName, phoneNumber, reply.cleanText, instanceToken);
+    let reply;
+    if (iaEnabled) {
+      // Gerar resposta com IA (skills do Ienvia Motor — demo fallback se sem chaves)
+      reply = await generateSmartReply({
+        profile: tenant.profile,
+        settings: tenant.settings,
+        history: nextHistory.slice(0, -1),
+        userText,
+        media,
+        contactName: phoneNumber,
+        allowDemoFallback: true,
+      });
+
+      // Enviar resposta
+      if (reply.cleanText) {
+        await sendMessage(instanceName, phoneNumber, reply.cleanText, instanceToken);
+      }
+    } else {
+      // IA desligada para este número: apenas registrar a mensagem, não responder
+      // (opcional: settings.iaOffReply — mensagem de fallback)
+      const offReply = tenant.settings?.iaOffReply || '';
+      if (offReply) {
+        await sendMessage(instanceName, phoneNumber, offReply, instanceToken);
+        reply = { cleanText: offReply, providerUsed: 'ia_off_fallback' };
+      } else {
+        reply = { cleanText: '', providerUsed: 'ia_off' };
+      }
     }
 
-    // Persistir histórico
+    // Persistir histórico (sem resposta da IA se desligada)
     nextHistory.push({ role: 'assistant', text: reply.cleanText, ts: Date.now() });
     if (nextHistory.length > 40) nextHistory.splice(0, nextHistory.length - 40);
     const saveResult = await saveHistory(tenant.userId, chatId, nextHistory, phoneNumber);
 
     console.log(
-      `[EvolutionWebhook] ${instanceName} → ${phoneNumber}: "${userText || '[mídia]'}" → "${String(reply.cleanText).slice(0, 60)}"`
+      `[EvolutionWebhook] ${instanceName} → ${phoneNumber}: "${userText || '[mídia]'}" → "${String(reply.cleanText).slice(0, 60)}" (IA: ${iaEnabled ? 'on' : 'off'})`
     );
-    return res.status(200).json({ ok: true, reply: reply.cleanText, provider: reply.providerUsed });
+    return res.status(200).json({ ok: true, reply: reply.cleanText, provider: reply.providerUsed, iaEnabled });
   } catch (err) {
     console.error('[EvolutionWebhook] Erro:', err.message);
     return res.status(200).json({ ok: false, error: err.message });

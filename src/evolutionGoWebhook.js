@@ -241,11 +241,18 @@ evolutionGoWebhookRouter.post('/webhook', async (req, res) => {
     nextHistory.push({ role: 'assistant', text: reply.cleanText, ts: Date.now() });
     if (nextHistory.length > 40) nextHistory.splice(0, nextHistory.length - 40);
     const saveResult = await saveHistory(tenant.userId, chatId, nextHistory, phoneNumber);
+    // Consulta de volta do row salvo (diag)
+    let savedRow = null;
+    try {
+      const admin = getAdminClient();
+      const { data } = await admin.from('zapia_contacts').select('chat_id,user_id').eq('user_id', tenant.userId).eq('chat_id', chatId);
+      savedRow = (data || []).length;
+    } catch (e) { savedRow = 'err:' + e.message; }
 
     console.log(
       `[EvolutionWebhook] ${instanceName} → ${phoneNumber}: "${userText || '[mídia]'}" → "${String(reply.cleanText).slice(0, 60)}"`
     );
-    return res.status(200).json({ ok: true, reply: reply.cleanText, provider: reply.providerUsed, userId: tenant.userId, chatId, save: saveResult });
+    return res.status(200).json({ ok: true, reply: reply.cleanText, provider: reply.providerUsed, userId: tenant.userId, chatId, save: saveResult, savedRow });
   } catch (err) {
     console.error('[EvolutionWebhook] Erro:', err.message);
     return res.status(200).json({ ok: false, error: err.message });

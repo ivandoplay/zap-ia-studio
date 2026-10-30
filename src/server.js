@@ -1304,12 +1304,13 @@ app.post('/api/wa/slot-config', async (req, res) => {
     );
 
     if (usesCloudBridge(req) && req.cloudAuth?.client && req.cloudAuth?.authUser?.id) {
-      await req.cloudAuth.client
-        .from('zapia_wa_slots')
-        .update({ label: nextLabel, ai_enabled: nextAiEnabled, updated_at: trueNowIso() })
-        .eq('user_id', req.cloudAuth.authUser.id)
-        .eq('slot_id', slotId)
-        .catch(() => {});
+      try {
+        await req.cloudAuth.client
+          .from('zapia_wa_slots')
+          .update({ label: nextLabel, ai_enabled: nextAiEnabled, updated_at: trueNowIso() })
+          .eq('user_id', req.cloudAuth.authUser.id)
+          .eq('slot_id', slotId);
+      } catch (e) {}
       if (req.cloudAuth.tenantStore?.waRuntime?.slots?.[slotId]) {
         req.cloudAuth.tenantStore.waRuntime.slots[slotId].label = nextLabel;
         req.cloudAuth.tenantStore.waRuntime.slots[slotId].aiEnabled = nextAiEnabled;

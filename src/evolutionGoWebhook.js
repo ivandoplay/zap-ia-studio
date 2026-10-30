@@ -288,25 +288,6 @@ evolutionGoWebhookRouter.post('/send', async (req, res) => {
   res.json(await sendMessage(instance, number, text));
 });
 
-// LER/ATUALIZAR settings do workspace (diag temporário)
-evolutionGoWebhookRouter.post('/settings', async (req, res) => {
-  try {
-    const admin = getAdminClient();
-    const userId = resolveUserId('ienvia-teste-06a36777') || process.env.EVOLUTION_DEFAULT_USER_ID;
-    if (req.body?.set) {
-      const { data } = await admin.from('zapia_workspaces').select('settings').eq('user_id', userId).maybeSingle();
-      const current = data?.settings || {};
-      const updated = { ...current, ...req.body.set };
-      await admin.from('zapia_workspaces').update({ settings: updated }).eq('user_id', userId);
-      return res.json({ ok: true, settings: updated });
-    }
-    const { data } = await admin.from('zapia_workspaces').select('settings').eq('user_id', userId).maybeSingle();
-    res.json({ ok: true, settings: data?.settings || {} });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
-
 // LIMPAR conversas de teste no CRM (temporário)
 evolutionGoWebhookRouter.post('/clear', async (req, res) => {
   try {

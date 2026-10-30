@@ -89,3 +89,13 @@ Cada cliente coloca suas chaves no **painel do Ienvia Motor** (aba "Motor de IA"
 
 - **Vercel (este guia)**: grátis, sem servidor — ideal para a comunicação (webhook)
 - **VPS** (Oracle grátis / KingHost / Serverspace): roda o docker-compose completo (motor + webhook no mesmo host) — veja `ORACLE-CLOUD-DEPLOY.md` e `GRATISVPS-DEPLOY.md` (aviso: GratisVPS é scam)
+
+## Passo 5: Controlar IA por número (no painel)
+
+O painel do Ienvia Motor já tem o toggle **"Atendimento automático"** (botEnabled):
+- **Ligado** → a IA responde as mensagens do WhatsApp
+- **Desligado** → a IA não responde; a mensagem é registrada no CRM e o dono responde manualmente
+
+O webhook respeita `settings.botEnabled` do `zapia_workspaces`. Para mensagem de fallback quando a IA está desligada, use `settings.iaOffReply`.
+
+> **Importante:** o toggle do painel atualiza o motor local. O motor sincroniza para o Supabase. O webhook lê do Supabase — pode haver alguns segundos de atraso.

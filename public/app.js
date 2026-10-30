@@ -153,8 +153,9 @@ function showToast(msg, isError = false) {
     stack.firstElementChild?.remove();
   }
   const el = document.createElement('div');
-  el.className = `toast ${isError ? 'error' : ''}`;
-  el.textContent = msg;
+  el.className = `toast ${isError ? 'error' : 'success'}`;
+  const icon = isError ? '⚠️' : '✓';
+  el.innerHTML = `<span class="toast-icon">${icon}</span><span>${escapeHtml(msg)}</span>`;
   stack.appendChild(el);
   setTimeout(() => el.remove(), window.innerWidth <= 820 ? 2200 : 2800);
 }

@@ -2938,18 +2938,51 @@ textarea {
   max-width: 360px;
   box-shadow: var(--shadow-md);
   pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: toast-in 200ms cubic-bezier(0.2, 0, 0, 1) both;
 }
 .toast.error {
   border-left-color: var(--danger);
 }
+.toast.success {
+  border-left-color: var(--accent);
+}
+.toast-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+@keyframes toast-in {
+  from { transform: translateY(12px) scale(0.96); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
 
 .empty-state {
-  padding: 26px 18px;
+  padding: 28px 18px;
   text-align: center;
   color: var(--text-secondary);
   font-size: 13px;
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-md);
+  background: var(--bg-card-subtle);
+}
+.empty-state .empty-icon {
+  font-size: 28px;
+  display: block;
+  margin-bottom: 8px;
+  opacity: 0.6;
+}
+.empty-state strong {
+  color: var(--text-main);
+  font-size: 14px;
+  display: block;
+  margin-bottom: 4px;
+}
+.empty-state p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
 }
 
 /* Mobile Bottom Nav & Inspector Backdrop (Hidden on Desktop) */

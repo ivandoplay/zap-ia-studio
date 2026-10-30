@@ -274,8 +274,10 @@ evolutionGoWebhookRouter.post('/clear', async (req, res) => {
     const admin = getAdminClient();
     const userId = resolveUserId('ienvia-teste-06a36777') || process.env.EVOLUTION_DEFAULT_USER_ID;
     if (req.body?.list) {
-      const { data } = await admin.from('zapia_contacts').select('chat_id').eq('user_id', userId);
-      return res.json({ ok: true, chatIds: (data || []).map((r) => r.chat_id).slice(0, 50) });
+      const { data } = await admin.from('zapia_contacts').select('chat_id').eq('user_id', userId).limit(500);
+      const all = (data || []).map((r) => r.chat_id);
+      const test = all.filter((c) => c.includes('558681') || c.includes('diag') || c.includes('s.whatsapp'));
+      return res.json({ ok: true, total: all.length, test, sample: all.slice(0, 3) });
     }
     const chatIds = req.body?.chatIds || [
       '558681638438@s.whatsapp.net', '558681638438:33@s.whatsapp.net', '558681638438:13@s.whatsapp.net',

@@ -99,14 +99,14 @@
     <nav class="nav-menu">
       <div class="nav-group-label">Operação</div>
 
-      <button type="button" class="nav-btn active" data-tab="dashboard" title="Visão geral, status da conexão WhatsApp e disparar abordagens">
+      <button type="button" class="nav-btn active" data-tab="dashboard" title="Visão geral, status da conexão WhatsApp e disparar abordagens" aria-label="Dashboard, painel principal">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>
           <span>Início &amp; Conexão</span>
         </span>
       </button>
 
-      <button type="button" class="nav-btn" data-tab="crm" title="Conversas do WhatsApp, CRM e caixa de entrada 360º">
+      <button type="button" class="nav-btn" data-tab="crm" title="Conversas do WhatsApp, CRM e caixa de entrada 360º" aria-label="Conversas, CRM">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
           <span>Conversas</span>
@@ -117,20 +117,20 @@
         </span>
       </button>
 
-      <button type="button" class="nav-btn" data-tab="campanhas" title="Disparar campanhas de mensagens em lote para múltiplos contatos">
+      <button type="button" class="nav-btn" data-tab="campanhas" title="Disparar campanhas de mensagens em lote para múltiplos contatos" aria-label="Campanhas">
         <span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l18-7-4 16-5-6-5 3 1-5z"></path></svg><span>Campanhas</span></span>
       </button>
 
       <div class="nav-group-label">Atendente</div>
 
-      <button type="button" class="nav-btn" data-tab="treinamento" title="Treinar o atendente: resumo do negócio, regras, FAQ e mensagens aprovadas">
+      <button type="button" class="nav-btn" data-tab="treinamento" title="Treinar o atendente: resumo do negócio, regras, FAQ e mensagens aprovadas" aria-label="Treinamento">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
           <span>Treinamento</span>
         </span>
       </button>
 
-      <button type="button" class="nav-btn" data-tab="audios" title="Gravar e organizar notas de voz humanas (áudios OGG/Opus)">
+      <button type="button" class="nav-btn" data-tab="audios" title="Gravar e organizar notas de voz humanas (áudios OGG/Opus)" aria-label="Áudios">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
           <span>Áudios</span>
@@ -138,14 +138,14 @@
         <span id="navVoiceBadge" class="badge-count" style="display:none; background:var(--accent-soft); color:var(--accent-bright); border:1px solid var(--accent-border);">0</span>
       </button>
 
-      <button type="button" class="nav-btn" data-tab="catalogo" title="Catálogo de produtos, mídias e chave PIX">
+      <button type="button" class="nav-btn" data-tab="catalogo" title="Catálogo de produtos, mídias e chave PIX" aria-label="Catálogo">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
           <span>Catálogo &amp; PIX</span>
         </span>
       </button>
 
-      <button type="button" class="nav-btn" data-tab="simulador" title="Testar respostas da IA antes de ir ao vivo">
+      <button type="button" class="nav-btn" data-tab="simulador" title="Testar respostas da IA antes de ir ao vivo" aria-label="Simulador">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2v5Z"></path><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"></path></svg>
           <span>Simulador</span>
@@ -154,14 +154,14 @@
 
       <div class="nav-group-label">Ajustes</div>
 
-      <button type="button" class="nav-btn" data-tab="ia" title="Configurar o motor de IA: chaves do Gemini e OpenRouter, modelos e fallback">
+      <button type="button" class="nav-btn" data-tab="ia" title="Configurar o motor de IA: chaves do Gemini e OpenRouter, modelos e fallback" aria-label="Motor de IA">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2v4"></path><path d="m16.2 7.8 2.9-2.9"></path><path d="M18 12h4"></path><path d="m16.2 16.2 2.9 2.9"></path><path d="M12 18v4"></path><path d="m4.9 19.1 2.9-2.9"></path><path d="M2 12h4"></path><path d="m4.9 4.9 2.9 2.9"></path><circle cx="12" cy="12" r="4"></circle></svg>
           <span>Motor de IA</span>
         </span>
       </button>
 
-      <button type="button" class="nav-btn" data-tab="seguranca" title="Anti-ban, fila segura de abordagem, PIN e proteções">
+      <button type="button" class="nav-btn" data-tab="seguranca" title="Anti-ban, fila segura de abordagem, PIN e proteções" aria-label="Segurança">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
           <span>Segurança &amp; Anti-Ban</span>
@@ -1998,33 +1998,33 @@
 
   <!-- BARRA INFERIOR MOBILE NATIVA (5 HUBS COESOS — ESTILO WHATSAPP / LINEAR MOBILE) -->
   <nav class="mobile-bottom-nav" aria-label="Navegação principal mobile">
-    <button type="button" class="mob-nav-btn active" data-mobhub="dashboard" data-mobtab="dashboard">
+    <button type="button" class="mob-nav-btn active" data-mobhub="dashboard" data-mobtab="dashboard" aria-label="Início, painel principal">
       <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>
       <span>Início</span>
     </button>
 
-    <button type="button" class="mob-nav-btn" data-mobhub="crm" data-mobtab="crm">
+    <button type="button" class="mob-nav-btn" data-mobhub="crm" data-mobtab="crm" aria-label="Conversas do CRM">
       <svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
       <span>Conversas</span>
       <span id="mobCrmBadge" class="mob-badge" style="display:none;">0</span>
     </button>
 
-    <button type="button" class="mob-nav-btn" data-mobhub="cerebro" data-mobtab="treinamento">
+    <button type="button" class="mob-nav-btn" data-mobhub="cerebro" data-mobtab="treinamento" aria-label="Atendente, treinamento">
       <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
       <span>Atendente</span>
     </button>
 
-    <button type="button" class="mob-nav-btn" data-mobhub="config" data-mobtab="ia">
+    <button type="button" class="mob-nav-btn" data-mobhub="config" data-mobtab="ia" aria-label="Ajustes, configurações">
       <svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
       <span>Ajustes</span>
     </button>
 
-    <button type="button" id="mobMasterUsersBtn" class="mob-nav-btn" data-mobhub="contas" data-mobtab="contas" style="display:none;">
+    <button type="button" id="mobMasterUsersBtn" class="mob-nav-btn" data-mobhub="contas" data-mobtab="contas" aria-label="Clientes SaaS"> style="display:none;">
       <svg class="icon-svg" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
       <span>Clientes</span>
     </button>
 
-    <button type="button" id="mobClientAccountBtn" class="mob-nav-btn" onclick="openAccountSheet()">
+    <button type="button" id="mobClientAccountBtn" class="mob-nav-btn" onclick="openAccountSheet()" aria-label="Abrir conta, perfil e configurações">
       <svg class="icon-svg" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
       <span>Conta</span>
     </button>

@@ -6357,7 +6357,10 @@ function bindEvents() {
   });
 
   // Aba 4: PIX QR Preview & Catálogo Multi-Mídia
-  document.getElementById('btnPreviewPixQr')?.addEventListener('click', async () => {
+  document.getElementById('btnPreviewPixQr')?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const orig = btn.innerHTML;
+    setBtnLoading(btn, 'Gerando QR...');
     const pix = {
       enabled: true,
       keyType: document.getElementById('pixKeyType').value,
@@ -6391,7 +6394,10 @@ function bindEvents() {
     }
   });
 
-  document.getElementById('btnSavePix').addEventListener('click', async () => {
+  document.getElementById('btnSavePix').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const orig = btn.innerHTML;
+    setBtnLoading(btn, 'Salvando...');
     const p = getActiveProfile();
     if (!p) return;
     const pix = {
@@ -6414,6 +6420,8 @@ function bindEvents() {
       showToast('Configuração PIX salva!');
     } catch (err) {
       showToast(err.message, true);
+    } finally {
+      setBtnDone(btn, orig);
     }
   });
 

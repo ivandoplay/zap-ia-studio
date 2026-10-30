@@ -263,5 +263,5 @@ O motor do **Ienvia** interpreta automaticamente estas tags especiais caso você
 ## 💡 Dica de Ouro para Vibe Coders
 Depois de importar seu `.JSON`, `.MD` ou `.ZIP`:
 1. Você pode **editar visualmente qualquer Mensagem (`Mxx`) ou Skill (`Sxx`/`Hxx`)** direto nos cartões da aba **Treinamento** sem precisar reimportar tudo;
-2. Teste na hora na aba **Simulador de Teste** clicando em *"Raio-X de Skills & Latência"* para ver exatamente quais skills seu pacote acionou;
+2. Teste na hora na aba **Simulador** clicando em *"Raio-X de Skills & Latência"* para ver exatamente quais skills seu pacote acionou;
 3. Clique em **Exportar Backup (`.ZIP`)** quando terminar para guardar seu pacote compilado completo!

@@ -397,7 +397,8 @@ const HUB_BY_TAB = {
 const HUB_TITLE_MAP = {
   dashboard: 'Início',
   crm: 'Conversas',
-  cerebro: 'Cérebro IA',
+  operacao: 'Operação',
+  cerebro: 'Atendente',
   config: 'Ajustes',
   contas: 'Clientes SaaS'
 };
@@ -438,7 +439,7 @@ window.switchTab = function switchTab(rawTabId) {
     btn.classList.toggle('active', btn.dataset.mobhub === hub);
   });
 
-  // Sub-navegação compartilhada por Hub (Cérebro IA / Configurações)
+  // Sub-navegação compartilhada por Hub (Atendente / Ajustes)
   const subCerebro = document.getElementById('hubSubNavCerebro');
   const subConfig = document.getElementById('hubSubNavConfig');
   if (subCerebro) subCerebro.classList.toggle('visible', hub === 'cerebro');
@@ -1108,8 +1109,6 @@ function renderSaasOnboardingBox() {
   const hasAiKey = Boolean(
     String(ai.geminiApiKey || '').trim() ||
     String(ai.geminiKeyPool || '').trim() ||
-    String(ai.groqApiKey || '').trim() ||
-    String(ai.openaiApiKey || '').trim() ||
     String(ai.openrouterApiKey || '').trim()
   );
 
@@ -1142,7 +1141,7 @@ function renderSaasOnboardingBox() {
     {
       done: hasAiKey,
       title: '2. Colar Sua Chave de IA',
-      desc: 'Cole sua chave gratuita do Google Gemini (ou Groq) em 1 minuto.',
+      desc: 'Cole sua chave gratuita do Google Gemini (áudio) ou OpenRouter (texto) em 1 minuto.',
       actionHtml: `<button type="button" class="btn ${hasAiKey ? 'btn-secondary' : 'btn-primary'} btn-sm" onclick="switchTab('ia')">${hasAiKey ? 'Revisar Chave' : 'Configurar Chave →'}</button>`
     },
     {
@@ -1928,7 +1927,7 @@ function renderReadinessAndFunnel() {
 
   const waOk = state.waState?.status === 'connected';
   const ai = state.settings?.ai || {};
-  const hasKey = Boolean(ai.geminiApiKey || ai.groqApiKey || ai.openaiApiKey || ai.openrouterApiKey);
+  const hasKey = Boolean(ai.geminiApiKey || ai.openrouterApiKey);
   const prof = getActiveProfile();
   const ownerOk = Boolean(state.settings?.humanHandoff?.ownerPersonalWhatsapp);
 
@@ -2085,8 +2084,6 @@ function renderStatsAndLogs() {
   const ai = state.settings?.ai || {};
   const provMap = {
     gemini: `Gemini (${ai.geminiModel || 'gemini-3.5-flash-lite'})`,
-    openai: `OpenAI (${ai.openaiModel || 'gpt-4o-mini'})`,
-    groq: `Groq (${ai.groqModel || 'llama-3.3'})`,
     openrouter: `OpenRouter (${ai.openrouterModel || 'custom'})`
   };
   document.getElementById('activeEngineBadge').textContent = provMap[ai.provider] || 'Gemini';
@@ -2756,7 +2753,7 @@ function renderAiSettings() {
   document.querySelectorAll('.provider-option').forEach((card) => {
     card.classList.toggle('selected', card.dataset.provider === activeProv);
   });
-  ['gemini', 'openai', 'groq', 'openrouter'].forEach((prov) => {
+  ['gemini', 'openrouter'].forEach((prov) => {
     const box = document.getElementById(`providerBox-${prov}`);
     if (box) box.style.display = prov === activeProv ? 'block' : 'none';
   });
@@ -2764,11 +2761,8 @@ function renderAiSettings() {
   document.getElementById('geminiApiKey').value = ai.geminiApiKey || '';
   document.getElementById('geminiKeyPool').value = ai.geminiKeyPool || '';
   document.getElementById('geminiModel').value = ai.geminiModel || 'gemini-3.5-flash-lite';
-  document.getElementById('autoFallbackProvider').value = ai.autoFallbackProvider || 'groq';
-  document.getElementById('openaiApiKey').value = ai.openaiApiKey || '';
-  document.getElementById('openaiModel').value = ai.openaiModel || 'gpt-4o-mini';
-  document.getElementById('groqApiKey').value = ai.groqApiKey || '';
-  document.getElementById('groqModel').value = ai.groqModel || 'llama-3.3-70b-versatile';
+  document.getElementById('providerMode').value = ai.providerMode || 'auto';
+  document.getElementById('autoFallbackProvider').value = ai.autoFallbackProvider || 'gemini';
   document.getElementById('openrouterApiKey').value = ai.openrouterApiKey || '';
   document.getElementById('openrouterModel').value = ai.openrouterModel || 'deepseek/deepseek-chat';
   document.getElementById('aiTemperature').value = ai.temperature ?? 0.35;
@@ -2778,15 +2772,12 @@ function renderAiSettings() {
 function collectAiSettingsFromForm() {
   const selectedCard = document.querySelector('.provider-option.selected');
   return {
-    provider: selectedCard ? selectedCard.dataset.provider : 'gemini',
+    provider: selectedCard ? selectedCard.dataset.provider : 'openrouter',
+    providerMode: document.getElementById('providerMode').value,
     geminiApiKey: document.getElementById('geminiApiKey').value.trim(),
     geminiKeyPool: document.getElementById('geminiKeyPool').value.trim(),
     geminiModel: document.getElementById('geminiModel').value,
     autoFallbackProvider: document.getElementById('autoFallbackProvider').value,
-    openaiApiKey: document.getElementById('openaiApiKey').value.trim(),
-    openaiModel: document.getElementById('openaiModel').value.trim(),
-    groqApiKey: document.getElementById('groqApiKey').value.trim(),
-    groqModel: document.getElementById('groqModel').value.trim(),
     openrouterApiKey: document.getElementById('openrouterApiKey').value.trim(),
     openrouterModel: document.getElementById('openrouterModel').value.trim(),
     temperature: Number(document.getElementById('aiTemperature').value || 0.35),
@@ -5518,9 +5509,9 @@ function renderCommandPaletteResults(query = '') {
     { id: 'treinamento', title: 'Ir para: Treinamento & Studio de Skills (Aba 3)', sub: 'Editar M01–M13, Skills e .ZIP' },
     { id: 'audios', title: 'Ir para: Biblioteca de Áudios Estratégicos (Voz Real)', sub: 'Gravar/subir áudios OGG/Opus + transcrição IA' },
     { id: 'catalogo', title: 'Ir para: Catálogo Multi-Fotos & PIX QR (Aba 4)', sub: 'Até 5 mídias por item + QR Code PIX' },
-    { id: 'ia', title: 'Ir para: Motor de IA & Pool Gemini (Aba 5)', sub: 'Rotação de chaves grátis e reserva' },
-    { id: 'seguranca', title: 'Ir para: Anti-Ban, Fila Segura & PIN', sub: 'Prospecção cadenciada e bloqueio' },
-    { id: 'crm', title: 'Ir para: Conversas & CRM Comercial', sub: 'Inbox 360º, Kanban, etiquetas e retorno S19' },
+    { id: 'ia', title: 'Ir para: Motor de IA', sub: 'Rotação de chaves grátis e reserva' },
+    { id: 'seguranca', title: 'Ir para: Segurança & Anti-Ban', sub: 'Prospecção cadenciada e bloqueio' },
+    { id: 'crm', title: 'Ir para: Conversas', sub: 'Inbox 360º, Kanban, etiquetas e retorno S19' },
     ...(state.currentUser?.role === 'master'
       ? [{ id: 'contas', title: 'Ir para: Clientes SaaS (Torre Master)', sub: 'Criar contas, Modo Suporte em 1 clique e Kit Boas-Vindas' }]
       : [])
@@ -6201,7 +6192,7 @@ function bindEvents() {
       document.querySelectorAll('.provider-option').forEach((b) => b.classList.remove('selected'));
       btn.classList.add('selected');
       const prov = btn.dataset.provider;
-      ['gemini', 'openai', 'groq', 'openrouter'].forEach((p) => {
+      ['gemini', 'openrouter'].forEach((p) => {
         document.getElementById(`providerBox-${p}`).style.display = p === prov ? 'block' : 'none';
       });
     });

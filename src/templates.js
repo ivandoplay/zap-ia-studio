@@ -296,7 +296,7 @@ export const NICHE_TEMPLATES = [
           name: 'Plano Start (1 Número)',
           category: 'Assinatura Mensal',
           price: '147,00',
-          description: '1 número conectado + CRM Completo + Cérebro IA + Catálogo e PIX.',
+          description: '1 número conectado + CRM Completo + Atendente + Catálogo e PIX.',
           paymentLink: ''
         },
         {

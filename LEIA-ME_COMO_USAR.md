@@ -59,12 +59,12 @@ Ienvia/
    - **Modo Suporte Master em 1 Clique (`Acessar Painel`):** entre no painel de qualquer cliente sem precisar da senha dele, com barra superior âmbar **`Voltar para Minha Conta Master`**.
    - **Isolamento de contas:** o banco usa políticas RLS. A mídia legada no bucket `zapia-media` pode ser acessada por quem possui a URL; a mídia de campanhas usa um bucket privado separado.
 
-2. **Conversas & CRM — Inbox 360º em 3 Colunas + Player e Download Universal de Mídias:**
+2. **Conversas — Inbox 360º em 3 Colunas + Player e Download Universal de Mídias:**
    - **Ouvir Áudios, Ver e Baixar Qualquer Arquivo do Cliente:** escute os áudios enviados pelo cliente direto na bolha (player nativo + botão **Baixar áudio**), abra fotos/comprovantes, assista vídeos MP4 e baixe qualquer documento (`.pdf`, `.xlsx`, `.docx`, `.csv`, `.txt`, `.zip`, `.xml`, etc.) em **1 clique**.
    - **Botão de Anexo Livre (Clipe), Atalhos `/`, Notas Internas, Gravação de Voz `OGG/Opus` ao vivo e Disparo Rápido de Catálogo / PIX.**
 
 3. **Configurar sua Chave Gratuita do Google Gemini (+ Pool e Reserva):**
-   - Gere sua chave gratuita em https://aistudio.google.com/apikey e cole na aba **Configurações > Motor de IA & Chaves** usando o modelo recomendado **`gemini-3.5-flash-lite`** (+ Pool de Chaves Extras e fallback opcional Groq / OpenRouter / OpenAI).
+   - Gere sua chave gratuita em https://aistudio.google.com/apikey e cole na aba **Configurações > Motor de IA & Chaves** usando o modelo recomendado **`gemini-3.5-flash-lite`** (+ Pool de Chaves Extras e fallback opcional com OpenRouter).
 
 ---
 

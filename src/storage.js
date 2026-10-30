@@ -508,16 +508,13 @@ function createDefaultDatabase() {
         soundAlertOnHandoff: true
       },
       ai: {
-        provider: 'gemini',
+        provider: 'openrouter',
+        providerMode: 'auto',
         geminiApiKey: process.env.GEMINI_API_KEY || '',
         geminiKeyPool: '',
         geminiModel: 'gemini-3.5-flash-lite',
-        autoFallbackProvider: 'groq',
+        autoFallbackProvider: 'gemini',
         promptShieldEnabled: true,
-        openaiApiKey: process.env.OPENAI_API_KEY || '',
-        openaiModel: 'gpt-4o-mini',
-        groqApiKey: process.env.GROQ_API_KEY || '',
-        groqModel: 'llama-3.3-70b-versatile',
         openrouterApiKey: process.env.OPENROUTER_API_KEY || '',
         openrouterModel: 'deepseek/deepseek-chat',
         temperature: 0.35,
@@ -622,8 +619,6 @@ export function createCleanDatabaseForNewTenant(displayName = 'Meu Negócio') {
   base.business = createCleanBusinessForNewTenant(displayName);
   base.settings.ai.geminiApiKey = '';
   base.settings.ai.geminiKeyPool = '';
-  base.settings.ai.openaiApiKey = '';
-  base.settings.ai.groqApiKey = '';
   base.settings.ai.openrouterApiKey = '';
   base.settings.humanHandoff.ownerPersonalWhatsapp = '';
   base.customPacks = {};
@@ -1742,8 +1737,6 @@ export class Storage {
       ...incAi,
       geminiApiKey: incAi.geminiApiKey || curAi.geminiApiKey || '',
       geminiKeyPool: incAi.geminiKeyPool || curAi.geminiKeyPool || '',
-      openaiApiKey: incAi.openaiApiKey || curAi.openaiApiKey || '',
-      groqApiKey: incAi.groqApiKey || curAi.groqApiKey || '',
       openrouterApiKey: incAi.openrouterApiKey || curAi.openrouterApiKey || ''
     };
 

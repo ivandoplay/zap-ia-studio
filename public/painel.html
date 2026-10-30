@@ -99,17 +99,17 @@
     <nav class="nav-menu">
       <div class="nav-group-label">Operação</div>
 
-      <button type="button" class="nav-btn active" data-tab="dashboard">
+      <button type="button" class="nav-btn active" data-tab="dashboard" title="Visão geral, status da conexão WhatsApp e disparar abordagens">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>
           <span>Início &amp; Conexão</span>
         </span>
       </button>
 
-      <button type="button" class="nav-btn" data-tab="crm">
+      <button type="button" class="nav-btn" data-tab="crm" title="Conversas do WhatsApp, CRM e caixa de entrada 360º">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-          <span>Conversas &amp; CRM</span>
+          <span>Conversas</span>
         </span>
         <span style="display:inline-flex; gap:4px; align-items:center;">
           <span id="navUnreadBadge" class="badge-count" style="display:none; background:var(--accent); color:#fff;">0</span>
@@ -117,54 +117,56 @@
         </span>
       </button>
 
-      <div class="nav-group-label">Cérebro da IA</div>
+      <button type="button" class="nav-btn" data-tab="campanhas" title="Disparar campanhas de mensagens em lote para múltiplos contatos">
+        <span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l18-7-4 16-5-6-5 3 1-5z"></path></svg><span>Campanhas</span></span>
+      </button>
 
-      <button type="button" class="nav-btn" data-tab="treinamento">
+      <div class="nav-group-label">Atendente</div>
+
+      <button type="button" class="nav-btn" data-tab="treinamento" title="Treinar o atendente: resumo do negócio, regras, FAQ e mensagens aprovadas">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
-          <span>Treinamento &amp; Regras</span>
+          <span>Treinamento</span>
         </span>
       </button>
 
-      <button type="button" class="nav-btn" data-tab="audios">
+      <button type="button" class="nav-btn" data-tab="audios" title="Gravar e organizar notas de voz humanas (áudios OGG/Opus)">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
-          <span>Voz Humana (Áudios)</span>
+          <span>Áudios</span>
         </span>
         <span id="navVoiceBadge" class="badge-count" style="display:none; background:var(--accent-soft); color:var(--accent-bright); border:1px solid var(--accent-border);">0</span>
       </button>
 
-      <button type="button" class="nav-btn" data-tab="catalogo">
+      <button type="button" class="nav-btn" data-tab="catalogo" title="Catálogo de produtos, mídias e chave PIX">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
-          <span>Catálogo, Mídia &amp; PIX</span>
+          <span>Catálogo &amp; PIX</span>
         </span>
       </button>
 
-      <button type="button" class="nav-btn" data-tab="simulador">
+      <button type="button" class="nav-btn" data-tab="simulador" title="Testar respostas da IA antes de ir ao vivo">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2v5Z"></path><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"></path></svg>
-          <span>Simulador de Teste</span>
+          <span>Simulador</span>
         </span>
       </button>
 
-      <div class="nav-group-label">Configurações</div>
+      <div class="nav-group-label">Ajustes</div>
 
-      <button type="button" class="nav-btn" data-tab="ia">
+      <button type="button" class="nav-btn" data-tab="ia" title="Configurar o motor de IA: chaves do Gemini e OpenRouter, modelos e fallback">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2v4"></path><path d="m16.2 7.8 2.9-2.9"></path><path d="M18 12h4"></path><path d="m16.2 16.2 2.9 2.9"></path><path d="M12 18v4"></path><path d="m4.9 19.1 2.9-2.9"></path><path d="M2 12h4"></path><path d="m4.9 4.9 2.9 2.9"></path><circle cx="12" cy="12" r="4"></circle></svg>
-          <span>Motor de IA &amp; Chaves</span>
+          <span>Motor de IA</span>
         </span>
       </button>
 
-      <button type="button" class="nav-btn" data-tab="seguranca">
+      <button type="button" class="nav-btn" data-tab="seguranca" title="Anti-ban, fila segura de abordagem, PIN e proteções">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-          <span>Anti-Ban &amp; Alertas</span>
+          <span>Segurança &amp; Anti-Ban</span>
         </span>
       </button>
-
-      <button type="button" class="nav-btn" data-tab="campanhas"><span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l18-7-4 16-5-6-5 3 1-5z"></path></svg><span>Campanhas</span></span></button>
 
       <div id="navMasterGroupLabel" class="nav-group-label" style="display:none;">Plataforma</div>
 
@@ -247,14 +249,14 @@
 
     <main id="mainContentArea" class="content-area" tabindex="-1">
       <!-- SUB-NAVEGAÇÃO COMPARTILHADA DO HUB "CÉREBRO IA" -->
-      <nav id="hubSubNavCerebro" class="hub-subnav" aria-label="Seções do Cérebro da IA">
+      <nav id="hubSubNavCerebro" class="hub-subnav" aria-label="Seções do Atendente">
         <button type="button" class="hub-subnav-btn" data-subtab="treinamento" onclick="switchTab('treinamento')">
           <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
           <span>Treinamento</span>
         </button>
         <button type="button" class="hub-subnav-btn" data-subtab="audios" onclick="switchTab('audios')">
           <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
-          <span>Voz Humana</span>
+          <span>Áudios</span>
         </button>
         <button type="button" class="hub-subnav-btn" data-subtab="catalogo" onclick="switchTab('catalogo')">
           <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
@@ -266,15 +268,15 @@
         </button>
       </nav>
 
-      <!-- SUB-NAVEGAÇÃO COMPARTILHADA DO HUB "CONFIGURAÇÕES" -->
-      <nav id="hubSubNavConfig" class="hub-subnav" aria-label="Seções de Configurações">
+      <!-- SUB-NAVEGAÇÃO COMPARTILHADA DO HUB "AJUSTES" -->
+      <nav id="hubSubNavConfig" class="hub-subnav" aria-label="Seções de Ajustes">
         <button type="button" class="hub-subnav-btn" data-subtab="ia" onclick="switchTab('ia')">
           <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v4"></path><path d="M12 18v4"></path><path d="M2 12h4"></path><path d="M18 12h4"></path></svg>
-          <span>Motor IA &amp; Chaves</span>
+          <span>Motor de IA</span>
         </button>
         <button type="button" class="hub-subnav-btn" data-subtab="seguranca" onclick="switchTab('seguranca')">
           <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-          <span>Anti-Ban &amp; Segurança</span>
+          <span>Segurança &amp; Anti-Ban</span>
         </button>
         <button type="button" class="hub-subnav-btn" data-subtab="campanhas" onclick="switchTab('campanhas')"><span>Campanhas</span></button>
       </nav>
@@ -918,17 +920,9 @@
               <h4>Google Gemini (Recomendado)</h4>
               <p>Chave grátis no Google AI Studio. Escuta áudios e analisa fotos/comprovantes nativamente.</p>
             </button>
-            <button type="button" class="provider-option" data-provider="groq">
-              <h4>Groq (Ultra Rápido & Grátis)</h4>
-              <p>Respostas em menos de 1s com Llama 3.3 + escuta de áudio via Whisper Turbo. Excelente reserva!</p>
-            </button>
-            <button type="button" class="provider-option" data-provider="openai">
-              <h4>OpenAI (ChatGPT)</h4>
-              <p>GPT-4o / GPT-4o-mini com leitura de imagens e transcrição de áudio via Whisper.</p>
-            </button>
             <button type="button" class="provider-option" data-provider="openrouter">
-              <h4>OpenRouter (Universal)</h4>
-              <p>Conecte DeepSeek, Claude, Qwen, Mistral ou qualquer modelo com uma única chave.</p>
+              <h4>OpenRouter (Texto Universal)</h4>
+              <p>Conecte DeepSeek, Claude, Qwen, Mistral ou qualquer modelo com uma única chave. Plano free.</p>
             </button>
           </div>
 
@@ -959,35 +953,6 @@
             </div>
           </div>
 
-          <!-- Campos OpenAI -->
-          <div id="providerBox-openai" class="provider-config-box" style="display:none;">
-            <div class="grid-equal">
-              <div class="form-group">
-                <label class="form-label" for="openaiApiKey">Chave da API OpenAI (OPENAI_API_KEY)</label>
-                <input type="password" id="openaiApiKey" placeholder="sk-..." autocomplete="off" spellcheck="false" autocapitalize="none" autocorrect="off" />
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="openaiModel">Modelo OpenAI</label>
-                <input type="text" id="openaiModel" value="gpt-4o-mini" placeholder="gpt-4o-mini ou gpt-4o" spellcheck="false" autocapitalize="none" autocorrect="off" />
-              </div>
-            </div>
-          </div>
-
-          <!-- Campos Groq -->
-          <div id="providerBox-groq" class="provider-config-box" style="display:none;">
-            <div class="grid-equal">
-              <div class="form-group">
-                <label class="form-label" for="groqApiKey">Chave da API Groq (GROQ_API_KEY)</label>
-                <input type="password" id="groqApiKey" placeholder="gsk_..." autocomplete="off" spellcheck="false" autocapitalize="none" autocorrect="off" />
-                <div class="form-hint">Obtenha gratuitamente em: <strong>console.groq.com/keys</strong></div>
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="groqModel">Modelo Groq</label>
-                <input type="text" id="groqModel" value="llama-3.3-70b-versatile" spellcheck="false" autocapitalize="none" autocorrect="off" />
-              </div>
-            </div>
-          </div>
-
           <!-- Campos OpenRouter -->
           <div id="providerBox-openrouter" class="provider-config-box" style="display:none;">
             <div class="grid-equal">
@@ -1002,14 +967,21 @@
             </div>
           </div>
 
-          <!-- Provedor Reserva Automático + Parâmetros -->
+          <!-- Modo de Rota + Provedor Reserva Automático -->
           <div class="grid-equal" style="margin-top:10px; padding-top:16px; border-top:1px solid var(--border);">
+            <div class="form-group">
+              <label class="form-label" for="providerMode">Modo de Rota (Áudio/Texto)</label>
+              <select id="providerMode">
+                <option value="auto">Auto (Áudio → Gemini, Texto/Imagem → OpenRouter)</option>
+                <option value="fallback">Fallback (Provedor principal + reserva)</option>
+              </select>
+              <div class="form-hint">Modo Auto separa a escuta de áudio (Gemini) do texto (OpenRouter). Modo Fallback usa o provedor principal e, se falhar, o reserva.</div>
+            </div>
             <div class="form-group">
               <label class="form-label" for="autoFallbackProvider">Provedor Reserva Automático (Auto-Fallback Anti-Queda)</label>
               <select id="autoFallbackProvider">
-                <option value="groq">Groq (Usa sua chave Groq se o provedor principal oscilar)</option>
+                <option value="gemini">Gemini (Usa sua chave Gemini como reserva)</option>
                 <option value="openrouter">OpenRouter (Usa sua chave OpenRouter como reserva)</option>
-                <option value="openai">OpenAI (Usa sua chave OpenAI como reserva)</option>
                 <option value="none">Desativado (Usar apenas o provedor principal)</option>
               </select>
               <div class="form-hint">Basta deixar uma chave cadastrada no provedor reserva escolhido acima para ativar a redundância automática.</div>
@@ -1976,20 +1948,20 @@
 
   <!-- BARRA INFERIOR MOBILE NATIVA (5 HUBS COESOS — ESTILO WHATSAPP / LINEAR MOBILE) -->
   <nav class="mobile-bottom-nav" aria-label="Navegação principal mobile">
+    <button type="button" class="mob-nav-btn active" data-mobhub="dashboard" data-mobtab="dashboard">
+      <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>
+      <span>Início</span>
+    </button>
+
     <button type="button" class="mob-nav-btn" data-mobhub="crm" data-mobtab="crm">
       <svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
       <span>Conversas</span>
       <span id="mobCrmBadge" class="mob-badge" style="display:none;">0</span>
     </button>
 
-    <button type="button" class="mob-nav-btn active" data-mobhub="dashboard" data-mobtab="dashboard">
-      <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>
-      <span>Início</span>
-    </button>
-
     <button type="button" class="mob-nav-btn" data-mobhub="cerebro" data-mobtab="treinamento">
       <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
-      <span>Cérebro IA</span>
+      <span>Atendente</span>
     </button>
 
     <button type="button" class="mob-nav-btn" data-mobhub="config" data-mobtab="ia">

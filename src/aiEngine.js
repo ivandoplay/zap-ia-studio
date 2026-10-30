@@ -594,33 +594,7 @@ export async function transcribeVoiceBufferWithAi(audioBuffer, mimeType = 'audio
     return String(out.text || '').trim();
   }
 
-  const groqKey = (aiSettings.groqApiKey || process.env.GROQ_API_KEY || '').trim();
-  if (groqKey) {
-    return (
-      await transcribeAudioOpenAICompatible({
-        endpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
-        apiKey: groqKey,
-        model: 'whisper-large-v3-turbo',
-        audioBuffer,
-        mimeType
-      })
-    ).trim();
-  }
-
-  const openaiKey = (aiSettings.openaiApiKey || process.env.OPENAI_API_KEY || '').trim();
-  if (openaiKey) {
-    return (
-      await transcribeAudioOpenAICompatible({
-        endpoint: 'https://api.openai.com/v1/audio/transcriptions',
-        apiKey: openaiKey,
-        model: 'whisper-1',
-        audioBuffer,
-        mimeType
-      })
-    ).trim();
-  }
-
-  throw new Error('Configure sua chave gratuita do Google Gemini (ou Groq/OpenAI) na aba Motor de IA para transcrever automaticamente.');
+  throw new Error('Configure sua chave gratuita do Google Gemini na aba Motor de IA para transcrever automaticamente.');
 }
 
 async function transcribeAudioOpenAICompatible({ endpoint, apiKey, model, audioBuffer, mimeType = 'audio/ogg' }) {
@@ -758,31 +732,8 @@ async function callOpenAICompatible({ providerName, baseUrl, apiKey, model, syst
   let effectiveUserText = userText || '';
 
   if (media && media.buffer && media.mimeType?.startsWith('audio/')) {
-    if (providerName === 'openai') {
-      const transcript = await transcribeAudioOpenAICompatible({
-        endpoint: 'https://api.openai.com/v1/audio/transcriptions',
-        apiKey,
-        model: 'whisper-1',
-        audioBuffer: media.buffer,
-        mimeType: media.mimeType
-      });
-      effectiveUserText = transcript.trim()
-        ? `[Conteúdo falado no áudio do contato]: "${transcript}"\n${effectiveUserText}`.trim()
-        : '[[Áudio sem fala compreensível — aplique PAUSA_SILENCIOSA]]';
-    } else if (providerName === 'groq') {
-      const transcript = await transcribeAudioOpenAICompatible({
-        endpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
-        apiKey,
-        model: 'whisper-large-v3-turbo',
-        audioBuffer: media.buffer,
-        mimeType: media.mimeType
-      });
-      effectiveUserText = transcript.trim()
-        ? `[Conteúdo falado no áudio do contato]: "${transcript}"\n${effectiveUserText}`.trim()
-        : '[[Áudio sem fala compreensível — aplique PAUSA_SILENCIOSA]]';
-    } else {
-      return '[[PAUSA_SILENCIOSA:Provedor atual sem transcrição nativa de áudio — aguardando revisão humana]]';
-    }
+    // OpenRouter não possui transcrição nativa de áudio.
+    return '[[PAUSA_SILENCIOSA:Provedor atual sem transcrição nativa de áudio — aguardando revisão humana]]';
   }
 
   const messages = [{ role: 'system', content: systemPrompt }];
@@ -794,7 +745,7 @@ async function callOpenAICompatible({ providerName, baseUrl, apiKey, model, syst
     });
   }
 
-  if (media && media.buffer && media.mimeType?.startsWith('image/') && providerName !== 'groq') {
+  if (media && media.buffer && media.mimeType?.startsWith('image/')) {
     const cleanMime = media.mimeType.split(';')[0].trim();
     const b64 = Buffer.from(media.buffer).toString('base64');
     messages.push({
@@ -812,8 +763,6 @@ async function callOpenAICompatible({ providerName, baseUrl, apiKey, model, syst
         }
       ]
     });
-  } else if (media && media.buffer && media.mimeType?.startsWith('image/') && providerName === 'groq') {
-    return '[[PAUSA_SILENCIOSA:Imagem recebida — aguardando revisão humana]]';
   } else {
     messages.push({
       role: 'user',
@@ -943,22 +892,6 @@ export function getProviderCredentialsByName(providerName, aiSettings = {}) {
       model: aiSettings.geminiModel || 'gemini-3.5-flash-lite'
     };
   }
-  if (providerName === 'openai') {
-    return {
-      provider: 'openai',
-      apiKey: (aiSettings.openaiApiKey || process.env.OPENAI_API_KEY || '').trim(),
-      model: aiSettings.openaiModel || 'gpt-4o-mini',
-      baseUrl: 'https://api.openai.com/v1'
-    };
-  }
-  if (providerName === 'groq') {
-    return {
-      provider: 'groq',
-      apiKey: (aiSettings.groqApiKey || process.env.GROQ_API_KEY || '').trim(),
-      model: aiSettings.groqModel || 'llama-3.3-70b-versatile',
-      baseUrl: 'https://api.groq.com/openai/v1'
-    };
-  }
   if (providerName === 'openrouter') {
     return {
       provider: 'openrouter',
@@ -1019,7 +952,7 @@ async function runProviderCall(creds, { systemPrompt, history, userText, media, 
 function credenciaisDaCampanha(ai={}) {
   if(!ai || typeof ai!=='object' || Array.isArray(ai))return null;
   const provider=ai.provider || 'gemini';
-  const campo={gemini:'geminiApiKey',openai:'openaiApiKey',groq:'groqApiKey',openrouter:'openrouterApiKey'}[provider];
+  const campo={gemini:'geminiApiKey',openrouter:'openrouterApiKey'}[provider];
   if(!campo)return null;
   let chave=typeof ai[campo]==='string'?ai[campo].trim():'';
   if(provider==='gemini'&&!chave&&typeof ai.geminiKeyPool==='string')chave=ai.geminiKeyPool.split(/[\r\n,;]+/).map(x=>x.trim()).find(x=>x.length>=16)||'';
@@ -1152,7 +1085,16 @@ export async function generateSmartReply({
     : null;
 
   const systemPrompt = buildSystemPrompt(profile, settings, contactName, turnContext);
-  const creds = getActiveProviderCredentials(settings.ai);
+  const isAudio = Boolean(media?.mimeType?.startsWith('audio/'));
+  const isImage = Boolean(media?.mimeType?.startsWith('image/'));
+  const providerMode = settings.ai?.providerMode || 'fallback';
+  let creds;
+  if (providerMode === 'auto') {
+    // Modo Auto: áudio → Gemini, texto/imagem → OpenRouter.
+    creds = getProviderCredentialsByName(isAudio ? 'gemini' : 'openrouter', settings.ai);
+  } else {
+    creds = getActiveProviderCredentials(settings.ai);
+  }
 
   if (!creds.apiKey) {
     if (allowDemoFallback) {
@@ -1196,7 +1138,13 @@ export async function generateSmartReply({
       })
     );
   } catch (primaryErr) {
-    const fallbackName = settings.ai?.autoFallbackProvider || 'none';
+    let fallbackName;
+    if (providerMode === 'auto') {
+      // Modo Auto: reserva é o outro provedor (áudio→Gemini falha → OpenRouter; texto→OpenRouter falha → Gemini).
+      fallbackName = creds.provider === 'gemini' ? 'openrouter' : 'gemini';
+    } else {
+      fallbackName = settings.ai?.autoFallbackProvider || 'none';
+    }
     if (fallbackName !== 'none' && fallbackName !== creds.provider) {
       const backupCreds = getProviderCredentialsByName(fallbackName, settings.ai);
       if (backupCreds.apiKey) {

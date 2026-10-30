@@ -1179,8 +1179,6 @@ export async function listManagedUsers() {
     const hasAiKey = Boolean(
       String(ai.geminiApiKey || '').trim() ||
       String(ai.geminiKeyPool || '').trim() ||
-      String(ai.groqApiKey || '').trim() ||
-      String(ai.openaiApiKey || '').trim() ||
       String(ai.openrouterApiKey || '').trim()
     );
 

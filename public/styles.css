@@ -4355,3 +4355,297 @@ label:has(input[type="checkbox"]) {
 
 
 
+
+/* ==========================================================================
+   ABA INÍCIO — POLISH VISUAL (2026)
+   Baseado em: better-ui, better-layout, better-colors, better-typography,
+   frontend-design, modern-web-design skills
+   ========================================================================== */
+
+/* ---- Hero Header ---- */
+#tab-dashboard .page-header {
+  padding: 24px 24px 20px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-card-subtle) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+}
+#tab-dashboard .page-header h1 {
+  font-size: clamp(1.4rem, 1.1rem + 1.2vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin: 0 0 6px;
+  color: var(--text-main);
+}
+#tab-dashboard .page-header p {
+  font-size: clamp(0.8rem, 0.7rem + 0.3vw, 0.95rem);
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+#tab-dashboard .page-header > div:last-child {
+  gap: 10px;
+}
+
+/* ---- Metrics Strip ---- */
+#tab-dashboard .metrics-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+#tab-dashboard .metric-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  transition: transform 150ms var(--ease-out), border-color 150ms var(--ease-out), box-shadow 150ms var(--ease-out);
+}
+#tab-dashboard .metric-box:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+#tab-dashboard .metric-box.attention {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+#tab-dashboard .metric-box .metric-head {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+#tab-dashboard .metric-box .metric-val {
+  font-size: clamp(1.4rem, 1.2rem + 0.8vw, 2rem);
+  font-weight: 700;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+#tab-dashboard .metric-box.attention .metric-val {
+  color: var(--accent-bright);
+}
+
+/* ---- Readiness Strip ---- */
+#tab-dashboard .readiness-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+/* ---- Funnel Bar ---- */
+#tab-dashboard .funnel-bar {
+  margin-bottom: 20px;
+}
+
+/* ---- Panel Surfaces ---- */
+#tab-dashboard .panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  margin-bottom: 16px;
+  transition: border-color 200ms var(--ease-out);
+}
+#tab-dashboard .panel:hover {
+  border-color: var(--border-strong);
+}
+#tab-dashboard .panel-header {
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid var(--border);
+}
+#tab-dashboard .panel-title {
+  font-size: clamp(1rem, 0.9rem + 0.3vw, 1.15rem);
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+#tab-dashboard .panel-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 4px 0 0;
+  line-height: 1.5;
+}
+
+/* ---- Slot Tabs (Chips) ---- */
+#tab-dashboard .wa-slots-tabbar {
+  display: flex;
+  gap: 10px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+#tab-dashboard .wa-slot-tab {
+  flex: 1;
+  min-width: 120px;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color 150ms var(--ease-out), background 150ms var(--ease-out), transform 150ms var(--ease-out);
+  text-align: left;
+}
+#tab-dashboard .wa-slot-tab:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+#tab-dashboard .wa-slot-tab.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+#tab-dashboard .wa-slot-tab.locked {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+#tab-dashboard .wa-slot-tab-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+#tab-dashboard .wa-slot-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+#tab-dashboard .wa-slot-dot.connected { background: var(--accent-bright); }
+#tab-dashboard .wa-slot-dot.qr_ready { background: var(--warning-bright); }
+#tab-dashboard .wa-slot-dot.connecting { background: var(--info); animation: pulse 1.5s infinite; }
+#tab-dashboard .wa-slot-tab-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#tab-dashboard .wa-slot-tab-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Config Strip ---- */
+#tab-dashboard .wa-slot-config-strip {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#tab-dashboard .wa-slot-nick-wrap {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+#tab-dashboard #waSlotLabelInput {
+  flex: 1;
+  min-width: 160px;
+}
+
+/* ---- Mode Toggle ---- */
+#tab-dashboard .mode-toggle {
+  transition: background 150ms var(--ease-out), border-color 150ms var(--ease-out), color 150ms var(--ease-out), transform 150ms var(--ease-out);
+}
+#tab-dashboard .mode-toggle:active {
+  transform: scale(0.96);
+}
+
+/* ---- QR Stage ---- */
+#tab-dashboard .qr-stage {
+  padding: 20px;
+  min-height: 120px;
+}
+#tab-dashboard .qr-image {
+  max-width: 280px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+#tab-dashboard .pairing-code-display {
+  font-size: clamp(1.6rem, 1.3rem + 1vw, 2.2rem);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--accent-bright);
+  text-align: center;
+  padding: 16px;
+  background: var(--bg-input);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-lg);
+  margin: 12px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Device Box ---- */
+#tab-dashboard .wa-devices-box {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+}
+#tab-dashboard .wa-device-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+/* ---- Motor Status Banner ---- */
+#tab-dashboard .motor-status-banner {
+  padding: 12px 20px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* ---- Proactive Panel ---- */
+#tab-dashboard [style*="border-left:3px solid var(--accent)"] {
+  border-left: 3px solid var(--accent) !important;
+}
+
+/* ---- Animations ---- */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 768px) {
+  #tab-dashboard .page-header {
+    padding: 18px 16px 16px;
+  }
+  #tab-dashboard .metrics-strip {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  #tab-dashboard .metric-box {
+    padding: 12px 14px;
+  }
+  #tab-dashboard .panel-header {
+    padding: 16px 16px 12px;
+  }
+  #tab-dashboard .wa-slots-tabbar {
+    padding: 12px 16px;
+    gap: 8px;
+  }
+  #tab-dashboard .wa-slot-tab {
+    min-width: 100px;
+  }
+}
+
+/* ---- Reduced Motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  #tab-dashboard .metric-box,
+  #tab-dashboard .panel,
+  #tab-dashboard .wa-slot-tab,
+  #tab-dashboard .mode-toggle {
+    transition: none !important;
+    animation: none !important;
+  }
+}

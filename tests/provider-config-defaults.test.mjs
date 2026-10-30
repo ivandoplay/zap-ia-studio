@@ -1,78 +1,167 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getProviderCredentialsByName, generateSmartReply } from '../src/aiEngine.js';
-import { storage } from '../src/storage.js';
+import { getProviderCredentialsByName, generateSmartReply, transcribeVoiceBufferWithAi } from '../src/aiEngine.js';
 
-test('Groq usa o modelo padrão atual e não o ID antigo que retornava model_not_found', () => {
-  const creds = getProviderCredentialsByName('groq', { groqApiKey: 'gsk-test-key' });
-  assert.equal(creds.model, 'openai/gpt-oss-20b');
-  assert.equal(creds.apiKey, 'gsk-test-key');
+// Chaves de teste com ≥16 chars (parseGeminiKeyPool filtra chaves curtas)
+const GEMINI_KEY = 'AIzaSyD-test-key-0123456789ab';
+const GEMINI_KEY2 = 'AIzaSyD-test-key-bcdef0123456';
+const OPENROUTER_KEY = 'sk-or-test-key-abcdefghijklmnop';
+
+test('Gemini usa o modelo padrão gemini-3.5-flash-lite quando não definido', () => {
+  const creds = getProviderCredentialsByName('gemini', {});
+  assert.equal(creds.provider, 'gemini');
+  assert.equal(creds.model, 'gemini-3.5-flash-lite');
+  assert.deepEqual(creds.apiKeys, []);
 });
 
-test('migra o ID antigo llama-3.3-70b-versatile para o modelo padrão atualizado', () => {
-  const creds = getProviderCredentialsByName('groq', {
-    groqApiKey: 'gsk-test-key',
-    groqModel: 'llama-3.3-70b-versatile'
+test('Gemini aceita modelo personalizado e chave configurada', () => {
+  const creds = getProviderCredentialsByName('gemini', { geminiModel: 'gemini-2.5-pro', geminiApiKey: GEMINI_KEY });
+  assert.equal(creds.provider, 'gemini');
+  assert.equal(creds.model, 'gemini-2.5-pro');
+  assert.equal(creds.apiKey, GEMINI_KEY);
+});
+
+test('Gemini parsea pool de chaves (GEMINI_KEY_POOL)', () => {
+  const creds = getProviderCredentialsByName('gemini', {
+    geminiKeyPool: `${GEMINI_KEY}\n${GEMINI_KEY2}`,
+    geminiApiKey: GEMINI_KEY
   });
-  assert.equal(creds.model, 'openai/gpt-oss-20b');
+  assert.equal(creds.apiKeys.length, 2);
+  assert.equal(creds.apiKey, GEMINI_KEY);
 });
 
-test('OpenRouter usa o roteador gratuito como padrão quando o modelo não foi definido', () => {
-  const creds = getProviderCredentialsByName('openrouter', { openrouterApiKey: 'sk-or-test-key' });
-  assert.equal(creds.model, 'openrouter/free');
-});
-
-test('OpenRouter pode usar chave Groq separada para transcrever áudio recebido', () => {
-  const creds = getProviderCredentialsByName('openrouter', {
-    openrouterApiKey: 'sk-or-test-key',
-    audioTranscriptionApiKey: 'gsk-transcription-test'
-  });
+test('OpenRouter usa deepseek/deepseek-chat como padrão quando o modelo não foi definido', () => {
+  const creds = getProviderCredentialsByName('openrouter', { openrouterApiKey: OPENROUTER_KEY });
   assert.equal(creds.provider, 'openrouter');
-  assert.equal(creds.audioTranscriptionApiKey, 'gsk-transcription-test');
-  assert.equal(creds.apiKey, 'sk-or-test-key');
+  assert.equal(creds.model, 'deepseek/deepseek-chat');
+  assert.equal(creds.apiKey, OPENROUTER_KEY);
+  assert.equal(creds.baseUrl, 'https://openrouter.ai/api/v1');
 });
 
-test('Groq também reutiliza sua chave de provedor para Whisper quando não há chave STT separada', () => {
-  const creds = getProviderCredentialsByName('groq', { groqApiKey: 'gsk-test-key' });
-  assert.equal(creds.audioTranscriptionApiKey, 'gsk-test-key');
+test('OpenRouter aceita modelo personalizado', () => {
+  const creds = getProviderCredentialsByName('openrouter', {
+    openrouterApiKey: OPENROUTER_KEY,
+    openrouterModel: 'anthropic/claude-sonnet-4.5'
+  });
+  assert.equal(creds.model, 'anthropic/claude-sonnet-4.5');
 });
 
-test('áudio transcrito uma vez é reutilizado no fallback sem novo upload ao Whisper', async () => {
+test('provedor desconhecido retorna fallback para Gemini', () => {
+  const creds = getProviderCredentialsByName('groq', { groqApiKey: 'gsk-test' });
+  assert.equal(creds.provider, 'gemini');
+  assert.equal(creds.apiKey, '');
+});
+
+test('providerMode auto: áudio vai para Gemini, texto vai para OpenRouter', async () => {
   const originalFetch = globalThis.fetch;
-  let transcriptionCalls = 0;
-  let chatCalls = 0;
+  const calls = [];
   globalThis.fetch = async (url) => {
     const target = String(url);
-    if (target.includes('/audio/transcriptions')) {
-      transcriptionCalls++;
-      return new Response(JSON.stringify({ text: 'quero saber o preço' }), { status: 200 });
+    calls.push(target);
+    if (target.includes('generativelanguage')) {
+      return new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: 'transcrito' }] } }]
+      }), { status: 200 });
     }
     if (target.includes('openrouter.ai')) {
-      chatCalls++;
-      return new Response(JSON.stringify({ error: { message: 'falha sintética' } }), { status: 503 });
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: 'resposta do openrouter' } }]
+      }), { status: 200 });
     }
-    if (target.includes('api.groq.com/openai/v1/chat/completions')) {
-      chatCalls++;
-      return new Response(JSON.stringify({ choices: [{ message: { content: 'O valor depende do plano.' } }] }), { status: 200 });
+    return new Response('{}', { status: 200 });
+  };
+  try {
+    // Texto → OpenRouter
+    const textReply = await generateSmartReply({
+      profile: { summary: 'teste', services: [] },
+      settings: { ai: {
+        provider: 'gemini', providerMode: 'auto',
+        geminiApiKey: GEMINI_KEY, openrouterApiKey: OPENROUTER_KEY
+      } },
+      history: [], userText: 'ola', media: null,
+      contactName: 'Teste', allowDemoFallback: false
+    });
+    assert.equal(textReply.providerUsed, 'openrouter');
+    assert.equal(textReply.usedFallback, false);
+
+    // Áudio → Gemini
+    const audioReply = await generateSmartReply({
+      profile: { summary: 'teste', services: [] },
+      settings: { ai: {
+        provider: 'openrouter', providerMode: 'auto',
+        geminiApiKey: GEMINI_KEY, openrouterApiKey: OPENROUTER_KEY
+      } },
+      history: [], userText: '',
+      media: { buffer: Buffer.from('audio'), mimeType: 'audio/ogg' },
+      contactName: 'Teste', allowDemoFallback: false
+    });
+    assert.equal(audioReply.providerUsed, 'gemini');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('providerMode fallback: reserva é acionada quando o provedor principal falha', async () => {
+  const originalFetch = globalThis.fetch;
+  let primaryCalls = 0;
+  let fallbackCalls = 0;
+  globalThis.fetch = async (url) => {
+    const target = String(url);
+    if (target.includes('openrouter.ai')) {
+      primaryCalls++;
+      return new Response(JSON.stringify({ error: { message: 'falha' } }), { status: 503 });
     }
-    throw new Error(`URL inesperada no teste: ${target}`);
+    if (target.includes('generativelanguage')) {
+      fallbackCalls++;
+      return new Response(JSON.stringify({
+        candidates: [{ content: { parts: [{ text: 'resposta do gemini' }] } }]
+      }), { status: 200 });
+    }
+    return new Response('{}', { status: 200 });
   };
   try {
     const reply = await generateSmartReply({
-      profile: storage.getBusiness(),
+      profile: { summary: 'teste', services: [] },
       settings: { ai: {
-        provider: 'openrouter', openrouterApiKey: 'sk-or-test', openrouterModel: 'openrouter/free',
-        groqApiKey: 'gsk-test', groqModel: 'openai/gpt-oss-20b',
-        autoFallbackProvider: 'groq'
+        provider: 'openrouter', providerMode: 'fallback',
+        autoFallbackProvider: 'gemini',
+        openrouterApiKey: OPENROUTER_KEY,
+        geminiApiKey: GEMINI_KEY
       } },
-      history: [], userText: '', media: { buffer: Buffer.from('synthetic-audio'), mimeType: 'audio/ogg' },
+      history: [], userText: 'ola', media: null,
       contactName: 'Teste', allowDemoFallback: false
     });
-    assert.equal(transcriptionCalls, 1);
-    assert.equal(chatCalls, 2);
-    assert.equal(reply.providerUsed, 'groq');
+    assert.equal(primaryCalls, 1);
+    assert.equal(fallbackCalls, 1);
+    assert.equal(reply.providerUsed, 'gemini');
     assert.equal(reply.usedFallback, true);
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('transcrição de áudio usa Gemini quando a chave está configurada', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    return new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: 'o texto do audio' }] } }]
+    }), { status: 200 });
+  };
+  try {
+    const text = await transcribeVoiceBufferWithAi(
+      Buffer.from('audio'),
+      'audio/ogg',
+      { geminiApiKey: GEMINI_KEY }
+    );
+    assert.equal(text, 'o texto do audio');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('transcrição de áudio falha sem chave de Gemini', async () => {
+  await assert.rejects(
+    transcribeVoiceBufferWithAi(Buffer.from('audio'), 'audio/ogg', {}),
+    /Configure sua chave gratuita do Google Gemini/
+  );
 });

@@ -52,6 +52,15 @@ Ou no painel Vercel: Deployments → *Deploy*.
 
 (O script configura a webhookUrl em todas as instâncias conectadas.)
 
+> **ANTI-LOOP:** se você tem 2 instâncias (ex.: número pessoal + número business) e só quer que o **business** responda, remova o webhook da instância cliente:
+> ```bash
+> # Reconectar a instância cliente com webhookUrl vazio
+> curl -X POST https://pool-evolution-go-025.cloud2.pageup.dev.br/instance/connect \
+>   -H "apikey: <token_da_instância_cliente>" -H "Content-Type: application/json" \
+>   -d '{"instance":"<nome_instância_cliente>","webhookUrl":"","events":""}'
+> ```
+> Se ambas tiverem webhook, elas respondem uma à outra → loop infinito.
+
 ## Passo 4: Testar
 
 1. No WhatsApp, mande uma mensagem para qualquer número da instância

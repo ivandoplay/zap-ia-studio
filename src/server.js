@@ -164,6 +164,9 @@ app.use(
   },
   express.static(UPLOADS_DIR)
 );
+// Healthcheck para monitoramento (Docker / Oracle Cloud)
+app.get('/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
+
 app.get(['/venda', '/venda.html'], (req, res) => res.redirect(302, `${IS_VERCEL ? '/' : '/vitrine'}${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`));
 app.get(['/painel', '/app'], (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache');

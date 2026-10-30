@@ -1,0 +1,34 @@
+# Ienvia Motor — Docker Compose para Oracle Cloud Always Free
+# Uso: docker compose up -d
+# O motor roda em modo local (IS_VERCEL=false) com Supabase para sincronização de dados
+
+services:
+  motor:
+    build: .
+    container_name: ienvia-motor
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Modo local (não Vercel) — roda servidor Node completo com WebSocket + Baileys
+      - VERCEL=""
+      # Porta do motor
+      - PORT=3000
+      # Supabase (dados dos clientes, CRM, auth — continua centralizado)
+      - SUPABASE_URL=${SUPABASE_URL:-https://iuysmojhaxplnhfrxqkv.supabase.co}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+      # IA (Gemini para áudio/transcrição + OpenRouter para texto)
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      # Origin confiável (personalizar com domínio do cliente)
+      - TRUSTED_ORIGINS=${TRUSTED_ORIGINS:-}
+    volumes:
+      # Dados persistentes: banco, uploads, autenticação WhatsApp, packs de treinamento
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

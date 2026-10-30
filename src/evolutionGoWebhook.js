@@ -286,6 +286,9 @@ evolutionGoWebhookRouter.get('/diag2', async (req, res) => {
     await new Promise((r) => setTimeout(r, 2000));
     const sel2 = await admin.from('zapia_contacts').select('chat_id').eq('chat_id', cid);
     d.after2s = { rows: (sel2.data || []).length };
+    // Busca todos os chat_ids com 558681 (sem limite)
+    const { data: allTest } = await admin.from('zapia_contacts').select('chat_id,user_id').ilike('chat_id', '%558681%');
+    d.allTest = (allTest || []).map((r) => ({ chat_id: r.chat_id, user_id: r.user_id }));
   } catch (err) { d.error = err.message; }
   res.json(d);
 });

@@ -5956,6 +5956,16 @@ function bindEvents() {
     }
     if (res.waState) state.waState = res.waState;
     renderWaState();
+
+    // O QR/código de pareamento é gerado assincronamente pelo motor (evento connection.update).
+    // O endpoint retorna imediatamente com status "connecting" — poll após 3s para captar o QR pronto.
+    if (!res?.deferredChoice) {
+      clearTimeout(state._waConnectRefreshTimer);
+      state._waConnectRefreshTimer = setTimeout(() => {
+        state._waConnectRefreshTimer = null;
+        refreshLiveStateOnly().catch(() => {});
+      }, 3000);
+    }
     return res;
   }
 
@@ -8774,3 +8784,13 @@ setInterval(() => {
     renderProactiveQueueStatus();
   }
 }, 2000);
+
+// Poll periódico leve do estado do WhatsApp: só atua quando algum slot está "connecting"
+// (aguardando QR/código assincrono do motor). Captura o QR pronto sem depender do WebSocket.
+setInterval(() => {
+  const slots = state.waState?.slots || {};
+  const hasConnecting = Object.values(slots).some(s => s?.status === 'connecting');
+  if (hasConnecting && !liveRefreshInFlight) {
+    refreshLiveStateOnly().catch(() => {});
+  }
+}, 5000);

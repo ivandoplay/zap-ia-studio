@@ -267,23 +267,3 @@ evolutionGoWebhookRouter.post('/send', async (req, res) => {
   const { instance, number, text } = req.body;
   res.json(await sendMessage(instance, number, text));
 });
-
-// DIAGNÓSTICO temporário (setup): testa o write no Supabase
-evolutionGoWebhookRouter.get('/diag', async (req, res) => {
-  const diag = { hasSupabase: HAS_SUPABASE, supabaseUrl: process.env.SUPABASE_URL, serviceKey: process.env.SUPABASE_SERVICE_ROLE_KEY ? 'SET' : 'EMPTY', instanceUsers: process.env.EVOLUTION_INSTANCE_USERS };
-  try {
-    const admin = getAdminClient();
-    const userId = resolveUserId('ienvia-teste-06a36777');
-    diag.userId = userId;
-    const upsert = await admin.from('zapia_contacts').upsert({
-      user_id: userId, chat_id: 'diag-chat', data: { name: 'diag', messages: [{ role: 'assistant', text: 'teste' }], stage: 'ativo' },
-      last_message_at: new Date().toISOString(), updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id,chat_id' });
-    diag.upsert = { error: upsert.error?.message || null, count: upsert.count };
-    const sel = await admin.from('zapia_contacts').select('user_id,chat_id').eq('user_id', userId);
-    diag.rows = (sel.data || []).length;
-  } catch (err) {
-    diag.error = err.message;
-  }
-  res.json(diag);
-});

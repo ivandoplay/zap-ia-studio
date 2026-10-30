@@ -18,16 +18,19 @@ https://zap-ia-studio.vercel.app/api/evolution-webhook/webhook
 
 ## Passo 1: Configurar variáveis de ambiente no Vercel
 
-Painel Vercel → Projeto → Settings → Environment Variables:
+Painel Vercel → Projeto → Settings → Environment Variables (ou via API `POST /v9/projects/{id}/env?upsert=true` com array de objetos `[{"key","value","type":"plain","target":["production"]}]`):
 
 ```
 EVOLUTION_GO_URL=https://pool-evolution-go-025.cloud2.pageup.dev.br
 EVOLUTION_GO_API_KEY=de641771b68731fb4340696241bd2cd6
-EVOLUTION_INSTANCE_USERS={"ienvia-teste-06a36777":"<user_id>","ienvia-teste-9ef7cfdd":"<user_id>"}
+EVOLUTION_INSTANCE_USERS={"ienvia-teste-06a36777":"28f17e53-1ab8-4ec7-8556-666df0d4add6","ienvia-teste-9ef7cfdd":"28f17e53-1ab8-4ec7-8556-666df0d4add6"}
+EVOLUTION_DEFAULT_USER_ID=28f17e53-1ab8-4ec7-8556-666df0d4add6
 ```
 
 > **Obs:** o `EVOLUTION_INSTANCE_USERS` é um JSON mapeando o **nome da instância** do Evolution Go ao **user_id do Supabase** (do usuário/empresa). Use `EVOLUTION_DEFAULT_USER_ID` para um único usuário.
-> `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` já devem estar configurados (o motor usa).
+> `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` já estão configurados no projeto (o motor usa).
+>
+> **Importante:** após mudar env vars no Vercel, faça um **redeploy** (novo push no Git ou "Redeploy" no painel) — o serverless só lê as env vars atualizadas no deployment novo. Verifique com `GET /api/evolution-webhook/status` (mostra `instances` populado).
 
 ## Passo 2: Deploy
 
@@ -38,6 +41,8 @@ vercel deploy --prod
 ```
 
 Ou no painel Vercel: Deployments → *Deploy*.
+
+> **Dica:** commits cujo autor não é uma conta Git reconhecida (ex.: e-mail de estudante) ficam **BLOCKED** no Vercel. Faça commits com o autor GitHub (`git config user.name`/`user.email`) — caso contrário, faça rebase para corrigir o autor e force-push.
 
 ## Passo 3: Configurar a webhook URL no Evolution Go
 

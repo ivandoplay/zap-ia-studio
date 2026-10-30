@@ -1,5 +1,10 @@
 # Ienvia Motor — Integração do Evolution Go
 
+> **STATUS ATUAL (30/10/2026): CONCLUÍDO e funcionando no Vercel.**
+> Webhook em produção: `https://zap-ia-studio.vercel.app/api/evolution-webhook/webhook`
+> Testado: texto, áudio (voz), os dois formatos de payload, IA respondendo (OpenRouter/Gemini), histórico gravando no Supabase (zapia_contacts).
+> Remaining: teste E2E real do WhatsApp + chaves de IA por cliente no painel.
+
 Guia para integrar o **Evolution Go** ao **Ienvia Motor atual** (que já tem IA integrada e funciona para atendimento).
 
 ## O que já funciona no Ienvia Motor (atual)

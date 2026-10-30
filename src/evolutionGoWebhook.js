@@ -215,9 +215,12 @@ evolutionGoWebhookRouter.post('/webhook', async (req, res) => {
   }
 
   try {
-    // Carregar tenant (business + settings) e histórico
-    const tenant = await loadTenant(instanceName);
-    const history = await loadHistory(tenant.userId, chatId);
+    // Carregar tenant (business + settings) e histórico — paralelo para reduzir latency
+    const userId = resolveUserId(instanceName);
+    const [tenant, history] = await Promise.all([
+      loadTenant(instanceName),
+      loadHistory(userId, chatId),
+    ]);
     const userTurn = { role: 'user', text: userText || (media ? '[áudio/imagem]' : ''), ts: Date.now() };
     const nextHistory = [...history, userTurn];
 
@@ -241,18 +244,11 @@ evolutionGoWebhookRouter.post('/webhook', async (req, res) => {
     nextHistory.push({ role: 'assistant', text: reply.cleanText, ts: Date.now() });
     if (nextHistory.length > 40) nextHistory.splice(0, nextHistory.length - 40);
     const saveResult = await saveHistory(tenant.userId, chatId, nextHistory, phoneNumber);
-    // Consulta de volta do row salvo (diag)
-    let savedRow = null;
-    try {
-      const admin = getAdminClient();
-      const { data } = await admin.from('zapia_contacts').select('chat_id,user_id').eq('user_id', tenant.userId).eq('chat_id', chatId);
-      savedRow = (data || []).length;
-    } catch (e) { savedRow = 'err:' + e.message; }
 
     console.log(
       `[EvolutionWebhook] ${instanceName} → ${phoneNumber}: "${userText || '[mídia]'}" → "${String(reply.cleanText).slice(0, 60)}"`
     );
-    return res.status(200).json({ ok: true, reply: reply.cleanText, provider: reply.providerUsed, userId: tenant.userId, chatId, save: saveResult, savedRow });
+    return res.status(200).json({ ok: true, reply: reply.cleanText, provider: reply.providerUsed });
   } catch (err) {
     console.error('[EvolutionWebhook] Erro:', err.message);
     return res.status(200).json({ ok: false, error: err.message });
@@ -274,30 +270,6 @@ evolutionGoWebhookRouter.get('/status', (req, res) => {
 evolutionGoWebhookRouter.post('/send', async (req, res) => {
   const { instance, number, text } = req.body;
   res.json(await sendMessage(instance, number, text));
-});
-
-// DIAGNÓSTICO: upsert + consulta imediata (temporário)
-evolutionGoWebhookRouter.get('/diag2', async (req, res) => {
-  const d = {};
-  try {
-    const admin = getAdminClient();
-    const userId = resolveUserId('ienvia-teste-06a36777') || process.env.EVOLUTION_DEFAULT_USER_ID;
-    const cid = 'diag-' + Date.now();
-    const up = await admin.from('zapia_contacts').upsert({
-      user_id: userId, chat_id: cid, data: { name: 'diag', messages: [{ role: 'assistant', text: 't' }] },
-      last_message_at: new Date().toISOString(), updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id,chat_id' });
-    d.upsert = { error: up.error?.message || null, count: up.count, status: up.status, statusText: up.statusText };
-    const sel = await admin.from('zapia_contacts').select('user_id,chat_id,data').eq('chat_id', cid);
-    d.afterUpsert = { rows: (sel.data || []).length, data: sel.data?.[0]?.data?.messages?.length };
-    await new Promise((r) => setTimeout(r, 2000));
-    const sel2 = await admin.from('zapia_contacts').select('chat_id').eq('chat_id', cid);
-    d.after2s = { rows: (sel2.data || []).length };
-    // Busca todos os chat_ids com 558681 (sem limite)
-    const { data: allTest } = await admin.from('zapia_contacts').select('chat_id,user_id').ilike('chat_id', '%558681%');
-    d.allTest = (allTest || []).map((r) => ({ chat_id: r.chat_id, user_id: r.user_id }));
-  } catch (err) { d.error = err.message; }
-  res.json(d);
 });
 
 // LIMPAR conversas de teste no CRM (temporário)

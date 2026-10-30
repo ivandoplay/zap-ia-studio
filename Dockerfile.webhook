@@ -1,0 +1,16 @@
+# Dockerfile para Evolution Go Webhook Server
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Dependências
+COPY package.json package-lock.json* ./
+RUN npm install --production
+
+# Código
+COPY src/ ./src/
+COPY evolution-webhook.mjs ./
+
+EXPOSE 3001
+
+CMD ["node", "evolution-webhook.mjs"]

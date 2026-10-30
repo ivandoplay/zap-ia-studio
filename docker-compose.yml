@@ -32,3 +32,35 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+  # ======================== WEBHOOK Evolution Go ========================
+  # Recebe mensagens do Evolution Go, processa com IA do Ienvia Motor e responde
+  webhook:
+    build:
+      context: .
+      dockerfile: Dockerfile.webhook
+    container_name: ienvia-evolution-webhook
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      # URL do Evolution Go (pool/API)
+      - EVOLUTION_GO_URL=${EVOLUTION_GO_URL:-https://pool-evolution-go-025.cloud2.pageup.dev.br}
+      # Chave global da API (para listar instâncias)
+      - EVOLUTION_GO_API_KEY=${EVOLUTION_GO_API_KEY:-de641771b68731fb4340696241bd2cd6}
+      # IA do Ienvia Motor (cada cliente coloca suas chaves)
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      # Porta do webhook
+      - PORT=3001
+    volumes:
+      # Dados compartilhados com o motor (perfil do cliente, histórico, chaves de IA)
+      - ./data:/app/data
+    depends_on:
+      - motor
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

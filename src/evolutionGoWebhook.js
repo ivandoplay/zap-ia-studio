@@ -269,6 +269,27 @@ evolutionGoWebhookRouter.post('/send', async (req, res) => {
   res.json(await sendMessage(instance, number, text));
 });
 
+// DIAGNÓSTICO: upsert + consulta imediata (temporário)
+evolutionGoWebhookRouter.get('/diag2', async (req, res) => {
+  const d = {};
+  try {
+    const admin = getAdminClient();
+    const userId = resolveUserId('ienvia-teste-06a36777') || process.env.EVOLUTION_DEFAULT_USER_ID;
+    const cid = 'diag-' + Date.now();
+    const up = await admin.from('zapia_contacts').upsert({
+      user_id: userId, chat_id: cid, data: { name: 'diag', messages: [{ role: 'assistant', text: 't' }] },
+      last_message_at: new Date().toISOString(), updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id,chat_id' });
+    d.upsert = { error: up.error?.message || null, count: up.count, status: up.status, statusText: up.statusText };
+    const sel = await admin.from('zapia_contacts').select('user_id,chat_id,data').eq('chat_id', cid);
+    d.afterUpsert = { rows: (sel.data || []).length, data: sel.data?.[0]?.data?.messages?.length };
+    await new Promise((r) => setTimeout(r, 2000));
+    const sel2 = await admin.from('zapia_contacts').select('chat_id').eq('chat_id', cid);
+    d.after2s = { rows: (sel2.data || []).length };
+  } catch (err) { d.error = err.message; }
+  res.json(d);
+});
+
 // LIMPAR conversas de teste no CRM (temporário)
 evolutionGoWebhookRouter.post('/clear', async (req, res) => {
   try {

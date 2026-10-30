@@ -277,11 +277,11 @@ evolutionGoWebhookRouter.post('/clear', async (req, res) => {
     if (req.body?.list) {
       const { data } = await admin.from('zapia_contacts').select('chat_id').eq('user_id', userId).limit(500);
       const all = (data || []).map((r) => r.chat_id);
-      // Consulta direta dos chat_ids de teste (sem limite)
+      // Consulta direta dos chat_ids de teste (sem filtro de user_id)
       const direct = [];
       for (const cid of ['558681638438@s.whatsapp.net', '558681303979@s.whatsapp.net', 'diag-chat']) {
-        const { data: d2 } = await admin.from('zapia_contacts').select('chat_id').eq('user_id', userId).eq('chat_id', cid);
-        if (d2?.length) direct.push(cid);
+        const { data: d2 } = await admin.from('zapia_contacts').select('user_id,chat_id').eq('chat_id', cid);
+        if (d2?.length) direct.push({ chat_id: cid, rows: d2.map((r) => ({ user_id: r.user_id })) });
       }
       return res.json({ ok: true, total: all.length, test: all.filter((c) => c.includes('558681') || c.includes('diag') || c.includes('s.whatsapp')), direct });
     }

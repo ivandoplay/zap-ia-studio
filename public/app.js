@@ -497,6 +497,144 @@ window.closeModal = function closeModal(id) {
   document.getElementById(id)?.classList.remove('open');
 };
 
+// ======================== WIZARD: CONECTAR NOVO NÚMERO ========================
+let wizState = { step: 0, mode: null, selectedDeviceId: null };
+
+window.openAddNumberWizard = function openAddNumberWizard() {
+  wizState = { step: 0, mode: null, selectedDeviceId: null };
+  const modal = document.getElementById('addNumberWizard');
+  if (modal) modal.classList.add('open');
+  wizRenderProgress(0);
+};
+
+window.wizGo = function wizGo(step, mode = null) {
+  if (mode) wizState.mode = mode;
+  wizState.step = step;
+  // Mostrar/ocultar etapas
+  const steps = document.querySelectorAll('#addNumberWizard .wiz-step');
+  steps.forEach((el) => {
+    const s = Number(el.dataset.step);
+    el.style.display = (s === step) ? 'flex' : 'none';
+  });
+  // Render dinâmico
+  if (step === 1 && wizState.mode === 'local') {
+    wizRenderDevices();
+  }
+  if (step === 2) {
+    wizRenderQrStage();
+  }
+  wizRenderProgress(step);
+};
+
+function wizRenderProgress(step) {
+  const bar = document.getElementById('wizProgress');
+  if (!bar) return;
+  const steps = ['0','1','1b','2','3','4','5'];
+  bar.innerHTML = steps.map((s, i) => {
+    const n = Number(s);
+    const cls = n < step ? 'done' : (n === step ? 'current' : '');
+    return `<div class="wiz-progress-dot ${cls}"></div>`;
+  }).join('');
+}
+
+function wizRenderDevices() {
+  const list = document.getElementById('wizDeviceList');
+  if (!list) return;
+  const devs = (state.waState?.devices || []).filter((d) => d.online);
+  if (devs.length === 0) {
+    list.innerHTML = `
+      <div style="padding:16px; text-align:center; background:var(--bg-card-subtle); border:1px dashed var(--border-strong); border-radius:var(--radius);">
+        <div style="font-size:24px; margin-bottom:6px;">🖥️</div>
+        <div style="font-weight:600; color:var(--text-main);">Nenhum motor online</div>
+        <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Inicie o Motor primeiro (baixe o pacote abaixo e dê 2 cliques em <code>INICIAR_NO_WINDOWS.bat</code>).</div>
+      </div>`;
+    return;
+  }
+  list.innerHTML = devs.map((d) => `
+    <button type="button" class="wiz-device-card ${wizState.selectedDeviceId === d.deviceId ? 'selected' : ''}" onclick="wizSelectDevice('${escapeJsArg(d.deviceId)}')">
+      <span class="wiz-device-dot"></span>
+      <div style="flex:1;">
+        <div class="wiz-device-name">🟢 ${escapeHtml(d.deviceName || 'Aparelho Online')}</div>
+        <div class="wiz-device-sub">${d.appVersion ? 'Motor v' + escapeHtml(d.appVersion) : 'Motor online'}</div>
+      </div>
+      <span style="color:var(--accent-bright); font-size:18px;">→</span>
+    </button>
+  `).join('');
+}
+
+window.wizSelectDevice = function wizSelectDevice(deviceId) {
+  wizState.selectedDeviceId = deviceId;
+  wizRenderDevices();
+  // Aguarda um momento para o usuário ver a seleção
+  setTimeout(() => wizGo(2), 300);
+};
+
+function wizRenderQrStage() {
+  const stage = document.getElementById('wizQrStage');
+  if (!stage) return;
+  const slotId = state.selectedWaSlotId || 'slot_1';
+  const meta = getSlotUiMeta(slotId);
+  if (meta.status === 'connected') {
+    stage.innerHTML = `
+      <div style="color:var(--accent-bright); font-weight:700; font-size:15px;">${escapeHtml(meta.label)} conectado!</div>
+      <div style="font-size:12px; color:var(--text-muted);">Número: +${escapeHtml(meta.connectedUser?.phone || '')}</div>
+    `;
+    return;
+  }
+  if (meta.status === 'qr_ready' && meta.qrDataUrl) {
+    stage.innerHTML = `<img src="${meta.qrDataUrl}" alt="QR Code" style="max-width:220px; width:100%; border-radius:8px;" /><div style="font-size:12px; color:var(--text-muted); text-align:center; margin-top:6px;">Escaneie com o WhatsApp do número</div>`;
+    return;
+  }
+  if (meta.status === 'qr_ready' && meta.pairingCode) {
+    stage.innerHTML = `<div class="pairing-code-display" style="margin:0 auto;">${escapeHtml(meta.pairingCode)}</div><div style="font-size:12px; color:var(--text-muted); text-align:center; margin-top:6px;">Digite este código no WhatsApp</div>`;
+    return;
+  }
+  stage.innerHTML = `
+    <div style="text-align:center; padding:16px; background:var(--bg-card-subtle); border:1px dashed var(--border); border-radius:var(--radius);">
+      <div style="font-size:22px; margin-bottom:6px;">📷</div>
+      <div style="font-weight:600; color:var(--text-main);">Clique em "Gerar Código" abaixo</div>
+      <div style="font-size:12px; color:var(--text-muted); margin-top:4px;">Para conexão por código (sem câmera)</div>
+    </div>`;
+}
+
+window.wizGeneratePairing = async function wizGeneratePairing() {
+  const phone = document.getElementById('wizPairingPhone')?.value.trim();
+  if (!phone) { showToast('Digite o número com 55 + DDD.', true); return; }
+  if (phone.replace(/\D/g, '').length < 10) {
+    return showToast('Digite o número completo com 55 + DDD (ex: 5586999998888).', true);
+  }
+  const slotId = state.selectedWaSlotId || 'slot_1';
+  try {
+    const out = await executeSlotConnectRequest({
+      pairingPhone: phone,
+      slotId
+    });
+    wizRenderQrStage();
+    showToast('Código de 8 dígitos gerado! Digite no WhatsApp.');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.wizGenerateQr = async function wizGenerateQr() {
+  const slotId = state.selectedWaSlotId || 'slot_1';
+  try {
+    await executeSlotConnectRequest({ pairingPhone: null, slotId });
+    wizRenderQrStage();
+    showToast('QR Code gerado! Escaneie com o WhatsApp.');
+  } catch (err) {
+    showToast(err.message, true);
+  }
+};
+
+window.copyWebhookUrl = function copyWebhookUrl() {
+  const url = document.getElementById('wizWebhookUrl')?.value || '';
+  navigator.clipboard?.writeText(url).then(
+    () => showToast('Webhook URL copiado!'),
+    () => showToast('Copiar manualmente: ' + url, true)
+  );
+};
+
 function getActiveProfile() {
   return state.business || null;
 }

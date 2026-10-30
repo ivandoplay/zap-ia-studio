@@ -109,6 +109,7 @@ async function saveHistory(userId, chatId, messages, contactName) {
       { onConflict: 'user_id,chat_id' }
     );
   if (error) console.warn(`[EvolutionWebhook] Falha ao salvar histórico: ${error.message}`);
+  return { error: error?.message || null };
 }
 
 // ======================== ENVIAR MENSAGEM (API Evolution Go) ========================
@@ -239,12 +240,12 @@ evolutionGoWebhookRouter.post('/webhook', async (req, res) => {
     // Persistir histórico
     nextHistory.push({ role: 'assistant', text: reply.cleanText, ts: Date.now() });
     if (nextHistory.length > 40) nextHistory.splice(0, nextHistory.length - 40);
-    await saveHistory(tenant.userId, chatId, nextHistory, phoneNumber);
+    const saveResult = await saveHistory(tenant.userId, chatId, nextHistory, phoneNumber);
 
     console.log(
       `[EvolutionWebhook] ${instanceName} → ${phoneNumber}: "${userText || '[mídia]'}" → "${String(reply.cleanText).slice(0, 60)}"`
     );
-    return res.status(200).json({ ok: true, reply: reply.cleanText, provider: reply.providerUsed });
+    return res.status(200).json({ ok: true, reply: reply.cleanText, provider: reply.providerUsed, userId: tenant.userId, chatId, save: saveResult });
   } catch (err) {
     console.error('[EvolutionWebhook] Erro:', err.message);
     return res.status(200).json({ ok: false, error: err.message });

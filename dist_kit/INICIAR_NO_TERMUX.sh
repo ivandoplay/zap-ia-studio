@@ -1,7 +1,33 @@
 #!/data/data/com.termux/files/usr/bin/bash
 set -e
 
-BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# O auto-updater pode substituir este launcher externo durante a própria execução.
+# Execute uma cópia imutável para o Bash nunca continuar lendo um arquivo trocado no meio.
+if [ "${ZAPIA_TERMUX_BOOT_SNAPSHOT:-0}" != "1" ]; then
+  ORIGINAL_BOOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/$(basename "${BASH_SOURCE[0]}")"
+  SNAPSHOT_DIR="${TMPDIR:-$HOME}"
+  mkdir -p "$SNAPSHOT_DIR"
+  SNAPSHOT_FILE="$(mktemp "$SNAPSHOT_DIR/.ienvia-termux-bootstrap.XXXXXX")" || {
+    echo "[ERRO] Não foi possível criar uma cópia segura do inicializador."
+    exit 1
+  }
+  if cp "$ORIGINAL_BOOT" "$SNAPSHOT_FILE"; then
+    chmod 700 "$SNAPSHOT_FILE"
+    export ZAPIA_TERMUX_BOOT_SNAPSHOT=1
+    export ZAPIA_TERMUX_BOOT_ORIGINAL="$ORIGINAL_BOOT"
+    export ZAPIA_TERMUX_BOOT_SNAPSHOT_FILE="$SNAPSHOT_FILE"
+    exec bash "$SNAPSHOT_FILE" "$@"
+  fi
+  rm -f "$SNAPSHOT_FILE"
+  echo "[ERRO] Não foi possível preparar o inicializador seguro."
+  exit 1
+fi
+
+if [ -n "${ZAPIA_TERMUX_BOOT_SNAPSHOT_FILE:-}" ]; then
+  trap 'rm -f "$ZAPIA_TERMUX_BOOT_SNAPSHOT_FILE"' EXIT
+fi
+
+BASE_DIR="$(cd "$(dirname "${ZAPIA_TERMUX_BOOT_ORIGINAL:-${BASH_SOURCE[0]}}")" && pwd -P)"
 
 # 1. Se o usuario abriu dentro da memoria compartilhada (/storage ou Downloads),
 #    copia automaticamente para $HOME/ZAP-IA-Studio (sistema nativo do Termux)!

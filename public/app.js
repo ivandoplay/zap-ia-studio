@@ -8785,20 +8785,22 @@ setInterval(() => {
   }
 }, 2000);
 
-// Poll periódico do estado do WhatsApp: monitora workerOnline + slots em "connecting"
-// Captura QR/código assincrono do motor e reflete mudança de worker (online↔offline) sem depender do WebSocket.
+// Poll periódico do estado do WhatsApp: refresh regular para capturar QR assincrono,
+// mudanças de workerOnline, status de slots e versão do app — sem depender do WebSocket.
 state._lastWorkerOnline = state._lastWorkerOnline ?? null;
 state._lastWaSlotStatuses = state._lastWaSlotStatuses ?? null;
+let _waPollCycles = 0;
 setInterval(() => {
+  _waPollCycles++;
   const slots = state.waState?.slots || {};
   const currentStatuses = WA_SLOT_IDS_UI.map(id => slots[id]?.status || 'disconnected').join(',');
   const hasConnecting = Object.values(slots).some(s => s?.status === 'connecting');
   const workerChanged = state._lastWorkerOnline !== null && state._lastWorkerOnline !== state.waState?.workerOnline;
   const slotStatusChanged = state._lastWaSlotStatuses !== null && state._lastWaSlotStatuses !== currentStatuses;
-  if ((hasConnecting || workerChanged || slotStatusChanged) && !liveRefreshInFlight) {
+  // Refresh se algo mudou, ou a cada 3 ciclos (~15s) como fallback para versão do app
+  if ((hasConnecting || workerChanged || slotStatusChanged || _waPollCycles % 3 === 0) && !liveRefreshInFlight) {
     refreshLiveStateOnly().catch(() => {});
   }
-  // Atualiza snapshot após cada verificação para evitar refreshes duplicados
   state._lastWorkerOnline = state.waState?.workerOnline ?? null;
   state._lastWaSlotStatuses = currentStatuses;
 }, 5000);

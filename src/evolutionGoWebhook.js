@@ -5,6 +5,10 @@
  *
  * Integração: Evolution Go → POST /webhook → IA (Gemini/OpenRouter) → Resposta via API Evolution Go
  *
+ * Suporte: texto, áudio (voz) e imagem. Aceita os dois formatos de payload do Evolution Go:
+ *   1. {event, instance, data: {key, message}}          — formato novo (evolution-api)
+ *   2. {event, instance, data: {Info, Message}}         — formato evolution-foundation
+ *
  * Configuração (env):
  *   EVOLUTION_GO_URL         — URL do pool Evolution Go (default: pool pageup)
  *   EVOLUTION_GO_API_KEY     — Chave global (para /instance/all)
@@ -20,6 +24,7 @@ import { Router } from 'express';
 import express from 'express';
 import { generateSmartReply } from './aiEngine.js';
 import { getAdminClient } from './supabaseCloud.js';
+import { convertToCanonicalWhatsAppVoice } from './audioProcessor.js';
 import { trueNowIso } from './trueClock.js';
 
 export const evolutionGoWebhookRouter = Router();
@@ -133,15 +138,15 @@ async function sendMessage(instanceName, number, text, tokenOverride) {
 
 // ======================== ROTAS ========================
 evolutionGoWebhookRouter.post('/webhook', async (req, res) => {
-  // Payload oficial Evolution Go: {event, instance, data:{key, message}}
-  // Também aceita formato antigo: {instance: {data: {instance, key, message}}}
+  // Aceita os dois formatos de payload do Evolution Go
   const instanceName = req.body?.instance?.data?.instance || req.body?.instance;
-  const key = req.body?.instance?.data?.key || req.body?.data?.key;
-  const message = req.body?.instance?.data?.message || req.body?.data?.message;
-  const instanceToken = req.body?.instanceToken || req.body?.instance?.data?.instanceToken || req.body?.apikey || null;
-  const event = req.body?.event || req.body?.instance?.data?.event || 'MESSAGE';
+  const data = req.body?.instance?.data || req.body?.data || {};
+  const info = data.Info || {};
+  const message = data.message || data.Message || req.body?.instance?.data?.message || req.body?.instance?.data?.Message || {};
+  const instanceToken = req.body?.instanceToken || data.instanceToken || req.body?.apikey || null;
+  const event = req.body?.event || data.event || 'MESSAGE';
 
-  if (!instanceName || !key) {
+  if (!instanceName) {
     return res.status(400).json({ error: 'Invalid webhook payload', received: req.body });
   }
 
@@ -153,29 +158,58 @@ evolutionGoWebhookRouter.post('/webhook', async (req, res) => {
     return res.status(200).json({ ok: true, ignored: 'event', event });
   }
 
-  const remoteJid = key?.remoteJid || '';
-  if (key?.fromMe || key?.IsFromMe) {
+  // Remetente/destinatário (aceita key.remoteJid e Info.Chat/Sender)
+  const key = data.key || {};
+  const remoteJid = key.remoteJid || info.Chat || info.Sender || '';
+  if (!remoteJid) {
+    return res.status(200).json({ ok: true, ignored: 'no-jid' });
+  }
+  if (key.fromMe ?? key.IsFromMe ?? info.IsFromMe) {
     return res.status(200).json({ ok: true, ignored: 'fromMe' });
   }
-  if (remoteJid.endsWith('@g.us')) {
+  if (remoteJid.endsWith('@g.us') || info.IsGroup) {
     return res.status(200).json({ ok: true, ignored: 'group' });
   }
 
   const phoneNumber = remoteJid.split('@')[0];
-  const chatId = remoteJid || `${phoneNumber}@s.whatsapp.net`;
+  const chatId = remoteJid;
 
-  // Extrair texto da mensagem
-  const msgType = message;
+  // Extrair texto e mídia da mensagem
   let userText = '';
-  if (msgType?.conversation) {
-    userText = msgType.conversation;
-  } else if (msgType?.extendedTextMessage?.text) {
-    userText = msgType.extendedTextMessage.text;
-  } else if (msgType?.imageMessage?.caption) {
-    userText = msgType.imageMessage.caption;
+  let media = null;
+
+  if (message.conversation) {
+    userText = message.conversation;
+  } else if (message.extendedTextMessage?.text) {
+    userText = message.extendedTextMessage.text;
+  } else if (message.imageMessage?.caption) {
+    userText = message.imageMessage.caption;
   }
 
-  if (!userText) {
+  // Áudio / imagem (base64 do payload)
+  if (message.audioMessage || message.imageMessage) {
+    const b64Raw = data.base64 || message.base64 || '';
+    if (b64Raw) {
+      const b64 = String(b64Raw).replace(/^data:[^;]+;base64,/, '');
+      const buf = Buffer.from(b64, 'base64');
+      if (buf.length > 0) {
+        if (message.audioMessage) {
+          try {
+            // Converte para voz canônica do WhatsApp (Ogg/Opus) — ffmpeg se disponível, JS puro se já for Ogg/Opus
+            const canonical = await convertToCanonicalWhatsAppVoice(buf, 'audio.ogg');
+            media = { mimeType: canonical.mimeType, buffer: canonical.buffer, durationSec: canonical.durationSec };
+          } catch (err) {
+            console.warn('[EvolutionWebhook] Áudio não convertível (mídia bruta enviada):', err.message);
+            media = { mimeType: 'audio/ogg', buffer: buf };
+          }
+        } else if (message.imageMessage) {
+          media = { mimeType: message.imageMessage.mimetype || 'image/jpeg', buffer: buf };
+        }
+      }
+    }
+  }
+
+  if (!userText && !media) {
     return res.status(200).json({ ok: true, ignored: 'no-text' });
   }
 
@@ -183,7 +217,8 @@ evolutionGoWebhookRouter.post('/webhook', async (req, res) => {
     // Carregar tenant (business + settings) e histórico
     const tenant = await loadTenant(instanceName);
     const history = await loadHistory(tenant.userId, chatId);
-    const nextHistory = [...history, { role: 'user', text: userText, ts: Date.now() }];
+    const userTurn = { role: 'user', text: userText || (media ? '[áudio/imagem]' : ''), ts: Date.now() };
+    const nextHistory = [...history, userTurn];
 
     // Gerar resposta com IA (skills do Ienvia Motor — demo fallback se sem chaves)
     const reply = await generateSmartReply({
@@ -191,6 +226,7 @@ evolutionGoWebhookRouter.post('/webhook', async (req, res) => {
       settings: tenant.settings,
       history: nextHistory.slice(0, -1),
       userText,
+      media,
       contactName: phoneNumber,
       allowDemoFallback: true,
     });
@@ -206,7 +242,7 @@ evolutionGoWebhookRouter.post('/webhook', async (req, res) => {
     await saveHistory(tenant.userId, chatId, nextHistory, phoneNumber);
 
     console.log(
-      `[EvolutionWebhook] ${instanceName} → ${phoneNumber}: "${userText.slice(0, 40)}" → "${String(reply.cleanText).slice(0, 60)}"`
+      `[EvolutionWebhook] ${instanceName} → ${phoneNumber}: "${userText || '[mídia]'}" → "${String(reply.cleanText).slice(0, 60)}"`
     );
     return res.status(200).json({ ok: true, reply: reply.cleanText, provider: reply.providerUsed });
   } catch (err) {

@@ -512,7 +512,10 @@
             <h1>Simulador de Atendimento com Áudio & Raio-X</h1>
             <p>Grave áudio pelo microfone, envie comprovantes, abra o Raio-X de Skills de cada resposta e corrija qualquer fala em 1 clique.</p>
           </div>
-          <button type="button" id="btnResetSimulator" class="btn btn-secondary">Limpar conversa de teste</button>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span id="simAiStatusPill" class="status-pill ai-active">IA Ativa</span>
+            <button type="button" id="btnResetSimulator" class="btn btn-secondary">Limpar conversa de teste</button>
+          </div>
         </div>
 
         <div class="grid-2">
@@ -791,13 +794,18 @@
         <!-- Configuração PIX -->
         <div class="panel">
           <div class="panel-header">
-            <h2 class="panel-title">Envio Automático de Chave PIX + Imagem QR Code + Copia e Cola</h2>
-            <label class="switch" aria-label="Habilitar envio automático de PIX">
-              <input type="checkbox" id="pixEnabledToggle" />
-              <span class="slider"></span>
-            </label>
+            <div>
+              <h2 class="panel-title">Envio Automático de Chave PIX + Imagem QR Code + Copia e Cola</h2>
+              <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">Quando ativado, sempre que o cliente pedir o PIX, a IA envia a imagem escaneável do QR Code + o código Copia e Cola oficial (padrão Banco Central).</p>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px;">
+              <span id="pixStatusPill" class="status-pill pix-off">Desligado</span>
+              <label class="switch" aria-label="Habilitar envio automático de PIX">
+                <input type="checkbox" id="pixEnabledToggle" onchange="togglePixStatus()" />
+                <span class="slider"></span>
+              </label>
+            </div>
           </div>
-          <p class="panel-desc">Quando ativado, sempre que o cliente pedir o PIX, a IA envia a imagem escaneável do QR Code + o código Copia e Cola oficial (padrão Banco Central).</p>
 
           <div class="grid-equal">
             <div>
@@ -1112,8 +1120,19 @@
         <div class="grid-equal">
           <!-- Anti-Ban -->
           <div class="panel">
-            <h2 class="panel-title" style="margin-bottom:6px;">Proteção Anti-Ban nas Respostas</h2>
-            <p class="panel-desc">Faz o atendimento parecer uma pessoa real digitando no aparelho.</p>
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Proteção Anti-Ban nas Respostas</h2>
+                <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">Faz o atendimento parecer uma pessoa real digitando no aparelho.</p>
+              </div>
+            </div>
+
+            <!-- Quick Presets (para não-programadores) -->
+            <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="applyAntiBanPreset('natural')">🌿 Natural</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="applyAntiBanPreset('moderado')">⚖️ Moderado</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="applyAntiBanPreset('agressivo')">🛡️ Agressivo</button>
+            </div>
 
             <div class="form-group">
               <label class="form-label" for="debounceSeconds">Juntar mensagens picadas (Segundos de espera)</label>

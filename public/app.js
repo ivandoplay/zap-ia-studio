@@ -2704,12 +2704,35 @@ window.deleteKnowledgeDoc = async function deleteKnowledgeDoc(docId) {
 
 // ======================== ABA 4: CATÁLOGO MULTI-MÍDIA & PIX COM QR CODE ========================
 
+window.togglePixStatus = function togglePixStatus() {
+  const pill = document.getElementById('pixStatusPill');
+  if (!pill) return;
+  const on = document.getElementById('pixEnabledToggle').checked;
+  pill.className = 'status-pill ' + (on ? 'pix-on' : 'pix-off');
+  pill.innerHTML = `<span class="status-dot"></span><span>${on ? 'Ativo' : 'Desligado'}</span>`;
+};
+
+// Status Pill da IA no Simulador (atualiza junto com o botEnabled)
+window.updateSimAiStatus = function updateSimAiStatus() {
+  const pill = document.getElementById('simAiStatusPill');
+  if (!pill) return;
+  const aiOn = state.settings?.botEnabled !== false;
+  pill.className = 'status-pill ' + (aiOn ? 'ai-active' : 'ai-off');
+  pill.innerHTML = `<span class="status-dot"></span><span>${aiOn ? 'IA Ativa' : 'IA Pausada'}</span>`;
+};
+
 function renderCatalogAndPix() {
   const p = getActiveProfile();
   if (!p) return;
 
   const pix = p.pix || {};
   document.getElementById('pixEnabledToggle').checked = Boolean(pix.enabled);
+  // Status pill do PIX
+  const pixPill = document.getElementById('pixStatusPill');
+  if (pixPill) {
+    pixPill.className = 'status-pill ' + (pix.enabled ? 'pix-on' : 'pix-off');
+    pixPill.innerHTML = `<span class="status-dot"></span><span>${pix.enabled ? 'Ativo' : 'Desligado'}</span>`;
+  }
   document.getElementById('pixKeyType').value = pix.keyType || 'aleatoria';
   document.getElementById('pixKey').value = pix.key || '';
   document.getElementById('pixReceiver').value = pix.receiverName || '';
@@ -3019,6 +3042,23 @@ window.removeIgnoredContact = async function removeIgnoredContact(id) {
   } catch (err) {
     showToast(err.message, true);
   }
+};
+
+// Presets Rápidos de Proteção Anti-Ban (para não-programadores)
+window.applyAntiBanPreset = function applyAntiBanPreset(preset) {
+  const presets = {
+    natural: { debounceSeconds: 4, minTypingMs: 1200, maxTypingMs: 3200, simulateTyping: true, splitLongMessages: true },
+    moderado: { debounceSeconds: 6, minTypingMs: 1800, maxTypingMs: 5200, simulateTyping: true, splitLongMessages: true },
+    agressivo: { debounceSeconds: 12, minTypingMs: 3000, maxTypingMs: 8000, simulateTyping: true, splitLongMessages: true }
+  };
+  const p = presets[preset];
+  if (!p) return;
+  document.getElementById('debounceSeconds').value = p.debounceSeconds;
+  document.getElementById('minTypingMs').value = p.minTypingMs;
+  document.getElementById('maxTypingMs').value = p.maxTypingMs;
+  document.getElementById('simulateTypingCheck').checked = p.simulateTyping;
+  document.getElementById('splitLongMessagesCheck').checked = p.splitLongMessages;
+  showToast(`Preset "${preset}" aplicado! Clique em "Salvar regras de segurança".`);
 };
 
 // ======================== ABA 7: CRM DRAG-AND-DROP, TAGS & RETORNO S19 ========================
@@ -5393,6 +5433,13 @@ function renderSimulator() {
   if (p) {
     document.getElementById('simProfileHeader').textContent = `${p.assistantName || 'Assistente'} — ${p.name}`;
   }
+  // Status pill da IA no simulador
+  const simPill = document.getElementById('simAiStatusPill');
+  if (simPill) {
+    const aiOn = state.settings?.botEnabled !== false;
+    simPill.className = 'status-pill ' + (aiOn ? 'ai-active' : 'ai-off');
+    simPill.innerHTML = `<span class="status-dot"></span><span>${aiOn ? 'IA Ativa' : 'IA Pausada'}</span>`;
+  }
 
   const quickBox = document.getElementById('simQuickPromptsBox');
   if (quickBox) {
@@ -5905,6 +5952,7 @@ function bindEvents() {
       const masterLabel = document.getElementById('masterBotLabel');
       if (masterLabel) masterLabel.textContent = enabled ? 'IA Ativa' : 'IA Pausada';
       renderWaState();
+      updateSimAiStatus();
       showToast(enabled ? 'IA ativada! O atendente automático está no ar.' : 'IA pausada. Mensagens serão registradas no CRM sem resposta automática.');
     } catch (err) {
       showToast(err.message, true);

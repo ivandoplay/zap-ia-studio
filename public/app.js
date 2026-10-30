@@ -6259,10 +6259,13 @@ function bindEvents() {
     syncSoloIdentityFormLabels();
   });
 
-  document.getElementById('btnSaveProfile').addEventListener('click', async () => {
+  document.getElementById('btnSaveProfile').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const orig = btn.innerHTML;
     const p = getActiveProfile();
     if (!p) return;
     syncFaqsFromDom(p);
+    setBtnLoading(btn, 'Salvando treinamento...');
     const soloIdentity = Boolean(document.getElementById('profSoloIdentityCheck')?.checked);
     const payload = {
       name: document.getElementById('profName').value.trim() || (soloIdentity ? 'Profissional' : 'Meu Negócio'),
@@ -6290,6 +6293,8 @@ function bindEvents() {
       showToast('Treinamento salvo com sucesso!');
     } catch (err) {
       showToast(err.message, true);
+    } finally {
+      setBtnDone(btn, orig);
     }
   });
 
@@ -6489,7 +6494,10 @@ function bindEvents() {
     }
   });
 
-  document.getElementById('btnTestAi').addEventListener('click', async () => {
+  document.getElementById('btnTestAi').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const orig = btn.innerHTML;
+    setBtnLoading(btn, 'Testando...');
     const box = document.getElementById('aiTestResultBox');
     box.style.display = 'flex';
     box.className = 'log-row';
@@ -6513,6 +6521,8 @@ function bindEvents() {
       box.className = 'log-row error';
       box.innerHTML = `<span><strong>Falha no teste:</strong> ${escapeHtml(err.message)}</span>`;
       showToast(err.message, true);
+    } finally {
+      setBtnDone(btn, orig);
     }
   });
 
@@ -6601,7 +6611,10 @@ function bindEvents() {
     }
   });
 
-  document.getElementById('btnSaveSecurity').addEventListener('click', async () => {
+  document.getElementById('btnSaveSecurity').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const orig = btn.innerHTML;
+    setBtnLoading(btn, 'Salvando...');
     const securityPin = document.getElementById('securityPinInput').value.trim();
     const antiBan = {
       debounceSeconds: Number(document.getElementById('debounceSeconds').value || 6),
@@ -6640,6 +6653,8 @@ function bindEvents() {
       showToast('Regras de segurança, limites e PIN salvos!');
     } catch (err) {
       showToast(err.message, true);
+    } finally {
+      setBtnDone(btn, orig);
     }
   });
 

@@ -1410,6 +1410,10 @@ function syncSlotSelectOptions() {
 }
 
 window.selectWaSlotTab = function selectWaSlotTab(slotId) {
+  if (state._autoReconnectTimer) {
+    clearTimeout(state._autoReconnectTimer);
+    state._autoReconnectTimer = null;
+  }
   const meta = getSlotUiMeta(slotId);
   if (meta.locked) {
     showToast(`🔒 Seu plano atual inclui até ${getAccountMaxSlots()} Chip(s) WhatsApp. Fale com o suporte para liberar o Chip ${meta.slotNum}!`, true);
@@ -1441,8 +1445,8 @@ window.setWizMode = function setWizMode(mode) {
     inactiveBtn.style.color = '';
     inactiveBtn.style.fontWeight = '';
   }
-  // Salva o mode junto com o config do slot
-  saveCurrentWaSlotConfig();
+  // Salva o mode junto com o config do slot e dá feedback
+  saveCurrentWaSlotConfig(true);
 };
 
 window.saveCurrentWaSlotConfig = async function saveCurrentWaSlotConfig(fromToggle = false) {
@@ -1467,6 +1471,11 @@ window.saveCurrentWaSlotConfig = async function saveCurrentWaSlotConfig(fromTogg
         ? (aiEnabled ? `🤖 IA automática ATIVADA em ${label}!` : `⏸️ IA automática PAUSADA em ${label} (apenas atendimento manual).`)
         : `✅ Apelido "${label}" salvo com sucesso!`
     );
+    if (fromToggle && _wizMode === 'cloud') {
+      setTimeout(() => showToast('☁️ Modo Nuvem — chip rodando no motor Evolution Go'), 400);
+    } else if (fromToggle && _wizMode === 'local') {
+      setTimeout(() => showToast('💻 Modo Local — chip rodando no seu computador'), 400);
+    }
   } catch (err) {
     showToast(err.message, true);
   }
@@ -1615,13 +1624,19 @@ function renderWaState() {
     btnConn.style.display = 'none';
     btnDisc.style.display = 'inline-flex';
     btnDisc.textContent = 'Cancelar';
+    const connStart = activeSlot._connectStart || Date.now();
+    activeSlot._connectStart = connStart;
+    const connElapsed = Math.floor((Date.now() - connStart) / 1000);
     stage.innerHTML = `
       <div style="font-weight:600;">Iniciando ponte segura para <strong>${escapeHtml(activeSlot.label)}</strong>...</div>
       <div style="font-size:12.5px; color:var(--text-secondary);">${escapeHtml(activeSlot.lastError || 'Gerando sessão criptografada isolada, aguarde alguns segundos.')}</div>
+      ${connElapsed > 10 ? `<div style="color:var(--warning-bright); font-size:12px; margin-top:4px;">A conexão está demorando... Se não sucessor em breve, tente novamente.</div>
+        <button type="button" class="btn btn-secondary btn-sm" style="margin-top:6px;" onclick="executeSlotConnectRequest({ pairingPhone: null, slotId: state.selectedWaSlotId })">↻ Tentar novamente</button>` : ''}
     `;
   } else {
     btnConn.style.display = activeSlot.locked ? 'none' : 'inline-flex';
-    btnConn.textContent = `Gerar QR (${activeSlot.shortLabel})`;
+    const hasSavedSession = Boolean(activeSlot.lastKnownUser?.phone);
+    btnConn.textContent = hasSavedSession ? `🔄 Reconectar ${activeSlot.shortLabel}` : `Gerar QR (${activeSlot.shortLabel})`;
     btnDisc.style.display = 'none';
     const isCloudWorkerOff = state.runtimeMode === 'vercel_cloud' && !state.waState?.workerOnline;
     const lastKnownPhone = activeSlot.lastKnownUser?.phone || '';
@@ -1637,6 +1652,27 @@ function renderWaState() {
           Baixar Motor Ienvia v${escapeHtml(state.appVersion || '5.6.0')} (.ZIP)
         </button>
       `;
+    } else if (lastKnownPhone) {
+      stage.innerHTML = `
+        <div style="font-weight:600;"><strong>${escapeHtml(activeSlot.label)}</strong> tinha uma sessão salva</div>
+        <div style="font-size:13px; color:var(--text-secondary); max-width:400px;">
+          Último número: <strong>+${escapeHtml(lastKnownPhone)}</strong>.
+          Clique em <strong>Reconectar</strong> para tentar recuperar a sessão sem precisar de QR Code.
+          ${activeSlot.lastError ? `<div style="color:var(--warning-bright); font-size:12px; margin-top:4px;">Último erro: ${escapeHtml(activeSlot.lastError)}</div>` : ''}
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="executeSlotConnectRequest({ pairingPhone: null, slotId: state.selectedWaSlotId })">
+          🔄 Reconectar sessão agora
+        </button>
+      `;
+      // Dispara reconexão automática após 3s se o usuário não clicar
+      if (!state._autoReconnectTimer) {
+        state._autoReconnectTimer = setTimeout(() => {
+          state._autoReconnectTimer = null;
+          if (getSlotUiMeta(state.selectedWaSlotId).status === 'disconnected') {
+            executeSlotConnectRequest({ pairingPhone: null, slotId: state.selectedWaSlotId });
+          }
+        }, 3000);
+      }
     } else {
       stage.innerHTML = `
         <div style="font-weight:600;"><strong>${escapeHtml(activeSlot.label)}</strong> pronto para conectar</div>

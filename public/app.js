@@ -6916,6 +6916,9 @@ function bindEvents() {
 
   document.getElementById('newContactForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    const btn = document.getElementById('btnCreateNewContact');
+    const orig = btn ? btn.innerHTML : '';
+    if (btn) setBtnLoading(btn, 'Criando...');
     try {
       const res = await api('/api/crm/new-contact', {
         method: 'POST',
@@ -6933,6 +6936,8 @@ function bindEvents() {
       showToast('Conversa criada e selecionada!');
     } catch (err) {
       showToast(err.message, true);
+    } finally {
+      if (btn) setBtnDone(btn, orig);
     }
   });
 

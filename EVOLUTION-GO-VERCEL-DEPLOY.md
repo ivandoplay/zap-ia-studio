@@ -1,0 +1,77 @@
+# Evolution Go Webhook — Deploy no Vercel (grátis)
+
+A maneira mais barata de integrar o Evolution Go ao Ienvia Motor: o webhook server vira uma **rota do motor no Vercel** — sem VPS, sem cartão, sem servidor.
+
+## URL do webhook
+
+```
+https://zap-ia-studio.vercel.app/api/evolution-webhook/webhook
+```
+
+## O que roda onde
+
+| Componente | Onde | Custo |
+|---|---|---|
+| Ienvia Motor (painel, IA, webhook) | Vercel | grátis |
+| WhatsApp + webhook delivery | Evolution Go (PageUp) | R$ 9,90/mês |
+| Dados (business, settings, histórico) | Supabase | grátis |
+
+## Passo 1: Configurar variáveis de ambiente no Vercel
+
+Painel Vercel → Projeto → Settings → Environment Variables:
+
+```
+EVOLUTION_GO_URL=https://pool-evolution-go-025.cloud2.pageup.dev.br
+EVOLUTION_GO_API_KEY=de641771b68731fb4340696241bd2cd6
+EVOLUTION_INSTANCE_USERS={"ienvia-teste-06a36777":"<user_id>","ienvia-teste-9ef7cfdd":"<user_id>"}
+```
+
+> **Obs:** o `EVOLUTION_INSTANCE_USERS` é um JSON mapeando o **nome da instância** do Evolution Go ao **user_id do Supabase** (do usuário/empresa). Use `EVOLUTION_DEFAULT_USER_ID` para um único usuário.
+> `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` já devem estar configurados (o motor usa).
+
+## Passo 2: Deploy
+
+O deploy é **automático** ao fazer push no GitHub (o projeto Vercel já está conectado). Para deploy manual:
+
+```bash
+vercel deploy --prod
+```
+
+Ou no painel Vercel: Deployments → *Deploy*.
+
+## Passo 3: Configurar a webhook URL no Evolution Go
+
+```bash
+./scripts/evolution-setup.sh https://zap-ia-studio.vercel.app/api/evolution-webhook/webhook
+```
+
+(O script configura a webhookUrl em todas as instâncias conectadas.)
+
+## Passo 4: Testar
+
+1. No WhatsApp, mande uma mensagem para qualquer número da instância
+2. O Evolution Go dispara o webhook → a IA do Ienvia Motor responde
+3. Caso não responda, veja os logs no Vercel: Deployments → *Visit* → Logs
+
+## Como encontrar o user_id do Supabase
+
+Supabase → SQL Editor:
+
+```sql
+select id from auth.users;
+```
+
+Ou pelo painel: faça login no painel do Ienvia Motor e veja o ID do usuário.
+
+## Histórico de conversas
+
+O webhook guarda o histórico das conversas em **Supabase** (`zapia_contacts`) — persistente entre chamadas (serverless não tem memória duradoura). Sem Supabase configurado, usa memória interna (VPS/desenvolvimento).
+
+## Configurar as chaves de IA
+
+Cada cliente coloca suas chaves no **painel do Ienvia Motor** (aba "Motor de IA") — elas ficam no Supabase (`zapia_workspaces.settings`). O webhook usa as mesmas automaticamente.
+
+## Variantes de deploy
+
+- **Vercel (este guia)**: grátis, sem servidor — ideal para a comunicação (webhook)
+- **VPS** (Oracle grátis / KingHost / Serverspace): roda o docker-compose completo (motor + webhook no mesmo host) — veja `ORACLE-CLOUD-DEPLOY.md` e `GRATISVPS-DEPLOY.md` (aviso: GratisVPS é scam)

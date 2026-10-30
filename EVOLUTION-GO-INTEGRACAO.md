@@ -241,18 +241,39 @@ O painel administrador vai controlar:
 | **Webhooks** | WebSocket | **HTTP** |
 | **Deploy** | Docker (VM cliente) | Docker Compose (VPS admin) |
 
-## Próximos passos
+## Status atual (2026-10)
 
-1. **Você me fornece a API Key do Evolution Go**
-2. **Criar instâncias de teste no Evolution Go**
-3. **Configurar webhook no Supabase**
-4. **Integrar o Ienvia Motor com o Evolution Go**
-5. **Testar o atendimento com IA via Evolution Go**
+✅ **Webhook server criado e testado** (`src/evolutionGoWebhook.js`) — recebe o payload oficial do Evolution Go, processa com a IA do Ienvia Motor (skills) e responde via API.
+✅ **Integrado ao motor** (rota `/api/evolution-webhook/*` no `src/server.js`) — serve no Vercel e na VPS.
+✅ **Setup script** (`scripts/evolution-setup.sh`) — configura a webhookUrl nas instâncias do Evolution Go.
+✅ **Mensagens entre 2 números testadas** — envio/recebimento funcionando.
+✅ **Commits no GitHub** (repo `ivandoplay/zap-ia-studio`).
 
-**O que você quer fazer agora?**
+## Como部署ar
 
-1. **Fornecer a API Key do Evolution Go** (para eu testar)
-2. **Criar instâncias de teste** (1 cliente)
-3. **Configurar webhook no Supabase**
-4. **Integrar o Ienvia Motor com o Evolution Go**
-5. **Outro**
+A opção mais barata: **Vercel (grátis)** — o webhook já está integrado ao motor no Vercel.
+
+👉 **Guia completo: `EVOLUTION-GO-VERCEL-DEPLOY.md`**
+
+URL do webhook: `https://zap-ia-studio.vercel.app/api/evolution-webhook/webhook`
+
+Resumo:
+1. Configurar env no Vercel: `EVOLUTION_GO_URL`, `EVOLUTION_GO_API_KEY`, `EVOLUTION_INSTANCE_USERS` (mapa instância → user_id Supabase)
+2. Deploy automático ao fazer push
+3. `./scripts/evolution-setup.sh https://zap-ia-studio.vercel.app/api/evolution-webhook/webhook`
+4. Testar: mandar mensagem WhatsApp para o número da instância → a IA responde
+
+Alternativas: VPS (Oracle grátis, KingHost, Serverspace) — roda o docker-compose completo.
+
+## Fluxo de atendimento (resumo)
+
+```
+Cliente → WhatsApp → Evolution Go (nuvem)
+              │
+              ▼ POST webhook
+     Vercel (motor + IA do Ienvia Motor)
+              │
+              ├── business/settings/histórico → Supabase
+              ▼
+     Resposta via API Evolution Go → WhatsApp → Cliente
+```

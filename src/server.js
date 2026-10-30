@@ -116,6 +116,7 @@ import {
   deletePackSkill,
   exportProfileBundleZip
 } from './trainingPackEngine.js';
+import { evolutionGoWebhookRouter } from './evolutionGoWebhook.js';
 
 export const app = express();
 const APP_VERSION = (() => {
@@ -166,6 +167,11 @@ app.use(
 );
 // Healthcheck para monitoramento (Docker / Oracle Cloud)
 app.get('/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
+
+// ======================== WEBHOOK EVOLUTION GO ========================
+// Recebe mensagens do Evolution Go → IA do Ienvia Motor → resposta.
+// Montado ANTES do middleware /api de auth (o webhook é público — o Evolution Go não autentica).
+app.use('/api/evolution-webhook', evolutionGoWebhookRouter);
 
 app.get(['/venda', '/venda.html'], (req, res) => res.redirect(302, `${IS_VERCEL ? '/' : '/vitrine'}${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`));
 app.get(['/painel', '/app'], (_req, res) => {

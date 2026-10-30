@@ -14,6 +14,7 @@
 
 import { Router } from 'express';
 import express from 'express';
+import { randomUUID } from 'crypto';
 
 export const evolutionGoCloudRouter = Router();
 evolutionGoCloudRouter.use(express.json({ limit: '10mb' }));
@@ -81,7 +82,7 @@ async function ensureInstance(slotId, suffix) {
   const name = `zap-ia-${slotId}${suffix ? '-' + suffix : ''}`;
   let instance = await findInstanceByName(name);
   if (!instance) {
-    const instanceId = `${slotId}-${Date.now().toString(36)}`;
+    const instanceId = randomUUID();
     const token = `zap_ia_${slotId}_${Date.now().toString(36)}`;
     const createResult = await createInstance(instanceId, name, token);
     if (createResult.ok) {
@@ -155,12 +156,13 @@ async function getInstanceStatus(instanceToken) {
 }
 
 /**
- * Converte QR code binário para data URL.
+ * Converte QR code binário para data URL (se necessário).
+ * A API Evolution Go já retorna data URL, mas este helper cobre casos de base64 puro.
  */
-function bufferToDataUrl(buffer) {
-  if (Buffer.isBuffer(buffer)) {
-    return `data:image/png;base64,${buffer.toString('base64')}`;
-  }
+function toDataUrl(qrValue) {
+  if (!qrValue) return null;
+  if (typeof qrValue === 'string' && qrValue.startsWith('data:')) return qrValue;
+  if (typeof qrValue === 'string') return `data:image/png;base64,${qrValue}`;
   return null;
 }
 
@@ -260,14 +262,9 @@ evolutionGoCloudRouter.post('/connect', async (req, res) => {
     let qrDataUrl = null;
     try {
       const qrResult = await getInstanceQr(instanceToken);
-      if (qrResult.ok && qrResult.data) {
-        if (qrResult.data.qr) {
-          qrDataUrl = bufferToDataUrl(Buffer.from(qrResult.data.qr, 'base64'));
-        } else if (qrResult.data.data) {
-          qrDataUrl = bufferToDataUrl(Buffer.from(qrResult.data.data, 'base64'));
-        } else if (typeof qrResult.data === 'string') {
-          qrDataUrl = qrDataUrl ? qrDataUrl : qrResult.data;
-        }
+      if (qrResult.ok && qrResult.data?.data) {
+        // Formato: { data: { qrcode: "data:image/png;base64,...", code: "https://wa.me/..." } }
+        qrDataUrl = qrResult.data.data.qrcode || null;
       }
     } catch {
       // QR pode ainda não estar disponível, voltamos com status connecting
@@ -314,14 +311,8 @@ evolutionGoCloudRouter.post('/refresh-qr', async (req, res) => {
 
     const qrResult = await getInstanceQr(cached.token);
     let qrDataUrl = null;
-    if (qrResult.ok && qrResult.data) {
-      if (qrResult.data.qr) {
-        qrDataUrl = bufferToDataUrl(Buffer.from(qrResult.data.qr, 'base64'));
-      } else if (qrResult.data.data) {
-        qrDataUrl = bufferToDataUrl(Buffer.from(qrResult.data.data, 'base64'));
-      } else if (typeof qrResult.data === 'string') {
-        qrDataUrl = qrResult.data;
-      }
+    if (qrResult.ok && qrResult.data?.data) {
+      qrDataUrl = qrResult.data.data.qrcode || null;
     }
 
     if (qrDataUrl) {
@@ -364,8 +355,8 @@ evolutionGoCloudRouter.post('/reconnect', async (req, res) => {
     let qrDataUrl = null;
     try {
       const qrResult = await getInstanceQr(cached.token);
-      if (qrResult.ok && qrResult.data?.qr) {
-        qrDataUrl = bufferToDataUrl(Buffer.from(qrResult.data.qr, 'base64'));
+      if (qrResult.ok && qrResult.data?.data?.qrcode) {
+        qrDataUrl = qrResult.data.data.qrcode;
       }
     } catch {}
 

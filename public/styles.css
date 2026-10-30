@@ -2416,6 +2416,26 @@ textarea {
   align-items: center;
   justify-content: space-between;
 }
+
+/* Cores por etapa do Kanban (funil visual) */
+.kanban-col[data-stage="novo"] { border-top: 3px solid #3b82f6; }
+.kanban-col[data-stage="qualificando"] { border-top: 3px solid #f59e0b; }
+.kanban-col[data-stage="em_atendimento"] { border-top: 3px solid var(--accent); }
+.kanban-col[data-stage="aguardando_humano"] { border-top: 3px solid #ef4444; }
+.kanban-col[data-stage="concluido"] { border-top: 3px solid #22c55e; }
+
+.kanban-col[data-stage="novo"] .kanban-col-head { border-bottom-color: rgba(59,130,246,0.3); }
+.kanban-col[data-stage="qualificando"] .kanban-col-head { border-bottom-color: rgba(245,158,11,0.3); }
+.kanban-col[data-stage="em_atendimento"] .kanban-col-head { border-bottom-color: var(--accent-border); }
+.kanban-col[data-stage="aguardando_humano"] .kanban-col-head { border-bottom-color: rgba(239,68,68,0.3); }
+.kanban-col[data-stage="concluido"] .kanban-col-head { border-bottom-color: rgba(34,197,94,0.3); }
+
+.kanban-col[data-stage="aguardando_humano"] .kanban-col-head {
+  background: rgba(239, 68, 68, 0.06);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
 .lead-card {
   background: var(--bg-card-subtle);
   border: 1px solid var(--border);
@@ -2567,6 +2587,30 @@ textarea {
   border-radius: var(--radius-lg);
   padding: 15px 16px;
   box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  overflow: hidden;
+}
+.saas-kpi-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--accent);
+  opacity: 0.6;
+}
+.saas-kpi-card .kpi-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-bright);
+  margin-bottom: 2px;
 }
 .saas-kpi-val,
 .kpi-num {

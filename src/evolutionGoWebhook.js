@@ -267,3 +267,15 @@ evolutionGoWebhookRouter.post('/send', async (req, res) => {
   const { instance, number, text } = req.body;
   res.json(await sendMessage(instance, number, text));
 });
+
+// ROTEIRA TEMPORÁRIA (setup): listar user_ids do auth.users para mapear instâncias
+evolutionGoWebhookRouter.get('/users', async (req, res) => {
+  try {
+    const supabase = getAdminClient();
+    const { data, error } = await supabase.auth.admin.listUsers({ limit: 100 });
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ users: (data?.users || []).map((u) => ({ id: u.id, email: u.email })) });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});

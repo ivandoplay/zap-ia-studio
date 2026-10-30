@@ -1,4 +1,24 @@
-# Ienvia Motor — Deploy em GratisVPS (Free, sem cartão)
+# ⚠️ AVISSO IMPORTANTE — GratisVPS É UM ESQUEMA (SCAM)
+
+**GratisVPS.net não é uma opção legítima.** Revisamos a reputação em 2026-10-30:
+
+- **Trustpilot: 1.9/5** (17 avaliações, maioria "Complete Scam")
+- **WOT: 0.9/5** (classificado como fraude/ad-fraude)
+- **ScamAdviser: "Very Likely Unsafe"** (trust score 0)
+- Reddit/r/VPS: "data-harvesting scam" — VPS nunca ativa, exigiria clicar em anúncios
+
+**Mesmo padrão do FreeVPS.edu.pl que já foi rejeitado.** Não use, não cadastre, não clique.
+
+Este arquivo foi mantido apenas como registro histórico. Para deploy grátis/sem cartão, veja:
+- **Oracle Cloud Always Free** (VPS grátis, 4 cores ARM/24GB — mas cadastro exige cartão de crédito para verificação)
+- **Vercel** (serverless grátis — webhook como função, sem servidor, sem cartão)
+
+---
+
+# Ienvia Motor — Deploy em GratisVPS (ARQUIVADO — ACESSO EXTINTO POR SCAM)
+
+<details>
+<summary>Conteúdo original mantido apenas para registro (Não siga estes passos)</summary>
 
 GratisVPS oferece **2 vCPU, 2GB RAM, NVMe, root SSH** — grátis, sem cartão de crédito, sem expiração fixa.
 
@@ -272,3 +292,5 @@ GratisVPS Free:
 - A VPS precisa de **IP público** para o WhatsApp conectar (o Baileys usa WebSocket ao servidor)
 - **IPv4 compartilhado é o maior risco** — o WhatsApp pode bloquear IPs com reputação baixa
 - Para **dominio próprio**: adicione um record A/CNAME na DNS do seu domínio apontando para o IP da VPS
+
+</details>

@@ -155,16 +155,8 @@ async function getInstanceStatus(instanceToken) {
   return evolutionGoFetch('/instance/status', { method: 'GET' }, instanceToken);
 }
 
-/**
- * Converte QR code binário para data URL (se necessário).
- * A API Evolution Go já retorna data URL, mas este helper cobre casos de base64 puro.
- */
-function toDataUrl(qrValue) {
-  if (!qrValue) return null;
-  if (typeof qrValue === 'string' && qrValue.startsWith('data:')) return qrValue;
-  if (typeof qrValue === 'string') return `data:image/png;base64,${qrValue}`;
-  return null;
-}
+// A API Evolution Go já retorna QR code como data URL (data:image/png;base64,...)
+// não é necessário converter — o valor é usado diretamente.
 
 // ======================== ROTAS ========================
 

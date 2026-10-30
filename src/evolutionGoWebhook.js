@@ -267,3 +267,20 @@ evolutionGoWebhookRouter.post('/send', async (req, res) => {
   const { instance, number, text } = req.body;
   res.json(await sendMessage(instance, number, text));
 });
+
+// LIMPAR conversas de teste no CRM (temporário)
+evolutionGoWebhookRouter.post('/clear', async (req, res) => {
+  try {
+    const admin = getAdminClient();
+    const userId = resolveUserId('ienvia-teste-06a36777') || process.env.EVOLUTION_DEFAULT_USER_ID;
+    const chatIds = req.body?.chatIds || ['558681638438@s.whatsapp.net', '558681303979@s.whatsapp.net', 'diag-chat'];
+    const { error, count } = await admin
+      .from('zapia_contacts')
+      .delete()
+      .eq('user_id', userId)
+      .in('chat_id', chatIds);
+    res.json({ ok: true, deleted: count || 0, error: error?.message || null });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});

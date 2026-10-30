@@ -117,6 +117,7 @@ import {
   exportProfileBundleZip
 } from './trainingPackEngine.js';
 import { evolutionGoWebhookRouter } from './evolutionGoWebhook.js';
+import { evolutionGoCloudRouter } from './evolutionGoCloud.js';
 
 export const app = express();
 const APP_VERSION = (() => {
@@ -172,6 +173,11 @@ app.get('/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
 // Recebe mensagens do Evolution Go → IA do Ienvia Motor → resposta.
 // Montado ANTES do middleware /api de auth (o webhook é público — o Evolution Go não autentica).
 app.use('/api/evolution-webhook', evolutionGoWebhookRouter);
+
+// ======================== CLOUD BRIDGE → EVOLUTION GO ========================
+// Permite ao painel nuvem (Vercel) conectar WhatsApp via Evolution Go API sem motor local.
+// Rotas: /api/evolution-cloud/status, /connect, /refresh-qr, /reconnect, /disconnect, /delete
+app.use('/api/evolution-cloud', evolutionGoCloudRouter);
 
 app.get(['/venda', '/venda.html'], (req, res) => res.redirect(302, `${IS_VERCEL ? '/' : '/vitrine'}${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`));
 app.get(['/painel', '/app'], (_req, res) => {

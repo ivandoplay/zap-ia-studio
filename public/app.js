@@ -88,6 +88,7 @@ const state = {
   selectedWaSlotId: 'slot_1',
   pendingDeviceChoice: null,
   proactiveQueueState: { running: false, paused: false, channelMode: 'auto_rotate', remaining: 0, sentSession: 0, dailySent: 0, dailyLimit: 25 },
+  evolutionCloud: { available: null, slots: {} },
   settings: null,
   geminiPoolCount: 1,
   business: null,
@@ -904,6 +905,11 @@ async function refreshLiveStateOnly() {
       }
       checkClientSideDueFollowUps(false);
 
+      // Verifica disponibilidade da Evolution Go na nuvem (sem motor local)
+      if (snap.runtimeMode === 'vercel_cloud' && state.evolutionCloud.available === null) {
+        checkEvolutionCloud().catch(() => {});
+      }
+
       // Renderiza SEMPRE (mesmo se você estiver com o WhatsApp aberto em outra janela/aba),
       // para que ao voltar ao painel a mensagem enviada pelo seu celular já esteja na tela!
       renderCloudHeaderBar();
@@ -1329,6 +1335,7 @@ function getSlotUiMeta(slotId = 'slot_1') {
   const maxSlots = getAccountMaxSlots();
   const cfg = state.settings?.waSlots?.[cleanId] || {};
   const rtSlot = state.waState?.slots?.[cleanId] || (cleanId === 'slot_1' ? state.waState : {}) || {};
+  const evoSlot = state.evolutionCloud?.slots?.[cleanId] || {};
   const defaultTitle = num === 1 ? 'Chip 1 · Principal' : `Chip ${num}`;
   const label = String(cfg.label || rtSlot.label || defaultTitle).trim() || defaultTitle;
   const aiEnabled = cfg.aiEnabled !== undefined ? cfg.aiEnabled !== false : rtSlot.aiEnabled !== false;
@@ -1339,14 +1346,15 @@ function getSlotUiMeta(slotId = 'slot_1') {
     label,
     shortLabel: label.length > 18 ? `${label.slice(0, 17)}…` : label,
     aiEnabled,
-    status: rtSlot.status || 'disconnected',
-    qrDataUrl: rtSlot.qrDataUrl || null,
-    pairingCode: rtSlot.pairingCode || null,
+    status: evoSlot.status || rtSlot.status || 'disconnected',
+    qrDataUrl: evoSlot.qrDataUrl || rtSlot.qrDataUrl || null,
+    pairingCode: evoSlot.pairingCode || rtSlot.pairingCode || null,
     connectedUser: rtSlot.connectedUser || null,
     lastKnownUser: rtSlot.lastKnownUser || null,
     lastError: rtSlot.lastError || null,
     deviceId: rtSlot.deviceId || null,
-    deviceName: rtSlot.deviceName || null
+    deviceName: rtSlot.deviceName || null,
+    evolutionCloud: Boolean(state.evolutionCloud?.available) || Boolean(evoSlot.status)
   };
 }
 
@@ -1664,7 +1672,9 @@ function renderWaState() {
     btnDisc.style.display = 'none';
     const isCloudWorkerOff = state.runtimeMode === 'vercel_cloud' && !state.waState?.workerOnline;
     const lastKnownPhone = activeSlot.lastKnownUser?.phone || '';
-    if (isCloudWorkerOff) {
+    const evoActive = activeSlot.status === 'qr_ready' || activeSlot.status === 'connecting';
+    const evoAvailable = state.evolutionCloud?.available;
+    if (isCloudWorkerOff && !evoActive && !evoAvailable) {
       stage.innerHTML = `
         <div class="stage-cloud-off">
           <div class="stage-cloud-off-title">
@@ -5957,6 +5967,26 @@ function bindEvents() {
 
   async function executeSlotConnectRequest({ pairingPhone = null, slotId = null, targetDeviceId = null } = {}) {
     const chosenSlot = slotId || state.selectedWaSlotId || 'slot_1';
+
+    // Na nuvem sem motor local, usa a ponte Evolution Go (cloud WhatsApp API)
+    const isCloudWorkerOff = state.runtimeMode === 'vercel_cloud' && !state.waState?.workerOnline;
+    if (isCloudWorkerOff && !targetDeviceId) {
+      // Verifica se a Evolution Go está disponível
+      if (state.evolutionCloud.available === null) {
+        await checkEvolutionCloud();
+      }
+      if (state.evolutionCloud.available) {
+        try {
+          const evoRes = await evolutionCloudConnect(chosenSlot, pairingPhone);
+          return { ...evoRes, evolutionCloud: true };
+        } catch (err) {
+          // Se falhar, mostra erro mas não cai para o endpoint normal (que daria "motor offline")
+          showToast(err.message, true);
+          return { ok: false, error: err.message, evolutionCloud: true };
+        }
+      }
+    }
+
     const res = await api('/api/wa/connect', {
       method: 'POST',
       body: JSON.stringify({
@@ -6001,6 +6031,125 @@ function bindEvents() {
       }, 3000);
     }
     return res;
+  }
+
+  // ======================== PONTE CLOUD → EVOLUTION GO ========================
+  // Permite conectar WhatsApp direto da nuvem sem motor local (Termux/PC).
+
+  async function checkEvolutionCloud() {
+    try {
+      const res = await api('/api/evolution-cloud/status');
+      if (res?.ok && res.available) {
+        state.evolutionCloud.available = true;
+        state.evolutionCloud.slots = res.slots || {};
+      } else {
+        state.evolutionCloud.available = false;
+      }
+    } catch {
+      state.evolutionCloud.available = false;
+    }
+    return state.evolutionCloud.available;
+  }
+
+  async function evolutionCloudConnect(slotId, pairingPhone) {
+    try {
+      const res = await api('/api/evolution-cloud/connect', {
+        method: 'POST',
+        body: JSON.stringify({ slotId, pairingPhone })
+      });
+      if (res?.ok) {
+        // Atualiza o slot no state
+        if (!state.evolutionCloud.slots[slotId]) state.evolutionCloud.slots[slotId] = {};
+        state.evolutionCloud.slots[slotId].status = res.status;
+        state.evolutionCloud.slots[slotId].qrDataUrl = res.qrDataUrl;
+        state.evolutionCloud.slots[slotId].pairingCode = res.pairingCode;
+        state.evolutionCloud.slots[slotId].instanceId = res.instanceId;
+        // Merge no waState para o renderWaState ler
+        if (!state.waState.slots[slotId]) state.waState.slots[slotId] = {};
+        state.waState.slots[slotId].status = res.status;
+        state.waState.slots[slotId].qrDataUrl = res.qrDataUrl;
+        state.waState.slots[slotId].pairingCode = res.pairingCode;
+        state.waState.slots[slotId].workerOnline = true;
+        renderWaState();
+        // Se o QR ainda não está pronto, poll a cada 3s
+        if (res.status === 'connecting') {
+          clearTimeout(state._evoRefreshTimer);
+          state._evoRefreshTimer = setTimeout(() => {
+            state._evoRefreshTimer = null;
+            evolutionCloudRefreshQr(slotId).catch(() => {});
+          }, 3000);
+        }
+        return res;
+      }
+      throw new Error(res?.error || 'Falha ao conectar via Evolution Go');
+    } catch (err) {
+      throw err;
+    }
+  }
+
+  async function evolutionCloudRefreshQr(slotId) {
+    try {
+      const res = await api('/api/evolution-cloud/refresh-qr', {
+        method: 'POST',
+        body: JSON.stringify({ slotId })
+      });
+      if (res?.ok) {
+        const slot = state.evolutionCloud.slots[slotId] || {};
+        slot.status = res.status;
+        slot.qrDataUrl = res.qrDataUrl || slot.qrDataUrl;
+        slot.pairingCode = res.pairingCode || slot.pairingCode;
+        state.evolutionCloud.slots[slotId] = slot;
+        // Merge no waState
+        if (state.waState.slots[slotId]) {
+          state.waState.slots[slotId].status = res.status;
+          state.waState.slots[slotId].qrDataUrl = res.qrDataUrl || state.waState.slots[slotId].qrDataUrl;
+          state.waState.slots[slotId].pairingCode = res.pairingCode || state.waState.slots[slotId].pairingCode;
+        }
+        renderWaState();
+        // Continua polling até QR pronto
+        if (res.status === 'connecting') {
+          clearTimeout(state._evoRefreshTimer);
+          state._evoRefreshTimer = setTimeout(() => {
+            state._evoRefreshTimer = null;
+            evolutionCloudRefreshQr(slotId).catch(() => {});
+          }, 3000);
+        }
+      }
+    } catch {}
+  }
+
+  async function evolutionCloudDisconnect(slotId) {
+    try {
+      const res = await api('/api/evolution-cloud/disconnect', {
+        method: 'POST',
+        body: JSON.stringify({ slotId })
+      });
+      if (res?.ok) {
+        const slot = state.evolutionCloud.slots[slotId] || {};
+        slot.status = 'disconnected';
+        slot.qrDataUrl = null;
+        slot.pairingCode = null;
+        state.evolutionCloud.slots[slotId] = slot;
+        if (state.waState.slots[slotId]) {
+          state.waState.slots[slotId].status = 'disconnected';
+          state.waState.slots[slotId].qrDataUrl = null;
+          state.waState.slots[slotId].pairingCode = null;
+        }
+        renderWaState();
+      }
+      return res;
+    } catch (err) {
+      throw err;
+    }
+  }
+
+  // Verifica a disponibilidade da Evolution Go na nuvem periodicamente
+  if (!state._evoCheckInterval) {
+    state._evoCheckInterval = setInterval(() => {
+      if (state.runtimeMode === 'vercel_cloud') {
+        checkEvolutionCloud().catch(() => {});
+      }
+    }, 60000);
   }
 
   window.confirmDeviceChoiceForSlot = async function confirmDeviceChoiceForSlot(deviceId) {
@@ -6075,13 +6224,18 @@ function bindEvents() {
     btn.disabled = true;
     btn.textContent = 'Desconectando...';
     try {
-      const res = await api('/api/wa/disconnect', {
-        method: 'POST',
-        body: JSON.stringify({ clearSession: true, slotId: slotMeta.slotId })
-      });
-      state.waState = res.waState;
-      renderWaState();
-      showToast(`${slotMeta.label} desconectado.`);
+      if (slotMeta.evolutionCloud && state.evolutionCloud?.slots?.[slotMeta.slotId]?.status) {
+        await evolutionCloudDisconnect(slotMeta.slotId);
+        showToast(`${slotMeta.label} desconectado.`);
+      } else {
+        const res = await api('/api/wa/disconnect', {
+          method: 'POST',
+          body: JSON.stringify({ clearSession: true, slotId: slotMeta.slotId })
+        });
+        state.waState = res.waState;
+        renderWaState();
+        showToast(`${slotMeta.label} desconectado.`);
+      }
     } catch (err) {
       showToast(err.message, true);
     } finally {

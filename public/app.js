@@ -160,6 +160,22 @@ function showToast(msg, isError = false) {
   setTimeout(() => el.remove(), window.innerWidth <= 820 ? 2200 : 2800);
 }
 
+// Helper: loading state para botões async
+function setBtnLoading(btn, label = 'Processando...') {
+  if (!btn) return;
+  btn.dataset.origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.classList.add('loading');
+  btn.innerHTML = `<span class="btn-spinner"></span>${label}`;
+}
+function setBtnDone(btn, origHtml) {
+  if (!btn) return;
+  btn.disabled = false;
+  btn.classList.remove('loading');
+  if (origHtml !== undefined) btn.innerHTML = origHtml;
+  else if (btn.dataset.origHtml) btn.innerHTML = btn.dataset.origHtml;
+}
+
 function playHandoffChime() {
   if (state.settings?.branding?.soundAlertOnHandoff === false) return;
   try {
@@ -6451,7 +6467,10 @@ function bindEvents() {
     });
   });
 
-  document.getElementById('btnSaveAi').addEventListener('click', async () => {
+  document.getElementById('btnSaveAi').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const orig = btn.innerHTML;
+    setBtnLoading(btn, 'Salvando...');
     try {
       const ai = collectAiSettingsFromForm();
       const res = await api('/api/settings', {
@@ -6465,6 +6484,8 @@ function bindEvents() {
       showToast('Configurações de IA e Pool de Chaves salvos!');
     } catch (err) {
       showToast(err.message, true);
+    } finally {
+      setBtnDone(btn, orig);
     }
   });
 

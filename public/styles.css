@@ -4317,6 +4317,25 @@ label:has(input[type="checkbox"]) {
   transition: transform 200ms cubic-bezier(0.2, 0, 0, 1), opacity 200ms ease;
 }
 
+/* Loading spinner para botões async */
+.btn-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 600ms linear infinite;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.btn.loading {
+  opacity: 0.75;
+}
+
 
 
 

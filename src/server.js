@@ -117,7 +117,7 @@ import {
   exportProfileBundleZip
 } from './trainingPackEngine.js';
 import { evolutionGoWebhookRouter } from './evolutionGoWebhook.js';
-import { evolutionGoCloudRouter } from './evolutionGoCloud.js';
+import { evolutionGoCloudRouter, getEvolutionGoSlotStatus } from './evolutionGoCloud.js';
 
 export const app = express();
 const APP_VERSION = (() => {
@@ -929,8 +929,57 @@ app.get('/api/cloud/realtime-config', (req, res) => {
   return res.json({ok:true,url:SUPABASE_URL,key:SUPABASE_ANON_KEY,userId:req.cloudAuth.authUser.id});
 });
 
-app.get('/api/cloud/poll', (req, res) => {
-  const waState = getEffectiveWaState(req);
+// Mergea o status real da Evolution Go (nuvem) no waState do worker local.
+// Quando rodando na Vercel (vercel_cloud), o worker local pode estar offline,
+// mas a Evolution Go na nuvem pode ter instâncias conectadas. Sem esse merge,
+// o painel mostra "desconectado" mesmo com WhatsApp conectado na nuvem.
+async function mergeEvolutionGoStatus(req, waState) {
+  if (!usesCloudBridge(req)) return waState;
+  try {
+    const evoSlots = await getEvolutionGoSlotStatus();
+    if (evoSlots && typeof evoSlots === 'object') {
+      let anyConnected = false;
+      for (const [slotId, evoSlot] of Object.entries(evoSlots)) {
+        if (evoSlot.status === 'connected') {
+          anyConnected = true;
+          if (waState.slots?.[slotId]) {
+            waState.slots[slotId].status = 'connected';
+            waState.slots[slotId].rawStatus = 'connected';
+            waState.slots[slotId].phone = evoSlot.phone || waState.slots[slotId].phone || null;
+            waState.slots[slotId].connectedUser = waState.slots[slotId].connectedUser || waState.slots[slotId].phone || null;
+            waState.slots[slotId].pairingCode = evoSlot.pairingCode || null;
+            waState.slots[slotId].qrDataUrl = evoSlot.qrDataUrl || null;
+            waState.slots[slotId].workerOnline = true;
+          } else {
+            // Slot não existe no waState do worker — cria um mínimo para o render funcionar
+            waState.slots = waState.slots || {};
+            waState.slots[slotId] = {
+              ...waState.slots?.[slotId],
+              slotId,
+              status: 'connected',
+              rawStatus: 'connected',
+              phone: evoSlot.phone || null,
+              connectedUser: evoSlot.phone || null,
+              pairingCode: evoSlot.pairingCode || null,
+              qrDataUrl: evoSlot.qrDataUrl || null,
+              workerOnline: true,
+              workerPlatform: null,
+              workerVersion: null,
+            };
+          }
+        }
+      }
+      if (anyConnected) {
+        waState.status = 'connected';
+        waState.rawStatus = 'connected';
+      }
+    }
+  } catch {}
+  return waState;
+}
+
+app.get('/api/cloud/poll', async (req, res) => {
+  const waState = await mergeEvolutionGoStatus(req, getEffectiveWaState(req));
   res.json({
     ok: true,
     appVersion: APP_VERSION,

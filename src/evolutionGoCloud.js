@@ -429,3 +429,26 @@ evolutionGoCloudRouter.post('/delete', async (req, res) => {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
+
+// ======================== UTILITÁRIO PARA O SERVER ========================
+// Retorna o status real dos slots da Evolution Go (para merge no waState do poll)
+// Exportado para server.js usar no /api/cloud/poll quando em modo nuvem (vercel_cloud).
+export async function getEvolutionGoSlotStatus() {
+  const instances = await listInstances();
+  const slots = {};
+  for (const inst of instances) {
+    const slotMatch = inst.name?.match(/zap-ia-(slot_\d+)/);
+    const slotId = slotMatch ? slotMatch[1] : 'slot_1';
+    const cached = instanceCache.get(slotId) || {};
+    slots[slotId] = {
+      slotId,
+      instanceId: inst.id,
+      name: inst.name,
+      status: inst.connected ? 'connected' : 'disconnected',
+      phone: inst.jid ? inst.jid.split(':')[0] : null,
+      qrDataUrl: inst.qrcode || cached.qrDataUrl || null,
+      pairingCode: cached.pairingCode || null,
+    };
+  }
+  return slots;
+}

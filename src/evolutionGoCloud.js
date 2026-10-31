@@ -244,7 +244,14 @@ evolutionGoCloudRouter.post('/connect', async (req, res) => {
           qrDataUrl: null,
         });
       }
-      return res.status(500).json({ ok: false, error: `Falha ao gerar código: ${pairResult.data?.error || pairResult.error}` });
+      const errMsg = pairResult.data?.error || pairResult.error || '';
+      if (errMsg.includes('429') || errMsg.includes('rate-overlimit')) {
+        return res.status(429).json({
+          ok: false,
+          error: 'Número temporariamente limitado pelo WhatsApp (429). Aguarde 15-40 minutos e tente novamente.',
+        });
+      }
+      return res.status(500).json({ ok: false, error: `Falha ao gerar código: ${errMsg}` });
     }
 
     // Conecta a instância

@@ -177,8 +177,8 @@ evolutionGoCloudRouter.get('/status', async (req, res) => {
         slotId,
         instanceId: inst.id,
         name: inst.name,
-        status: inst.status || 'disconnected',
-        phone: inst.phone || null,
+        status: inst.connected ? 'connected' : 'disconnected',
+        phone: inst.jid ? inst.jid.split(':')[0] : null,
         webhookUrl: inst.webhook || null,
       };
     }

@@ -5968,9 +5968,11 @@ function bindEvents() {
   async function executeSlotConnectRequest({ pairingPhone = null, slotId = null, targetDeviceId = null } = {}) {
     const chosenSlot = slotId || state.selectedWaSlotId || 'slot_1';
 
-    // Na nuvem sem motor local, usa a ponte Evolution Go (cloud WhatsApp API)
+    // Na nuvem sem motor local OU local com slot desconectado, usa a ponte Evolution Go
+    const slotStatus = state.waState?.slots?.[chosenSlot]?.status;
     const isCloudWorkerOff = state.runtimeMode === 'vercel_cloud' && !state.waState?.workerOnline;
-    if (isCloudWorkerOff && !targetDeviceId) {
+    const isSlotDisconnected = slotStatus === 'disconnected' || !slotStatus;
+    if ((isCloudWorkerOff || isSlotDisconnected) && !targetDeviceId) {
       // Verifica se a Evolution Go está disponível
       if (state.evolutionCloud.available === null) {
         await checkEvolutionCloud();

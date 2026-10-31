@@ -261,7 +261,7 @@ evolutionGoCloudRouter.post('/connect', async (req, res) => {
 
     // Conecta a instância (com webhook configurado para receber mensagens)
     const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const webhookUrl = `${baseUrl}/api/evolution-webhook`;
+    const webhookUrl = `${baseUrl}/api/evolution-webhook/webhook`;
     const connectResult = await connectInstance(instanceToken, webhookUrl);
 
     // Obtém QR code (pode ser assincrono)

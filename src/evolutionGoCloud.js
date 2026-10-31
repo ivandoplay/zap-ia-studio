@@ -225,7 +225,7 @@ evolutionGoCloudRouter.post('/connect', async (req, res) => {
     if (pairingPhone) {
       const pairResult = await requestPairingCode(instanceToken, pairingPhone);
       if (pairResult.ok) {
-        const code = pairResult.data?.code || pairResult.data?.data?.code || null;
+        const code = pairResult.data?.data?.PairingCode || pairResult.data?.data?.code || pairResult.data?.PairingCode || pairResult.data?.code || null;
         // Cache do código de pareamento
         instanceCache.set(slotId, {
           instanceId: instance.id,

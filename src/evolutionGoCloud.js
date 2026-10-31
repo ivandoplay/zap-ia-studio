@@ -104,10 +104,15 @@ async function ensureInstance(slotId, suffix) {
 /**
  * Conecta a instância e obtém QR code.
  */
-async function connectInstance(instanceToken) {
+async function connectInstance(instanceToken, webhookUrl = null) {
+  const body = { immediate: false };
+  if (webhookUrl) {
+    body.webhookUrl = webhookUrl;
+    body.subscribe = ['MESSAGE'];
+  }
   return evolutionGoFetch('/instance/connect', {
     method: 'POST',
-    body: JSON.stringify({ immediate: false }),
+    body: JSON.stringify(body),
   }, instanceToken);
 }
 
@@ -254,8 +259,10 @@ evolutionGoCloudRouter.post('/connect', async (req, res) => {
       return res.status(500).json({ ok: false, error: `Falha ao gerar código: ${errMsg}` });
     }
 
-    // Conecta a instância
-    const connectResult = await connectInstance(instanceToken);
+    // Conecta a instância (com webhook configurado para receber mensagens)
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const webhookUrl = `${baseUrl}/api/evolution-webhook`;
+    const connectResult = await connectInstance(instanceToken, webhookUrl);
 
     // Obtém QR code (pode ser assincrono)
     let qrDataUrl = null;

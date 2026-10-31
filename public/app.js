@@ -6207,8 +6207,10 @@ function bindEvents() {
         pairingPhone: phone,
         slotId: state.selectedWaSlotId || 'slot_1'
       });
-      if (!out?.deferredChoice) {
+      if (out?.ok && !out?.deferredChoice) {
         showToast('Código de 8 dígitos gerado!');
+      } else if (out?.error) {
+        showToast(out.error, true);
       }
     } catch (err) {
       showToast(err.message, true);

@@ -437,7 +437,45 @@ evolutionGoCloudRouter.post('/delete', async (req, res) => {
   }
 });
 
-// ======================== UTILITÁRIO PARA O SERVER ========================
+/**
+ * POST /api/evolution-cloud/sync-history
+ * Pede à Evolution Go para sincronizar o histórico de um chat específico.
+ * As mensagens syncronizadas são enviadas de volta via webhook (já configurado).
+ * Body: { slotId, chatId }
+ */
+evolutionGoCloudRouter.post('/sync-history', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    const slotId = req.body?.slotId || 'slot_1';
+    const chatId = req.body?.chatId;
+    if (!chatId) return res.status(400).json({ ok: false, error: 'Informe chatId' });
+
+    const { instance, error } = await ensureInstance(slotId);
+    if (error) return res.status(500).json({ ok: false, error });
+
+    const instanceToken = instance.token;
+
+    // Faz o history-sync (pede à Evolution Go para sincronizar o histórico do chat)
+    const result = await evolutionGoFetch('/chat/history-sync', {
+      method: 'POST',
+      body: JSON.stringify({
+        messageInfo: {
+          chat: chatId,
+          count: 50,
+        },
+      }),
+    }, instanceToken);
+
+    if (result.ok) {
+      // As mensagens syncronizadas chegam via webhook em seguida
+      res.json({ ok: true, chatId, sync: result.data, message: 'Sincronização iniciada. As mensagens chegam via webhook.' });
+    } else {
+      res.status(500).json({ ok: false, error: result.data?.error || result.error });
+    }
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
 // Retorna o status real dos slots da Evolution Go (para merge no waState do poll)
 // Exportado para server.js usar no /api/cloud/poll quando em modo nuvem (vercel_cloud).
 export async function getEvolutionGoSlotStatus() {

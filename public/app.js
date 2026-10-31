@@ -6211,7 +6211,8 @@ function bindEvents() {
       showToast(err.message, true);
     } finally {
       btn.disabled = false;
-      btn.innerHTML = orig;
+      renderWaState();
+      if (btn.style.display !== 'none' && btn.textContent === 'Gerando código...') btn.innerHTML = orig;
     }
   });
 

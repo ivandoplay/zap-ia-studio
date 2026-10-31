@@ -459,3 +459,33 @@ export async function getEvolutionGoSlotStatus() {
   }
   return slots;
 }
+
+// Obtém os contatos do WhatsApp conectado na Evolution Go (via /user/contacts).
+// Retorna um array de contatos no formato do storage (chatId, name, stage, lastMessageAt, messages).
+export async function getEvolutionGoContacts() {
+  const instances = await listInstances();
+  const contactsMap = {};
+  for (const inst of instances) {
+    if (!inst.connected) continue;
+    const slotMatch = inst.name?.match(/zap-ia-(slot_\d+)/);
+    const slotId = slotMatch ? slotMatch[1] : 'slot_1';
+    const token = inst.token || instanceCache.get(slotId)?.token;
+    if (!token) continue;
+    const result = await evolutionGoFetch('/user/contacts', { method: 'GET' }, token);
+    if (result.ok && Array.isArray(result.data?.data)) {
+      for (const c of result.data.data) {
+        const chatId = c.Jid;
+        if (!chatId || contactsMap[chatId]) continue;
+        contactsMap[chatId] = {
+          chatId,
+          name: c.PushName || c.FullName || c.BusinessName || null,
+          stage: 'novo',
+          lastMessageAt: null,
+          messages: [],
+          savedContact: false,
+        };
+      }
+    }
+  }
+  return Object.values(contactsMap);
+}

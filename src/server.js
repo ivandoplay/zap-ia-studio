@@ -117,7 +117,7 @@ import {
   exportProfileBundleZip
 } from './trainingPackEngine.js';
 import { evolutionGoWebhookRouter } from './evolutionGoWebhook.js';
-import { evolutionGoCloudRouter, getEvolutionGoSlotStatus } from './evolutionGoCloud.js';
+import { evolutionGoCloudRouter, getEvolutionGoSlotStatus, getEvolutionGoContacts } from './evolutionGoCloud.js';
 
 export const app = express();
 const APP_VERSION = (() => {
@@ -980,6 +980,16 @@ async function mergeEvolutionGoStatus(req, waState) {
 
 app.get('/api/cloud/poll', async (req, res) => {
   const waState = await mergeEvolutionGoStatus(req, getEffectiveWaState(req));
+  // Sincroniza contatos do WhatsApp conectado na Evolution Go (nuvem) para o CRM
+  let contactsMap = storage.data.contacts || {};
+  if (usesCloudBridge(req)) {
+    try {
+      const evoContacts = await getEvolutionGoContacts();
+      for (const c of evoContacts) {
+        if (!contactsMap[c.chatId]) contactsMap[c.chatId] = c;
+      }
+    } catch {}
+  }
   res.json({
     ok: true,
     appVersion: APP_VERSION,
@@ -988,7 +998,7 @@ app.get('/api/cloud/poll', async (req, res) => {
     waState,
     waSlots: normalizeWaSlotsSettings(storage.data.settings?.waSlots),
     proactiveQueueState: usesCloudBridge(req) ? waState.proactive : whatsappManager.getProactiveQueueState(),
-    contacts: sortContactsForInbox(storage.data.contacts),
+    contacts: sortContactsForInbox(contactsMap),
     stats: storage.data.stats,
     logs: (storage.data.logs || []).slice(0, 60)
   });

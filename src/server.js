@@ -117,7 +117,7 @@ import {
   exportProfileBundleZip
 } from './trainingPackEngine.js';
 import { evolutionGoWebhookRouter } from './evolutionGoWebhook.js';
-import { evolutionGoCloudRouter, getEvolutionGoSlotStatus, getEvolutionGoContacts } from './evolutionGoCloud.js';
+import { evolutionGoCloudRouter, getEvolutionGoSlotStatus, getEvolutionGoContacts, sendEvolutionGoText, sendEvolutionGoMedia, sendEvolutionGoContact, reactEvolutionGoMessage, editEvolutionGoMessage, deleteEvolutionGoMessage, markEvolutionGoRead, blockEvolutionGoContact, requestEvolutionGoHistory } from './evolutionGoCloud.js';
 
 export const app = express();
 const APP_VERSION = (() => {
@@ -173,11 +173,6 @@ app.get('/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
 // Recebe mensagens do Evolution Go → IA do Ienvia Motor → resposta.
 // Montado ANTES do middleware /api de auth (o webhook é público — o Evolution Go não autentica).
 app.use('/api/evolution-webhook', evolutionGoWebhookRouter);
-
-// ======================== CLOUD BRIDGE → EVOLUTION GO ========================
-// Permite ao painel nuvem (Vercel) conectar WhatsApp via Evolution Go API sem motor local.
-// Rotas: /api/evolution-cloud/status, /connect, /refresh-qr, /reconnect, /disconnect, /delete
-app.use('/api/evolution-cloud', evolutionGoCloudRouter);
 
 app.get(['/venda', '/venda.html'], (req, res) => res.redirect(302, `${IS_VERCEL ? '/' : '/vitrine'}${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`));
 app.get(['/painel', '/app'], (_req, res) => {
@@ -628,6 +623,9 @@ app.use('/api', async (req, res, next) => {
   return next();
 });
 
+// O bridge precisa ficar após o middleware /api, que autentica e instala o tenant context.
+app.use('/api/evolution-cloud', evolutionGoCloudRouter);
+
 // Consulta autenticada e por tenant: não expõe payloads ou conteúdo de conversas.
 app.get('/api/cloud/commands/:commandId/status', async (req, res) => {
   if (!req.cloudAuth?.client || !req.cloudAuth?.authUser?.id) return res.status(404).json({ ok: false, error: 'Envio não encontrado.' });
@@ -900,7 +898,15 @@ function sortContactsForInbox(contactsObj = {}) {
 app.get('/api/bootstrap', async (req, res) => {
   storage.ensureDailyRollover();
   const ffmpegBin = usesCloudBridge(req) ? 'cloud' : await resolveFfmpegPath();
-  const waState = getEffectiveWaState(req);
+  const waState = await mergeEvolutionGoStatus(req, getEffectiveWaState(req));
+  let contacts = sortContactsForInbox(storage.data.contacts);
+  if (usesCloudBridge(req)) {
+    try {
+      const known = new Set(contacts.map((c) => c.chatId));
+      const discovered = await getEvolutionGoContacts(req.cloudAuth?.authUser?.id || null);
+      contacts = [...contacts, ...discovered.filter((c) => !known.has(c.chatId))];
+    } catch {}
+  }
   res.json({
     appVersion: APP_VERSION,
     runtimeMode: usesCloudBridge(req) ? 'vercel_cloud' : 'local_worker',
@@ -913,7 +919,7 @@ app.get('/api/bootstrap', async (req, res) => {
     business: storage.getBusiness(),
     templates: NICHE_TEMPLATES,
     trainingPacks: listTrainingPacks(),
-    contacts: sortContactsForInbox(storage.data.contacts),
+    contacts,
     stats: storage.data.stats,
     logs: storage.data.logs,
     simulatorHistory: storage.data.simulatorHistory || []
@@ -936,7 +942,7 @@ app.get('/api/cloud/realtime-config', (req, res) => {
 async function mergeEvolutionGoStatus(req, waState) {
   if (!usesCloudBridge(req)) return waState;
   try {
-    const evoSlots = await getEvolutionGoSlotStatus();
+    const evoSlots = await getEvolutionGoSlotStatus(req.cloudAuth?.authUser?.id || null);
     if (evoSlots && typeof evoSlots === 'object') {
       let anyConnected = false;
       for (const [slotId, evoSlot] of Object.entries(evoSlots)) {
@@ -984,7 +990,7 @@ app.get('/api/cloud/poll', async (req, res) => {
   let contactsMap = storage.data.contacts || {};
   if (usesCloudBridge(req)) {
     try {
-      const evoContacts = await getEvolutionGoContacts();
+      const evoContacts = await getEvolutionGoContacts(req.cloudAuth?.authUser?.id || null);
       for (const c of evoContacts) {
         if (!contactsMap[c.chatId]) contactsMap[c.chatId] = c;
       }
@@ -1435,6 +1441,17 @@ app.post('/api/wa/device-rename', async (req, res) => {
 app.post('/api/wa/sync-history', async (req, res) => {
   try {
     const slotId = req.body?.slotId ? normalizeSlotId(req.body.slotId) : null;
+    if (usesCloudBridge(req) && !getEffectiveWaState(req).workerOnline) {
+      const contacts = Object.values(storage.data.contacts || {}).filter((c) => {
+        const cid = String(c.chatId || ''); return cid && !cid.startsWith('demo_') && !cid.includes('@g.us') && (c.slotId ? normalizeSlotId(c.slotId) === (slotId || normalizeSlotId(c.slotId)) : true);
+      });
+      let requested = 0;
+      for (const contact of contacts.slice(0, 15)) {
+        const anchor = (contact.messages || []).filter((m) => m.waMsgId).sort((a,b) => Date.parse(a.timestamp||0)-Date.parse(b.timestamp||0))[0];
+        try { await requestEvolutionGoHistory(req.cloudAuth.authUser.id, contact.chatId, 50, { id:anchor?.waMsgId || '', isFromMe:anchor?.role !== 'user', timestamp:anchor?.timestamp || '' }); requested++; } catch {}
+      }
+      return res.json({ ok:true, provider:'evolution_go', requested, partial:contacts.length > requested, contacts:sortContactsForInbox(storage.data.contacts), message:'Solicitações de histórico enviadas; as mensagens chegam de forma assíncrona pelo webhook.' });
+    }
     if (usesCloudBridge(req)) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
@@ -1508,6 +1525,15 @@ app.post('/api/wa/proactive-send', async (req, res) => {
       .replace(/\{\s*nome\s*\}/gi, cleanName !== 'Contato Abordado' ? cleanName.split(' ')[0] : '')
       .replace(/\s{2,}/g, ' ')
       .trim();
+    if (usesCloudBridge(req) && !getEffectiveWaState(req).workerOnline) {
+      if (voiceId) return res.status(503).json({ ok:false, workerOffline:true, error:'O envio de áudio estratégico exige o Motor WhatsApp online. Envie texto ou conecte o Motor.' });
+      const digits = String(phone).replace(/\D/g, '');
+      const jid = `${digits}@s.whatsapp.net`;
+      const destination = WA_SLOT_IDS.includes(channelMode) && channelMode !== 'slot_1' ? `${channelMode}::${jid}` : jid;
+      await sendEvolutionGoText(req.cloudAuth.authUser.id, destination, personalizedText);
+      const contact = storage.appendContactMessage(destination, { role:'owner', text:personalizedText, contactName:cleanName, phone:digits });
+      return res.json({ ok:true, contact, sentRealWhatsApp:true, provider:'evolution_go', accepted:true });
+    }
     if (usesCloudBridge(req)) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
@@ -2422,6 +2448,10 @@ app.post('/api/crm/:chatId/block', async (req, res) => {
       } catch (bridgeErr) {
         if (!/desconhecida/i.test(bridgeErr.message || '')) throw bridgeErr;
       }
+    } else if (usesCloudBridge(req) && !key.startsWith('demo_')) {
+      await blockEvolutionGoContact(req.cloudAuth.authUser.id, key, nextBlocked);
+      const updated = storage.upsertContact(key, { waBlocked:nextBlocked, aiIgnored:nextBlocked ? true : Boolean(existing.aiIgnored) });
+      return res.json({ ok:true, contact:updated, syncedWhatsApp:true, provider:'evolution_go' });
     } else if (!usesCloudBridge(req) && !key.startsWith('demo_') && whatsappManager?.status === 'connected') {
       const updated = await whatsappManager.setWhatsAppBlockStatus(key, nextBlocked);
       return res.json({ ok: true, contact: updated, syncedWhatsApp: true });
@@ -2470,6 +2500,11 @@ app.post('/api/crm/:chatId/send-vcard', async (req, res) => {
       } catch (bridgeErr) {
         if (!/desconhecida/i.test(bridgeErr.message || '')) throw bridgeErr;
       }
+    } else if (usesCloudBridge(req) && !targetKey.startsWith('demo_')) {
+      await sendEvolutionGoContact(req.cloudAuth.authUser.id, targetKey, cardContact);
+      const displayName = String(cardContact.name || cardContact.phone || 'Contato').trim();
+      const updated = storage.appendContactMessage(targetKey, { role:'owner', text:`🪪 Cartão de contato enviado: *${displayName}*` });
+      return res.json({ ok:true, contact:updated, syncedWhatsApp:true, provider:'evolution_go' });
     } else if (!usesCloudBridge(req) && !targetKey.startsWith('demo_') && whatsappManager?.status === 'connected') {
       const updated = await whatsappManager.sendContactVCardOnWhatsApp(targetKey, cardContact);
       return res.json({ ok: true, contact: updated, syncedWhatsApp: true });
@@ -2489,8 +2524,12 @@ app.post('/api/crm/:chatId/send-vcard', async (req, res) => {
   }
 });
 
-app.post('/api/crm/:chatId/mark-read', (req, res) => {
+app.post('/api/crm/:chatId/mark-read', async (req, res) => {
   const chatId = decodeURIComponent(req.params.chatId);
+  const existing = storage.data.contacts[storage.findSiblingContactKey(chatId) || chatId];
+  if (usesCloudBridge(req) && !chatId.startsWith('demo_')) {
+    try { await markEvolutionGoRead(req.cloudAuth.authUser.id, chatId, (existing?.messages || []).filter((m) => m.role === 'user' && m.waMsgId).map((m) => m.waMsgId)); } catch (err) { return res.status(err.statusCode || 502).json({ ok:false, error:err.message }); }
+  }
   const contact = storage.markContactRead(chatId);
   if (!contact) return res.status(404).json({ ok: false, error: 'Conversa não encontrada.' });
   res.json({ ok: true, contact });
@@ -2679,11 +2718,12 @@ app.post(['/api/crm/:chatId/send', '/api/crm/:chatId/reply'], async (req, res) =
     if (usesCloudBridge(req) && !chatId.startsWith('demo_')) {
       const waState = getEffectiveWaState(req);
       if (!waState.workerOnline) {
-        return res.status(503).json({
-          ok: false,
-          workerOffline: true,
-          error: 'Seu Motor WhatsApp (Termux / PC) está offline. Ligue o motor no seu aparelho para enviar mensagens reais no WhatsApp.'
-        });
+        const quotedMessage = quotedMsgId ? storage.findMessageInContact(chatId, quotedMsgId)?.msg : null;
+        const result = await sendEvolutionGoText(req.cloudAuth.authUser.id, chatId, text, { quoted:quotedMessage?.waMsgId ? { messageId:quotedMessage.waMsgId } : undefined });
+        const messageId = result?.data?.key?.id || result?.key?.id || result?.data?.id || result?.id || '';
+        const contact = storage.appendContactMessage(chatId, { role:'owner', text, ...(messageId ? { waMsgId:String(messageId) } : {}) });
+        storage.markContactRead(chatId);
+        return res.json({ ok:true, contact, sentRealWhatsApp:true, provider:'evolution_go', accepted:true });
       }
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
@@ -2764,6 +2804,13 @@ app.post('/api/crm/:chatId/messages/:msgId/react', async (req, res) => {
       } catch (bridgeErr) {
         if (!/desconhecida/i.test(bridgeErr.message || '')) throw bridgeErr;
       }
+    } else if (usesCloudBridge(req) && !chatId.startsWith('demo_')) {
+      const target = storage.findMessageInContact(chatId, msgId)?.msg;
+      if (!target) return res.status(404).json({ ok:false, error:'Mensagem não encontrada.' });
+      await reactEvolutionGoMessage(req.cloudAuth.authUser.id, chatId, target.waMsgId || msgId, emoji, target.role !== 'user');
+      const updated = storage.applyMessageReaction(chatId, msgId, emoji, 'owner');
+      if (!updated) return res.status(404).json({ ok:false, error:'Mensagem enviada; não encontrei a mensagem local para atualizar a reação.' });
+      return res.json({ ok:true, contact:updated, syncedWhatsApp:true, provider:'evolution_go' });
     } else if (!usesCloudBridge(req) && !chatId.startsWith('demo_') && whatsappManager?.status === 'connected') {
       const updated = await whatsappManager.reactToWhatsappMessage(chatId, msgId, emoji);
       return res.json({ ok: true, contact: updated, syncedWhatsApp: true });
@@ -2797,6 +2844,14 @@ app.put('/api/crm/:chatId/messages/:msgId', async (req, res) => {
       } catch (bridgeErr) {
         if (!/desconhecida/i.test(bridgeErr.message || '')) throw bridgeErr;
       }
+    } else if (usesCloudBridge(req) && !chatId.startsWith('demo_')) {
+      const target = storage.findMessageInContact(chatId, msgId)?.msg;
+      if (!target) return res.status(404).json({ ok:false, error:'Mensagem não encontrada.' });
+      if (target.role === 'user') return res.status(403).json({ ok:false, error:'Só é possível editar mensagens enviadas por esta conta.' });
+      await editEvolutionGoMessage(req.cloudAuth.authUser.id, chatId, target.waMsgId || msgId, text);
+      const updated = storage.applyMessageEdit(chatId, msgId, text);
+      if (!updated) return res.status(404).json({ ok:false, error:'Mensagem enviada; não encontrei a mensagem local para atualizar.' });
+      return res.json({ ok:true, contact:updated, syncedWhatsApp:true, provider:'evolution_go' });
     } else if (!usesCloudBridge(req) && !chatId.startsWith('demo_') && whatsappManager?.status === 'connected') {
       const updated = await whatsappManager.editWhatsappMessage(chatId, msgId, text);
       return res.json({ ok: true, contact: updated, syncedWhatsApp: true });
@@ -2828,6 +2883,14 @@ app.delete('/api/crm/:chatId/messages/:msgId', async (req, res) => {
       } catch (bridgeErr) {
         if (!/desconhecida/i.test(bridgeErr.message || '')) throw bridgeErr;
       }
+    } else if (usesCloudBridge(req) && !chatId.startsWith('demo_')) {
+      const target = storage.findMessageInContact(chatId, msgId)?.msg;
+      if (!target) return res.status(404).json({ ok:false, error:'Mensagem não encontrada.' });
+      if (target.role === 'user') return res.status(403).json({ ok:false, error:'Só é possível apagar mensagens enviadas por esta conta.' });
+      await deleteEvolutionGoMessage(req.cloudAuth.authUser.id, chatId, target.waMsgId || msgId);
+      const updated = storage.applyMessageDelete(chatId, msgId);
+      if (!updated) return res.status(404).json({ ok:false, error:'Mensagem apagada; não encontrei a mensagem local para atualizar.' });
+      return res.json({ ok:true, contact:updated, syncedWhatsApp:true, provider:'evolution_go' });
     } else if (!usesCloudBridge(req) && !chatId.startsWith('demo_') && whatsappManager?.status === 'connected') {
       const updated = await whatsappManager.deleteWhatsappMessageForEveryone(chatId, msgId);
       return res.json({ ok: true, contact: updated, syncedWhatsApp: true });
@@ -2883,6 +2946,12 @@ app.post('/api/crm/:chatId/fetch-history', async (req, res) => {
     return res.json({ ok: true, countAdded: 0, contact: storage.data.contacts[chatId] || null });
   }
   try {
+    if (usesCloudBridge(req) && !getEffectiveWaState(req).workerOnline) {
+      const contact = storage.data.contacts[storage.findSiblingContactKey(chatId) || chatId];
+      const anchor = (contact?.messages || []).filter((m) => m.waMsgId).sort((a,b) => Date.parse(a.timestamp||0)-Date.parse(b.timestamp||0))[0];
+      const result = await requestEvolutionGoHistory(req.cloudAuth.authUser.id, chatId, count, { id:anchor?.waMsgId || '', isFromMe:anchor?.role !== 'user', timestamp:anchor?.timestamp || '' });
+      return res.json({ ok:true, chatId, requested:true, provider:'evolution_go', sync:result, countAdded:0, contact:contact || null });
+    }
     if (usesCloudBridge(req)) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
@@ -2910,6 +2979,15 @@ app.post('/api/crm/:chatId/send-item', async (req, res) => {
   if (!item) return res.status(404).json({ ok: false, error: 'Item do catálogo não encontrado.' });
 
   try {
+    if (usesCloudBridge(req) && !chatId.startsWith('demo_') && !getEffectiveWaState(req).workerOnline) {
+      const txt = `*${item.name}*${item.price ? ` — R$ ${item.price}` : ''}\n${item.description || ''}${item.paymentLink ? `\n${item.paymentLink}` : ''}`.trim();
+      const mediaFiles = item.mediaFiles || (item.mediaFile ? [item.mediaFile] : []);
+      const media = mediaFiles.find((m) => m?.url && /^https?:\/\//i.test(m.url));
+      if (media) await sendEvolutionGoMedia(req.cloudAuth.authUser.id, chatId, { url:media.url, type:String(media.mimeType || '').startsWith('image/') ? 'image' : 'document', filename:media.originalName || media.filename || item.name, caption:txt });
+      else await sendEvolutionGoText(req.cloudAuth.authUser.id, chatId, txt);
+      const updated = storage.appendContactMessage(chatId, { role:'owner', text:txt, ...(media ? {mediaUrl:media.url, mediaName:media.originalName || media.filename, mediaMime:media.mimeType} : {}) });
+      return res.json({ ok:true, contact:updated, sentRealWhatsApp:true, provider:'evolution_go' });
+    }
     if (usesCloudBridge(req) && !chatId.startsWith('demo_')) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
@@ -2956,6 +3034,19 @@ app.post('/api/crm/:chatId/send-pix', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'Ative e configure sua chave PIX na aba Catálogo & PIX primeiro.' });
   }
   try {
+    if (usesCloudBridge(req) && !chatId.startsWith('demo_') && !getEffectiveWaState(req).workerOnline) {
+      const preview = await formatPixMessageWithQr(biz.pix, req.body?.amount || null);
+      const text = preview?.summaryText || `PIX\nChave: ${biz.pix.key}`;
+      let mediaUrl = '';
+      if (preview?.qrBuffer && preview.sendQrImage) {
+        const filename = `pix_${crypto.randomUUID()}.png`;
+        mediaUrl = await uploadMediaBufferToCloud(req.cloudAuth.client, req.cloudAuth.authUser.id, filename, preview.qrBuffer, 'image/png') || '';
+        if (mediaUrl) await sendEvolutionGoMedia(req.cloudAuth.authUser.id, chatId, { url:mediaUrl, type:'image', filename:'pix.png', caption:text });
+      }
+      if (!mediaUrl) await sendEvolutionGoText(req.cloudAuth.authUser.id, chatId, text);
+      const updated = storage.appendContactMessage(chatId, { role:'owner', text, ...(mediaUrl ? {mediaUrl, mediaName:'pix.png', mediaMime:'image/png'} : {}) });
+      return res.json({ ok:true, contact:updated, sentRealWhatsApp:true, provider:'evolution_go' });
+    }
     if (usesCloudBridge(req) && !chatId.startsWith('demo_')) {
       const out = await dispatchCommandToWorker(
         req.cloudAuth.client,
@@ -3081,11 +3172,9 @@ app.post('/api/crm/:chatId/send-attachment', memUpload.single('file'), async (re
       if (!chatId.startsWith('demo_')) {
         const waState = getEffectiveWaState(req);
         if (!waState.workerOnline) {
-          return res.status(503).json({
-            ok: false,
-            workerOffline: true,
-            error: 'Seu Motor WhatsApp (Termux / PC) está offline. Ligue o motor para enviar arquivos reais no WhatsApp.'
-          });
+          await sendEvolutionGoMedia(req.cloudAuth.authUser.id, chatId, { url:mediaUrl, type:isImage ? 'image' : isVideo ? 'video' : 'document', filename:displayFileName, caption });
+          const contact = storage.appendContactMessage(chatId, { role:'owner', text:caption || (isImage ? '[Imagem enviada]' : isVideo ? `[Vídeo enviado: ${displayFileName}]` : `[Arquivo enviado: ${displayFileName}]`), mediaUrl, mediaName:displayFileName, mediaMime:resolvedMime, mediaSize:req.file.buffer.length });
+          return res.json({ ok:true, contact, sentRealWhatsApp:true, provider:'evolution_go' });
         }
         const out = await dispatchCommandToWorker(
           req.cloudAuth.client,

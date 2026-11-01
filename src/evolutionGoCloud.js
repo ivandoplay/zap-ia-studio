@@ -18,6 +18,16 @@ import { randomUUID } from 'crypto';
 
 export const evolutionGoCloudRouter = Router();
 evolutionGoCloudRouter.use(express.json({ limit: '10mb' }));
+// The global Evolution pool API key currently serves one configured tenant only.
+// Fail closed for other accounts until per-tenant instance credentials are provisioned.
+evolutionGoCloudRouter.use((req, res, next) => {
+  if (process.env.VERCEL) {
+    const userId = req.cloudAuth?.authUser?.id;
+    const allowed = Boolean(userId && userId === process.env.EVOLUTION_DEFAULT_USER_ID && !req.cloudAuth?.isRemoteImpersonation);
+    if (!allowed) return res.status(userId ? 403 : 401).json({ ok: false, error: 'Esta conta não tem Evolution Go configurado.' });
+  }
+  next();
+});
 
 const EVOLUTION_GO_URL = process.env.EVOLUTION_GO_URL || 'https://pool-evolution-go-025.cloud2.pageup.dev.br';
 const EVOLUTION_GO_API_KEY = process.env.EVOLUTION_GO_API_KEY || 'de641771b68731fb4340696241bd2cd6';
@@ -75,12 +85,28 @@ async function findInstanceByName(name) {
   return instances.find(i => i.name === name);
 }
 
+async function resolveSlotInstance(slotId, userId = null) {
+  const cached = instanceCache.get(slotId);
+  if (cached?.token && (!userId || instanceOwnedBy({ name:cached.name }, userId))) return cached;
+  const instances = (await listInstances()).filter((i) => !userId || instanceOwnedBy(i, userId));
+  const named = instances.find((i) => i.name === `zap-ia-${slotId}`);
+  const legacy = slotId === 'slot_1' ? instances.find((i) => i.connected && !/^zap-ia-slot_\d+/.test(i.name || '')) : null;
+  const inst = legacy || named;
+  if (!inst?.token) return null;
+  const resolved = { instanceId: inst.id, name: inst.name, token: inst.token, status: inst.connected ? 'connected' : 'disconnected', qrDataUrl: inst.qrcode || null, pairingCode: null };
+  instanceCache.set(slotId, resolved);
+  return resolved;
+}
+
 /**
  * Busca ou cria uma instância para um slot.
  */
-async function ensureInstance(slotId, suffix) {
+async function ensureInstance(slotId, suffix, userId = null) {
   const name = `zap-ia-${slotId}${suffix ? '-' + suffix : ''}`;
-  let instance = await findInstanceByName(name);
+  const available = (await listInstances()).filter((i) => !userId || instanceOwnedBy(i, userId));
+  const namedInstance = available.find((i) => i.name === name);
+  const connectedLegacy = slotId === 'slot_1' ? available.find((i) => i.connected && !/^zap-ia-slot_\d+/.test(i.name || '')) : null;
+  let instance = connectedLegacy || namedInstance;
   if (!instance) {
     const instanceId = randomUUID();
     const token = `zap_ia_${slotId}_${Date.now().toString(36)}`;
@@ -105,11 +131,8 @@ async function ensureInstance(slotId, suffix) {
  * Conecta a instância e obtém QR code.
  */
 async function connectInstance(instanceToken, webhookUrl = null) {
-  const body = { immediate: false };
-  if (webhookUrl) {
-    body.webhookUrl = webhookUrl;
-    body.subscribe = ['MESSAGE'];
-  }
+  const body = { immediate: false, subscribe: ['ALL'] };
+  if (webhookUrl) body.webhookUrl = webhookUrl;
   return evolutionGoFetch('/instance/connect', {
     method: 'POST',
     body: JSON.stringify(body),
@@ -172,20 +195,16 @@ async function getInstanceStatus(instanceToken) {
 evolutionGoCloudRouter.get('/status', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   try {
-    const instances = await listInstances();
+    const statusUserId = req.cloudAuth?.authUser?.id || null;
+    const instances = (await listInstances()).filter((inst) => !statusUserId || instanceOwnedBy(inst, statusUserId));
     const slots = {};
     for (const inst of instances) {
       // Parse slot ID from instance name (zap-ia-slot_1)
       const slotMatch = inst.name?.match(/zap-ia-(slot_\d+)/);
-      const slotId = slotMatch ? slotMatch[1] : 'slot_1';
-      slots[slotId] = {
-        slotId,
-        instanceId: inst.id,
-        name: inst.name,
-        status: inst.connected ? 'connected' : 'disconnected',
-        phone: inst.jid ? inst.jid.split(':')[0] : null,
-        webhookUrl: inst.webhook || null,
-      };
+      const slotId = slotMatch ? slotMatch[1] : (inst.connected && slots.slot_1?.status !== 'connected' ? 'slot_1' : null);
+      if (!slotId) continue;
+      const candidate = { slotId, instanceId: inst.id, name: inst.name, status: inst.connected ? 'connected' : 'disconnected', phone: inst.jid ? inst.jid.split(':')[0] : null, webhookUrl: inst.webhook || null };
+      if (!slots[slotId] || (candidate.status === 'connected' && slots[slotId].status !== 'connected')) slots[slotId] = candidate;
     }
 
     // Check cache for QR codes and pairing codes
@@ -221,12 +240,19 @@ evolutionGoCloudRouter.post('/connect', async (req, res) => {
     const pairingPhone = req.body?.pairingPhone || null;
 
     // Busca ou cria instância
-    const { instance, error } = await ensureInstance(slotId);
+    const { instance, error } = await ensureInstance(slotId, undefined, req.cloudAuth?.authUser?.id || null);
     if (error) return res.status(500).json({ ok: false, error });
 
     const instanceToken = instance.token;
 
     // Se foi solicitado código de pareamento
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const webhookUrl = `${baseUrl}/api/evolution-webhook/webhook`;
+    // Pair endpoint does not accept webhookUrl; configure instance first, then request pairing code.
+    const configureResult = await connectInstance(instanceToken, webhookUrl);
+    if (!configureResult.ok && !String(configureResult.data?.error || '').toLowerCase().includes('already')) {
+      return res.status(502).json({ ok: false, error: `Falha ao configurar webhook: ${configureResult.data?.error || configureResult.error}` });
+    }
     if (pairingPhone) {
       const pairResult = await requestPairingCode(instanceToken, pairingPhone);
       if (pairResult.ok) {
@@ -260,9 +286,7 @@ evolutionGoCloudRouter.post('/connect', async (req, res) => {
     }
 
     // Conecta a instância (com webhook configurado para receber mensagens)
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const webhookUrl = `${baseUrl}/api/evolution-webhook/webhook`;
-    const connectResult = await connectInstance(instanceToken, webhookUrl);
+    const connectResult = configureResult;
 
     // Obtém QR code (pode ser assincrono)
     let qrDataUrl = null;
@@ -310,10 +334,8 @@ evolutionGoCloudRouter.post('/refresh-qr', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   try {
     const slotId = req.body?.slotId || 'slot_1';
-    const cached = instanceCache.get(slotId);
-    if (!cached) {
-      return res.status(404).json({ ok: false, error: 'Instância não encontrada' });
-    }
+    const cached = await resolveSlotInstance(slotId, req.cloudAuth?.authUser?.id || null);
+    if (!cached) return res.status(404).json({ ok: false, error: 'Instância não encontrada' });
 
     const qrResult = await getInstanceQr(cached.token);
     let qrDataUrl = null;
@@ -347,10 +369,8 @@ evolutionGoCloudRouter.post('/reconnect', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   try {
     const slotId = req.body?.slotId || 'slot_1';
-    const cached = instanceCache.get(slotId);
-    if (!cached) {
-      return res.status(404).json({ ok: false, error: 'Instância não encontrada' });
-    }
+    const cached = await resolveSlotInstance(slotId, req.cloudAuth?.authUser?.id || null);
+    if (!cached) return res.status(404).json({ ok: false, error: 'Instância não encontrada' });
 
     const reconnectResult = await reconnectInstance(cached.token);
     if (!reconnectResult.ok) {
@@ -389,12 +409,14 @@ evolutionGoCloudRouter.post('/disconnect', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   try {
     const slotId = req.body?.slotId || 'slot_1';
-    const cached = instanceCache.get(slotId);
-    if (!cached) {
-      return res.status(404).json({ ok: false, error: 'Instância não encontrada' });
-    }
+    const cached = await resolveSlotInstance(slotId, req.cloudAuth?.authUser?.id || null);
+    if (!cached) return res.status(404).json({ ok: false, error: 'Instância não encontrada' });
 
-    const disconnectResult = await disconnectInstance(cached.token);
+    const logout = req.body?.logout === true;
+    const disconnectResult = logout
+      ? await evolutionGoFetch('/instance/logout', { method: 'DELETE' }, cached.token)
+      : await disconnectInstance(cached.token);
+    if (!disconnectResult.ok) return res.status(502).json({ ok: false, error: disconnectResult.data?.error || disconnectResult.error || 'Falha ao desconectar.' });
     cached.status = 'disconnected';
     cached.qrDataUrl = null;
     cached.pairingCode = null;
@@ -420,7 +442,9 @@ evolutionGoCloudRouter.post('/delete', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Informe slotId ou instanceId' });
     }
 
-    const targetId = instanceId || (instanceCache.get(slotId)?.instanceId);
+    const resolved = slotId ? await resolveSlotInstance(slotId, req.cloudAuth?.authUser?.id || null) : null;
+    const ownedById = instanceId ? (await listInstances()).find((inst) => inst.id === instanceId && instanceOwnedBy(inst, req.cloudAuth?.authUser?.id || null)) : null;
+    const targetId = instanceId ? ownedById?.id : resolved?.instanceId;
     if (!targetId) {
       return res.status(404).json({ ok: false, error: 'Instância não encontrada' });
     }
@@ -450,7 +474,7 @@ evolutionGoCloudRouter.post('/sync-history', async (req, res) => {
     const chatId = req.body?.chatId;
     if (!chatId) return res.status(400).json({ ok: false, error: 'Informe chatId' });
 
-    const { instance, error } = await ensureInstance(slotId);
+    const { instance, error } = await ensureInstance(slotId, undefined, req.cloudAuth?.authUser?.id || null);
     if (error) return res.status(500).json({ ok: false, error });
 
     const instanceToken = instance.token;
@@ -458,12 +482,7 @@ evolutionGoCloudRouter.post('/sync-history', async (req, res) => {
     // Faz o history-sync (pede à Evolution Go para sincronizar o histórico do chat)
     const result = await evolutionGoFetch('/chat/history-sync', {
       method: 'POST',
-      body: JSON.stringify({
-        messageInfo: {
-          chat: chatId,
-          count: 50,
-        },
-      }),
+      body: JSON.stringify({ count: Math.max(1, Math.min(100, Number(req.body?.count) || 50)), messageInfo: { chat: chatId, id: String(req.body?.messageId || ''), isFromMe: Boolean(req.body?.isFromMe), timestamp: Number(req.body?.timestamp) || 0 } }),
     }, instanceToken);
 
     if (result.ok) {
@@ -478,14 +497,15 @@ evolutionGoCloudRouter.post('/sync-history', async (req, res) => {
 });
 // Retorna o status real dos slots da Evolution Go (para merge no waState do poll)
 // Exportado para server.js usar no /api/cloud/poll quando em modo nuvem (vercel_cloud).
-export async function getEvolutionGoSlotStatus() {
-  const instances = await listInstances();
+export async function getEvolutionGoSlotStatus(userId = null) {
+  const instances = (await listInstances()).filter((i) => !userId || instanceOwnedBy(i, userId));
   const slots = {};
   for (const inst of instances) {
     const slotMatch = inst.name?.match(/zap-ia-(slot_\d+)/);
-    const slotId = slotMatch ? slotMatch[1] : 'slot_1';
+    const slotId = slotMatch ? slotMatch[1] : (inst.connected && slots.slot_1?.status !== 'connected' ? 'slot_1' : null);
+    if (!slotId) continue;
     const cached = instanceCache.get(slotId) || {};
-    slots[slotId] = {
+    const candidate = {
       slotId,
       instanceId: inst.id,
       name: inst.name,
@@ -494,14 +514,15 @@ export async function getEvolutionGoSlotStatus() {
       qrDataUrl: inst.qrcode || cached.qrDataUrl || null,
       pairingCode: cached.pairingCode || null,
     };
+    if (!slots[slotId] || (candidate.status === 'connected' && slots[slotId].status !== 'connected')) slots[slotId] = candidate;
   }
   return slots;
 }
 
 // Obtém os contatos do WhatsApp conectado na Evolution Go (via /user/contacts).
 // Retorna um array de contatos no formato do storage (chatId, name, stage, lastMessageAt, messages).
-export async function getEvolutionGoContacts() {
-  const instances = await listInstances();
+export async function getEvolutionGoContacts(userId = null) {
+  const instances = (await listInstances()).filter((i) => !userId || instanceOwnedBy(i, userId));
   const contactsMap = {};
   for (const inst of instances) {
     if (!inst.connected) continue;
@@ -514,8 +535,9 @@ export async function getEvolutionGoContacts() {
       for (const c of result.data.data) {
         const chatId = c.Jid;
         if (!chatId || contactsMap[chatId]) continue;
-        contactsMap[chatId] = {
-          chatId,
+        const contactKey = slotId === 'slot_1' ? chatId : `${slotId}::${chatId}`;
+        contactsMap[contactKey] = {
+          chatId: contactKey,
           name: c.PushName || c.FullName || c.BusinessName || null,
           stage: 'novo',
           lastMessageAt: null,
@@ -526,4 +548,61 @@ export async function getEvolutionGoContacts() {
     }
   }
   return Object.values(contactsMap);
+}
+
+function ownerMap() {
+  try { return JSON.parse(process.env.EVOLUTION_INSTANCE_USERS || '{}'); } catch { return {}; }
+}
+function instanceOwnedBy(inst, userId) {
+  return Boolean(userId && (ownerMap()[inst.name] || process.env.EVOLUTION_DEFAULT_USER_ID) === userId);
+}
+async function connectedInstanceForTenant(userId, chatId = '') {
+  if (!userId) throw Object.assign(new Error('Conta inválida para Evolution Go.'), { statusCode: 403 });
+  const instances = (await listInstances()).filter((i) => i.connected && instanceOwnedBy(i, userId));
+  const parsedSlot = String(chatId || '').match(/^(slot_\d+)::/)?.[1] || '';
+  const preferred = parsedSlot && instances.find((i) => i.name === `zap-ia-${parsedSlot}`);
+  const inst = preferred || instances.find((i) => /^zap-ia-slot_\d+$/.test(i.name || '')) || instances[0];
+  if (!inst?.token) throw Object.assign(new Error('Não há instância Evolution Go conectada para esta conta.'), { statusCode: 503 });
+  return inst;
+}
+function phoneForChat(chatId = '') {
+  const raw = String(chatId).split('::').at(-1).replace(/:\d+@/, '@');
+  if (raw.includes('@')) return raw;
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) throw Object.assign(new Error('Conversa sem telefone válido.'), { statusCode: 400 });
+  return digits;
+}
+async function tenantCall(userId, chatId, path, method, payload) {
+  const instance = await connectedInstanceForTenant(userId, chatId);
+  const result = await evolutionGoFetch(path, { method, ...(payload ? { body: JSON.stringify(payload) } : {}) }, instance.token);
+  if (!result.ok) throw Object.assign(new Error(result.data?.error || result.error || `Evolution Go HTTP ${result.status}`), { statusCode: result.status >= 400 ? result.status : 502, evolutionResponse: result.data });
+  return result.data;
+}
+export async function sendEvolutionGoText(userId, chatId, text, options = {}) {
+  return tenantCall(userId, chatId, '/send/text', 'POST', { number: phoneForChat(chatId), text: String(text || ''), formatJid: true, ...(options.quoted ? { quoted: options.quoted } : {}) });
+}
+export async function sendEvolutionGoMedia(userId, chatId, { url, type, caption = '', filename = '' } = {}) {
+  if (!url) throw Object.assign(new Error('URL de mídia ausente.'), { statusCode: 400 });
+  return tenantCall(userId, chatId, '/send/media', 'POST', { number: phoneForChat(chatId), url, type: type || 'document', caption, filename, formatJid: true });
+}
+export async function sendEvolutionGoContact(userId, chatId, contact = {}) {
+  return tenantCall(userId, chatId, '/send/contact', 'POST', { number: phoneForChat(chatId), vcard: { fullName:String(contact.name || contact.fullName || ''), organization:String(contact.company || contact.organization || ''), phone:String(contact.phone || '') }, formatJid: true });
+}
+export async function reactEvolutionGoMessage(userId, chatId, msgId, reaction, fromMe = false) {
+  return tenantCall(userId, chatId, '/message/react', 'POST', { number: phoneForChat(chatId), id: String(msgId), reaction: String(reaction || ''), fromMe: Boolean(fromMe) });
+}
+export async function editEvolutionGoMessage(userId, chatId, msgId, text) {
+  return tenantCall(userId, chatId, '/message/edit', 'POST', { chat: phoneForChat(chatId), messageId: String(msgId), message: String(text || '') });
+}
+export async function deleteEvolutionGoMessage(userId, chatId, msgId) {
+  return tenantCall(userId, chatId, '/message/delete', 'POST', { chat: phoneForChat(chatId), messageId: String(msgId) });
+}
+export async function markEvolutionGoRead(userId, chatId, ids = []) {
+  return tenantCall(userId, chatId, '/message/markread', 'POST', { number: phoneForChat(chatId), id: ids.map(String) });
+}
+export async function blockEvolutionGoContact(userId, chatId, blocked) {
+  return tenantCall(userId, chatId, blocked ? '/user/block' : '/user/unblock', 'POST', { number: phoneForChat(chatId) });
+}
+export async function requestEvolutionGoHistory(userId, chatId, count = 50, anchor = {}) {
+  return tenantCall(userId, chatId, '/chat/history-sync', 'POST', { count: Math.min(100, Math.max(1, Number(count) || 50)), messageInfo: { chat: phoneForChat(chatId), id: String(anchor.id || ''), isFromMe: Boolean(anchor.isFromMe), isGroup: false, sender: String(anchor.sender || ''), timestamp: String(anchor.timestamp || '') } });
 }

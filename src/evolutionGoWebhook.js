@@ -26,6 +26,7 @@ import { generateSmartReply } from './aiEngine.js';
 import { getAdminClient } from './supabaseCloud.js';
 import { convertToCanonicalWhatsAppVoice } from './audioProcessor.js';
 import { trueNowIso } from './trueClock.js';
+import { buildContactChannelKey } from './storage.js';
 
 export const evolutionGoWebhookRouter = Router();
 
@@ -39,6 +40,11 @@ const HAS_SUPABASE = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SE
 const memoryHistory = new Map(); // chatId -> [messages] (uso quando sem Supabase)
 
 // ======================== RESOLVER USUÁRIO (tenant) ========================
+function scopedChatId(instanceName, jid) {
+  const slot = String(instanceName || '').match(/zap-ia-(slot_\d+)/)?.[1] || 'slot_1';
+  return buildContactChannelKey(slot, jid);
+}
+
 function resolveUserId(instanceName) {
   let map = {};
   try {
@@ -83,33 +89,45 @@ async function loadHistory(userId, chatId) {
 }
 
 async function saveHistory(userId, chatId, messages, contactName) {
+  const incoming = (Array.isArray(messages) ? messages : []).filter(Boolean).map((m) => {
+    const timestamp = new Date(m.timestamp || m.ts || Date.now()).toISOString();
+    const waMsgId = String(m.waMsgId || m.id || '');
+    return { ...m, id: m.id || waMsgId || `evo-${timestamp}`, ...(waMsgId ? { waMsgId } : {}), timestamp };
+  });
   if (!userId) {
-    memoryHistory.set(chatId, messages);
-    return;
+    const prior = memoryHistory.get(chatId) || [];
+    const map = new Map(prior.map((m) => [m.waMsgId || m.id, m]));
+    for (const m of incoming) map.set(m.waMsgId || m.id, { ...(map.get(m.waMsgId || m.id) || {}), ...m });
+    memoryHistory.set(chatId, [...map.values()].slice(-120)); return { error: null };
   }
   const admin = getAdminClient();
-  const contact = {
-    name: contactName || chatId,
-    messages,
-    lastMessageAt: trueNowIso(),
-    stage: 'ativo',
-    unreadCount: 0,
-    archived: false,
-  };
-  const { error } = await admin
-    .from('zapia_contacts')
-    .upsert(
-      {
-        user_id: userId,
-        chat_id: chatId,
-        data: contact,
-        last_message_at: trueNowIso(),
-        updated_at: trueNowIso(),
-      },
-      { onConflict: 'user_id,chat_id' }
-    );
+  const { data: row, error: readError } = await admin.from('zapia_contacts').select('data').eq('user_id', userId).eq('chat_id', chatId).maybeSingle();
+  if (readError) return { error: readError.message };
+  const existing = row?.data && typeof row.data === 'object' ? row.data : {};
+  const byKey = new Map((Array.isArray(existing.messages) ? existing.messages : []).map((m) => [String(m.waMsgId || m.id || `${m.role}|${m.timestamp}|${m.text}`), m]));
+  for (const m of incoming) {
+    const k = String(m.waMsgId || m.id || `${m.role}|${m.timestamp}|${m.text}`);
+    let target = byKey.get(k);
+    // Merge a paired IA SEND_MESSAGE webhook with the assistant turn that the same
+    // serverless invocation may have persisted before/after the webhook callback.
+    if (!target && (m.role === 'owner' || m.role === 'assistant') && m.text) {
+      const t = Date.parse(m.timestamp || 0);
+      target = [...byKey.values()].find((old) => ['owner','assistant'].includes(old.role) && old.text === m.text && Math.abs(Date.parse(old.timestamp || 0) - t) <= 60_000);
+    }
+    if (target) {
+      Object.assign(target, m, { role:target.role === 'assistant' && m.role === 'owner' ? 'assistant' : m.role });
+      if (m.waMsgId) target.waMsgId = m.waMsgId;
+    } else byKey.set(k, m);
+  }
+  const merged = [...new Set(byKey.values())].sort((x,y) => Date.parse(x.timestamp || 0)-Date.parse(y.timestamp || 0)).slice(-120);
+  const latest = merged.at(-1)?.timestamp || existing.lastMessageAt || trueNowIso();
+  const contact = { ...existing, ...(contactName && (!existing.name || existing.name === chatId) ? { name: contactName } : {}), messages: merged, lastMessageAt: latest };
+  const { error } = await admin.from('zapia_contacts').upsert({ user_id:userId, chat_id:chatId, data:contact, last_message_at:latest, updated_at:trueNowIso() }, { onConflict:'user_id,chat_id' });
   if (error) console.warn(`[EvolutionWebhook] Falha ao salvar histórico: ${error.message}`);
-  return { error: error?.message || null };
+  return { error:error?.message || null };
+}
+function extractMessageText(message = {}) {
+  return message.conversation || message.extendedTextMessage?.text || message.imageMessage?.caption || message.videoMessage?.caption || message.documentMessage?.caption || message.buttonsResponseMessage?.selectedDisplayText || message.listResponseMessage?.title || '';
 }
 
 // ======================== ENVIAR MENSAGEM (API Evolution Go) ========================
@@ -152,28 +170,37 @@ evolutionGoWebhookRouter.post('/webhook', async (req, res) => {
   }
 
   // Ignorar eventos que não são mensagens
-  const isMessageEvent = ['MESSAGE', 'MESSAGE_RECEIVED', 'messages.upsert'].includes(
-    String(event).toUpperCase()
-  );
-  if (!isMessageEvent) {
-    return res.status(200).json({ ok: true, ignored: 'event', event });
-  }
+  const eventKey = String(event).trim().toUpperCase().replace(/[.\s-]+/g, '_');
+  const isHistoryEvent = eventKey.includes('HISTORY_SYNC') || eventKey === 'HISTORYSYNC';
+  const isMessageEvent = ['MESSAGE', 'MESSAGE_RECEIVED', 'MESSAGES_UPSERT', 'SEND_MESSAGE'].includes(eventKey) || isHistoryEvent;
+  if (!isMessageEvent) return res.status(200).json({ ok: true, ignored: 'event', event });
 
   // Remetente/destinatário (aceita key.remoteJid e Info.Chat/Sender)
   const key = data.key || {};
   const remoteJid = key.remoteJid || info.Chat || info.Sender || '';
-  if (!remoteJid) {
-    return res.status(200).json({ ok: true, ignored: 'no-jid' });
-  }
-  if (key.fromMe ?? key.IsFromMe ?? info.IsFromMe) {
-    return res.status(200).json({ ok: true, ignored: 'fromMe' });
+  if (!remoteJid && !isHistoryEvent) return res.status(200).json({ ok: true, ignored: 'no-jid' });
+  const fromMe = Boolean(key.fromMe ?? key.IsFromMe ?? info.IsFromMe ?? data.fromMe ?? data.IsFromMe);
+  if (isHistoryEvent) {
+    const tenant = await loadTenant(instanceName);
+    const conversations = data.conversations || data.Conversations;
+    const entries = data.messages || data.Messages || data.history || data.History || (Array.isArray(conversations) ? conversations.flatMap((c) => (c.messages || c.Messages || []).map((m) => ({ ...m, _chat: c.id || c.chat || c.Info?.Chat || c.Jid }))) : []);
+    const list = Array.isArray(entries) ? entries : (entries ? [entries] : []); let saved = 0;
+    for (const entry of list) {
+      const ei = entry.Info || entry.info || {}; const ek = entry.key || ei.Key || {}; const jid = ek.remoteJid || ei.Chat || entry.chat || entry._chat || remoteJid;
+      if (!jid || jid.endsWith('@g.us')) continue;
+      const payload = entry.message || entry.Message || entry; const text = extractMessageText(payload); const id = ek.id || ei.ID || entry.id || ei.Id;
+      const raw = entry.messageTimestamp || ei.Timestamp || entry.timestamp || ei.TimestampMS; const n = Number(raw); const ts = new Date(n > 1e12 ? n : n > 0 ? n*1000 : Date.now()).toISOString();
+      if (!id && !text) continue;
+      await saveHistory(tenant.userId, scopedChatId(instanceName, jid), [{ id:String(id || `history-${ts}`), ...(id ? {waMsgId:String(id)} : {}), waMsgKey:ek, role:(ek.fromMe ?? ei.IsFromMe) ? 'owner' : 'user', text:text || '[mídia]', timestamp:ts, historical:true }], jid.split('@')[0]); saved++;
+    }
+    return res.status(200).json({ ok:true, historical:true, saved });
   }
   if (remoteJid.endsWith('@g.us') || info.IsGroup) {
     return res.status(200).json({ ok: true, ignored: 'group' });
   }
 
   const phoneNumber = remoteJid.split('@')[0];
-  const chatId = remoteJid;
+  const chatId = scopedChatId(instanceName, remoteJid);
 
   // Extrair texto e mídia da mensagem
   let userText = '';
@@ -210,8 +237,12 @@ evolutionGoWebhookRouter.post('/webhook', async (req, res) => {
     }
   }
 
-  if (!userText && !media) {
-    return res.status(200).json({ ok: true, ignored: 'no-text' });
+  if (!userText && !media) userText = extractMessageText(message) || (message.videoMessage ? '[vídeo]' : message.documentMessage ? '[documento]' : '');
+  if (!userText && !media) return res.status(200).json({ ok: true, ignored: 'no-text' });
+  if (fromMe || eventKey === 'SEND_MESSAGE') {
+    try { const tenant = await loadTenant(instanceName); const id = key.id || info.ID || data.id; const raw = data.messageTimestamp || info.Timestamp || data.timestamp; const n = Number(raw); const ts = new Date(n > 1e12 ? n : n > 0 ? n*1000 : Date.now()).toISOString();
+      await saveHistory(tenant.userId, chatId, [{id:String(id || `out-${ts}`), ...(id ? {waMsgId:String(id)} : {}), waMsgKey:key, role:'owner', text:userText || '[mídia]', timestamp:ts}], phoneNumber);
+      return res.status(200).json({ok:true, persisted:true, role:'owner'}); } catch(err) { return res.status(200).json({ok:false,error:err.message}); }
   }
 
   try {
@@ -221,7 +252,12 @@ evolutionGoWebhookRouter.post('/webhook', async (req, res) => {
       loadTenant(instanceName),
       loadHistory(userId, chatId),
     ]);
-    const userTurn = { role: 'user', text: userText || (media ? '[áudio/imagem]' : ''), ts: Date.now() };
+    const rawTs = data.messageTimestamp || info.Timestamp || data.timestamp; const n = Number(rawTs); const timestamp = new Date(n > 1e12 ? n : n > 0 ? n*1000 : Date.now()).toISOString();
+    const waMsgId = key.id || info.ID || data.id;
+    const userTurn = { id:String(waMsgId || `in-${timestamp}`), ...(waMsgId ? {waMsgId:String(waMsgId)} : {}), waMsgKey:key, role:'user', text:userText || '[mídia]', timestamp };
+    if (waMsgId && history.some((m) => String(m.waMsgId || m.id || '') === String(waMsgId))) {
+      return res.status(200).json({ ok:true, duplicate:true });
+    }
     const nextHistory = [...history, userTurn];
 
     // Verificar se IA está ligada para este número (settings.botEnabled do workspace)
@@ -257,8 +293,8 @@ evolutionGoWebhookRouter.post('/webhook', async (req, res) => {
     }
 
     // Persistir histórico (sem resposta da IA se desligada)
-    nextHistory.push({ role: 'assistant', text: reply.cleanText, ts: Date.now() });
-    if (nextHistory.length > 40) nextHistory.splice(0, nextHistory.length - 40);
+    if (reply.cleanText) nextHistory.push({ id:`ai-${Date.now()}`, role:'assistant', text:reply.cleanText, timestamp:trueNowIso() });
+    if (nextHistory.length > 120) nextHistory.splice(0, nextHistory.length - 120);
     const saveResult = await saveHistory(tenant.userId, chatId, nextHistory, phoneNumber);
 
     console.log(
@@ -283,39 +319,7 @@ evolutionGoWebhookRouter.get('/status', (req, res) => {
 });
 
 // Enviar mensagem manual (teste)
-evolutionGoWebhookRouter.post('/send', async (req, res) => {
-  const { instance, number, text } = req.body;
-  res.json(await sendMessage(instance, number, text));
-});
+evolutionGoWebhookRouter.post('/send', (_req, res) => res.status(404).json({ ok: false, error: 'Rota desativada.' }));
 
 // LIMPAR conversas de teste no CRM (temporário)
-evolutionGoWebhookRouter.post('/clear', async (req, res) => {
-  try {
-    const admin = getAdminClient();
-    const userId = resolveUserId('ienvia-teste-06a36777') || process.env.EVOLUTION_DEFAULT_USER_ID;
-    if (req.body?.list) {
-      const { data } = await admin.from('zapia_contacts').select('chat_id').eq('user_id', userId).limit(500);
-      const all = (data || []).map((r) => r.chat_id);
-      // Consulta direta dos chat_ids de teste (sem filtro de user_id)
-      const direct = [];
-      for (const cid of ['558681638438@s.whatsapp.net', '558681303979@s.whatsapp.net', 'diag-chat']) {
-        const { data: d2 } = await admin.from('zapia_contacts').select('user_id,chat_id').eq('chat_id', cid);
-        if (d2?.length) direct.push({ chat_id: cid, rows: d2.map((r) => ({ user_id: r.user_id })) });
-      }
-      return res.json({ ok: true, total: all.length, test: all.filter((c) => c.includes('558681') || c.includes('diag') || c.includes('s.whatsapp')), direct });
-    }
-    const chatIds = req.body?.chatIds || [
-      '558681638438@s.whatsapp.net', '558681638438:33@s.whatsapp.net', '558681638438:13@s.whatsapp.net',
-      '558681303979@s.whatsapp.net', '558681303979:23@s.whatsapp.net', '558681303979:2@s.whatsapp.net',
-      'diag-chat'
-    ];
-    const { error, count } = await admin
-      .from('zapia_contacts')
-      .delete()
-      .eq('user_id', userId)
-      .in('chat_id', chatIds);
-    res.json({ ok: true, deleted: count || 0, error: error?.message || null });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-  }
-});
+evolutionGoWebhookRouter.post('/clear', (_req, res) => res.status(404).json({ ok: false, error: 'Rota desativada.' }));

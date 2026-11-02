@@ -166,10 +166,89 @@ export async function markEvolutionApiRead(userId, chatId, ids = []) {
 export async function blockEvolutionApiContact(userId, chatId, blocked) {
   return tenantCall(userId, chatId, '/chat/updateBlockStatus', 'POST', { number: numberForChat(chatId), status: blocked ? 'block' : 'unblock' });
 }
-export async function requestEvolutionApiHistory(userId, chatId, count = 50, anchor = {}) {
+export async function requestEvolutionApiHistory(userId, chatId, count = 50, anchor = {}, page = 1) {
   const remoteJid = chatJidForChat(chatId);
-  const data = await tenantCall(userId, chatId, '/chat/findMessages', 'POST', { where: { key: { remoteJid } }, page: 1, offset: Math.min(100, Math.max(1, Number(count) || 50)) });
+  const data = await tenantCall(userId, chatId, '/chat/findMessages', 'POST', {
+    where: { key: { remoteJid } },
+    page: Math.max(1, Math.floor(Number(page) || 1)),
+    offset: Math.min(100, Math.max(1, Number(count) || 50))
+  });
   return { ...data, requested: true, anchor: anchor.id || null };
+}
+
+function unwrapHistoryContent(message = {}) {
+  let current = message && typeof message === 'object' ? message : {};
+  for (let i = 0; i < 5; i += 1) {
+    const nested = current.ephemeralMessage?.message || current.viewOnceMessage?.message || current.viewOnceMessageV2?.message || current.documentWithCaptionMessage?.message;
+    if (!nested || typeof nested !== 'object') break;
+    current = nested;
+  }
+  return current;
+}
+
+function historyTimestamp(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const numeric = Number(value);
+  const date = Number.isFinite(numeric)
+    ? new Date(numeric < 1_000_000_000_000 ? numeric * 1000 : numeric)
+    : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function historyMessageText(content, record) {
+  const text = content.conversation
+    || content.extendedTextMessage?.text
+    || content.imageMessage?.caption
+    || content.videoMessage?.caption
+    || content.documentMessage?.caption
+    || content.buttonsResponseMessage?.selectedDisplayText
+    || content.templateButtonReplyMessage?.selectedDisplayText
+    || content.listResponseMessage?.title
+    || content.pollUpdateMessage?.vote?.selectedOptions?.join(', ')
+    || '';
+  if (text) return String(text);
+  if (content.imageMessage) return '[Imagem recebida]';
+  if (content.videoMessage) return '[Vídeo recebido]';
+  if (content.documentMessage) return `[Arquivo recebido${content.documentMessage.fileName ? `: ${content.documentMessage.fileName}` : ''}]`;
+  if (content.audioMessage || content.ptvMessage) return '[Áudio recebido]';
+  if (content.stickerMessage) return '[Figurinha recebida]';
+  if (content.locationMessage || content.liveLocationMessage) return '[Localização recebida]';
+  if (content.contactMessage || content.contactsArrayMessage) return '[Contato recebido]';
+  if (content.protocolMessage || !record?.key?.id) return '';
+  return record?.messageType ? `[${String(record.messageType).replace(/Message$/i, '')} recebido]` : '';
+}
+
+/** Converte registros persistidos pela Evolution API v2.3.7 em mensagens seguras para o CRM. */
+export function normalizeEvolutionApiHistoryRecords(data, chatId = '') {
+  const records = Array.isArray(data?.messages?.records) ? data.messages.records
+    : Array.isArray(data?.data?.messages?.records) ? data.data.messages.records
+      : Array.isArray(data?.records) ? data.records : [];
+  return records.map((record) => {
+    const key = record?.key || {};
+    const content = unwrapHistoryContent(record?.message || {});
+    const timestamp = historyTimestamp(record?.messageTimestamp || record?.timestamp);
+    const waMsgId = String(key.id || record?.id || '').trim();
+    const text = historyMessageText(content, record);
+    if (!waMsgId || !timestamp || !text) return null;
+    const messageType = String(record.messageType || Object.keys(content).find((k) => /Message$/.test(k)) || '');
+    const historyMediaUnavailable = Boolean(content.imageMessage || content.videoMessage || content.documentMessage || content.audioMessage || content.ptvMessage || content.stickerMessage);
+    return {
+      role: key.fromMe === true || key.fromMe === 'true' ? 'owner' : 'user',
+      text,
+      waMsgId,
+      waFromMe: key.fromMe === true || key.fromMe === 'true',
+      waTimestampMs: Date.parse(timestamp),
+      timestamp,
+      historical: true,
+      ...(record.pushName ? { contactName: String(record.pushName).slice(0, 120) } : {}),
+      ...(messageType ? { waMessageType: messageType } : {}),
+      ...(historyMediaUnavailable ? { historyMediaUnavailable: true } : {}),
+      ...(content.documentMessage?.fileName ? { mediaName: String(content.documentMessage.fileName).slice(0, 180) } : {}),
+      ...(content.imageMessage?.mimetype ? { mediaMime: String(content.imageMessage.mimetype).slice(0, 100) } : {}),
+      ...(content.videoMessage?.mimetype ? { mediaMime: String(content.videoMessage.mimetype).slice(0, 100) } : {}),
+      ...(content.documentMessage?.mimetype ? { mediaMime: String(content.documentMessage.mimetype).slice(0, 100) } : {}),
+    };
+  }).filter(Boolean);
 }
 
 export async function getEvolutionApiSlotStatus(userId = null) {
@@ -191,6 +270,37 @@ export async function getEvolutionApiSlotStatus(userId = null) {
     };
   }
   return result;
+}
+
+export async function getEvolutionApiChats(userId = null, { limit = 200, offset = 0 } = {}) {
+  if (!userId) return [];
+  const rows = (await listInstances()).filter((item) => instanceOwnedBy(item, userId));
+  const chats = new Map();
+  const safeLimit = Math.min(200, Math.max(1, Number(limit) || 200));
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  let hasMore = false;
+  for (const item of rows) {
+    const state = await connectionState(item.name).catch(() => ({ state: item.state }));
+    if (state.state !== 'open') continue;
+    const slotId = item.name.match(/zap-ia-(slot_[1-3])/)?.[1] || 'slot_1';
+    const data = await apiCall(`/chat/findChats/${encodeURIComponent(item.name)}`, {
+      method: 'POST', body: { where: {}, take: safeLimit, skip: safeOffset }
+    });
+    const list = Array.isArray(data) ? data : data.chats || data.data || data.response || [];
+    if (Array.isArray(list) && list.length >= safeLimit) hasMore = true;
+    for (const row of Array.isArray(list) ? list : []) {
+      const remoteJid = String(row.remoteJid || row.lastMessage?.key?.remoteJid || row.lastMessage?.remoteJid || '').trim();
+      if (!remoteJid || /@(g\.us|broadcast|newsletter)$/i.test(remoteJid)) continue;
+      const chatId = slotId === 'slot_1' ? remoteJid : `${slotId}::${remoteJid}`;
+      if (chats.has(chatId)) continue;
+      chats.set(chatId, {
+        chatId, remoteJid, slotId,
+        name: row.pushName || row.name || row.lastMessagePushName || row.lastMessage?.pushName || null,
+        lastMessageAt: historyTimestamp(row.updatedAt || row.lastMessage?.messageTimestamp || row.lastMessageMessageTimestamp),
+      });
+    }
+  }
+  return { chats: [...chats.values()], hasMore };
 }
 
 export async function getEvolutionApiContacts(userId = null) {

@@ -117,7 +117,8 @@ import {
   exportProfileBundleZip
 } from './trainingPackEngine.js';
 import { evolutionApiWebhookRouter } from './evolutionApiWebhook.js';
-import { evolutionApiCloudRouter, getEvolutionApiSlotStatus, getEvolutionApiContacts, sendEvolutionApiText, sendEvolutionApiMedia, sendEvolutionApiContact, reactEvolutionApiMessage, editEvolutionApiMessage, deleteEvolutionApiMessage, markEvolutionApiRead, blockEvolutionApiContact, requestEvolutionApiHistory } from './evolutionApiCloud.js';
+import { evolutionApiCloudRouter, getEvolutionApiSlotStatus, getEvolutionApiContacts, getEvolutionApiChats, sendEvolutionApiText, sendEvolutionApiMedia, sendEvolutionApiContact, reactEvolutionApiMessage, editEvolutionApiMessage, deleteEvolutionApiMessage, markEvolutionApiRead, blockEvolutionApiContact, requestEvolutionApiHistory } from './evolutionApiCloud.js';
+import { mergeEvolutionApiHistoryPage } from './evolutionApiHistory.js';
 
 export const app = express();
 const APP_VERSION = (() => {
@@ -1537,15 +1538,45 @@ app.post('/api/wa/sync-history', async (req, res) => {
   try {
     const slotId = req.body?.slotId ? normalizeSlotId(req.body.slotId) : null;
     if (usesCloudBridge(req) && !getEffectiveWaState(req).workerOnline) {
-      const contacts = Object.values(storage.data.contacts || {}).filter((c) => {
-        const cid = String(c.chatId || ''); return cid && !cid.startsWith('demo_') && !cid.includes('@g.us') && (c.slotId ? normalizeSlotId(c.slotId) === (slotId || normalizeSlotId(c.slotId)) : true);
-      });
-      let requested = 0;
-      for (const contact of contacts.slice(0, 15)) {
-        const anchor = (contact.messages || []).filter((m) => m.waMsgId).sort((a,b) => Date.parse(a.timestamp||0)-Date.parse(b.timestamp||0))[0];
-        try { await requestEvolutionApiHistory(req.cloudAuth.authUser.id, contact.chatId, 50, { id:anchor?.waMsgId || '', isFromMe:anchor?.role !== 'user', timestamp:anchor?.timestamp || '' }); requested++; } catch {}
+      const offset = Math.max(0, Math.min(100_000, Number(req.body?.offset) || 0));
+      const pageSize = 200;
+      const directory = await getEvolutionApiChats(req.cloudAuth.authUser.id, { limit:pageSize, offset });
+      const remoteChats = (directory.chats || []).filter((chat) => !slotId || normalizeSlotId(chat.slotId) === slotId);
+      for (const chat of remoteChats) {
+        const existingKey = storage.findSiblingContactKey(chat.chatId) || chat.chatId;
+        if (!storage.data.contacts[existingKey]) {
+          storage.upsertContact(chat.chatId, {
+            ...(chat.name ? { name: String(chat.name).slice(0, 120) } : {}),
+            ...(chat.lastMessageAt ? { lastMessageAt: chat.lastMessageAt } : {}),
+            slotId: chat.slotId
+          }, { deferSave:true, preferAddressBookName:true });
+        }
       }
-      return res.json({ ok:true, provider:'evolution_api', requested, partial:contacts.length > requested, contacts:sortContactsForInbox(storage.data.contacts), message:'Solicitações de histórico enviadas; as mensagens chegam de forma assíncrona pelo webhook.' });
+      let requested = 0;
+      let importedMessages = 0;
+      let failures = 0;
+      const batch = remoteChats.filter((chat) => {
+        const key = storage.findSiblingContactKey(chat.chatId) || chat.chatId;
+        return storage.data.contacts[key]?.evolutionApiHistoryComplete !== true;
+      }).slice(0, 15);
+      for (const chat of batch) {
+        const key = storage.findSiblingContactKey(chat.chatId) || chat.chatId;
+        const contact = storage.data.contacts[key];
+        const anchor = (contact?.messages || []).filter((m) => m.waMsgId).sort((a,b) => Date.parse(a.timestamp||0)-Date.parse(b.timestamp||0))[0];
+        const page = Math.max(1, Number(contact?.evolutionApiHistoryNextPage) || 1);
+        try {
+          const result = await requestEvolutionApiHistory(req.cloudAuth.authUser.id, chat.chatId, 50, { id:anchor?.waMsgId || '', isFromMe:anchor?.role !== 'user', timestamp:anchor?.timestamp || '' }, page);
+          const merged = mergeEvolutionApiHistoryPage(storage, chat.chatId, result, { page, pageSize:50 });
+          importedMessages += merged.countAdded;
+          requested++;
+        } catch { failures++; }
+      }
+      const remainingInPage = remoteChats.filter((chat) => {
+        const key = storage.findSiblingContactKey(chat.chatId) || chat.chatId;
+        return storage.data.contacts[key]?.evolutionApiHistoryComplete !== true;
+      }).length;
+      const nextOffset = remainingInPage === 0 && directory.hasMore ? offset + pageSize : offset;
+      return res.json({ ok:true, provider:'evolution_api', requested, importedMessages, totalContacts:remoteChats.length, partial:failures > 0 || remainingInPage > 0 || directory.hasMore, nextOffset, contacts:sortContactsForInbox(storage.data.contacts), message:`${importedMessages} mensagem(ns) de histórico importada(s) diretamente da Evolution API.` });
     }
     if (usesCloudBridge(req)) {
       const out = await dispatchCommandToWorker(
@@ -3044,10 +3075,16 @@ app.post('/api/crm/:chatId/fetch-history', async (req, res) => {
   }
   try {
     if (usesCloudBridge(req) && !getEffectiveWaState(req).workerOnline) {
-      const contact = storage.data.contacts[storage.findSiblingContactKey(chatId) || chatId];
+      const contactKey = storage.findSiblingContactKey(chatId) || chatId;
+      const contact = storage.data.contacts[contactKey];
+      if (contact?.evolutionApiHistoryComplete === true) {
+        return res.json({ ok:true, chatId, requested:false, provider:'evolution_api', countAdded:0, hasMore:false, contact });
+      }
       const anchor = (contact?.messages || []).filter((m) => m.waMsgId).sort((a,b) => Date.parse(a.timestamp||0)-Date.parse(b.timestamp||0))[0];
-      const result = await requestEvolutionApiHistory(req.cloudAuth.authUser.id, chatId, count, { id:anchor?.waMsgId || '', isFromMe:anchor?.role !== 'user', timestamp:anchor?.timestamp || '' });
-      return res.json({ ok:true, chatId, requested:true, provider:'evolution_api', sync:result, countAdded:0, contact:contact || null });
+      const page = Math.max(1, Number(contact?.evolutionApiHistoryNextPage) || 1);
+      const result = await requestEvolutionApiHistory(req.cloudAuth.authUser.id, chatId, count, { id:anchor?.waMsgId || '', isFromMe:anchor?.role !== 'user', timestamp:anchor?.timestamp || '' }, page);
+      const merged = mergeEvolutionApiHistoryPage(storage, chatId, result, { page, pageSize:count });
+      return res.json({ ok:true, chatId, requested:true, provider:'evolution_api', sync:result, ...merged });
     }
     if (usesCloudBridge(req)) {
       const out = await dispatchCommandToWorker(

@@ -3737,7 +3737,7 @@ function renderActiveInboxConversation() {
     msgBox.dataset.renderedFp = msgFp;
     msgBox.dataset.renderedLastMsgIdent = lastMIdent;
 
-    const canFetchOlder = !String(c.chatId || '').startsWith('demo_');
+    const canFetchOlder = !String(c.chatId || '').startsWith('demo_') && c.evolutionApiHistoryComplete !== true;
     const fetchOlderBtnHtml = canFetchOlder
       ? `<button type="button" class="btn-fetch-older-history" onclick="fetchOlderChatMessages('${encChatId}', this)">Carregar histórico do WhatsApp</button>`
       : '';
@@ -3766,6 +3766,7 @@ function renderActiveInboxConversation() {
       `;
     } else {
       msgBox.innerHTML =
+        fetchOlderBtnHtml +
         localHistoryButton +
         visibleMsgs
           .map((m) => {
@@ -3868,6 +3869,9 @@ window.loadEarlierInboxMessages = function loadEarlierInboxMessages() {
 
 function renderBubbleMediaHtml(m) {
   if (!m?.mediaUrl) {
+    if (m?.historyMediaUnavailable) {
+      return '<div class="wa-legacy-media-hint">Arquivo histórico registrado no WhatsApp; a mídia não foi baixada para o CRM.</div>';
+    }
     if (
       m?.role === 'user' &&
       /^(\uD83C\uDFA4|\uD83D\uDDBC\uFE0F|\uD83D\uDCC4)?\s*\[(Áudio|Imagem|PDF|Vídeo|Arquivo)/i.test(String(m.text || '').trim())
@@ -9019,8 +9023,9 @@ window.triggerFullWhatsAppHistorySync = async function triggerFullWhatsAppHistor
   try {
     const res = await api('/api/wa/sync-history', {
       method: 'POST',
-      body: JSON.stringify({ waitMs: 6800 })
+      body: JSON.stringify({ waitMs: 6800, ...(state._evoHistoryOffset ? { offset: state._evoHistoryOffset } : {}) })
     });
+    if (res.provider === 'evolution_api' && Number.isFinite(Number(res.nextOffset))) state._evoHistoryOffset = Number(res.nextOffset);
     if (Array.isArray(res.contacts)) {
       state.contacts = mergePolledContactsWithClientGuards(res.contacts);
       updateInboxFilterCounters();
@@ -9033,15 +9038,20 @@ window.triggerFullWhatsAppHistorySync = async function triggerFullWhatsAppHistor
     const total = Number(res.afterCount ?? res.totalContacts) || (state.contacts || []).length;
     const stillWaiting = Boolean(res.waitingForHistory || res.slots?.some(slot => slot.waitingForHistory || slot.alreadyRunning));
     const rejected = Boolean(res.historyRejected || res.slots?.some(slot => slot.historyRejected));
-    showToast(rejected
-      ? '⚠️ O WhatsApp recusou o pedido de histórico completo em pelo menos um chip. O histórico integral não foi confirmado.'
-      : res.partial
-      ? '⚠️ Solicitação parcial: pelo menos um chip não conseguiu sincronizar. Tente novamente.'
-      : (added > 0
-        ? `✅ ${added} conversa(s) importada(s); outros lotes podem chegar depois. Total no CRM: ${total}.`
-        : (stillWaiting
-          ? `⏳ Aguardando o WhatsApp enviar o histórico (${total} conversa(s) no CRM).`
-          : `📥 Solicitação processada; o WhatsApp ainda pode enviar outros lotes (${total} conversa(s) no CRM).`)), Boolean(res.partial || rejected));
+    const historyMessagesAdded = Number(res.importedMessages) || 0;
+    showToast(res.provider === 'evolution_api'
+      ? (historyMessagesAdded > 0
+        ? `📥 ${historyMessagesAdded} mensagem(ns) histórica(s) importada(s) para o CRM.${res.partial ? ' Há mais conversas para sincronizar; execute novamente.' : ''}`
+        : `📥 Sincronização concluída sem mensagens novas.${res.partial ? ' Há mais conversas para sincronizar; execute novamente.' : ''}`)
+      : rejected
+        ? '⚠️ O WhatsApp recusou o pedido de histórico completo em pelo menos um chip. O histórico integral não foi confirmado.'
+        : res.partial
+          ? '⚠️ Solicitação parcial: pelo menos um chip não conseguiu sincronizar. Tente novamente.'
+          : (added > 0
+            ? `✅ ${added} conversa(s) importada(s); outros lotes podem chegar depois. Total no CRM: ${total}.`
+            : (stillWaiting
+              ? `⏳ Aguardando o WhatsApp enviar o histórico (${total} conversa(s) no CRM).`
+              : `📥 Solicitação processada; o WhatsApp ainda pode enviar outros lotes (${total} conversa(s) no CRM).`)), Boolean(res.partial || rejected));
     // O celular pode enviar blocos extras de histórico nos segundos seguintes; atualiza automaticamente!
     setTimeout(() => { refreshLiveStateOnly().catch(() => {}); }, 3800);
     setTimeout(() => { refreshLiveStateOnly().catch(() => {}); }, 8500);
@@ -9073,10 +9083,16 @@ window.fetchOlderChatMessages = async function fetchOlderChatMessages(encodedCha
     }
     await refreshLiveStateOnly();
     const added = Number(res.addedCount ?? res.countAdded) || 0;
+    if (res.provider === 'evolution_api' && btnEl) {
+      if (res.hasMore === false) btnEl.hidden = true;
+      else if (res.hasMore === true) btnEl.textContent = 'Carregar mais histórico';
+    }
     showToast(
       added > 0
-        ? `📥 ${added} mensagem(ns) anterior(es) carregada(s) do WhatsApp!`
-        : '⏳ Solicitação enviada. O WhatsApp pode disponibilizar mensagens antigas depois, mas a resposta não é garantida.'
+        ? `📥 ${added} mensagem(ns) anterior(es) carregada(s)${res.provider === 'evolution_api' && res.hasMore ? '; há mais para importar' : ''}.`
+        : res.provider === 'evolution_api'
+          ? (res.hasMore ? 'O histórico já está atualizado nesta página. Você pode carregar a próxima.' : 'Não há mais mensagens antigas disponíveis para esta conversa.')
+          : '⏳ Solicitação enviada. O WhatsApp pode disponibilizar mensagens antigas depois, mas a resposta não é garantida.'
     );
     setTimeout(() => { refreshLiveStateOnly().catch(() => {}); }, 3500);
   } catch (err) {

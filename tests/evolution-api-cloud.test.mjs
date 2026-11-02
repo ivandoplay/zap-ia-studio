@@ -21,7 +21,7 @@ globalThis.fetch = async (url, options = {}) => {
   }
   return { ok: true, status: 201, text: async () => JSON.stringify(body) };
 };
-const { sendEvolutionApiText, sendEvolutionApiMedia, sendEvolutionApiContact, reactEvolutionApiMessage, editEvolutionApiMessage, deleteEvolutionApiMessage, markEvolutionApiRead, requestEvolutionApiHistory } = await import('../src/evolutionApiCloud.js');
+const { sendEvolutionApiText, sendEvolutionApiMedia, sendEvolutionApiContact, reactEvolutionApiMessage, editEvolutionApiMessage, deleteEvolutionApiMessage, markEvolutionApiRead, requestEvolutionApiHistory, getEvolutionApiChats } = await import('../src/evolutionApiCloud.js');
 
 test('Evolution API v2 envia texto pela instância do tenant e usa endpoint/payload v2', async () => {
   requests.length = 0;
@@ -41,11 +41,36 @@ test('Histórico usa chat/findMessages com JID, paginação e offset limitado', 
   assert.deepEqual(JSON.parse(history.options.body), {
     where: { key: { remoteJid: '558899999999@s.whatsapp.net' } }, page: 1, offset: 35
   });
+  requests.length = 0;
+  await requestEvolutionApiHistory('tenant-1', '558899999999@s.whatsapp.net', 35, {}, 2);
+  const nextPage = requests.find((r) => r.url.includes('/chat/findMessages/'));
+  assert.equal(JSON.parse(nextPage.options.body).page, 2);
 });
 
 test('resposta HTTP 2xx com rejeição de aplicação não é tratada como envio aceito', async () => {
   globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ success: false, message: 'Instância sem conexão' }) });
   await assert.rejects(() => sendEvolutionApiText('tenant-1', '558899999999@s.whatsapp.net', 'Não enviar'), /Instância sem conexão/);
+});
+
+
+
+test('findChats importa somente conversas do slot do tenant e respeita a paginação', async () => {
+  globalThis.fetch = async (url, options = {}) => {
+    const href = String(url);
+    requests.push({ url: href, options });
+    let body = {};
+    if (href.endsWith('/instance/fetchInstances')) body = [{ instanceName: 'zap-ia-slot_1', connectionStatus: 'open' }];
+    else if (href.includes('/instance/connectionState/')) body = { instance: { state: 'open' } };
+    else if (href.includes('/chat/findChats/')) body = [{ remoteJid: '558899999999@s.whatsapp.net', pushName: 'Ana', updatedAt: '2024-01-01T00:00:00.000Z' }];
+    return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+  };
+  requests.length = 0;
+  const result = await getEvolutionApiChats('tenant-1', { limit: 25, offset: 50 });
+  assert.equal(result.chats.length, 1);
+  assert.equal(result.chats[0].chatId, '558899999999@s.whatsapp.net');
+  assert.equal(result.chats[0].name, 'Ana');
+  const query = requests.find((r) => r.url.includes('/chat/findChats/'));
+  assert.deepEqual(JSON.parse(query.options.body), { where: {}, take: 25, skip: 50 });
 });
 
 

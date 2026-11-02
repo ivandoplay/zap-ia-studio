@@ -6,6 +6,7 @@ import { Router } from 'express';
 import express from 'express';
 import { assertEvolutionApiAccepted } from './evolutionApiResponse.js';
 import QRCode from 'qrcode';
+import { runReadOnlyEvolutionDiagnostics } from './crmV2/readOnlyEvolutionDiagnostics.js';
 
 export const evolutionApiCloudRouter = Router();
 evolutionApiCloudRouter.use(express.json({ limit: '10mb' }));
@@ -22,6 +23,7 @@ evolutionApiCloudRouter.use((req, res, next) => {
 const API_URL = String(process.env.EVOLUTION_API_URL || 'https://pool-evolution-api-067.cloud2.pageup.dev.br').replace(/\/+$/, '');
 const API_KEY = process.env.EVOLUTION_API_KEY || '';
 const slotCache = new Map();
+const readOnlyDiagnosticRuns = new Map();
 const EVENTS = ['APPLICATION_STARTUP', 'QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'SEND_MESSAGE', 'CONTACTS_UPDATE', 'CHATS_UPDATE'];
 
 function ownerMap() {
@@ -251,6 +253,79 @@ export function normalizeEvolutionApiHistoryRecords(data, chatId = '') {
   }).filter(Boolean);
 }
 
+const DIAGNOSTIC_READ_TIMEOUT_MS = 4000;
+
+async function diagnosticReadRequest(path, body) {
+  if (!API_KEY) return { ok: false, errorCategory: 'configuration', statusCode: null };
+  let response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { apikey: API_KEY, 'Content-Type': 'application/json' },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      signal: AbortSignal.timeout(DIAGNOSTIC_READ_TIMEOUT_MS),
+    });
+  } catch (err) {
+    const timedOut = err?.name === 'TimeoutError' || err?.name === 'AbortError';
+    return { ok: false, errorCategory: timedOut ? 'timeout' : 'connection', statusCode: null };
+  }
+
+  let data;
+  try {
+    const text = await response.text();
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    return { ok: false, errorCategory: 'invalid_json', statusCode: response.status };
+  }
+  if (!response.ok) {
+    const statusCode = response.status;
+    const errorCategory = statusCode === 401 || statusCode === 403 ? 'authentication'
+      : statusCode === 404 ? 'endpoint_not_found'
+        : 'http_error';
+    return { ok: false, errorCategory, statusCode };
+  }
+  try {
+    assertEvolutionApiAccepted(data);
+  } catch {
+    return { ok: false, errorCategory: 'application_rejected', statusCode: response.status };
+  }
+  return { ok: true, data };
+}
+
+export async function getEvolutionApiReadOnlyDiagnostics(userId) {
+  if (!API_KEY) return { ok: false, readOnly: true, errorCategory: 'configuration', slots: [] };
+  if (!userId) return { ok: false, readOnly: true, errorCategory: 'authentication', slots: [] };
+
+  const instancesResponse = await diagnosticReadRequest('/instance/fetchInstances');
+  if (!instancesResponse.ok) return { ok: false, readOnly: true, errorCategory: instancesResponse.errorCategory, statusCode: instancesResponse.statusCode, slots: [] };
+  const body = instancesResponse.data;
+  const rawRows = Array.isArray(body) ? body : body?.instances || body?.data || body?.response;
+  if (!Array.isArray(rawRows)) return { ok: false, readOnly: true, errorCategory: 'invalid_response_shape', slots: [] };
+  const ownedByName = new Map(rawRows.map(normalizeInstance).filter((row) => row.name && instanceOwnedBy(row, userId)).map((row) => [row.name, row]));
+  const slots = ['slot_1', 'slot_2', 'slot_3'];
+  const readInstance = (slotId) => ownedByName.get(instanceName(slotId)) || null;
+  const pathFor = (endpoint, slotId) => `/chat/${endpoint}/${encodeURIComponent(instanceName(slotId))}`;
+
+  const result = await runReadOnlyEvolutionDiagnostics({
+    slots,
+    readConnection: async (slotId) => {
+      const instance = readInstance(slotId);
+      if (!instance) return { ok: true, instanceFound: false };
+      const stateResponse = await diagnosticReadRequest(`/instance/connectionState/${encodeURIComponent(instance.name)}`);
+      if (!stateResponse.ok) return { ok: false, instanceFound: true, errorCategory: stateResponse.errorCategory, statusCode: stateResponse.statusCode };
+      const stateBody = stateResponse.data;
+      const stateObject = stateBody?.instance || stateBody?.data?.instance || stateBody?.data || stateBody || {};
+      const state = String(stateObject.state || stateObject.connectionStatus || stateObject.status || '').toLowerCase();
+      if (!state) return { ok: false, instanceFound: true, errorCategory: 'invalid_response_shape', statusCode: null };
+      return { ok: true, instanceFound: true, state: state === 'connected' ? 'open' : state };
+    },
+    readContactsPage: (slotId, page) => diagnosticReadRequest(pathFor('findContacts', slotId), { where: {}, ...page }),
+    readChatsPage: (slotId, page) => diagnosticReadRequest(pathFor('findChats', slotId), { where: {}, ...page }),
+    readMessageSample: (slotId, remoteJid, page) => diagnosticReadRequest(pathFor('findMessages', slotId), { where: { key: { remoteJid } }, page: 1, offset: page.take }),
+  });
+  return result;
+}
+
 export async function getEvolutionApiSlotStatus(userId = null) {
   if (!userId || !API_KEY) return {};
   const rows = (await listInstances()).filter((item) => instanceOwnedBy(item, userId));
@@ -402,6 +477,27 @@ async function connectSlot(slotId, userId, baseUrl, pairingPhone = null) {
   slotCache.set(slotId, slot);
   return { slotId, ...slot };
 }
+
+evolutionApiCloudRouter.get('/diagnostics/read-only', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, private');
+  res.setHeader('Pragma', 'no-cache');
+  const userId = req.cloudAuth?.authUser?.id || null;
+  if (!process.env.VERCEL || !userId || userId !== process.env.EVOLUTION_DEFAULT_USER_ID || req.cloudAuth?.isRemoteImpersonation) {
+    return res.status(userId ? 403 : 401).json({ ok: false, errorCategory: 'authentication' });
+  }
+  const now = Date.now();
+  const previous = readOnlyDiagnosticRuns.get(userId) || 0;
+  if (now - previous < 30_000) {
+    return res.status(429).json({ ok: false, errorCategory: 'rate_limited', retryAfterSeconds: Math.ceil((30_000 - (now - previous)) / 1000) });
+  }
+  readOnlyDiagnosticRuns.set(userId, now);
+  try {
+    const result = await getEvolutionApiReadOnlyDiagnostics(userId);
+    return res.status(result.ok ? 200 : 502).json(result);
+  } catch {
+    return res.status(502).json({ ok: false, readOnly: true, errorCategory: 'diagnostic_failed' });
+  }
+});
 
 evolutionApiCloudRouter.get('/status', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');

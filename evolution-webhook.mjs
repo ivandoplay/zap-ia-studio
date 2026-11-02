@@ -1,6 +1,6 @@
 /**
- * Evolution Go Webhook Server (standalone / VPS)
- * Servidor Express dedicado que usa o router compartilhado src/evolutionGoWebhook.js.
+ * Evolution API Webhook Server (standalone / VPS)
+ * Servidor Express dedicado que usa o router compartilhado src/evolutionApiWebhook.js.
  * Para Vercel, o webhook já está integrado no motor (src/server.js) — não precisa deste arquivo.
  *
  * Roda: node evolution-webhook.mjs   (porta 3001)
@@ -8,14 +8,14 @@
  */
 
 import express from 'express';
-import { evolutionGoWebhookRouter } from './src/evolutionGoWebhook.js';
+import { evolutionApiWebhookRouter } from './src/evolutionApiWebhook.js';
 
 const app = express();
-app.use(evolutionGoWebhookRouter);
+app.use(evolutionApiWebhookRouter);
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Evolution Go Webhook rodando em :${PORT}`);
+  console.log(`✅ Evolution API Webhook rodando em :${PORT}`);
   console.log(`   Webhook: http://localhost:${PORT}/webhook`);
   console.log(`   Health:  http://localhost:${PORT}/health`);
   console.log(`   Status:  http://localhost:${PORT}/status`);

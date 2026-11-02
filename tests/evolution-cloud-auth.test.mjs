@@ -10,7 +10,7 @@ const server = app.listen(0, '127.0.0.1');
 await once(server, 'listening');
 test.after(() => new Promise((resolve) => server.close(resolve)));
 
-test('Evolution Go cloud bridge is behind API authentication', async () => {
+test('Evolution API cloud bridge is behind API authentication', async () => {
   const response = await fetch(`http://127.0.0.1:${server.address().port}/api/evolution-cloud/status`);
   assert.equal(response.status, 401);
   assert.equal((await response.json()).authRequired, true);

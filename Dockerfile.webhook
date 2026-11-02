@@ -1,4 +1,4 @@
-# Dockerfile para Evolution Go Webhook Server
+# Dockerfile para Evolution API v2 Webhook Server
 FROM node:20-alpine
 
 WORKDIR /app

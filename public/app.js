@@ -920,7 +920,7 @@ async function refreshLiveStateOnly() {
       }
       checkClientSideDueFollowUps(false);
 
-      // Verifica disponibilidade da Evolution Go na nuvem (sem motor local)
+      // Verifica disponibilidade da Evolution API na nuvem (sem motor local)
       if (snap.runtimeMode === 'vercel_cloud' && state.evolutionCloud.available === null) {
         checkEvolutionCloud().catch(() => {});
       }
@@ -1495,7 +1495,7 @@ window.saveCurrentWaSlotConfig = async function saveCurrentWaSlotConfig(fromTogg
         : `✅ Apelido "${label}" salvo com sucesso!`
     );
     if (fromToggle && _wizMode === 'cloud') {
-      setTimeout(() => showToast('☁️ Modo Nuvem — chip rodando no motor Evolution Go'), 400);
+      setTimeout(() => showToast('☁️ Modo Nuvem — chip rodando no motor Evolution API'), 400);
     } else if (fromToggle && _wizMode === 'local') {
       setTimeout(() => showToast('💻 Modo Local — chip rodando no seu computador'), 400);
     }
@@ -3790,7 +3790,9 @@ function renderActiveInboxConversation() {
 
           const ackNum = Number(m.ack) || (m.role !== 'user' ? 1 : 0);
           const ackHtml = m.role !== 'user' && !m.deletedForEveryone
-            ? `<span class="wa-ack-checks ${ackNum >= 3 ? 'read' : ''}" title="${ackNum >= 3 ? 'Lida' : ackNum === 2 ? 'Entregue' : 'Enviada'}">${ackNum >= 2 ? '✓✓' : '✓'}</span>`
+            ? m.deliveryStatus === 'accepted'
+              ? '<span class="wa-ack-checks" title="API aceitou a solicitação; entrega ao WhatsApp ainda não confirmada">…</span>'
+              : `<span class="wa-ack-checks ${ackNum >= 3 ? 'read' : ''}" title="${ackNum >= 3 ? 'Lida' : ackNum === 2 ? 'Entregue' : 'Enviada'}">${ackNum >= 2 ? '✓✓' : '✓'}</span>`
             : '';
           const editedLabel = m.editedAt && !m.deletedForEveryone ? ' • <em>(editada)</em>' : '';
 
@@ -6232,13 +6234,13 @@ function bindEvents() {
   async function executeSlotConnectRequest({ pairingPhone = null, slotId = null, targetDeviceId = null } = {}) {
     const chosenSlot = slotId || state.selectedWaSlotId || 'slot_1';
 
-    // Na nuvem sem motor local OU local com slot desconectado OU usuário quer código de pareamento, usa a ponte Evolution Go
+    // Na nuvem sem motor local OU local com slot desconectado OU usuário quer código de pareamento, usa a ponte Evolution API
     const slotStatus = state.waState?.slots?.[chosenSlot]?.status;
     const isCloudWorkerOff = state.runtimeMode === 'vercel_cloud' && !state.waState?.workerOnline;
     const isSlotDisconnected = slotStatus === 'disconnected' || !slotStatus;
     const isUsingPairingCode = !!pairingPhone;
     if ((isCloudWorkerOff || isSlotDisconnected || isUsingPairingCode) && !targetDeviceId) {
-      // Verifica se a Evolution Go está disponível
+      // Verifica se a Evolution API está disponível
       if (state.evolutionCloud.available === null) {
         await checkEvolutionCloud();
       }
@@ -6348,7 +6350,7 @@ function bindEvents() {
         }
         return res;
       }
-      throw new Error(res?.error || 'Falha ao conectar via Evolution Go');
+      throw new Error(res?.error || 'Falha ao conectar via Evolution API');
     } catch (err) {
       throw err;
     }
@@ -6410,7 +6412,7 @@ function bindEvents() {
     }
   }
 
-  // Verifica a disponibilidade da Evolution Go na nuvem periodicamente
+  // Verifica a disponibilidade da Evolution API na nuvem periodicamente
   if (!state._evoCheckInterval) {
     state._evoCheckInterval = setInterval(() => {
       if (state.runtimeMode === 'vercel_cloud') {
@@ -7493,7 +7495,7 @@ function bindEvents() {
         input.value = '';
         clearComposerQuote();
         if (res.contact) applyReturnedContactToState(res.contact, chatId);
-        showToast(res.queued ? 'Mensagem em processamento. Confira a conversa antes de reenviar.' : res.sentRealWhatsApp ? 'Mensagem enviada no WhatsApp!' : 'Mensagem registrada na conversa.');
+        showToast(res.queued ? 'Mensagem em processamento. Confira a conversa antes de reenviar.' : res.deliveryStatus === 'accepted' ? 'A Evolution API aceitou o envio; a entrega ainda não foi confirmada.' : res.sentRealWhatsApp ? 'Mensagem enviada no WhatsApp!' : 'Mensagem registrada na conversa.');
         watchQueuedCrmSend(res).catch(() => {});
         refreshLiveStateOnly().catch(() => {});
       }
@@ -7941,7 +7943,7 @@ function bindEvents() {
       });
       input.value = '';
       if (res.contact) applyReturnedContactToState(res.contact, chatId);
-      showToast(res.queued ? 'Mensagem em processamento. Confira a conversa antes de reenviar.' : res.sentRealWhatsApp ? 'Mensagem enviada no WhatsApp!' : 'Mensagem registrada no painel.');
+      showToast(res.queued ? 'Mensagem em processamento. Confira a conversa antes de reenviar.' : res.deliveryStatus === 'accepted' ? 'A Evolution API aceitou o envio; a entrega ainda não foi confirmada.' : res.sentRealWhatsApp ? 'Mensagem enviada no WhatsApp!' : 'Mensagem registrada no painel.');
       watchQueuedCrmSend(res).catch(() => {});
       await refreshLiveStateOnly();
       openLeadModal(encodeURIComponent(res.contact?.chatId || chatId));

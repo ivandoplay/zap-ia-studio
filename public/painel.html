@@ -1259,22 +1259,22 @@
       <section id="tab-crm" class="tab-pane">
         <!-- Barra Superior Compacta: Visões Segmentadas + Busca + Nova Conversa + Menu ⋯ -->
         <div class="crm-hub-topbar">
-          <div class="crm-subtabs" role="tablist" aria-label="Modos de visão do CRM">
-            <button type="button" class="crm-subtab-btn active" data-crmview="inbox" id="btnCrmViewInbox">
+          <div class="crm-subtabs" role="group" aria-label="Visões do CRM">
+            <button type="button" class="crm-subtab-btn active" aria-pressed="true" data-crmview="inbox" id="btnCrmViewInbox">
               <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
               <span>Conversas</span>
               <span class="tag" id="crmInboxTotalCount" style="padding:1px 6px; font-size:10.5px;">0</span>
             </button>
-            <button type="button" class="crm-subtab-btn" data-crmview="contacts" id="btnCrmViewContacts">
+            <button type="button" class="crm-subtab-btn" aria-pressed="false" data-crmview="contacts" id="btnCrmViewContacts">
               <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
               <span>Contatos</span>
               <span class="tag" id="crmContactsSavedCount" style="padding:1px 6px; font-size:10.5px;">0</span>
             </button>
-            <button type="button" class="crm-subtab-btn" data-crmview="kanban" id="btnCrmViewKanban">
+            <button type="button" class="crm-subtab-btn" aria-pressed="false" data-crmview="kanban" id="btnCrmViewKanban">
               <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><rect x="3" y="3" width="5" height="18" rx="1"></rect><rect x="10" y="3" width="5" height="12" rx="1"></rect><rect x="17" y="3" width="4" height="15" rx="1"></rect></svg>
               <span>Kanban</span>
             </button>
-            <button type="button" class="crm-subtab-btn" data-crmview="coach" id="btnCrmViewCoach">
+            <button type="button" class="crm-subtab-btn" aria-pressed="false" data-crmview="coach" id="btnCrmViewCoach">
               <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><path d="M3 3v18h18"></path><path d="m19 9-5 5-4-4-3 3"></path></svg>
               <span>Coach IA</span>
             </button>
@@ -1393,19 +1393,19 @@
                       <svg class="icon-svg" style="width:17px; height:17px;" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></svg>
                     </button>
                     <div id="inboxHeadAvatar" class="crm-inbox-avatar" style="width:34px; height:34px; font-size:12px; flex-shrink:0;">C</div>
-                    <div style="min-width:0; flex:1;">
-                      <div style="display:flex; align-items:center; gap:6px; min-width:0;">
-                        <strong id="inboxContactName" style="font-size:14.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Cliente</strong>
-                        <button type="button" id="btnQuickRenameContact" onclick="quickRenameActiveContact()" style="background:none; border:none; color:var(--text-muted); cursor:pointer; padding:0 2px; font-size:12px;" title="Editar nome do contato" aria-label="Editar nome do contato">✏️</button>
+                    <div class="crm-chat-contact">
+                      <div class="crm-chat-identity-line">
+                        <strong id="inboxContactName">Cliente</strong>
+                        <button type="button" id="btnQuickRenameContact" onclick="quickRenameActiveContact()" title="Editar nome do contato" aria-label="Editar nome do contato">✏️</button>
                         <span id="inboxSlotBadge" class="slot-pill slot_1">Chip 1</span>
                         <span id="inboxSentimentBadge" class="sentiment-pill" style="display:none;"></span>
-                        <span id="inboxAiStatusBadge" class="tag">Ativo</span>
+                        <span id="inboxAiStatusBadge" class="tag">IA ativa</span>
                         <span id="inboxDealBadge" class="tag" style="display:none;"></span>
                       </div>
-                      <div style="display:flex; align-items:center; gap:8px; font-size:11.5px; color:var(--text-secondary); font-variant-numeric:tabular-nums; flex-wrap:wrap;">
+                      <div class="crm-chat-contact-meta">
                         <span id="inboxContactPhone">+55...</span>
-                        <button type="button" id="btnCopyInboxPhone" style="background:none; border:none; color:var(--accent-bright); font-size:11px; font-weight:600; cursor:pointer; padding:0;">Copiar</button>
-                        <button type="button" id="btnQuickSaveContactPill" onclick="openSaveContactModalForActive()" style="background:rgba(16,185,129,0.14); border:1px solid rgba(16,185,129,0.35); color:var(--accent-bright); border-radius:999px; font-size:10.5px; font-weight:700; cursor:pointer; padding:1px 8px;">+ Salvar Contato</button>
+                        <button type="button" id="btnCopyInboxPhone" class="crm-chat-contact-copy">Copiar número</button>
+                        <button type="button" id="btnQuickSaveContactPill" class="crm-chat-save-contact" onclick="openSaveContactModalForActive()">+ Salvar contato</button>
                       </div>
                     </div>
                   </div>
@@ -1484,7 +1484,7 @@
                 <div id="inboxDossierBanner" class="dossier-banner" style="display:none;"></div>
 
                 <!-- Histórico completo estilo WhatsApp + Notas Internas -->
-                <div id="crmInboxMessages" class="wa-messages crm-inbox-messages"></div>
+                <div id="crmInboxMessages" class="wa-messages crm-inbox-messages" role="region" tabindex="0" aria-label="Histórico de mensagens da conversa"></div>
 
                 <!-- Barra de Resposta Pro -->
                 <div class="crm-inbox-composer" id="crmInboxComposerWrap">
@@ -1498,11 +1498,11 @@
                   </div>
 
                   <div class="composer-top-bar">
-                    <div class="composer-mode-tabs" role="tablist">
-                      <button type="button" id="btnModeWhatsappReply" class="composer-mode-btn active reply" onclick="setInboxComposerMode('reply')">
+                    <div class="composer-mode-tabs" role="group" aria-label="Modo da mensagem">
+                      <button type="button" id="btnModeWhatsappReply" class="composer-mode-btn active reply" aria-pressed="true" onclick="setInboxComposerMode('reply')">
                         WhatsApp
                       </button>
-                      <button type="button" id="btnModeInternalNote" class="composer-mode-btn note" onclick="setInboxComposerMode('note')">
+                      <button type="button" id="btnModeInternalNote" class="composer-mode-btn note" aria-pressed="false" onclick="setInboxComposerMode('note')">
                         Nota Interna
                       </button>
                     </div>
@@ -1765,17 +1765,26 @@
               </div>
             </div>
 
-            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px;">
-              <input type="text" id="contactsBookSearchInput" placeholder="Buscar por nome, número, empresa, cidade ou observação..." oninput="renderContactsAgendaView()" style="flex:1; min-width:210px;" aria-label="Buscar na agenda de contatos" />
-              <select id="contactsBookFilterSelect" onchange="renderContactsAgendaView()" style="width:auto; min-width:170px;" aria-label="Filtrar agenda de contatos">
-                <option value="all">Todos os Contatos</option>
-                <option value="saved">⭐ Salvos na Agenda</option>
-                <option value="unsaved">Ainda Não Salvos</option>
+            <div class="contacts-book-controls" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:12px;">
+              <input type="text" id="contactsBookSearchInput" placeholder="Buscar por nome, número, empresa, cidade ou observação..." oninput="handleContactsBookSearch()" style="flex:1; min-width:210px;" aria-label="Buscar na agenda de contatos" />
+              <select id="contactsBookFilterSelect" onchange="renderContactsAgendaView()" style="width:auto; min-width:190px;" aria-label="Filtrar agenda de contatos">
+                <option value="saved" selected>⭐ Salvos no CRM</option>
+                <option value="all">Todos do CRM</option>
+                <option value="directory">Agenda conectada (sob demanda)</option>
+                <option value="unsaved">Ainda Não Salvos no CRM</option>
                 <option value="blocked">🚫 Bloqueados no WhatsApp</option>
               </select>
+              <label id="contactsBookIncludeUnnamedWrap" style="display:none; align-items:center; gap:6px; font-size:12px; color:var(--text-secondary);">
+                <input id="contactsBookIncludeUnnamed" type="checkbox" onchange="loadContactsDirectoryPage(true)" /> Incluir sem nome
+              </label>
             </div>
-
+            <div id="contactsBookMeta" class="contacts-book-meta" style="margin-top:8px;" aria-live="polite"></div>
             <div id="contactsBookGrid" class="contacts-book-grid" style="margin-top:14px;"></div>
+            <div class="contacts-book-pager" style="display:flex; justify-content:center; align-items:center; gap:10px; margin:14px 0;">
+              <button id="contactsBookPrevious" type="button" class="btn btn-secondary btn-sm" style="display:none;" onclick="loadPreviousContactsPage()">Página anterior</button>
+              <span id="contactsBookPageMeta" class="contacts-book-meta" aria-live="polite"></span>
+              <button id="contactsBookLoadMore" type="button" class="btn btn-secondary btn-sm" style="display:none;" onclick="loadMoreContactsDirectory()">Próxima página</button>
+            </div>
           </div>
         </div>
 

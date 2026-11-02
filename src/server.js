@@ -895,18 +895,47 @@ function sortContactsForInbox(contactsObj = {}) {
   });
 }
 
+const evolutionContactDirectoryCache = new Map();
+const EVOLUTION_CONTACT_DIRECTORY_TTL_MS = 30_000;
+
+async function getCachedEvolutionContactDirectory(userId) {
+  if (!userId) return [];
+  const now = Date.now();
+  const cached = evolutionContactDirectoryCache.get(userId);
+  if (cached?.rows && cached.expiresAt > now) return cached.rows;
+  if (cached?.promise) return cached.promise;
+
+  const entry = { promise: null, rows: null, expiresAt: 0 };
+  entry.promise = getEvolutionGoContacts(userId)
+    .then((rows) => {
+      entry.rows = Array.isArray(rows) ? rows : [];
+      entry.expiresAt = Date.now() + EVOLUTION_CONTACT_DIRECTORY_TTL_MS;
+      entry.promise = null;
+      return entry.rows;
+    })
+    .catch((error) => {
+      evolutionContactDirectoryCache.delete(userId);
+      throw error;
+    });
+  evolutionContactDirectoryCache.set(userId, entry);
+  return entry.promise;
+}
+
+function normalizeDirectoryChatId(contact = {}) {
+  const raw = String(contact.chatId || '').replace(/^slot_[1-3]::/i, '').trim();
+  const at = raw.lastIndexOf('@');
+  if (at < 1 || at === raw.length - 1 || /\s/.test(raw)) return '';
+  const local = raw.slice(0, at).replace(/:\d+$/, '');
+  const domain = raw.slice(at + 1).toLowerCase();
+  if (!local || !/^[a-z0-9.-]+$/i.test(domain)) return '';
+  return `${local.toLowerCase()}@${domain}`;
+}
+
 app.get('/api/bootstrap', async (req, res) => {
   storage.ensureDailyRollover();
   const ffmpegBin = usesCloudBridge(req) ? 'cloud' : await resolveFfmpegPath();
   const waState = await mergeEvolutionGoStatus(req, getEffectiveWaState(req));
-  let contacts = sortContactsForInbox(storage.data.contacts);
-  if (usesCloudBridge(req)) {
-    try {
-      const known = new Set(contacts.map((c) => c.chatId));
-      const discovered = await getEvolutionGoContacts(req.cloudAuth?.authUser?.id || null);
-      contacts = [...contacts, ...discovered.filter((c) => !known.has(c.chatId))];
-    } catch {}
-  }
+  const contacts = sortContactsForInbox(storage.data.contacts);
   res.json({
     appVersion: APP_VERSION,
     runtimeMode: usesCloudBridge(req) ? 'vercel_cloud' : 'local_worker',
@@ -924,6 +953,82 @@ app.get('/api/bootstrap', async (req, res) => {
     logs: storage.data.logs,
     simulatorHistory: storage.data.simulatorHistory || []
   });
+});
+
+// A agenda da Evolution é carregada só ao abrir essa área, nunca no bootstrap ou no polling.
+app.get('/api/crm/contact-directory', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const userId = req.cloudAuth?.authUser?.id || cloudWorker.getStatus().user?.id || null;
+  const limit = Math.max(1, Math.min(100, Number.parseInt(req.query.limit, 10) || 100));
+  const offset = Math.max(0, Math.min(100_000, Number.parseInt(req.query.offset, 10) || 0));
+  const query = String(req.query.q || '').trim().toLocaleLowerCase('pt-BR').slice(0, 120);
+  const includeUnnamed = req.query.includeUnnamed === 'true';
+
+  try {
+    const imported = await getCachedEvolutionContactDirectory(userId);
+    const saved = Object.values(storage.data.contacts || {});
+    const contactsById = new Map();
+    for (const contact of saved) {
+      if (contact?.chatId) contactsById.set(contact.chatId, contact);
+    }
+
+    const seenBySlot = new Set();
+    let hiddenUnnamed = 0;
+    let invalidIds = 0;
+    let duplicateIds = 0;
+    for (const contact of saved) {
+      const normalized = normalizeDirectoryChatId(contact);
+      if (!normalized) continue;
+      const slotId = contact.slotId || String(contact.chatId).match(/^(slot_[1-3])::/i)?.[1] || 'slot_1';
+      seenBySlot.add(`${slotId}|${normalized}`);
+    }
+    for (const contact of imported) {
+      const normalized = normalizeDirectoryChatId(contact);
+      if (!normalized) {
+        invalidIds += 1;
+        continue;
+      }
+      const slotId = contact.slotId || String(contact.chatId).match(/^(slot_[1-3])::/i)?.[1] || 'slot_1';
+      const dedupeKey = `${slotId}|${normalized}`;
+      if (seenBySlot.has(dedupeKey)) {
+        duplicateIds += 1;
+        continue;
+      }
+      seenBySlot.add(dedupeKey);
+      if (contactsById.has(contact.chatId)) {
+        duplicateIds += 1;
+        continue;
+      }
+      if (!String(contact.name || '').trim()) {
+        hiddenUnnamed += 1;
+        if (!includeUnnamed) continue;
+      }
+      contactsById.set(contact.chatId, { ...contact, slotId, directoryImport: true });
+    }
+
+    const all = [...contactsById.values()].filter((contact) => {
+      if (!query) return true;
+      const haystack = [contact.name, contact.phone, contact.company, contact.city, contact.email, contact.notes, contact.chatId]
+        .filter(Boolean).join(' ').toLocaleLowerCase('pt-BR');
+      return haystack.includes(query);
+    });
+    all.sort((a, b) => {
+      if (Boolean(a.savedContact) !== Boolean(b.savedContact)) return a.savedContact ? -1 : 1;
+      return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR') || String(a.chatId).localeCompare(String(b.chatId));
+    });
+
+    return res.json({
+      ok: true,
+      total: all.length,
+      offset,
+      limit,
+      hasMore: offset + limit < all.length,
+      cleanup: { hiddenUnnamed, invalidIds, duplicateIds },
+      contacts: all.slice(offset, offset + limit)
+    });
+  } catch (err) {
+    return res.status(502).json({ ok: false, error: `Não foi possível carregar a agenda do WhatsApp: ${err.message}` });
+  }
 });
 
 // Somente configuração pública. A assinatura Realtime usa o JWT do usuário e RLS.
@@ -986,16 +1091,6 @@ async function mergeEvolutionGoStatus(req, waState) {
 
 app.get('/api/cloud/poll', async (req, res) => {
   const waState = await mergeEvolutionGoStatus(req, getEffectiveWaState(req));
-  // Sincroniza contatos do WhatsApp conectado na Evolution Go (nuvem) para o CRM
-  let contactsMap = storage.data.contacts || {};
-  if (usesCloudBridge(req)) {
-    try {
-      const evoContacts = await getEvolutionGoContacts(req.cloudAuth?.authUser?.id || null);
-      for (const c of evoContacts) {
-        if (!contactsMap[c.chatId]) contactsMap[c.chatId] = c;
-      }
-    } catch {}
-  }
   res.json({
     ok: true,
     appVersion: APP_VERSION,
@@ -1004,7 +1099,7 @@ app.get('/api/cloud/poll', async (req, res) => {
     waState,
     waSlots: normalizeWaSlotsSettings(storage.data.settings?.waSlots),
     proactiveQueueState: usesCloudBridge(req) ? waState.proactive : whatsappManager.getProactiveQueueState(),
-    contacts: sortContactsForInbox(contactsMap),
+    contacts: sortContactsForInbox(storage.data.contacts),
     stats: storage.data.stats,
     logs: (storage.data.logs || []).slice(0, 60)
   });

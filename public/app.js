@@ -102,6 +102,18 @@ const state = {
   slashSelectedIndex: 0,
   selectedInboxChatId: null,
   contacts: [],
+  contactsDirectory: [],
+  contactsDirectoryOffset: 0,
+  contactsDirectoryTotal: 0,
+  contactsDirectoryHasMore: false,
+  contactsDirectoryLoading: false,
+  contactsDirectoryQuery: '',
+  contactsDirectoryLoadedKey: '',
+  contactsDirectoryRequestId: 0,
+  contactsDirectoryCleanup: { hiddenUnnamed: 0, invalidIds: 0, duplicateIds: 0 },
+  contactsBookCrmPage: 0,
+  contactsBookCrmLimit: 100,
+  contactsBookLastViewKey: '',
   stats: {},
   logs: [],
   simulatorHistory: [],
@@ -472,6 +484,9 @@ window.switchTab = function switchTab(rawTabId) {
   document.querySelectorAll('.tab-pane').forEach((pane) => {
     pane.classList.toggle('active', pane.id === `tab-${tabId}`);
   });
+
+  // Renderiza a caixa somente depois de ativar o CRM: evita montar milhares de cards em abas ocultas.
+  if (tabId === 'crm') renderCrmBoard();
 
   try {
     document.querySelector('.content-area')?.scrollTo({ top: 0, behavior: 'instant' });
@@ -3108,6 +3123,16 @@ function updateInboxFilterCounters() {
   }
 }
 
+function isInboxContactVisible(contact) {
+  if (!contact?.directoryImport) return true;
+  if (contact.savedContact === true || (Array.isArray(contact.messages) && contact.messages.length > 0)) return true;
+  return contact.chatId === state.selectedInboxChatId;
+}
+
+function getInboxDisplayContacts() {
+  return (state.contacts || []).filter(isInboxContactVisible);
+}
+
 function getFilteredCrmContacts() {
   syncCrmTagDropdowns();
   syncSlotSelectOptions();
@@ -3118,11 +3143,24 @@ function getFilteredCrmContacts() {
   const dealFilter = document.getElementById('crmFilterDealSelect')?.value || '';
   const out = [];
   for (const c of state.contacts || []) {
+    if (!isInboxContactVisible(c)) continue;
     if (slotFilter && getContactSlotId(c) !== slotFilter) continue;
-    const tagsStr = (c.tags || []).join(' ');
-    const msgsBlob = (c.messages || []).slice(-12).map((m) => m.text || '').join(' ');
-    const profileBlob = `${c.name || ''} ${c.phone || ''} ${c.company || ''} ${c.email || ''} ${c.docNumber || ''} ${c.city || ''} ${c.leadSource || ''}`;
-    if (q && !`${profileBlob} ${c.summary || ''} ${c.notes || ''} ${tagsStr} ${msgsBlob}`.toLowerCase().includes(q)) continue;
+    if (q) {
+      const tagsStr = (c.tags || []).join(' ');
+      const profileBlob = `${c.name || ''} ${c.phone || ''} ${c.company || ''} ${c.email || ''} ${c.docNumber || ''} ${c.city || ''} ${c.leadSource || ''} ${c.summary || ''} ${c.notes || ''} ${tagsStr}`;
+      let matches = profileBlob.toLowerCase().includes(q);
+      if (!matches) {
+        const messages = c.messages || [];
+        for (let i = messages.length - 1, checked = 0; i >= 0 && checked < 12; i -= 1, checked += 1) {
+          const message = messages[i];
+          if (String(message.text || '').toLowerCase().includes(q)) {
+            matches = true;
+            break;
+          }
+        }
+      }
+      if (!matches) continue;
+    }
 
     if (state.activeCrmFilter === 'archived') {
       if (!c.archived) continue;
@@ -3217,96 +3255,116 @@ function renderSentimentPillHtml(sentiment) {
   return `<span class="sentiment-pill ${escapeHtml(sentiment.code)}">${escapeHtml(sentiment.emoji || '')} ${escapeHtml(sentiment.label || '')}</span>`;
 }
 
+function getLastPublicMessage(contact) {
+  const messages = contact?.messages;
+  if (!Array.isArray(messages)) return null;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i]?.role !== 'internal_note') return messages[i];
+  }
+  return null;
+}
+
 function renderCrmBoard() {
   updateInboxFilterCounters();
-  const filtered = getFilteredCrmContacts();
+  const crmTab = document.getElementById('tab-crm');
+  if (!crmTab?.classList.contains('active')) return;
+
+  const activeView = state.activeCrmSubView || 'inbox';
+  const filtered = activeView === 'inbox' || activeView === 'kanban' ? getFilteredCrmContacts() : [];
+  const allContacts = getInboxDisplayContacts();
+  const allActiveCount = allContacts.reduce((count, contact) => count + (contact.archived ? 0 : 1), 0);
   const totalCountEl = document.getElementById('crmInboxTotalCount');
-  if (totalCountEl) totalCountEl.textContent = (state.contacts || []).filter((c) => !c.archived).length;
+  if (totalCountEl) totalCountEl.textContent = String(allActiveCount);
+  const savedTotalEl = document.getElementById('crmContactsSavedCount');
+  if (savedTotalEl) savedTotalEl.textContent = String(allContacts.length);
 
-  const cols = {
-    novo: [],
-    qualificando: [],
-    em_atendimento: [],
-    aguardando_humano: [],
-    concluido: []
-  };
+  if (activeView === 'kanban') {
+    const cols = {
+      novo: [],
+      qualificando: [],
+      em_atendimento: [],
+      aguardando_humano: [],
+      concluido: []
+    };
 
-  for (const c of filtered) {
-    const st = cols[c.stage] ? c.stage : 'novo';
-    cols[st].push(c);
+    for (const c of filtered) {
+      const st = cols[c.stage] ? c.stage : 'novo';
+      cols[st].push(c);
+    }
+
+    Object.entries(cols).forEach(([stage, list]) => {
+      const cntEl = document.getElementById(`count-${stage}`);
+      if (cntEl) cntEl.textContent = list.length;
+      const sumEl = document.getElementById(`sum-${stage}`);
+      if (sumEl) {
+        const colTotal = list.reduce((acc, item) => acc + (Number(item.dealValue) || 0), 0);
+        sumEl.textContent = formatBrlShort(colTotal);
+      }
+      const container = document.getElementById(`col-${stage}`);
+      if (!container) return;
+      if (!list.length) {
+        container.innerHTML = `<div class="empty-state" style="padding:18px 10px;">Arraste ou receba clientes aqui</div>`;
+        return;
+      }
+      container.innerHTML = list
+        .map((c) => {
+          const paused = isContactCurrentlyPaused(c);
+          const lastMsg = getLastPublicMessage(c)?.text || c.summary || 'Sem mensagens';
+          const sentHtml = renderSentimentPillHtml(c.sentiment);
+          const dealValHtml = Number(c.dealValue) > 0 ? `<span class="deal-pill value">${escapeHtml(formatBrlShort(c.dealValue))}</span>` : '';
+          const dealStHtml = c.dealStatus === 'won'
+            ? '<span class="deal-pill won">✅ Ganho</span>'
+            : c.dealStatus === 'lost'
+              ? '<span class="deal-pill lost">❌ Perdido</span>'
+              : '';
+          const tagsHtml = (c.tags || []).length || sentHtml || dealValHtml || dealStHtml
+            ? `<div class="lead-tags-row">${dealValHtml}${dealStHtml}${sentHtml}${(c.tags || []).map((t) => renderColoredTagPill(t)).join('')}</div>`
+            : '';
+
+          let followHtml = '';
+          if (c.followUpAt) {
+            const dt = new Date(c.followUpAt);
+            const isOverdue = !Number.isNaN(dt.getTime()) && dt.getTime() <= Date.now();
+            const fmt = !Number.isNaN(dt.getTime())
+              ? dt.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+              : c.followUpAt;
+            followHtml = `<div class="followup-badge ${isOverdue ? 'overdue' : ''}">${isOverdue ? '● Retornar agora:' : '○ Retorno:'} ${escapeHtml(fmt)}</div>`;
+          }
+
+          const encId = encodeURIComponent(c.chatId);
+          return `
+            <button
+              type="button"
+              draggable="true"
+              ondragstart="handleLeadDragStart(event, '${encId}')"
+              class="lead-card ${stage === 'aguardando_humano' ? 'urgent' : ''}"
+              onclick="openLeadModal('${encId}')"
+            >
+              <div class="lead-title-row">
+                <span>${c.pinned ? '📌 ' : ''}${escapeHtml(c.name)}</span>
+                ${c.aiIgnored ? '<span class="tag paused">🔕 Ignorado</span>' : paused ? '<span class="tag paused">Pausado</span>' : '<span class="tag">Ativo</span>'}
+              </div>
+              <div class="lead-phone">${renderSlotPillHtml(c)} ${escapeHtml(formatContactSubtitle(c))}${c.company ? ` • ${escapeHtml(c.company)}` : ''}</div>
+              ${tagsHtml}
+              ${followHtml}
+              <div class="lead-summary">${escapeHtml(c.handoffDossier?.trigger || c.summary || lastMsg)}</div>
+            </button>
+          `;
+        })
+        .join('');
+    });
   }
 
-  Object.entries(cols).forEach(([stage, list]) => {
-    const cntEl = document.getElementById(`count-${stage}`);
-    if (cntEl) cntEl.textContent = list.length;
-    const sumEl = document.getElementById(`sum-${stage}`);
-    if (sumEl) {
-      const colTotal = list.reduce((acc, item) => acc + (Number(item.dealValue) || 0), 0);
-      sumEl.textContent = formatBrlShort(colTotal);
-    }
-    const container = document.getElementById(`col-${stage}`);
-    if (!container) return;
-    if (!list.length) {
-      container.innerHTML = `<div class="empty-state" style="padding:18px 10px;">Arraste ou receba clientes aqui</div>`;
-      return;
-    }
-    container.innerHTML = list
-      .map((c) => {
-        const paused = isContactCurrentlyPaused(c);
-        const realMsgs = (c.messages || []).filter((m) => m.role !== 'internal_note');
-        const lastMsg = realMsgs[realMsgs.length - 1]?.text || c.summary || 'Sem mensagens';
-        const sentHtml = renderSentimentPillHtml(c.sentiment);
-        const dealValHtml = Number(c.dealValue) > 0 ? `<span class="deal-pill value">${escapeHtml(formatBrlShort(c.dealValue))}</span>` : '';
-        const dealStHtml = c.dealStatus === 'won'
-          ? '<span class="deal-pill won">✅ Ganho</span>'
-          : c.dealStatus === 'lost'
-            ? '<span class="deal-pill lost">❌ Perdido</span>'
-            : '';
-        const tagsHtml = (c.tags || []).length || sentHtml || dealValHtml || dealStHtml
-          ? `<div class="lead-tags-row">${dealValHtml}${dealStHtml}${sentHtml}${(c.tags || []).map((t) => renderColoredTagPill(t)).join('')}</div>`
-          : '';
-
-        let followHtml = '';
-        if (c.followUpAt) {
-          const dt = new Date(c.followUpAt);
-          const isOverdue = !Number.isNaN(dt.getTime()) && dt.getTime() <= Date.now();
-          const fmt = !Number.isNaN(dt.getTime())
-            ? dt.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-            : c.followUpAt;
-          followHtml = `<div class="followup-badge ${isOverdue ? 'overdue' : ''}">${isOverdue ? '● Retornar agora:' : '○ Retorno:'} ${escapeHtml(fmt)}</div>`;
-        }
-
-        const encId = encodeURIComponent(c.chatId);
-        return `
-          <button
-            type="button"
-            draggable="true"
-            ondragstart="handleLeadDragStart(event, '${encId}')"
-            class="lead-card ${stage === 'aguardando_humano' ? 'urgent' : ''}"
-            onclick="openLeadModal('${encId}')"
-          >
-            <div class="lead-title-row">
-              <span>${c.pinned ? '📌 ' : ''}${escapeHtml(c.name)}</span>
-              ${c.aiIgnored ? '<span class="tag paused">🔕 Ignorado</span>' : paused ? '<span class="tag paused">Pausado</span>' : '<span class="tag">Ativo</span>'}
-            </div>
-            <div class="lead-phone">${renderSlotPillHtml(c)} ${escapeHtml(formatContactSubtitle(c))}${c.company ? ` • ${escapeHtml(c.company)}` : ''}</div>
-            ${tagsHtml}
-            ${followHtml}
-            <div class="lead-summary">${escapeHtml(c.handoffDossier?.trigger || c.summary || lastMsg)}</div>
-          </button>
-        `;
-      })
-      .join('');
-  });
-
-  renderCrmInbox(filtered);
-  renderContactsAgendaView();
+  if (activeView === 'inbox') renderCrmInbox(filtered);
+  else if (activeView === 'contacts') renderContactsAgendaView();
 }
 
 window.switchCrmSubView = function switchCrmSubView(viewName) {
   state.activeCrmSubView = viewName;
   document.querySelectorAll('.crm-subtab-btn').forEach((b) => {
-    b.classList.toggle('active', b.dataset.crmview === viewName);
+    const active = b.dataset.crmview === viewName;
+    b.classList.toggle('active', active);
+    b.setAttribute('aria-pressed', String(active));
   });
   ['inbox', 'contacts', 'kanban', 'coach'].forEach((v) => {
     const el = document.getElementById(`crmSubView-${v}`);
@@ -3314,7 +3372,7 @@ window.switchCrmSubView = function switchCrmSubView(viewName) {
   });
   const filterBar = document.getElementById('crmFilterBar');
   if (filterBar) filterBar.style.display = (viewName === 'coach' || viewName === 'contacts') ? 'none' : '';
-  if (viewName === 'contacts') renderContactsAgendaView();
+  if (viewName === 'inbox' || viewName === 'kanban' || viewName === 'contacts') renderCrmBoard();
 };
 
 function renderCrmInbox(filteredList) {
@@ -3329,94 +3387,109 @@ function renderCrmInbox(filteredList) {
     state.selectedInboxChatId = list[0].chatId;
   }
 
-  const allActiveCount = (state.contacts || []).filter((c) => !c.archived).length;
   const countAllEl = document.getElementById('crmCountAll');
-  if (countAllEl) countAllEl.textContent = String(allActiveCount);
+  const inboxContacts = getInboxDisplayContacts();
+  if (countAllEl) countAllEl.textContent = String(inboxContacts.filter((c) => !c.archived).length);
   const inboxTotalEl = document.getElementById('crmInboxTotalCount');
-  if (inboxTotalEl) inboxTotalEl.textContent = String(allActiveCount);
+  if (inboxTotalEl) inboxTotalEl.textContent = String(inboxContacts.filter((c) => !c.archived).length);
   const savedTotalEl = document.getElementById('crmContactsSavedCount');
-  if (savedTotalEl) savedTotalEl.textContent = String((state.contacts || []).length);
+  if (savedTotalEl) savedTotalEl.textContent = String((state.contacts || []).filter((c) => c.savedContact).length);
 
-  if (!list.length) {
-    listEl.innerHTML = `<div class="empty-state" style="padding:28px 14px;">Nenhuma conversa encontrada neste filtro.</div>`;
-  } else {
-    const stageLabels = {
-      novo: 'Novo',
-      qualificando: 'Qualificando',
-      em_atendimento: 'Em Atendimento',
-      proposta_enviada: 'Proposta Enviada',
-      negociacao: 'Em Negociação',
-      aguardando_humano: 'Aguardando Você',
-      fechado: 'Fechado',
-      concluido: 'Concluído',
-      perdido: 'Perdido'
-    };
-    const limit = Math.max(100, Number(state.inboxRenderLimit) || 100);
-    const visibleItems = list.slice(0, limit);
-    const remaining = list.length - visibleItems.length;
+  const limit = Math.max(100, Number(state.inboxRenderLimit) || 100);
+  const visibleItems = list.slice(0, limit);
+  const remaining = list.length - visibleItems.length;
+  const signature = `${list.length}:${limit}:${remaining}:${state.crmBulkMode ? 1 : 0}:` + visibleItems.map((c) => {
+    const last = getLastPublicMessage(c);
+    const selected = state.crmBulkSelected instanceof Set && state.crmBulkSelected.has(c.chatId);
+    return JSON.stringify([
+      c.chatId, c.name, c.phone, c.company, c.avatarUrl, c.lastMessageAt, c.summary,
+      last?.id || last?.waMsgId, last?.role, last?.text, last?.timestamp, last?.mediaUrl,
+      c.unreadCount, c.stage, c.pinned, c.savedContact, c.aiIgnored, c.waBlocked,
+      c.archived, c.dealValue, c.dealStatus, c.tags || [], c.sentiment?.code,
+      c.sentiment?.emoji, c.sentiment?.label, getContactSlotId(c), isContactCurrentlyPaused(c),
+      selected, c.chatId === state.selectedInboxChatId
+    ]);
+  }).join('|');
 
-    listEl.innerHTML =
-      visibleItems
-        .map((c) => {
-          const isSelected = c.chatId === state.selectedInboxChatId;
-          const realMsgs = (c.messages || []).filter((m) => m.role !== 'internal_note');
-          const lastObj = realMsgs[realMsgs.length - 1];
-          const prefix = lastObj ? (lastObj.role === 'user' ? '' : 'Você: ') : '';
-          const preview = lastObj?.text ? `${prefix}${lastObj.text}` : (c.summary || 'Clique para ver ou puxar mensagens anteriores');
-          const timeStr = c.lastMessageAt
-            ? new Date(c.lastMessageAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  if (listEl.dataset.renderSignature !== signature) {
+    listEl.dataset.renderSignature = signature;
+    if (!list.length) {
+      const hasContacts = (state.contacts || []).length > 0;
+      listEl.innerHTML = hasContacts
+        ? `<div class="crm-inbox-empty"><strong>Nenhuma conversa encontrada</strong><span>Altere a busca ou os filtros para ver outras conversas.</span></div>`
+        : `<div class="crm-inbox-empty"><strong>Nenhuma conversa carregada</strong><span>Sincronize o histórico do WhatsApp para trazer conversas para esta fila.</span><button type="button" class="btn btn-secondary btn-sm" onclick="triggerFullWhatsAppHistorySync()">Sincronizar histórico</button></div>`;
+    } else {
+      const stageLabels = {
+        novo: 'Novo',
+        qualificando: 'Qualificando',
+        em_atendimento: 'Em Atendimento',
+        proposta_enviada: 'Proposta Enviada',
+        negociacao: 'Em Negociação',
+        aguardando_humano: 'Aguardando você',
+        fechado: 'Fechado',
+        concluido: 'Concluído',
+        perdido: 'Perdido'
+      };
+
+      listEl.innerHTML = visibleItems.map((c) => {
+        const isSelected = c.chatId === state.selectedInboxChatId;
+        const lastObj = getLastPublicMessage(c);
+        const prefix = lastObj ? (lastObj.role === 'user' ? '' : 'Você: ') : '';
+        const preview = lastObj?.text ? `${prefix}${lastObj.text}` : (c.summary || 'Sem mensagens');
+        const timeStr = c.lastMessageAt
+          ? new Date(c.lastMessageAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+          : '';
+        const avatarTint = getAvatarTintStyle(c.chatId || c.phone || c.name);
+        const paused = isContactCurrentlyPaused(c) || c.stage === 'aguardando_humano';
+        const unread = Math.max(0, Number(c.unreadCount) || 0);
+        const encId = encodeURIComponent(c.chatId);
+        const prettyStage = stageLabels[c.stage] || String(c.stage || 'Novo').replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+        const subPhone = formatContactSubtitle(c);
+        const bulkChecked = state.crmBulkSelected instanceof Set && state.crmBulkSelected.has(c.chatId);
+        const dealBadge = Number(c.dealValue) > 0
+          ? `<span class="deal-pill value">${escapeHtml(formatBrlShort(c.dealValue))}</span>`
+          : '';
+        const statusDealBadge = c.dealStatus === 'won'
+          ? '<span class="deal-pill won">Ganho</span>'
+          : c.dealStatus === 'lost'
+            ? '<span class="deal-pill lost">Perdido</span>'
             : '';
-          const avatarTint = getAvatarTintStyle(c.chatId || c.phone || c.name);
-          const paused = isContactCurrentlyPaused(c) || c.stage === 'aguardando_humano';
-          const unread = Math.max(0, Number(c.unreadCount) || 0);
-          const encId = encodeURIComponent(c.chatId);
-          const prettyStage = stageLabels[c.stage] || String(c.stage || 'Novo').replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
-          const subPhone = formatContactSubtitle(c);
-          const bulkChecked = state.crmBulkSelected instanceof Set && state.crmBulkSelected.has(c.chatId);
-          const dealBadge = Number(c.dealValue) > 0
-            ? `<span class="deal-pill value">${escapeHtml(formatBrlShort(c.dealValue))}</span>`
-            : '';
-          const statusDealBadge = c.dealStatus === 'won'
-            ? '<span class="deal-pill won">Ganho</span>'
-            : c.dealStatus === 'lost'
-              ? '<span class="deal-pill lost">Perdido</span>'
-              : '';
-          const customTagsMini = (c.tags || [])
-            .slice(0, 2)
-            .map((t) => renderColoredTagPill(t))
-            .join('');
+        const customTagsMini = (c.tags || []).slice(0, 2).map((t) => renderColoredTagPill(t)).join('');
+        const contactName = c.name || 'Contato';
+        const selection = state.crmBulkMode
+          ? `<label class="crm-bulk-select-control"><input type="checkbox" ${bulkChecked ? 'checked' : ''} onclick="toggleBulkChatItem('${encId}', event)" aria-label="Selecionar conversa com ${escapeHtml(contactName)}" /></label>`
+          : '';
 
-          return `
-            <button type="button" class="crm-inbox-item ${isSelected ? 'active' : ''} ${unread > 0 ? 'unread' : ''}" onclick="${state.crmBulkMode ? `toggleBulkChatItem('${encId}', event)` : `selectInboxChat('${encId}')`}">
-              ${state.crmBulkMode ? `<input type="checkbox" ${bulkChecked ? 'checked' : ''} onclick="event.stopPropagation(); toggleBulkChatItem('${encId}', event)" style="width:16px; height:16px; flex-shrink:0; accent-color:var(--accent);" aria-label="Selecionar conversa" />` : ''}
+        return `
+          <div class="crm-inbox-item ${isSelected ? 'active' : ''} ${unread > 0 ? 'unread' : ''}" role="group" aria-label="Conversa de ${escapeHtml(contactName)}">
+            ${selection}
+            <button type="button" class="crm-inbox-item-main" aria-label="Abrir conversa com ${escapeHtml(contactName)}" onclick="${state.crmBulkMode ? `toggleBulkChatItem('${encId}', event)` : `selectInboxChat('${encId}')`}">
               <div class="crm-inbox-avatar" style="${avatarTint}">${renderContactAvatarContent(c)}</div>
               <div class="crm-inbox-item-body">
                 <div class="crm-inbox-item-top">
-                  <span class="crm-inbox-item-name">${c.pinned ? '<span style="color:var(--accent-bright);margin-right:4px;" title="Fixada">★</span>' : ''}${c.savedContact ? '<span style="color:var(--accent-bright);margin-right:3px;font-size:11px;" title="Salvo na Agenda">📇</span>' : ''}${escapeHtml(c.name || 'Contato')}</span>
-                  <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
-                    <span class="crm-inbox-item-time">${escapeHtml(timeStr)}</span>
-                    ${unread > 0 ? `<span class="inbox-unread-pill">${unread > 99 ? '99+' : unread}</span>` : ''}
-                    <span role="button" tabindex="0" class="inbox-row-kebab" title="Opções da conversa" aria-label="Opções da conversa" onclick="event.stopPropagation(); openListRowMenu('${encId}', event)">⋮</span>
-                  </div>
+                  <span class="crm-inbox-item-name">${c.pinned ? '<span class="crm-list-mark" title="Fixada">★</span>' : ''}${c.savedContact ? '<span class="crm-list-mark" title="Salvo na agenda">📇</span>' : ''}${escapeHtml(contactName)}</span>
+                  <span class="crm-inbox-item-time">${escapeHtml(timeStr)}</span>
+                  ${unread > 0 ? `<span class="inbox-unread-pill">${unread > 99 ? '99+' : unread}</span>` : ''}
                 </div>
-                <div style="font-size:11px; color:var(--text-muted); font-variant-numeric:tabular-nums;">${escapeHtml(subPhone)}${c.company ? ` • ${escapeHtml(c.company)}` : ''}</div>
+                <div class="crm-inbox-item-phone">${escapeHtml(subPhone)}${c.company ? ` • ${escapeHtml(c.company)}` : ''}</div>
                 <div class="crm-inbox-item-preview">${escapeHtml(preview)}</div>
                 <div class="crm-inbox-item-badges">
                   ${renderSlotPillHtml(c)}
-                  <span class="tag ${c.stage === 'aguardando_humano' ? 'paused' : ''}" style="font-size:10.5px; padding:1px 6px;">${escapeHtml(prettyStage)}</span>
-                  ${c.waBlocked ? '<span class="deal-pill lost">🚫 Bloqueado</span>' : c.aiIgnored ? '<span class="tag paused" style="font-size:10.5px; padding:1px 6px;">🔕 Ignorado</span>' : paused ? '<span class="tag paused" style="font-size:10.5px; padding:1px 6px;">Humano</span>' : '<span class="tag" style="font-size:10.5px; padding:1px 6px;">IA Ativa</span>'}
+                  <span class="tag ${c.stage === 'aguardando_humano' ? 'paused' : ''}">${escapeHtml(prettyStage)}</span>
+                  ${c.waBlocked ? '<span class="deal-pill lost">Bloqueado</span>' : c.aiIgnored ? '<span class="tag paused">IA ignorada</span>' : paused ? '<span class="tag paused">Com você</span>' : '<span class="tag">IA ativa</span>'}
                   ${dealBadge}${statusDealBadge}${customTagsMini}
-                  ${c.archived ? '<span class="tag" style="font-size:10.5px; padding:1px 6px;">Arquivada</span>' : ''}
+                  ${c.archived ? '<span class="tag">Arquivada</span>' : ''}
                   ${renderSentimentPillHtml(c.sentiment)}
                 </div>
               </div>
             </button>
-          `;
-        })
-        .join('') +
-      (remaining > 0
+            <button type="button" class="inbox-row-kebab" title="Mais opções da conversa" aria-label="Mais opções: ${escapeHtml(contactName)}" onclick="openListRowMenu('${encId}', event)">⋮</button>
+          </div>
+        `;
+      }).join('') + (remaining > 0
         ? `<button type="button" class="inbox-load-more-btn" onclick="loadMoreInboxItems()">Mostrar mais conversas (+${Math.min(100, remaining)} de ${remaining})</button>`
         : '');
+    }
   }
 
   renderActiveInboxConversation();
@@ -3448,6 +3521,11 @@ function renderActiveInboxConversation() {
   if (!emptyEl || !paneEl) return;
 
   const c = (state.contacts || []).find((x) => x.chatId === state.selectedInboxChatId);
+  const msgBox = document.getElementById('crmInboxMessages');
+  const chatChanged = Boolean(c && msgBox && msgBox.dataset.renderedChatId !== c.chatId);
+  if (c && (chatChanged || state.inboxMessageWindow?.chatId !== c.chatId)) {
+    state.inboxMessageWindow = { chatId: c.chatId, limit: 120 };
+  }
   renderInboxInspector360(c);
 
   if (!c) {
@@ -3616,8 +3694,7 @@ function renderActiveInboxConversation() {
     }
   }
 
-  // Renderizar histórico completo de mensagens + Notas Internas Amarelas (com proteção anti-flicker p/ players de áudio/vídeo)
-  const msgBox = document.getElementById('crmInboxMessages');
+  // Renderiza uma janela recente do histórico; mensagens anteriores entram sob demanda.
   const msgs = c.messages || [];
   const encChatId = encodeURIComponent(c.chatId);
   const searchQ = String(state.inChatSearchQuery || '').trim().toLowerCase();
@@ -3626,23 +3703,29 @@ function renderActiveInboxConversation() {
     .map((x) => `${x.id || x.waMsgId || ''}:${x.editedAt || ''}:${x.deletedForEveryone ? 1 : 0}:${x.ack || 0}:${JSON.stringify(x.reactions || {})}`)
     .join('|');
   const lastM = msgs[msgs.length - 1] || null;
-  const chatChanged = msgBox.dataset.renderedChatId !== c.chatId;
   const lastMIdent = String(lastM?.id || lastM?.waMsgId || lastM?.timestamp || '');
   const prevLastMIdent = msgBox.dataset.renderedLastMsgIdent || '';
   const newOwnerMsgArrived = !chatChanged && Boolean(lastMIdent && lastMIdent !== prevLastMIdent && lastM?.role === 'owner');
-  const msgFp = `${c.chatId}::${msgs.length}::${lastM?.timestamp || ''}::${lastM?.mediaUrl || ''}::${mutSig}::${searchQ}::${state.openReactionMsgId || ''}`;
-  const mediaPlaying = !chatChanged && Array.from(msgBox.querySelectorAll('audio, video')).some((el) => !el.paused && !el.ended);
+  const messageLimit = Math.max(120, Number(state.inboxMessageWindow?.limit) || 120);
+  const msgFp = `${c.chatId}::${msgs.length}::${lastM?.timestamp || ''}::${lastM?.mediaUrl || ''}::${mutSig}::${searchQ}::${state.openReactionMsgId || ''}::${messageLimit}`;
 
-  if (chatChanged) {
-    clearComposerQuote();
-  }
+  if (chatChanged) clearComposerQuote();
 
   const forceRender = msgBox.dataset.forceRender === '1' || newOwnerMsgArrived;
   const forceScrollBottom = msgBox.dataset.forceScrollBottom === '1' || newOwnerMsgArrived;
+  const needsMessageRender = chatChanged || forceRender || msgBox.dataset.renderedFp !== msgFp;
   msgBox.dataset.forceRender = '';
   msgBox.dataset.forceScrollBottom = '';
 
-  if (chatChanged || forceRender || (msgBox.dataset.renderedFp !== msgFp && !mediaPlaying)) {
+  const mediaPlaying = needsMessageRender && !chatChanged
+    ? Array.from(msgBox.querySelectorAll('audio, video')).some((el) => !el.paused && !el.ended)
+    : false;
+
+  if (needsMessageRender && !mediaPlaying) {
+    const preserveScroll = msgBox.dataset.preserveScroll === '1';
+    const previousScrollTop = msgBox.scrollTop;
+    const previousScrollHeight = msgBox.scrollHeight;
+    msgBox.dataset.preserveScroll = '';
     const wasNearBottom =
       forceScrollBottom || chatChanged || (msgBox.scrollHeight - msgBox.scrollTop - msgBox.clientHeight < 140);
     msgBox.dataset.renderedChatId = c.chatId;
@@ -3651,7 +3734,12 @@ function renderActiveInboxConversation() {
 
     const canFetchOlder = !String(c.chatId || '').startsWith('demo_');
     const fetchOlderBtnHtml = canFetchOlder
-      ? `<button type="button" class="btn-fetch-older-history" onclick="fetchOlderChatMessages('${encChatId}', this)">📥 Carregar mensagens anteriores do WhatsApp</button>`
+      ? `<button type="button" class="btn-fetch-older-history" onclick="fetchOlderChatMessages('${encChatId}', this)">Carregar histórico do WhatsApp</button>`
+      : '';
+    const messageStartIndex = searchQ ? 0 : Math.max(0, msgs.length - messageLimit);
+    const visibleMsgs = msgs.slice(messageStartIndex);
+    const localHistoryButton = messageStartIndex > 0
+      ? `<button type="button" class="btn-load-older-chat" onclick="loadEarlierInboxMessages()">Ver ${Math.min(100, messageStartIndex)} mensagens anteriores <span>(${messageStartIndex} ainda no histórico)</span></button>`
       : '';
 
     const highlightSearchInHtml = (formattedHtml) => {
@@ -3673,8 +3761,8 @@ function renderActiveInboxConversation() {
       `;
     } else {
       msgBox.innerHTML =
-        fetchOlderBtnHtml +
-        msgs
+        localHistoryButton +
+        visibleMsgs
           .map((m) => {
           const time = m.timestamp
             ? new Date(m.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -3750,7 +3838,9 @@ function renderActiveInboxConversation() {
         })
         .join('');
 
-      if (searchQ) {
+      if (preserveScroll) {
+        msgBox.scrollTop = previousScrollTop + (msgBox.scrollHeight - previousScrollHeight);
+      } else if (searchQ) {
         updateInChatSearchHighlights();
       } else if (wasNearBottom) {
         msgBox.scrollTop = msgBox.scrollHeight;
@@ -3758,6 +3848,16 @@ function renderActiveInboxConversation() {
     }
   }
 }
+
+window.loadEarlierInboxMessages = function loadEarlierInboxMessages() {
+  const box = document.getElementById('crmInboxMessages');
+  const windowState = state.inboxMessageWindow;
+  if (!box || !windowState || windowState.chatId !== state.selectedInboxChatId) return;
+  windowState.limit = Math.max(120, Number(windowState.limit) || 120) + 100;
+  box.dataset.preserveScroll = '1';
+  box.dataset.forceRender = '1';
+  renderActiveInboxConversation();
+};
 
 function renderBubbleMediaHtml(m) {
   if (!m?.mediaUrl) {
@@ -5114,73 +5214,235 @@ window.sendCustomTypedVcardNow = async function sendCustomTypedVcardNow() {
   }
 };
 
+let contactsDirectorySearchTimer = null;
+
+window.handleContactsBookSearch = function handleContactsBookSearch() {
+  const mode = document.getElementById('contactsBookFilterSelect')?.value || 'saved';
+  if (mode !== 'directory') return window.renderContactsAgendaView();
+  clearTimeout(contactsDirectorySearchTimer);
+  contactsDirectorySearchTimer = setTimeout(() => window.loadContactsDirectoryPage(true), 250);
+};
+
+window.loadContactsDirectoryPage = async function loadContactsDirectoryPage(reset = false, requestedOffset = null) {
+  const mode = document.getElementById('contactsBookFilterSelect')?.value || 'saved';
+  if (mode !== 'directory' || state.contactsDirectoryLoading) return;
+  const q = String(document.getElementById('contactsBookSearchInput')?.value || '').trim();
+  const includeUnnamed = Boolean(document.getElementById('contactsBookIncludeUnnamed')?.checked);
+  const key = `${q}\u0000${includeUnnamed ? '1' : '0'}`;
+  if (!reset && state.contactsDirectoryLoadedKey !== key) reset = true;
+  if (reset) {
+    state.contactsDirectoryLoadedKey = key;
+    state.contactsDirectoryQuery = q;
+    state.contactsDirectoryOffset = 0;
+    state.contactsDirectoryTotal = 0;
+    state.contactsDirectoryHasMore = false;
+    state.contactsDirectory = [];
+    state.contactsDirectoryRequestId += 1;
+  }
+  const requestId = state.contactsDirectoryRequestId;
+  const offset = reset ? 0 : Math.max(0, Number(requestedOffset ?? state.contactsDirectoryOffset) || 0);
+  state.contactsDirectoryLoading = true;
+  state.contactsDirectoryError = '';
+  window.renderContactsAgendaView();
+  try {
+    const params = new URLSearchParams({ limit: '100', offset: String(offset), q, includeUnnamed: String(includeUnnamed) });
+    const data = await api(`/api/crm/contact-directory?${params.toString()}`);
+    if (requestId !== state.contactsDirectoryRequestId) return;
+    const incoming = Array.isArray(data.contacts) ? data.contacts : [];
+    state.contactsDirectory = incoming;
+    state.contactsDirectoryOffset = offset;
+    state.contactsDirectoryTotal = Number(data.total) || 0;
+    state.contactsDirectoryHasMore = Boolean(data.hasMore);
+    state.contactsDirectoryCleanup = data.cleanup || state.contactsDirectoryCleanup;
+  } catch (err) {
+    if (requestId === state.contactsDirectoryRequestId) state.contactsDirectoryError = err.message || 'Falha ao carregar a agenda.';
+  } finally {
+    if (requestId === state.contactsDirectoryRequestId) {
+      state.contactsDirectoryLoading = false;
+      window.renderContactsAgendaView();
+    }
+  }
+};
+
+window.loadMoreContactsDirectory = function loadMoreContactsDirectory() {
+  const mode = document.getElementById('contactsBookFilterSelect')?.value || 'saved';
+  if (mode !== 'directory') {
+    state.contactsBookCrmPage = (Number(state.contactsBookCrmPage) || 0) + 1;
+    window.renderContactsAgendaView();
+    return;
+  }
+  if (!state.contactsDirectoryHasMore || state.contactsDirectoryLoading) return;
+  window.loadContactsDirectoryPage(false, state.contactsDirectoryOffset + 100);
+};
+
+window.loadPreviousContactsPage = function loadPreviousContactsPage() {
+  const mode = document.getElementById('contactsBookFilterSelect')?.value || 'saved';
+  if (mode !== 'directory') {
+    state.contactsBookCrmPage = Math.max(0, (Number(state.contactsBookCrmPage) || 0) - 1);
+    window.renderContactsAgendaView();
+    return;
+  }
+  if (state.contactsDirectoryOffset <= 0 || state.contactsDirectoryLoading) return;
+  window.loadContactsDirectoryPage(false, Math.max(0, state.contactsDirectoryOffset - 100));
+};
+
+function getContactDirectoryItem(chatId) {
+  return (state.contactsDirectory || []).find((c) => c.chatId === chatId) || null;
+}
+
+function ensureDirectoryContactInState(encodedChatId) {
+  const chatId = decodeURIComponent(encodedChatId);
+  const existing = (state.contacts || []).find((c) => c.chatId === chatId);
+  if (existing) return existing;
+  const directoryContact = getContactDirectoryItem(chatId);
+  if (!directoryContact) return null;
+  state.contacts.push({ ...directoryContact });
+  return state.contacts[state.contacts.length - 1];
+}
+
+window.openSaveContactFromDirectory = function openSaveContactFromDirectory(encodedChatId) {
+  ensureDirectoryContactInState(encodedChatId);
+  openSaveContactModalById(encodedChatId);
+};
+window.downloadContactDirectoryVcf = function downloadContactDirectoryVcf(encodedChatId) {
+  ensureDirectoryContactInState(encodedChatId);
+  downloadSingleContactVcf(encodedChatId);
+};
+window.openSendContactCardFromDirectory = function openSendContactCardFromDirectory(encodedChatId) {
+  ensureDirectoryContactInState(encodedChatId);
+  openSendContactCardModal('from_agenda', encodedChatId);
+};
+
 window.renderContactsAgendaView = function renderContactsAgendaView() {
   const grid = document.getElementById('contactsBookGrid');
   if (!grid) return;
   const q = String(document.getElementById('contactsBookSearchInput')?.value || '').trim().toLowerCase();
-  const mode = document.getElementById('contactsBookFilterSelect')?.value || 'all';
+  const mode = document.getElementById('contactsBookFilterSelect')?.value || 'saved';
+  const isDirectory = mode === 'directory';
+  const includeUnnamedWrap = document.getElementById('contactsBookIncludeUnnamedWrap');
+  const loadMoreButton = document.getElementById('contactsBookLoadMore');
+  const meta = document.getElementById('contactsBookMeta');
+  let list = [];
+  let total = 0;
+  if (includeUnnamedWrap) includeUnnamedWrap.style.display = isDirectory ? 'inline-flex' : 'none';
 
-  let list = [...(state.contacts || [])];
-  if (mode === 'saved') list = list.filter((c) => c.savedContact);
-  else if (mode === 'unsaved') list = list.filter((c) => !c.savedContact);
-  else if (mode === 'blocked') list = list.filter((c) => c.waBlocked);
-
-  if (q) {
-    list = list.filter((c) =>
-      `${c.name || ''} ${c.phone || ''} ${c.company || ''} ${c.city || ''} ${c.email || ''} ${c.notes || ''}`
-        .toLowerCase()
-        .includes(q)
-    );
+  if (isDirectory) {
+    const key = `${q}\u0000${document.getElementById('contactsBookIncludeUnnamed')?.checked ? '1' : '0'}`;
+    if (state.contactsDirectoryLoadedKey !== key && !state.contactsDirectoryLoading) {
+      window.loadContactsDirectoryPage(true);
+      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1;">Carregando a agenda sob demanda…</div>';
+      if (meta) meta.textContent = 'Buscando a agenda conectada. As conversas e contatos salvos continuam independentes.';
+      if (loadMoreButton) loadMoreButton.style.display = 'none';
+      return;
+    }
+    list = state.contactsDirectory || [];
+    total = state.contactsDirectoryTotal;
+    if (meta) {
+      if (state.contactsDirectoryError) meta.textContent = state.contactsDirectoryError;
+      else if (state.contactsDirectoryLoading) meta.textContent = 'Carregando contatos…';
+      else meta.textContent = `${state.contactsDirectoryTotal.toLocaleString('pt-BR')} contato(s) encontrados. ${state.contactsDirectoryCleanup.hiddenUnnamed ? `${state.contactsDirectoryCleanup.hiddenUnnamed.toLocaleString('pt-BR')} sem nome ocultos por padrão; ` : ''}${state.contactsDirectoryCleanup.invalidIds ? `${state.contactsDirectoryCleanup.invalidIds} ID(s) inválidos ocultos; ` : ''}${state.contactsDirectoryCleanup.duplicateIds ? `${state.contactsDirectoryCleanup.duplicateIds} duplicata(s) removidas da lista;` : ''}`;
+    }
+    const directoryStart = state.contactsDirectoryOffset;
+    const pageMeta = document.getElementById('contactsBookPageMeta');
+    if (pageMeta) pageMeta.textContent = total ? `${directoryStart + 1}–${directoryStart + list.length} de ${total}` : '0 contatos';
+    const previousButton = document.getElementById('contactsBookPrevious');
+    if (previousButton) {
+      previousButton.style.display = directoryStart > 0 ? '' : 'none';
+      previousButton.disabled = directoryStart <= 0 || state.contactsDirectoryLoading;
+    }
+    if (loadMoreButton) {
+      loadMoreButton.style.display = state.contactsDirectoryHasMore ? '' : 'none';
+      loadMoreButton.disabled = state.contactsDirectoryLoading;
+      loadMoreButton.textContent = state.contactsDirectoryLoading ? 'Carregando…' : 'Próxima página';
+    }
+  } else {
+    list = [...(state.contacts || [])];
+    if (mode === 'saved') list = list.filter((c) => c.savedContact);
+    else if (mode === 'unsaved') list = list.filter((c) => !c.savedContact);
+    else if (mode === 'blocked') list = list.filter((c) => c.waBlocked);
+    if (q) {
+      list = list.filter((c) =>
+        `${c.name || ''} ${c.phone || ''} ${c.company || ''} ${c.city || ''} ${c.email || ''} ${c.notes || ''}`
+          .toLowerCase()
+          .includes(q)
+      );
+    }
+    list.sort((a, b) => {
+      if (Boolean(a.savedContact) !== Boolean(b.savedContact)) return a.savedContact ? -1 : 1;
+      return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR');
+    });
+    total = list.length;
+    const viewKey = `${mode}|${q}`;
+    if (state.contactsBookLastViewKey !== viewKey) {
+      state.contactsBookLastViewKey = viewKey;
+      state.contactsBookCrmPage = 0;
+    }
+    const crmLimit = Math.max(100, Number(state.contactsBookCrmLimit) || 100);
+    const crmStart = (Number(state.contactsBookCrmPage) || 0) * crmLimit;
+    list = list.slice(crmStart, crmStart + crmLimit);
+    if (meta) meta.textContent = `${total.toLocaleString('pt-BR')} contato(s) nesta visão do CRM. A agenda completa do WhatsApp só carrega quando solicitada.`;
+    const pageMeta = document.getElementById('contactsBookPageMeta');
+    if (pageMeta) pageMeta.textContent = total ? `${(crmStart + 1).toLocaleString('pt-BR')}–${(crmStart + list.length).toLocaleString('pt-BR')} de ${total.toLocaleString('pt-BR')}` : '0 contatos';
+    const previousButton = document.getElementById('contactsBookPrevious');
+    if (previousButton) {
+      previousButton.style.display = crmStart > 0 ? '' : 'none';
+      previousButton.disabled = crmStart <= 0;
+    }
+    if (loadMoreButton) {
+      loadMoreButton.style.display = crmStart + list.length < total ? '' : 'none';
+      loadMoreButton.textContent = 'Próxima página';
+      loadMoreButton.disabled = crmStart + list.length >= total;
+    }
+    if (!total) {
+      grid.innerHTML = `<div class="empty-state" style="grid-column:1 / -1;">Nenhum contato nesta visão. Contatos importados do WhatsApp podem ser consultados separadamente, sob demanda.</div>`;
+      return;
+    }
   }
 
-  list.sort((a, b) => {
-    if (Boolean(a.savedContact) !== Boolean(b.savedContact)) return a.savedContact ? -1 : 1;
-    return String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR');
-  });
-
   if (!list.length) {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1 / -1;">Nenhum contato neste filtro. Clique em <strong>"+ Salvar Novo Contato"</strong> acima para cadastrar na agenda.</div>`;
+    grid.innerHTML = state.contactsDirectoryLoading
+      ? '<div class="empty-state" style="grid-column:1/-1;">Carregando contatos…</div>'
+      : '<div class="empty-state" style="grid-column:1/-1;">Nenhum contato corresponde a esta busca.</div>';
     return;
   }
 
-  grid.innerHTML = list
-    .map((c) => {
-      const enc = encodeURIComponent(c.chatId);
-      const avatarTint = getAvatarTintStyle(c.chatId || c.phone || c.name);
-      return `
-        <div class="contact-book-card">
-          <div class="contact-book-card-head">
-            <div class="crm-inbox-avatar" style="width:40px; height:40px; font-size:13px; flex-shrink:0; ${avatarTint}">${renderContactAvatarContent(c)}</div>
-            <div style="min-width:0; flex:1;">
-              <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
-                <strong style="font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(c.name || 'Contato')}</strong>
-                ${c.savedContact ? '<span class="deal-pill won">📇 Salvo</span>' : ''}
-                ${c.waBlocked ? '<span class="deal-pill lost">🚫 Bloqueado</span>' : ''}
-              </div>
-              <div style="font-size:12px; color:var(--text-secondary); font-variant-numeric:tabular-nums;">${escapeHtml(formatContactSubtitle(c))}</div>
+  grid.innerHTML = list.map((c) => {
+    const enc = encodeURIComponent(c.chatId);
+    const avatarTint = getAvatarTintStyle(c.chatId || c.phone || c.name);
+    const isDirectoryImport = Boolean(c.directoryImport && !c.savedContact);
+    return `
+      <div class="contact-book-card">
+        <div class="contact-book-card-head">
+          <div class="crm-inbox-avatar" style="width:40px; height:40px; font-size:13px; flex-shrink:0; ${avatarTint}">${renderContactAvatarContent(c)}</div>
+          <div style="min-width:0; flex:1;">
+            <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
+              <strong style="font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(c.name || 'Contato')}</strong>
+              ${c.savedContact ? '<span class="deal-pill won">📇 Salvo</span>' : isDirectoryImport ? '<span class="tag">Importado</span>' : ''}
+              ${c.waBlocked ? '<span class="deal-pill lost">🚫 Bloqueado</span>' : ''}
             </div>
-          </div>
-          <div style="font-size:11.5px; color:var(--text-secondary); display:flex; flex-direction:column; gap:2px;">
-            ${c.company ? `<span>🏢 ${escapeHtml(c.company)}</span>` : ''}
-            ${c.city ? `<span>📍 ${escapeHtml(c.city)}</span>` : ''}
-            ${c.email ? `<span>✉️ ${escapeHtml(c.email)}</span>` : ''}
-            ${c.leadSource ? `<span>🎯 Origem: ${escapeHtml(c.leadSource)}</span>` : ''}
-            ${Number(c.dealValue) > 0 ? `<span>💰 Negócio: <strong>${escapeHtml(formatBrlShort(c.dealValue))}</strong></span>` : ''}
-          </div>
-          <div class="contact-book-actions">
-            <button type="button" class="btn btn-primary btn-sm" onclick="openChatFromContactsAgenda('${enc}')">💬 Conversar</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="openSaveContactModalById('${enc}')">✏️ Editar</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="downloadSingleContactVcf('${enc}')" title="Baixar para salvar na agenda do celular">📲 .VCF</button>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="openSendContactCardModal('from_agenda', '${enc}')" title="Enviar cartão deste contato">🪪</button>
-            <button type="button" class="btn btn-danger btn-sm" onclick="deleteChatByIdWithConfirm('${enc}')" title="Apagar contato e conversa">🗑️</button>
+            <div style="font-size:12px; color:var(--text-secondary); font-variant-numeric:tabular-nums;">${escapeHtml(formatContactSubtitle(c))}</div>
           </div>
         </div>
-      `;
-    })
-    .join('');
+        <div style="font-size:11.5px; color:var(--text-secondary); display:flex; flex-direction:column; gap:2px;">
+          ${c.company ? `<span>🏢 ${escapeHtml(c.company)}</span>` : ''}
+          ${c.city ? `<span>📍 ${escapeHtml(c.city)}</span>` : ''}
+          ${c.email ? `<span>✉️ ${escapeHtml(c.email)}</span>` : ''}
+          ${c.leadSource ? `<span>🎯 Origem: ${escapeHtml(c.leadSource)}</span>` : ''}
+          ${Number(c.dealValue) > 0 ? `<span>💰 Negócio: <strong>${escapeHtml(formatBrlShort(c.dealValue))}</strong></span>` : ''}
+        </div>
+        <div class="contact-book-actions">
+          <button type="button" class="btn btn-primary btn-sm" onclick="openChatFromContactsAgenda('${enc}')">💬 Conversar</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="openSaveContactFromDirectory('${enc}')">${c.savedContact ? '✏️ Editar' : '＋ Salvar'}</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="downloadContactDirectoryVcf('${enc}')" title="Baixar para salvar na agenda do celular">📲 .VCF</button>
+          ${!isDirectoryImport ? `<button type="button" class="btn btn-secondary btn-sm" onclick="openSendContactCardFromDirectory('${enc}')" title="Enviar cartão deste contato">🪪</button><button type="button" class="btn btn-danger btn-sm" onclick="deleteChatByIdWithConfirm('${enc}')" title="Apagar contato e conversa">🗑️</button>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
 };
 
 window.openChatFromContactsAgenda = function openChatFromContactsAgenda(encodedChatId) {
+  ensureDirectoryContactInState(encodedChatId);
   window.switchCrmSubView('inbox');
   window.selectInboxChat(encodedChatId);
 };
@@ -5197,6 +5459,8 @@ window.setInboxComposerMode = function setInboxComposerMode(mode = 'reply') {
   wrap?.classList.toggle('note-mode', isNote);
   btnReply?.classList.toggle('active', !isNote);
   btnNote?.classList.toggle('active', isNote);
+  btnReply?.setAttribute('aria-pressed', String(!isNote));
+  btnNote?.setAttribute('aria-pressed', String(isNote));
 
   if (inp) {
     inp.placeholder = isNote

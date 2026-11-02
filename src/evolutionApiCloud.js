@@ -120,15 +120,15 @@ async function connectedInstanceForTenant(userId, chatId = '') {
   if (!userId) throw Object.assign(new Error('Conta inválida para Evolution API.'), { statusCode: 403 });
   const rows = (await listInstances()).filter((item) => instanceOwnedBy(item, userId));
   const requested = slotForChat(chatId);
-  const choices = [requested, 'slot_1', 'slot_2', 'slot_3'];
-  for (const slotId of [...new Set(choices)]) {
-    const item = rows.find((candidate) => candidate.name === instanceName(slotId));
-    if (item) {
-      const state = await connectionState(item.name).catch(() => ({ state: item.state }));
-      if (state.state === 'open') return { ...item, state: 'open', phone: state.phone || item.phone };
-    }
+  const item = rows.find((candidate) => candidate.name === instanceName(requested));
+  if (!item) {
+    throw Object.assign(new Error(`Não há instância Evolution API configurada para o chip selecionado (${requested}).`), { statusCode: 503 });
   }
-  throw Object.assign(new Error('Não há instância Evolution API conectada para esta conta.'), { statusCode: 503 });
+  const state = await connectionState(item.name).catch(() => ({ state: item.state }));
+  if (state.state !== 'open') {
+    throw Object.assign(new Error(`O chip selecionado (${requested}) está desconectado; a operação não será encaminhada para outro chip.`), { statusCode: 503 });
+  }
+  return { ...item, state: 'open', phone: state.phone || item.phone };
 }
 async function tenantCall(userId, chatId, path, method = 'POST', payload = undefined) {
   const instance = await connectedInstanceForTenant(userId, chatId);

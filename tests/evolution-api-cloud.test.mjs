@@ -33,6 +33,33 @@ test('Evolution API v2 envia texto pela instância do tenant e usa endpoint/payl
   assert.deepEqual(JSON.parse(send.options.body), { number: '558899999999', text: 'Olá' });
 });
 
+test('não desvia operação para outro chip quando o chip selecionado está desconectado', async () => {
+  requests.length = 0;
+  globalThis.fetch = async (url, options = {}) => {
+    const href = String(url);
+    requests.push({ url: href, options });
+    let body = {};
+    if (href.endsWith('/instance/fetchInstances')) {
+      body = [
+        { instanceName: 'zap-ia-slot_1', connectionStatus: 'open' },
+        { instanceName: 'zap-ia-slot_2', connectionStatus: 'close' },
+      ];
+    } else if (href.includes('/instance/connectionState/zap-ia-slot_2')) {
+      body = { instance: { state: 'close' } };
+    } else if (href.includes('/instance/connectionState/zap-ia-slot_1')) {
+      body = { instance: { state: 'open' } };
+    }
+    return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+  };
+
+  await assert.rejects(
+    () => sendEvolutionApiText('tenant-1', 'slot_2::558899999999@s.whatsapp.net', 'Não enviar'),
+    (error) => error.statusCode === 503 && /não será encaminhada para outro chip/.test(error.message)
+  );
+  assert.equal(requests.some((request) => request.url.includes('/message/sendText/')), false);
+  assert.equal(requests.some((request) => request.url.includes('/instance/connectionState/zap-ia-slot_1')), false);
+});
+
 test('Histórico usa chat/findMessages com JID, paginação e offset limitado', async () => {
   requests.length = 0;
   await requestEvolutionApiHistory('tenant-1', '558899999999@s.whatsapp.net', 35, { id: 'wa-id-1' });

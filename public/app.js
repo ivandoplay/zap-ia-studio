@@ -434,6 +434,32 @@ const LEGACY_TAB_ALIASES = {
   master: 'contas'
 };
 
+const tabAssetLoads = new Map();
+const TAB_ASSETS = {
+  campanhas: { src: '/campanhas.js', globalName: 'carregarCampanhas' },
+  crm: { src: '/inbox-realtime.js', globalName: 'ienviaInboxRealtime' }
+};
+
+function ensureTabAsset(tabId) {
+  const asset = TAB_ASSETS[tabId];
+  if (!asset || window[asset.globalName]) return Promise.resolve();
+  if (tabAssetLoads.has(tabId)) return tabAssetLoads.get(tabId);
+  const promise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = asset.src;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => {
+      script.remove();
+      tabAssetLoads.delete(tabId);
+      reject(new Error(`Não foi possível carregar os recursos da aba ${tabId}.`));
+    };
+    document.head.append(script);
+  });
+  tabAssetLoads.set(tabId, promise);
+  return promise;
+}
+
 window.switchTab = function switchTab(rawTabId) {
   if (!rawTabId) return;
   const candidate = LEGACY_TAB_ALIASES[rawTabId] || rawTabId;
@@ -478,7 +504,25 @@ window.switchTab = function switchTab(rawTabId) {
     window.scrollTo({ top: 0, behavior: 'instant' });
   } catch {}
 
-  if (tabId === 'campanhas') window.carregarCampanhas?.();
+  if (tabId === 'campanhas') {
+    ensureTabAsset(tabId)
+      .then(() => window.carregarCampanhas?.())
+      .catch((err) => showToast(err.message, true));
+  }
+  if (tabId === 'crm') {
+    ensureTabAsset(tabId)
+      .then(() => syncInboxRealtime())
+      .catch((err) => showToast(err.message, true));
+  } else {
+    window.ienviaInboxRealtime?.stop().catch(() => {});
+  }
+  if (tabId === 'dashboard') {
+    renderSaasOnboardingBox();
+    renderStatsAndLogs();
+    renderReadinessAndFunnel();
+    renderProactiveQueueStatus();
+  }
+  if (tabId === 'crm') renderCrmBoard();
   if (tabId === 'ia') renderAiSettings();
 
   if (tabId === 'contas' && state.currentUser?.role === 'master') {
@@ -499,6 +543,15 @@ window.switchMobileMore = function switchMobileMore(tabId) {
   document.getElementById('mobileMoreSheet')?.classList.remove('open');
   document.getElementById('accountSheet')?.classList.remove('open');
   switchTab(tabId);
+};
+
+window.openDashboardConnection = function openDashboardConnection() {
+  const panel = document.getElementById('dashboardConnectionPanel');
+  const heading = panel?.querySelector('.panel-title');
+  if (!panel) return;
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  panel.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+  heading?.focus({ preventScroll: true });
 };
 
 window.openAccountSheet = function openAccountSheet() {
@@ -914,10 +967,12 @@ async function refreshLiveStateOnly() {
       // para que ao voltar ao painel a mensagem enviada pelo seu celular já esteja na tela!
       renderCloudHeaderBar();
       renderWaState();
-      renderStatsAndLogs();
-      renderReadinessAndFunnel();
-      renderProactiveQueueStatus();
-      renderCrmBoard();
+      if (document.getElementById('tab-dashboard')?.classList.contains('active')) {
+        renderStatsAndLogs();
+        renderReadinessAndFunnel();
+        renderProactiveQueueStatus();
+      }
+      if (document.getElementById('tab-crm')?.classList.contains('active')) renderCrmBoard();
     } catch {}
   })().finally(() => {
     liveRefreshInFlight = null;
@@ -939,6 +994,10 @@ let lastInboxRealtimeWake = 0;
 async function syncInboxRealtime() {
   const rt = window.ienviaInboxRealtime;
   if (!rt) return;
+  if (!document.getElementById('tab-crm')?.classList.contains('active')) {
+    await rt.stop();
+    return;
+  }
   if (state.runtimeMode !== 'vercel_cloud' || !state.cloudSession?.accessToken || state.actAsUser) {
     inboxRealtimeConfig = null;
     inboxRealtimeConfigToken = '';
@@ -1126,13 +1185,34 @@ function renderCloudHeaderBar() {
   if (sheetWorker) sheetWorker.textContent = `Ambiente: ${workerDesc}`;
 }
 
+function isBusinessTrainingConfigured(profile = getActiveProfile() || {}) {
+  const defaultSummaryHint = 'Descreva aqui o que sua empresa vende';
+  return Boolean(
+    profile.trainingPackId ||
+    (profile.companySummary && !String(profile.companySummary).startsWith(defaultSummaryHint)) ||
+    (Array.isArray(profile.faqs) && profile.faqs.length > 0) ||
+    (Array.isArray(profile.knowledgeDocs) && profile.knowledgeDocs.length > 0)
+  );
+}
+
+function hasConnectedWhatsApp() {
+  const runtimeConnected = Object.values(state.waState?.slots || {}).some((slot) => slot?.status === 'connected');
+  const cloudConnected = Object.values(state.evolutionCloud?.slots || {}).some((slot) => slot?.status === 'connected');
+  return state.waState?.status === 'connected' || runtimeConnected || cloudConnected;
+}
+
 function renderSaasOnboardingBox() {
   const box = document.getElementById('saasOnboardingBox');
   if (!box) return;
 
   const uid = state.currentUser?.id || 'local';
-  const dismissedKey = `zapia_onb_hide_${uid}`;
-  if (localStorage.getItem(dismissedKey) === '1') {
+  let dismissed = false;
+  let savedCollapse = null;
+  try {
+    dismissed = localStorage.getItem(`zapia_onb_hide_${uid}`) === '1';
+    savedCollapse = localStorage.getItem(`zapia_onb_collapsed_${uid}`);
+  } catch {}
+  if (dismissed) {
     box.style.display = 'none';
     return;
   }
@@ -1143,114 +1223,116 @@ function renderSaasOnboardingBox() {
     String(ai.geminiKeyPool || '').trim() ||
     String(ai.openrouterApiKey || '').trim()
   );
+  const hasTraining = isBusinessTrainingConfigured();
+  const hasSimulatorTest = Array.isArray(state.simulatorHistory) && state.simulatorHistory.length > 0;
+  const isConnected = hasConnectedWhatsApp();
 
-  const biz = getActiveProfile() || {};
-  const defaultSummaryHint = 'Descreva aqui o que sua empresa vende';
-  const hasTraining = Boolean(
-    biz.trainingPackId ||
-    (biz.companySummary && !String(biz.companySummary).startsWith(defaultSummaryHint)) ||
-    (Array.isArray(biz.faqs) && biz.faqs.length > 0) ||
-    (Array.isArray(biz.knowledgeDocs) && biz.knowledgeDocs.length > 0)
-  );
-  const hasAssets = Boolean(
-    (Array.isArray(biz.catalog) && biz.catalog.length > 0) ||
-    (Array.isArray(biz.voiceLibrary) && biz.voiceLibrary.length > 0) ||
-    (biz.pix?.enabled && biz.pix?.key)
-  );
-  const hasTestedOrConnected = Boolean(
-    state.waState?.status === 'connected' ||
-    (Array.isArray(state.simulatorHistory) && state.simulatorHistory.length > 0)
-  );
-
-  // Endowed Progress Effect (20% inicial pela conta já provisionada + 4 passos de 20% = 100%)
   const steps = [
     {
-      done: true,
-      title: '1. Conta Isolada Ativa',
-      desc: 'Seu painel, CRM e banco em nuvem já estão protegidos.',
-      actionHtml: '<span style="font-size:11.5px; color:var(--accent-bright); font-weight:600;">Concluído ✓</span>'
-    },
-    {
-      done: hasAiKey,
-      title: '2. Colar Sua Chave de IA',
-      desc: 'Cole sua chave gratuita do Google Gemini (áudio) ou OpenRouter (texto) em 1 minuto.',
-      actionHtml: `<button type="button" class="btn ${hasAiKey ? 'btn-secondary' : 'btn-primary'} btn-sm" onclick="switchTab('ia')">${hasAiKey ? 'Revisar Chave' : 'Configurar Chave →'}</button>`
-    },
-    {
+      id: 'training',
       done: hasTraining,
-      title: '3. Treinar Seu Negócio',
-      desc: 'Defina o resumo, regras ou escolha um modelo pronto do seu nicho.',
-      actionHtml: `<button type="button" class="btn btn-secondary btn-sm" onclick="switchTab('treinamento')">Abrir Treinamento →</button>`
+      title: 'Prepare o treinamento da IA',
+      desc: 'Escolha um modelo e conte o que sua empresa oferece, como atende e quais regras deve seguir.',
+      actionHtml: '<button type="button" class="btn btn-primary" onclick="switchTab(\'treinamento\')">Abrir treinamento e modelos</button>'
     },
     {
-      done: hasAssets,
-      title: '4. Catálogo, PIX ou Áudios',
-      desc: 'Cadastre seus produtos/fotos, chave PIX ou notas de voz humanas.',
-      actionHtml: `<div style="display:flex; gap:5px; flex-wrap:wrap;"><button type="button" class="btn btn-secondary btn-sm" onclick="switchTab('catalogo')">Catálogo/PIX</button><button type="button" class="btn btn-secondary btn-sm" onclick="switchTab('audios')">Áudios</button></div>`
+      id: 'ai',
+      done: hasAiKey,
+      title: 'Configure a chave de IA',
+      desc: 'Escolha um provedor e informe a chave que será usada para formular as respostas.',
+      actionHtml: '<button type="button" class="btn btn-primary" onclick="switchTab(\'ia\')">Configurar provedor de IA</button>'
     },
     {
-      done: hasTestedOrConnected,
-      title: '5. Testar & Conectar WhatsApp',
-      desc: 'Valide no Simulador e pareie seu aparelho para atender ao vivo.',
-      actionHtml: `<button type="button" class="btn btn-secondary btn-sm" onclick="switchTab('simulador')">Testar Simulador →</button>`
+      id: 'simulator',
+      done: hasSimulatorTest,
+      title: 'Teste uma conversa',
+      desc: 'Converse com a IA no simulador antes de atender clientes pelo WhatsApp.',
+      actionHtml: '<button type="button" class="btn btn-primary" onclick="switchTab(\'simulador\')">Abrir simulador</button>'
+    },
+    {
+      id: 'whatsapp',
+      done: isConnected,
+      title: 'Conecte seu WhatsApp',
+      desc: 'Quando estiver pronto, pareie o número por QR Code ou código de 8 dígitos.',
+      actionHtml: '<button type="button" class="btn btn-primary" onclick="openDashboardConnection()">Ir para conexão</button>'
     }
   ];
 
-  const doneCount = steps.filter((s) => s.done).length;
+  const doneCount = steps.filter((step) => step.done).length;
   const pct = Math.round((doneCount / steps.length) * 100);
+  const nextIndex = steps.findIndex((step) => !step.done);
+  const nextStep = nextIndex >= 0 ? steps[nextIndex] : null;
+  const isMasterSelf = (state.currentUser?.role === 'master' || state.currentUser?.tenantRole === 'master') && !state.actAsUser?.userId;
 
-  // Na conta Master já 100% pronta e conectada, não polui o topo (a menos que esteja em Modo Suporte de cliente)
-  if (pct === 100 && (state.currentUser?.role === 'master' || state.currentUser?.tenantRole === 'master') && !state.actAsUser?.userId) {
+  if (pct === 100 && isMasterSelf) {
     box.style.display = 'none';
     return;
   }
 
-  const collapsedKey = `zapia_onb_collapsed_${uid}`;
-  const savedCollapse = localStorage.getItem(collapsedKey);
-  const isMasterSelf = (state.currentUser?.role === 'master' || state.currentUser?.tenantRole === 'master') && !state.actAsUser?.userId;
-  const isCollapsed = savedCollapse ? savedCollapse === '1' : isMasterSelf;
+  const isCollapsed = savedCollapse === null ? isMasterSelf : savedCollapse === '1';
+  const showAllStepsByDefault = !window.matchMedia?.('(max-width: 600px)').matches;
+  const progressText = `${doneCount} de ${steps.length} etapas concluídas`;
+  const nextStepMarkup = nextStep
+    ? `<div class="home-next-step" aria-current="step">
+        <div class="home-next-step-copy">
+          <h3>${escapeHtml(nextStep.title)}</h3>
+          <p>${escapeHtml(nextStep.desc)}</p>
+        </div>
+        <div class="home-next-step-action">${nextStep.actionHtml}</div>
+      </div>`
+    : `<div class="home-next-step home-next-step-complete">
+        <div class="home-next-step-copy">
+          <h3>Configuração concluída</h3>
+          <p>Você já treinou, testou e conectou o atendimento. Os passos continuam disponíveis para revisão.</p>
+        </div>
+        <div class="home-next-step-action"><button type="button" class="btn btn-secondary" onclick="switchTab('treinamento')">Revisar treinamento</button></div>
+      </div>`;
 
   box.style.display = 'block';
   box.innerHTML = `
-    <div class="saas-onboarding-card">
-      <div class="saas-onboarding-head" style="${isCollapsed ? 'margin-bottom:0;' : ''}">
-        <div>
-          <strong style="font-size:14px; color:var(--text-main);">
-            ${pct === 100 ? 'Configuração 100% Concluída' : `Ativação Guiada da Conta (${pct}%)`}
-          </strong>
-          ${isCollapsed ? '' : `<div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Complete os passos na ordem para operar 100% no automático.</div>`}
+    <section class="home-onboarding-card" aria-labelledby="homeOnboardingTitle">
+      <header class="home-onboarding-head">
+        <div class="home-onboarding-heading">
+          <h2 id="homeOnboardingTitle">${doneCount === steps.length ? 'Seu atendimento está pronto' : 'Comece por aqui'}</h2>
+          <p>${doneCount === steps.length ? 'O roteiro pode ser reaberto sempre que precisar.' : 'Prepare a IA e valide uma conversa antes de conectar clientes.'}</p>
         </div>
-        <div style="display:flex; gap:6px; align-items:center;">
-          <button type="button" class="btn btn-secondary btn-sm" onclick="toggleSaasOnboardingCollapse()">${isCollapsed ? 'Expandir' : 'Minimizar'}</button>
-          <button type="button" class="btn btn-secondary btn-sm" onclick="dismissSaasOnboarding()">Ocultar</button>
+        <div class="home-onboarding-controls">
+          <span class="home-step-count" aria-label="${escapeHtml(progressText)}">${doneCount} de ${steps.length}</span>
+          <button type="button" class="btn btn-secondary btn-sm" aria-expanded="${!isCollapsed}" aria-controls="homeOnboardingDetails" onclick="toggleSaasOnboardingCollapse()">${isCollapsed ? 'Mostrar etapas' : 'Recolher'}</button>
+          <button type="button" class="btn btn-quiet btn-sm" aria-label="Ocultar roteiro de configuração" title="Ocultar roteiro de configuração" onclick="dismissSaasOnboarding()">Ocultar roteiro</button>
         </div>
+      </header>
+      <div class="home-progress-track" role="progressbar" aria-label="Progresso da configuração" aria-valuemin="0" aria-valuemax="${steps.length}" aria-valuenow="${doneCount}" aria-valuetext="${escapeHtml(progressText)}">
+        <span class="home-progress-fill" style="width:${pct}%"></span>
       </div>
-      <div class="saas-progress-track" style="${isCollapsed ? 'margin:8px 0 0;' : ''}">
-        <div class="saas-progress-fill" style="width:${pct}%;"></div>
-      </div>
-      ${
-        isCollapsed
-          ? ''
-          : `<div class="saas-steps-grid">
-        ${steps
-          .map(
-            (st) => `
-          <div class="saas-step-item ${st.done ? 'done' : ''}">
-            <div>
-              <div class="saas-step-top">
-                <span class="saas-step-check">${st.done ? '✓' : '•'}</span>
-                <span>${escapeHtml(st.title)}</span>
+      <div id="homeOnboardingDetails" ${isCollapsed ? 'hidden' : ''}>
+        ${nextStepMarkup}
+        <details class="home-all-steps" ${showAllStepsByDefault ? 'open' : ''}>
+          <summary>Etapas da configuração</summary>
+          <ol class="home-step-list" aria-label="Etapas de configuração">
+            ${steps
+              .map((step, index) => `
+                <li class="home-step-item ${step.done ? 'is-done' : ''} ${index === nextIndex ? 'is-current' : ''}" ${index === nextIndex ? 'aria-current="step"' : ''}>
+                  <span class="home-step-number" aria-hidden="true">${step.done ? '✓' : index + 1}</span>
+                  <span class="home-step-copy"><strong>${escapeHtml(step.title)}</strong>${index === nextIndex ? '' : `<span>${escapeHtml(step.desc)}</span>`}</span>
+                  <span class="home-step-status">${step.done ? 'Concluído' : index === nextIndex ? 'Próximo' : 'Pendente'}</span>
+                </li>
+              `)
+              .join('')}
+          </ol>
+          <details class="home-optional-resources">
+            <summary>Adicionar catálogo, PIX ou áudios <span>(opcional)</span></summary>
+            <div class="home-optional-body">
+              <p>Esses recursos complementam as respostas, mas não são necessários para testar a primeira conversa.</p>
+              <div class="home-optional-actions">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="switchTab('catalogo')">Abrir Catálogo &amp; PIX</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="switchTab('audios')">Abrir Áudios</button>
               </div>
-              <div style="font-size:11.8px; color:var(--text-secondary); margin-top:5px; line-height:1.4;">${escapeHtml(st.desc)}</div>
             </div>
-            <div>${st.actionHtml}</div>
-          </div>
-        `
-          )
-          .join('')}
-      </div>`
-      }
-    </div>
+          </details>
+        </details>
+      </div>
+    </section>
   `;
 }
 
@@ -1258,8 +1340,11 @@ window.toggleSaasOnboardingCollapse = function toggleSaasOnboardingCollapse() {
   const uid = state.currentUser?.id || 'local';
   const key = `zapia_onb_collapsed_${uid}`;
   const isMasterSelf = (state.currentUser?.role === 'master' || state.currentUser?.tenantRole === 'master') && !state.actAsUser?.userId;
-  const cur = localStorage.getItem(key);
-  const currentlyCollapsed = cur ? cur === '1' : isMasterSelf;
+  let cur = null;
+  try {
+    cur = localStorage.getItem(key);
+  } catch {}
+  const currentlyCollapsed = cur === null ? isMasterSelf : cur === '1';
   try {
     localStorage.setItem(key, currentlyCollapsed ? '0' : '1');
   } catch {}
@@ -2055,24 +2140,42 @@ function renderReadinessAndFunnel() {
   const funnel = document.getElementById('funnelSummaryBar');
   if (!strip || !funnel) return;
 
-  const waOk = state.waState?.status === 'connected';
   const ai = state.settings?.ai || {};
-  const hasKey = Boolean(ai.geminiApiKey || ai.openrouterApiKey);
-  const prof = getActiveProfile();
-  const ownerOk = Boolean(state.settings?.humanHandoff?.ownerPersonalWhatsapp);
+  const hasKey = Boolean(
+    String(ai.geminiApiKey || '').trim() ||
+    String(ai.geminiKeyPool || '').trim() ||
+    String(ai.openrouterApiKey || '').trim()
+  );
+  const profile = getActiveProfile() || {};
+  const trainingReady = isBusinessTrainingConfigured(profile);
+  const ownerReady = Boolean(state.settings?.humanHandoff?.ownerPersonalWhatsapp);
+  const connected = hasConnectedWhatsApp();
+  const statusItems = [
+    { label: 'WhatsApp', value: connected ? 'Conectado' : 'Pendente', state: connected ? 'ok' : 'warn' },
+    { label: 'Chave de IA', value: hasKey ? 'Configurada' : 'Pendente', state: hasKey ? 'ok' : 'warn' },
+    { label: 'Treinamento', value: trainingReady ? (profile.name || 'Configurado') : 'Falta personalizar', state: trainingReady ? 'ok' : 'warn' },
+    { label: 'Alerta pessoal', value: ownerReady ? 'Configurado' : 'Opcional', state: ownerReady ? 'ok' : 'optional' }
+  ];
 
-  strip.innerHTML = `
-    <span class="ready-pill ${waOk ? 'ok' : 'warn'}">${waOk ? '● WhatsApp Conectado' : '○ WhatsApp Pendente'}</span>
-    <span class="ready-pill ${hasKey ? 'ok' : 'warn'}">${hasKey ? `● Motor IA Ativo (${state.geminiPoolCount} chave${state.geminiPoolCount > 1 ? 's' : ''})` : '○ Falta Chave de IA'}</span>
-    <span class="ready-pill ok">● Cérebro Único: ${escapeHtml(prof?.name || 'Padrão')}</span>
-    <span class="ready-pill ${ownerOk ? 'ok' : 'warn'}">${ownerOk ? '● Alerta Pessoal Configurado' : '○ Alerta Pessoal Opcional'}</span>
-  `;
+  strip.innerHTML = statusItems
+    .map((item) => `
+      <span class="ready-pill home-status-item ${item.state}" aria-label="${escapeHtml(item.label)}: ${escapeHtml(item.value)}">
+        <span class="home-status-dot" aria-hidden="true"></span>
+        <span class="home-status-copy"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong></span>
+      </span>
+    `)
+    .join('');
 
-  const contacts = state.contacts || [];
-  const totalLeads = contacts.length;
-  const activeAi = contacts.filter((c) => c.stage === 'em_atendimento' || c.stage === 'novo').length;
-  const humanPending = contacts.filter((c) => c.stage === 'aguardando_humano').length;
-  const closedCount = contacts.filter((c) => c.stage === 'concluido').length;
+  let totalLeads = 0;
+  let activeAi = 0;
+  let humanPending = 0;
+  let closedCount = 0;
+  for (const contact of state.contacts || []) {
+    totalLeads += 1;
+    if (contact.stage === 'em_atendimento' || contact.stage === 'novo') activeAi += 1;
+    if (contact.stage === 'aguardando_humano') humanPending += 1;
+    if (contact.stage === 'concluido') closedCount += 1;
+  }
   const handoffRate = totalLeads > 0 ? Math.round(((humanPending + closedCount) / totalLeads) * 100) : 0;
   const avgLat = state.stats?.avgLatencyMs ? `${state.stats.avgLatencyMs} ms` : '—';
 
@@ -2082,16 +2185,16 @@ function renderReadinessAndFunnel() {
       <span class="funnel-step-val">${totalLeads}</span>
     </div>
     <div class="funnel-step">
-      <span class="funnel-step-label">Em Qualificação IA</span>
+      <span class="funnel-step-label">Novos ou em atendimento pela IA</span>
       <span class="funnel-step-val">${activeAi}</span>
     </div>
     <div class="funnel-step">
-      <span class="funnel-step-label">Taxa de Avanço / Passagem</span>
+      <span class="funnel-step-label">Taxa de avanço no funil</span>
       <span class="funnel-step-val">${handoffRate}%</span>
     </div>
     <div class="funnel-step">
-      <span class="funnel-step-label">Velocidade Média da IA</span>
-      <span class="funnel-step-val">${avgLat}</span>
+      <span class="funnel-step-label">Tempo médio de resposta da IA</span>
+      <span class="funnel-step-val">${escapeHtml(avgLat)}</span>
     </div>
   `;
 }

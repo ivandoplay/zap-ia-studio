@@ -309,18 +309,10 @@
 </section>
       <!-- ==================== ABA 1: DASHBOARD & CONEXÃO ==================== -->
       <section id="tab-dashboard" class="tab-pane active">
-        <div class="page-header">
-          <div>
-            <h1><svg class="icon-svg" style="width:24px; height:24px; vertical-align:-4px; margin-right:8px; color:var(--accent-bright);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Central de Conexão & Monitoramento</h1>
-            <p>Conecte seu WhatsApp, dispare abordagens ativas aprovadas e acompanhe todo o funil em tempo real.</p>
-          </div>
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <button type="button" class="btn btn-secondary" onclick="downloadLatestMotorZip()" title="Baixar última versão do Motor Ienvia (.ZIP para Windows PC e Android Termux)">
-              <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-              <span>Baixar Motor (.ZIP)</span>
-            </button>
-            <button type="button" class="btn btn-secondary" onclick="switchTab('simulador')">Testar no Simulador</button>
-            <button type="button" class="btn btn-primary" onclick="switchTab('treinamento')">Editar Treinamento</button>
+        <div class="page-header dashboard-home-header">
+          <div class="dashboard-home-intro">
+            <h1>Prepare seu atendimento</h1>
+            <p>Treine a IA, teste uma conversa e conecte seu WhatsApp quando estiver pronto.</p>
           </div>
         </div>
 
@@ -328,9 +320,13 @@
         <div id="saasOnboardingBox" style="display:none;"></div>
 
         <!-- Checklist Rápido de Prontidão -->
-        <div id="readinessStrip" class="readiness-strip"></div>
+        <div id="readinessStrip" class="readiness-strip home-readiness-strip" role="status" aria-live="polite" aria-label="Estado da configuração"></div>
 
-        <!-- Métricas Principais -->
+        <details class="home-overview-disclosure" id="dashboardOverview">
+          <summary>
+            <span class="home-overview-summary-copy"><strong>Indicadores do atendimento</strong><span>Mensagens, respostas da IA e andamento do funil</span></span>
+          </summary>
+          <div class="home-overview-body">
         <div class="metrics-strip">
           <div class="metric-box">
             <div class="metric-head"><svg class="icon-svg" style="width:12px; height:12px; vertical-align:-2px; margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span>Mensagens recebidas</span></div>
@@ -348,23 +344,25 @@
             <div class="metric-head"><svg class="icon-svg" style="width:12px; height:12px; vertical-align:-2px; margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span>Fotos, PDFs e PIX enviados</span></div>
             <div id="statMediaPix" class="metric-val">0</div>
           </div>
-          <div class="metric-box attention" style="cursor:pointer;" onclick="switchTab('crm')">
+          <button type="button" class="metric-box attention home-metric-action" aria-label="Aguardando você: abrir conversas aguardando atendimento humano" onclick="switchTab('crm')">
             <div class="metric-head"><svg class="icon-svg" style="width:12px; height:12px; vertical-align:-2px; margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg><span>Aguardando você (Humano)</span></div>
             <div id="statHandoffsPending" class="metric-val">0</div>
-          </div>
+          </button>
         </div>
 
-        <!-- Funil Visual de Conversão -->
         <div id="funnelSummaryBar" class="funnel-bar"></div>
 
-        <div class="grid-2">
+          </div>
+        </details>
+
+        <div class="grid-2 home-main-grid">
           <!-- Coluna Esquerda: Conexão WhatsApp + Disparador de Abordagem Ativa M01–M13 -->
           <div>
-            <div class="panel conn-panel">
+            <div class="panel conn-panel" id="dashboardConnectionPanel">
               <div class="panel-header">
                 <div>
-                  <h2 class="panel-title">Conexão Multi-Chip WhatsApp</h2>
-                  <p class="panel-desc">Conecte até 3 números no mesmo aparelho ou distribua em múltiplos aparelhos.</p>
+                  <h2 class="panel-title" tabindex="-1">Conecte seu WhatsApp</h2>
+                  <p class="panel-desc">Use QR Code ou código de 8 dígitos para conectar um chip liberado no seu plano.</p>
                 </div>
                 <div class="conn-actions">
                   <button type="button" id="btnConnectQr" class="btn btn-primary btn-sm">
@@ -375,6 +373,7 @@
                 </div>
               </div>
 
+              <p class="home-connection-guide"><span>1. Escolha o chip</span><span>2. Selecione Nuvem ou Local</span><span>3. Gere o QR Code ou código</span></p>
               <div id="waSlotsTabBar" class="slot-selector" role="tablist" aria-label="Chips de WhatsApp da conta"></div>
 
               <div id="waSlotConfigStrip" class="config-bar">
@@ -383,12 +382,12 @@
                     <input type="text" id="waSlotLabelInput" maxlength="42" placeholder="Apelido do Chip (ex: Comercial)" aria-label="Apelido identificador deste Chip" />
                     <button type="button" id="btnSaveWaSlotLabel" class="btn btn-secondary btn-sm" onclick="saveCurrentWaSlotConfig()">Salvar</button>
                   </div>
-                  <div class="mode-control">
-                    <button type="button" id="btnModeCloud" class="mode-btn" onclick="setWizMode('cloud')" aria-label="Mode nuvem">
+                  <div class="mode-control" role="group" aria-label="Escolha onde o WhatsApp ficará conectado">
+                    <button type="button" id="btnModeCloud" class="mode-btn" onclick="setWizMode('cloud')" aria-label="Usar conexão na Nuvem">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17.5 19a4.5 4.5 0 1 0 0-9 6 6 0 0 0-11.6-1.5A4 4 0 0 0 6 19z"/></svg>
                       <span>Nuvem</span>
                     </button>
-                    <button type="button" id="btnModeLocal" class="mode-btn" onclick="setWizMode('local')" aria-label="Mode motor local">
+                    <button type="button" id="btnModeLocal" class="mode-btn" onclick="setWizMode('local')" aria-label="Usar o motor Local neste dispositivo">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></svg>
                       <span>Local</span>
                     </button>
@@ -419,6 +418,9 @@
               <div id="waOnlineDevicesBox" class="devices-box" style="display:none;"></div>
             </div>
 
+            <details class="home-advanced-disclosure">
+              <summary><span><strong>Mais ferramentas</strong><small>Instalar o motor ou enviar uma abordagem manual</small></span></summary>
+              <div class="home-advanced-content">
             <!-- DOWNLOAD DA ÚLTIMA VERSÃO DO MOTOR (WINDOWS, LINUX & ANDROID TERMUX) -->
             <div class="panel" id="motorDownloadPanel">
               <div class="panel-header">
@@ -451,11 +453,11 @@
             </div>
 
             <!-- NOVO: Disparar Abordagem Ativa (M01–M13) direto pela tela -->
-            <div class="panel" style="border-left:3px solid var(--accent);">
+            <div class="panel home-proactive-panel">
               <div class="panel-header">
                 <div>
-                  <h2 class="panel-title">Disparar Abordagem Ativa (M01–M13)</h2>
-                  <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">Envie a abertura aprovada para um número e deixe a IA escutando a resposta automaticamente.</p>
+                  <h2 class="panel-title">Enviar abordagem individual</h2>
+                  <p class="panel-desc" style="margin-bottom:0; margin-top:2px;">Use uma mensagem aprovada para iniciar uma conversa com um contato que autorizou receber mensagens.</p>
                 </div>
                 <button type="button" class="btn btn-secondary btn-sm" onclick="switchTab('seguranca')">Fila em Lote</button>
               </div>
@@ -480,10 +482,10 @@
                   <div class="form-group" style="margin-bottom:10px;">
                     <label class="form-label" for="dashProactiveChannelMode">Chip de Saída</label>
                     <select id="dashProactiveChannelMode">
-                      <option value="auto_rotate">🔄 Rodízio Inteligente Anti-Ban</option>
-                      <option value="slot_1">📱 Somente Chip 1</option>
-                      <option value="slot_2">📱 Somente Chip 2</option>
-                      <option value="slot_3">📱 Somente Chip 3</option>
+                      <option value="auto_rotate">Rodízio entre chips disponíveis</option>
+                      <option value="slot_1">Somente Chip 1</option>
+                      <option value="slot_2">Somente Chip 2</option>
+                      <option value="slot_3">Somente Chip 3</option>
                     </select>
                   </div>
                 </div>
@@ -501,19 +503,22 @@
                 </div>
 
                 <button type="button" id="btnSendProactiveNow" class="btn btn-primary" style="width:100%;">
-                  Enviar Abordagem com IA Ativa
+                  Enviar abordagem pelo WhatsApp
                 </button>
               </div>
             </div>
+              </div>
+            </details>
+
           </div>
 
           <!-- Coluna Direita: Atividade ao vivo -->
           <div class="panel">
             <div class="panel-header">
-              <h2 class="panel-title">Registro de Atividades ao Vivo</h2>
+              <h2 class="panel-title">Atividade recente</h2>
               <span class="tag" id="activeEngineBadge">Gemini</span>
             </div>
-            <p class="panel-desc">Tudo o que o atendente faz aparece aqui instantaneamente.</p>
+            <p class="panel-desc">Conexões e interações do atendimento aparecem aqui.</p>
             <div id="logsContainer" class="log-list" style="max-height:560px;"></div>
           </div>
         </div>
@@ -2994,8 +2999,6 @@
 
   <div id="toastStack" class="toast-stack" role="status" aria-live="polite" aria-atomic="true"></div>
 
-  <script src="/inbox-realtime.js"></script>
   <script src="/app.js"></script>
-  <script src="/campanhas.js"></script>
 </body>
 </html>

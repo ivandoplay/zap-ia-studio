@@ -13,6 +13,8 @@ export function assertEvolutionApiAccepted(data) {
     : (typeof errorValue?.message === 'string' ? errorValue.message : '');
   const explicitlyRejected = body.ok === false
     || body.success === false
+    || body.error === true
+    || nested.error === true
     || nested.ok === false
     || nested.success === false
     || body.status === false

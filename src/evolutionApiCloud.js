@@ -5,6 +5,7 @@
 import { Router } from 'express';
 import express from 'express';
 import { assertEvolutionApiAccepted } from './evolutionApiResponse.js';
+import QRCode from 'qrcode';
 
 export const evolutionApiCloudRouter = Router();
 evolutionApiCloudRouter.use(express.json({ limit: '10mb' }));
@@ -151,14 +152,16 @@ export async function reactEvolutionApiMessage(userId, chatId, msgId, reaction, 
   return tenantCall(userId, chatId, '/message/sendReaction', 'POST', { key: { remoteJid: chatJidForChat(chatId), fromMe: Boolean(fromMe), id: String(msgId) }, reaction: String(reaction || '') });
 }
 export async function editEvolutionApiMessage(userId, chatId, msgId, text) {
-  return tenantCall(userId, chatId, '/chat/updateMessage', 'POST', { key: { remoteJid: chatJidForChat(chatId), fromMe: true, id: String(msgId) }, text: String(text || '') });
+  const remoteJid = chatJidForChat(chatId);
+  return tenantCall(userId, chatId, '/chat/updateMessage', 'POST', { number: numberForChat(chatId), key: { remoteJid, fromMe: true, id: String(msgId) }, text: String(text || '') });
 }
 export async function deleteEvolutionApiMessage(userId, chatId, msgId) {
-  return tenantCall(userId, chatId, '/chat/deleteMessageForEveryone', 'DELETE', { key: { remoteJid: chatJidForChat(chatId), fromMe: true, id: String(msgId) } });
+  return tenantCall(userId, chatId, '/chat/deleteMessageForEveryone', 'DELETE', { id: String(msgId), remoteJid: chatJidForChat(chatId), fromMe: true });
 }
 export async function markEvolutionApiRead(userId, chatId, ids = []) {
-  const remoteJid = chatJidForChat(chatId);
-  return tenantCall(userId, chatId, '/chat/markMessageAsRead', 'POST', { readMessages: ids.map((id) => ({ id: String(id), remoteJid, fromMe: false })) });
+  const readMessages = (Array.isArray(ids) ? ids : []).filter(Boolean).map((id) => ({ id: String(id), remoteJid: chatJidForChat(chatId), fromMe: false }));
+  if (!readMessages.length) return { skipped: true, reason: 'no-message-ids' };
+  return tenantCall(userId, chatId, '/chat/markMessageAsRead', 'POST', { readMessages });
 }
 export async function blockEvolutionApiContact(userId, chatId, blocked) {
   return tenantCall(userId, chatId, '/chat/updateBlockStatus', 'POST', { number: numberForChat(chatId), status: blocked ? 'block' : 'unblock' });
@@ -210,19 +213,57 @@ export async function getEvolutionApiContacts(userId = null) {
   return Object.values(contacts);
 }
 
+function resolveWebhookBaseUrl(req) {
+  if (process.env.VERCEL) {
+    const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || req.get('host');
+    return `https://${String(host || '').replace(/^https?:\/\//i, '')}`;
+  }
+  return `${req.protocol}://${req.get('host')}`;
+}
+
+function connectionPayload(data = {}) {
+  let payload = data;
+  for (let i = 0; i < 3 && payload?.data && typeof payload.data === 'object'; i += 1) payload = payload.data;
+  if (payload?.qrcode && typeof payload.qrcode === 'object') return { ...payload.qrcode, ...payload };
+  return payload || {};
+}
+
+function normalizeQrDataUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const raw = value.trim();
+  if (/^data:image\//i.test(raw)) return raw;
+  const withoutOtherDataUri = raw.replace(/^data:[^,]*;base64,/i, '');
+  return `data:image/png;base64,${withoutOtherDataUri}`;
+}
+
 async function connectSlot(slotId, userId, baseUrl, pairingPhone = null) {
   const instance = await ensureInstance(slotId, userId);
   const hookUrl = `${baseUrl}/api/evolution-webhook/webhook`;
   await setWebhook(instance.name, hookUrl);
-  const query = pairingPhone ? `?number=${encodeURIComponent(String(pairingPhone).replace(/\D/g, ''))}` : '';
+  const digits = pairingPhone ? String(pairingPhone).replace(/\D/g, '') : '';
+  const query = digits ? `?number=${encodeURIComponent(digits)}` : '';
   const data = await apiCall(`/instance/connect/${encodeURIComponent(instance.name)}${query}`);
-  const payload = data.data || data;
-  const rawQr = payload.base64 || payload.qrcode?.base64 || payload.qrcode || null;
-  const qrDataUrl = rawQr ? (String(rawQr).startsWith('data:') ? rawQr : `data:image/png;base64,${rawQr}`) : null;
-  const pairingCode = payload.code || payload.pairingCode || null;
+  const payload = connectionPayload(data);
+  const qrSource = typeof payload.base64 === 'string'
+    ? payload.base64
+    : typeof payload.qrcode?.base64 === 'string'
+      ? payload.qrcode.base64
+      : typeof payload.qrcode === 'string'
+        ? payload.qrcode
+        : '';
+  let qrDataUrl = normalizeQrDataUrl(qrSource);
+  // In Evolution API v2.3.7, `code` is the raw QR payload (for example `2@...`),
+  // while `pairingCode` is the separate eight-digit linking code.
+  const pairingCode = typeof payload.pairingCode === 'string' && payload.pairingCode.trim()
+    ? payload.pairingCode.trim()
+    : null;
+  if (!qrDataUrl && typeof payload.code === 'string' && payload.code.trim()) {
+    qrDataUrl = await QRCode.toDataURL(payload.code.trim());
+  }
   const state = await connectionState(instance.name).catch(() => ({ state: 'connecting' }));
-  const status = state.state === 'open' ? 'connected' : qrDataUrl || pairingCode ? 'qr_ready' : 'connecting';
-  const slot = { instanceId: instance.id, name: instance.name, status, qrDataUrl, pairingCode };
+  const connected = state.state === 'open';
+  const status = connected ? 'connected' : qrDataUrl || pairingCode ? 'qr_ready' : 'connecting';
+  const slot = { instanceId: instance.id, name: instance.name, status, qrDataUrl: connected ? null : qrDataUrl, pairingCode: connected ? null : pairingCode };
   slotCache.set(slotId, slot);
   return { slotId, ...slot };
 }
@@ -240,7 +281,7 @@ evolutionApiCloudRouter.post('/connect', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   try {
     const slotId = /^slot_[1-3]$/.test(String(req.body?.slotId || '')) ? req.body.slotId : 'slot_1';
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const baseUrl = resolveWebhookBaseUrl(req);
     return res.json({ ok: true, ...(await connectSlot(slotId, req.cloudAuth?.authUser?.id || null, baseUrl, req.body?.pairingPhone || null)) });
   } catch (err) { return res.status(err.statusCode || 502).json({ ok: false, error: err.message }); }
 });
@@ -248,7 +289,7 @@ evolutionApiCloudRouter.post('/refresh-qr', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   try {
     const slotId = /^slot_[1-3]$/.test(String(req.body?.slotId || '')) ? req.body.slotId : 'slot_1';
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const baseUrl = resolveWebhookBaseUrl(req);
     return res.json({ ok: true, ...(await connectSlot(slotId, req.cloudAuth?.authUser?.id || null, baseUrl)) });
   } catch (err) { return res.status(err.statusCode || 502).json({ ok: false, error: err.message }); }
 });
@@ -257,7 +298,7 @@ evolutionApiCloudRouter.post('/reconnect', async (req, res) => {
     const slotId = /^slot_[1-3]$/.test(String(req.body?.slotId || '')) ? req.body.slotId : 'slot_1';
     const name = instanceName(slotId);
     await apiCall(`/instance/restart/${encodeURIComponent(name)}`, { method: 'POST', body: {} });
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const baseUrl = resolveWebhookBaseUrl(req);
     return res.json({ ok: true, ...(await connectSlot(slotId, req.cloudAuth?.authUser?.id || null, baseUrl)) });
   } catch (err) { return res.status(err.statusCode || 502).json({ ok: false, error: err.message }); }
 });

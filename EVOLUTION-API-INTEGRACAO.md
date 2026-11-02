@@ -27,3 +27,18 @@ A confirmação HTTP da API significa que ela aceitou a solicitação, não que 
 ## Segurança
 
 Se uma chave já apareceu em código, documentação ou conversa, considere-a comprometida e rotacione-a no provedor. Configure a nova chave diretamente como `EVOLUTION_API_KEY` no ambiente de produção; não a registre em arquivos do projeto.
+
+
+## Pareamento e estado do QR
+
+No contrato da versão 2.3.7, `base64` contém a imagem do QR, `code` contém o payload cru do QR e `pairingCode` é o código numérico de pareamento (quando disponível). O painel não deve tratar `code` como código numérico; se a imagem não vier, converte o payload `code` em QR localmente. O status é consultado até a instância ficar conectada; ao conectar, QR e código deixam de ser exibidos.
+
+## Mensagens, arquivos e confirmação
+
+- O bridge autentica a chamada com o header `apikey`, resolve a instância pertencente à conta autorizada e usa `{ number, text }` para texto.
+- Mídia é enviada como JSON com `number`, `mediatype`, `media` (URL acessível à Evolution API), `caption`, `fileName` e, quando conhecido, `mimetype`. Portanto, o armazenamento de mídia precisa gerar uma URL que o serviço consiga buscar.
+- Contatos usam `contact` como array, com `fullName`, `wuid`, `phoneNumber` e `organization`. Atualização e exclusão de mensagens seguem os campos exigidos pela v2.3.7; leitura não é chamada com uma lista vazia.
+- Webhook é configurado no formato `{ webhook: { enabled, url, byEvents, base64, events } }`. Em Vercel, a URL usa o host de produção da plataforma para não gravar URL de preview como destino permanente.
+- Respostas HTTP 2xx contendo `error: true`, `success: false` ou estados de falha são rejeitadas. Um envio aceito pela API fica pendente até o webhook/ACK confirmar entrega; não se deve exibi-lo como entregue apenas porque a chamada retornou sucesso.
+
+Os contratos acima foram conferidos contra o código e os schemas da tag Evolution API v2.3.7 (`cd800f2`); versões diferentes devem ser verificadas antes de alterar payloads.

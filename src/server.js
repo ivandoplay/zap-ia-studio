@@ -1625,8 +1625,9 @@ app.post('/api/wa/proactive-send', async (req, res) => {
       const digits = String(phone).replace(/\D/g, '');
       const jid = `${digits}@s.whatsapp.net`;
       const destination = WA_SLOT_IDS.includes(channelMode) && channelMode !== 'slot_1' ? `${channelMode}::${jid}` : jid;
-      await sendEvolutionApiText(req.cloudAuth.authUser.id, destination, personalizedText);
-      const contact = storage.appendContactMessage(destination, { role:'owner', text:personalizedText, contactName:cleanName, phone:digits, deliveryStatus:'accepted' });
+      const sendResult = await sendEvolutionApiText(req.cloudAuth.authUser.id, destination, personalizedText);
+      const messageId = sendResult?.data?.key?.id || sendResult?.key?.id || sendResult?.data?.id || sendResult?.id || '';
+      const contact = storage.appendContactMessage(destination, { role:'owner', text:personalizedText, contactName:cleanName, phone:digits, deliveryStatus:'accepted', ...(messageId ? { waMsgId:String(messageId) } : {}) });
       return res.json({ ok:true, contact, sentRealWhatsApp:false, accepted:true, deliveryStatus:'accepted', provider:'evolution_api' });
     }
     if (usesCloudBridge(req)) {
@@ -2596,10 +2597,11 @@ app.post('/api/crm/:chatId/send-vcard', async (req, res) => {
         if (!/desconhecida/i.test(bridgeErr.message || '')) throw bridgeErr;
       }
     } else if (usesCloudBridge(req) && !targetKey.startsWith('demo_')) {
-      await sendEvolutionApiContact(req.cloudAuth.authUser.id, targetKey, cardContact);
+      const sendResult = await sendEvolutionApiContact(req.cloudAuth.authUser.id, targetKey, cardContact);
+      const messageId = sendResult?.data?.key?.id || sendResult?.key?.id || sendResult?.data?.id || sendResult?.id || '';
       const displayName = String(cardContact.name || cardContact.phone || 'Contato').trim();
-      const updated = storage.appendContactMessage(targetKey, { role:'owner', text:`🪪 Cartão de contato enviado: *${displayName}*` });
-      return res.json({ ok:true, contact:updated, syncedWhatsApp:true, provider:'evolution_api' });
+      const updated = storage.appendContactMessage(targetKey, { role:'owner', text:`🪪 Cartão de contato enviado: *${displayName}*`, deliveryStatus:'accepted', ...(messageId ? { waMsgId:String(messageId) } : {}) });
+      return res.json({ ok:true, contact:updated, sentRealWhatsApp:false, syncedWhatsApp:false, accepted:true, deliveryStatus:'accepted', provider:'evolution_api' });
     } else if (!usesCloudBridge(req) && !targetKey.startsWith('demo_') && whatsappManager?.status === 'connected') {
       const updated = await whatsappManager.sendContactVCardOnWhatsApp(targetKey, cardContact);
       return res.json({ ok: true, contact: updated, syncedWhatsApp: true });
@@ -3078,10 +3080,12 @@ app.post('/api/crm/:chatId/send-item', async (req, res) => {
       const txt = `*${item.name}*${item.price ? ` — R$ ${item.price}` : ''}\n${item.description || ''}${item.paymentLink ? `\n${item.paymentLink}` : ''}`.trim();
       const mediaFiles = item.mediaFiles || (item.mediaFile ? [item.mediaFile] : []);
       const media = mediaFiles.find((m) => m?.url && /^https?:\/\//i.test(m.url));
-      if (media) await sendEvolutionApiMedia(req.cloudAuth.authUser.id, chatId, { url:media.url, type:String(media.mimeType || '').startsWith('image/') ? 'image' : 'document', filename:media.originalName || media.filename || item.name, caption:txt });
-      else await sendEvolutionApiText(req.cloudAuth.authUser.id, chatId, txt);
-      const updated = storage.appendContactMessage(chatId, { role:'owner', text:txt, ...(media ? {mediaUrl:media.url, mediaName:media.originalName || media.filename, mediaMime:media.mimeType} : {}) });
-      return res.json({ ok:true, contact:updated, sentRealWhatsApp:true, provider:'evolution_api' });
+      const sendResult = media
+        ? await sendEvolutionApiMedia(req.cloudAuth.authUser.id, chatId, { url:media.url, type:String(media.mimeType || '').startsWith('image/') ? 'image' : 'document', filename:media.originalName || media.filename || item.name, caption:txt })
+        : await sendEvolutionApiText(req.cloudAuth.authUser.id, chatId, txt);
+      const messageId = sendResult?.data?.key?.id || sendResult?.key?.id || sendResult?.data?.id || sendResult?.id || '';
+      const updated = storage.appendContactMessage(chatId, { role:'owner', text:txt, deliveryStatus:'accepted', ...(messageId ? { waMsgId:String(messageId) } : {}), ...(media ? {mediaUrl:media.url, mediaName:media.originalName || media.filename, mediaMime:media.mimeType} : {}) });
+      return res.json({ ok:true, contact:updated, sentRealWhatsApp:false, accepted:true, deliveryStatus:'accepted', provider:'evolution_api' });
     }
     if (usesCloudBridge(req) && !chatId.startsWith('demo_')) {
       const out = await dispatchCommandToWorker(
@@ -3133,14 +3137,16 @@ app.post('/api/crm/:chatId/send-pix', async (req, res) => {
       const preview = await formatPixMessageWithQr(biz.pix, req.body?.amount || null);
       const text = preview?.summaryText || `PIX\nChave: ${biz.pix.key}`;
       let mediaUrl = '';
+      let sendResult;
       if (preview?.qrBuffer && preview.sendQrImage) {
         const filename = `pix_${crypto.randomUUID()}.png`;
         mediaUrl = await uploadMediaBufferToCloud(req.cloudAuth.client, req.cloudAuth.authUser.id, filename, preview.qrBuffer, 'image/png') || '';
-        if (mediaUrl) await sendEvolutionApiMedia(req.cloudAuth.authUser.id, chatId, { url:mediaUrl, type:'image', filename:'pix.png', caption:text });
+        if (mediaUrl) sendResult = await sendEvolutionApiMedia(req.cloudAuth.authUser.id, chatId, { url:mediaUrl, type:'image', filename:'pix.png', caption:text });
       }
-      if (!mediaUrl) await sendEvolutionApiText(req.cloudAuth.authUser.id, chatId, text);
-      const updated = storage.appendContactMessage(chatId, { role:'owner', text, ...(mediaUrl ? {mediaUrl, mediaName:'pix.png', mediaMime:'image/png'} : {}) });
-      return res.json({ ok:true, contact:updated, sentRealWhatsApp:true, provider:'evolution_api' });
+      if (!mediaUrl) sendResult = await sendEvolutionApiText(req.cloudAuth.authUser.id, chatId, text);
+      const messageId = sendResult?.data?.key?.id || sendResult?.key?.id || sendResult?.data?.id || sendResult?.id || '';
+      const updated = storage.appendContactMessage(chatId, { role:'owner', text, deliveryStatus:'accepted', ...(messageId ? { waMsgId:String(messageId) } : {}), ...(mediaUrl ? {mediaUrl, mediaName:'pix.png', mediaMime:'image/png'} : {}) });
+      return res.json({ ok:true, contact:updated, sentRealWhatsApp:false, accepted:true, deliveryStatus:'accepted', provider:'evolution_api' });
     }
     if (usesCloudBridge(req) && !chatId.startsWith('demo_')) {
       const out = await dispatchCommandToWorker(
@@ -3267,9 +3273,10 @@ app.post('/api/crm/:chatId/send-attachment', memUpload.single('file'), async (re
       if (!chatId.startsWith('demo_')) {
         const waState = getEffectiveWaState(req);
         if (!waState.workerOnline) {
-          await sendEvolutionApiMedia(req.cloudAuth.authUser.id, chatId, { url:mediaUrl, type:isImage ? 'image' : isVideo ? 'video' : 'document', filename:displayFileName, caption });
-          const contact = storage.appendContactMessage(chatId, { role:'owner', text:caption || (isImage ? '[Imagem enviada]' : isVideo ? `[Vídeo enviado: ${displayFileName}]` : `[Arquivo enviado: ${displayFileName}]`), mediaUrl, mediaName:displayFileName, mediaMime:resolvedMime, mediaSize:req.file.buffer.length });
-          return res.json({ ok:true, contact, sentRealWhatsApp:true, provider:'evolution_api' });
+          const sendResult = await sendEvolutionApiMedia(req.cloudAuth.authUser.id, chatId, { url:mediaUrl, type:isImage ? 'image' : isVideo ? 'video' : 'document', filename:displayFileName, caption });
+          const messageId = sendResult?.data?.key?.id || sendResult?.key?.id || sendResult?.data?.id || sendResult?.id || '';
+          const contact = storage.appendContactMessage(chatId, { role:'owner', text:caption || (isImage ? '[Imagem enviada]' : isVideo ? `[Vídeo enviado: ${displayFileName}]` : `[Arquivo enviado: ${displayFileName}]`), deliveryStatus:'accepted', ...(messageId ? { waMsgId:String(messageId) } : {}), mediaUrl, mediaName:displayFileName, mediaMime:resolvedMime, mediaSize:req.file.buffer.length });
+          return res.json({ ok:true, contact, sentRealWhatsApp:false, accepted:true, deliveryStatus:'accepted', provider:'evolution_api' });
         }
         const out = await dispatchCommandToWorker(
           req.cloudAuth.client,

@@ -7,4 +7,5 @@ assert.throws(() => assertEvolutionApiAccepted({ ok: false, error: 'Número indi
 assert.throws(() => assertEvolutionApiAccepted({ success: false, message: 'Falha simulada' }), /Falha simulada/);
 assert.throws(() => assertEvolutionApiAccepted({ data: { status: 'error', error: { message: 'Rejeitado' } } }), /Rejeitado/);
 assert.throws(() => assertEvolutionApiAccepted({ status: 'failed' }), /rejeitou a solicitação/);
+assert.throws(() => assertEvolutionApiAccepted({ error: true, message: 'Falha na conexão' }), /Falha na conexão/);
 console.log('OK: falhas de aplicação em HTTP 2xx são rejeitadas; aceitação não implica entrega.');

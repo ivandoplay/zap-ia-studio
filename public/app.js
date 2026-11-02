@@ -1540,7 +1540,12 @@ function renderWaState() {
 
   const metas = WA_SLOT_IDS_UI.map((id) => getSlotUiMeta(id));
   const connectedMetas = metas.filter((m) => m.status === 'connected');
-  const overallSt = connectedMetas.length > 0 ? 'connected' : (state.waState?.status || 'disconnected');
+  const pendingQrMetas = metas.filter((m) => m.status === 'qr_ready');
+  const connectingMetas = metas.filter((m) => m.status === 'connecting');
+  const overallSt = connectedMetas.length > 0 ? 'connected'
+    : pendingQrMetas.length > 0 ? 'qr_ready'
+      : connectingMetas.length > 0 ? 'connecting'
+        : (state.waState?.status || 'disconnected');
   pill.className = `status-pill ${overallSt}`;
 
   const botOn = state.waState?.botEnabled !== false;
@@ -4357,7 +4362,7 @@ window.sendPastedClipboardImage = async function sendPastedClipboardImage() {
     clearPastedClipboardImage();
     if (res.contact) applyReturnedContactToState(res.contact, chatId);
     await refreshLiveStateOnly();
-    showToast(res.sentRealWhatsApp ? '📸 Print enviado no WhatsApp!' : '📸 Print anexado na conversa!');
+    showToast(res.deliveryStatus === 'accepted' ? 'A Evolution API aceitou o print; a entrega ainda não foi confirmada.' : res.sentRealWhatsApp ? '📸 Print enviado no WhatsApp!' : '📸 Print anexado na conversa!');
   } catch (err) {
     showToast(err.message, true);
   }
@@ -5190,7 +5195,7 @@ window.dispatchSendContactCard = async function dispatchSendContactCard(encodedT
     if (res.contact) applyReturnedContactToState(res.contact, targetChatId);
     closeModal('sendContactCardModal');
     renderCrmBoard();
-    showToast('🪪 Cartão de contato enviado!');
+    showToast(res.deliveryStatus === 'accepted' ? 'A Evolution API aceitou o cartão; a entrega ainda não foi confirmada.' : '🪪 Cartão de contato enviado!');
   } catch (err) {
     showToast(err.message, true);
   }
@@ -5210,7 +5215,7 @@ window.sendCustomTypedVcardNow = async function sendCustomTypedVcardNow() {
     if (res.contact) applyReturnedContactToState(res.contact, targetChatId);
     closeModal('sendContactCardModal');
     renderCrmBoard();
-    showToast('🪪 Cartão avulso enviado!');
+    showToast(res.deliveryStatus === 'accepted' ? 'A Evolution API aceitou o cartão; a entrega ainda não foi confirmada.' : '🪪 Cartão avulso enviado!');
   } catch (err) {
     showToast(err.message, true);
   }
@@ -6340,9 +6345,10 @@ function bindEvents() {
         state.waState.slots[slotId].pairingCode = res.pairingCode;
         state.waState.slots[slotId].workerOnline = true;
         renderWaState();
-        // Se o QR ainda não está pronto, poll a cada 3s
-        if (res.status === 'connecting') {
-          clearTimeout(state._evoRefreshTimer);
+        // Poll o estado até conectar: a Evolution retorna base64 e pairingCode em campos distintos.
+        clearTimeout(state._evoRefreshTimer);
+        state._evoRefreshTimer = null;
+        if (res.status !== 'connected') {
           state._evoRefreshTimer = setTimeout(() => {
             state._evoRefreshTimer = null;
             evolutionCloudRefreshQr(slotId).catch(() => {});
@@ -6365,26 +6371,47 @@ function bindEvents() {
       if (res?.ok) {
         const slot = state.evolutionCloud.slots[slotId] || {};
         slot.status = res.status;
-        slot.qrDataUrl = res.qrDataUrl || slot.qrDataUrl;
-        slot.pairingCode = res.pairingCode || slot.pairingCode;
+        slot.qrDataUrl = res.status === 'connected' ? null : (res.qrDataUrl || slot.qrDataUrl || null);
+        slot.pairingCode = res.status === 'connected' ? null : (res.pairingCode || slot.pairingCode || null);
         state.evolutionCloud.slots[slotId] = slot;
         // Merge no waState
         if (state.waState.slots[slotId]) {
           state.waState.slots[slotId].status = res.status;
-          state.waState.slots[slotId].qrDataUrl = res.qrDataUrl || state.waState.slots[slotId].qrDataUrl;
-          state.waState.slots[slotId].pairingCode = res.pairingCode || state.waState.slots[slotId].pairingCode;
+          state.waState.slots[slotId].qrDataUrl = res.status === 'connected' ? null : (res.qrDataUrl || state.waState.slots[slotId].qrDataUrl || null);
+          state.waState.slots[slotId].pairingCode = res.status === 'connected' ? null : (res.pairingCode || state.waState.slots[slotId].pairingCode || null);
         }
         renderWaState();
-        // Continua polling até QR pronto
-        if (res.status === 'connecting') {
+        // Continua consultando também após mostrar QR/código, até confirmar conexão.
+        if (res.status !== 'connected') {
           clearTimeout(state._evoRefreshTimer);
           state._evoRefreshTimer = setTimeout(() => {
             state._evoRefreshTimer = null;
             evolutionCloudRefreshQr(slotId).catch(() => {});
           }, 3000);
+        } else {
+          clearTimeout(state._evoRefreshTimer);
+          state._evoRefreshTimer = null;
+        }
+      } else {
+        const status = state.evolutionCloud.slots[slotId]?.status || state.waState?.slots?.[slotId]?.status;
+        if (status && status !== 'connected' && status !== 'disconnected') {
+          clearTimeout(state._evoRefreshTimer);
+          state._evoRefreshTimer = setTimeout(() => {
+            state._evoRefreshTimer = null;
+            evolutionCloudRefreshQr(slotId).catch(() => {});
+          }, 5000);
         }
       }
-    } catch {}
+    } catch {
+      const status = state.evolutionCloud.slots[slotId]?.status || state.waState?.slots?.[slotId]?.status;
+      if (status && status !== 'connected' && status !== 'disconnected') {
+        clearTimeout(state._evoRefreshTimer);
+        state._evoRefreshTimer = setTimeout(() => {
+          state._evoRefreshTimer = null;
+          evolutionCloudRefreshQr(slotId).catch(() => {});
+        }, 5000);
+      }
+    }
   }
 
   async function evolutionCloudDisconnect(slotId) {
@@ -6394,6 +6421,8 @@ function bindEvents() {
         body: JSON.stringify({ slotId })
       });
       if (res?.ok) {
+        clearTimeout(state._evoRefreshTimer);
+        state._evoRefreshTimer = null;
         const slot = state.evolutionCloud.slots[slotId] || {};
         slot.status = 'disconnected';
         slot.qrDataUrl = null;
@@ -6433,7 +6462,8 @@ function bindEvents() {
         targetDeviceId: deviceId
       });
       if (pending.pairingPhone && !res?.deferredChoice) {
-        showToast('Código de 8 dígitos gerado!');
+        if (res?.pairingCode) showToast('Código de pareamento gerado. Digite-o no WhatsApp.');
+        else if (res?.qrDataUrl) showToast('A API retornou QR, não código numérico. Use o QR exibido no painel.');
       }
     } catch (err) {
       showToast(err.message, true);
@@ -6474,7 +6504,10 @@ function bindEvents() {
         slotId: state.selectedWaSlotId || 'slot_1'
       });
       if (out?.ok && !out?.deferredChoice) {
-        showToast('Código de 8 dígitos gerado!');
+        if (out.evolutionCloud && out.pairingCode) showToast('Código de pareamento gerado. Digite-o no WhatsApp.');
+        else if (out.evolutionCloud && out.qrDataUrl) showToast('A Evolution API retornou QR, não código numérico. Use o QR exibido no painel.');
+        else if (out.evolutionCloud) showToast('A Evolution API está preparando o pareamento. Aguarde alguns segundos.');
+        else showToast('Código de 8 dígitos gerado!');
       } else if (out?.error) {
         showToast(out.error, true);
       }
@@ -6551,7 +6584,7 @@ function bindEvents() {
       document.getElementById('dashProactivePhone').value = '';
       document.getElementById('dashProactiveName').value = '';
       await loadBootstrap();
-      showToast(`Abordagem enviada${out?.slotLabel ? ` pelo ${out.slotLabel}` : ''}! A IA já está pronta aguardando a resposta.`);
+      showToast(out?.deliveryStatus === 'accepted' ? 'A Evolution API aceitou a abordagem; a entrega ao WhatsApp ainda não foi confirmada.' : `Abordagem enviada${out?.slotLabel ? ` pelo ${out.slotLabel}` : ''}! A IA já está pronta aguardando a resposta.`);
     } catch (err) {
       showToast(err.message, true);
     } finally {
@@ -7435,7 +7468,7 @@ function bindEvents() {
       });
       if (res.contact) applyReturnedContactToState(res.contact, chatId);
       await refreshLiveStateOnly();
-      showToast(res.sentRealWhatsApp ? '💠 QR Code PIX + Copia e Cola enviados!' : '💠 PIX registrado na conversa.');
+      showToast(res.deliveryStatus === 'accepted' ? 'A Evolution API aceitou o PIX; a entrega ainda não foi confirmada.' : res.sentRealWhatsApp ? '💠 QR Code PIX + Copia e Cola enviados!' : '💠 PIX registrado na conversa.');
     } catch (err) {
       showToast(err.message, true);
     }
@@ -7458,7 +7491,7 @@ function bindEvents() {
       if (sel) sel.value = '';
       if (res.contact) applyReturnedContactToState(res.contact, chatId);
       await refreshLiveStateOnly();
-      showToast(res.sentRealWhatsApp ? '🛍️ Item e mídias enviados no WhatsApp!' : '🛍️ Item registrado na conversa.');
+      showToast(res.deliveryStatus === 'accepted' ? 'A Evolution API aceitou o item; a entrega ainda não foi confirmada.' : res.sentRealWhatsApp ? '🛍️ Item e mídias enviados no WhatsApp!' : '🛍️ Item registrado na conversa.');
     } catch (err) {
       showToast(err.message, true);
     } finally {
@@ -7800,7 +7833,7 @@ function bindEvents() {
       if (res.contact) applyReturnedContactToState(res.contact, chatId);
       await refreshLiveStateOnly();
       openLeadModal(encodeURIComponent(res.contact?.chatId || chatId));
-      showToast(res.sentRealWhatsApp ? 'Item e fotos enviados no WhatsApp!' : 'Item registrado no histórico da ficha.');
+      showToast(res.deliveryStatus === 'accepted' ? 'A Evolution API aceitou o item; a entrega ainda não foi confirmada.' : res.sentRealWhatsApp ? 'Item e fotos enviados no WhatsApp!' : 'Item registrado no histórico da ficha.');
     } catch (err) {
       showToast(err.message, true);
     }
@@ -7817,7 +7850,7 @@ function bindEvents() {
       if (res.contact) applyReturnedContactToState(res.contact, chatId);
       await refreshLiveStateOnly();
       openLeadModal(encodeURIComponent(res.contact?.chatId || chatId));
-      showToast(res.sentRealWhatsApp ? 'QR Code PIX + Copia e Cola enviados!' : 'PIX registrado na ficha.');
+      showToast(res.deliveryStatus === 'accepted' ? 'A Evolution API aceitou o PIX; a entrega ainda não foi confirmada.' : res.sentRealWhatsApp ? 'QR Code PIX + Copia e Cola enviados!' : 'PIX registrado na ficha.');
     } catch (err) {
       showToast(err.message, true);
     }
@@ -8805,7 +8838,7 @@ function bindCloudAuthAndAdminEvents() {
       }
       if (replyInp && caption) replyInp.value = '';
       if (out.contact) applyReturnedContactToState(out.contact, chatId);
-      showToast(out.queued ? 'Anexo em processamento. Confira a conversa antes de reenviar.' : out.sentRealWhatsApp ? 'Anexo enviado no WhatsApp!' : 'Anexo registrado na conversa!');
+      showToast(out.queued ? 'Anexo em processamento. Confira a conversa antes de reenviar.' : out.deliveryStatus === 'accepted' ? 'A Evolution API aceitou o anexo; a entrega ainda não foi confirmada.' : out.sentRealWhatsApp ? 'Anexo enviado no WhatsApp!' : 'Anexo registrado na conversa!');
       watchQueuedCrmSend(out).catch(() => {});
       refreshLiveStateOnly().catch(() => {});
     } catch (err) {

@@ -3685,7 +3685,13 @@ function renderActiveInboxConversation() {
 
   if (voiceRow) {
     const showAny = voices.length > 0 || catalog.length > 0;
-    voiceRow.style.display = showAny ? 'flex' : 'none';
+    voiceRow.style.display = showAny ? '' : 'none';
+    const mediaTrayToggle = document.getElementById('btnToggleComposerMediaTray');
+    if (mediaTrayToggle) mediaTrayToggle.style.display = showAny ? 'inline-flex' : 'none';
+    if (!showAny) {
+      voiceRow.classList.remove('open');
+      mediaTrayToggle?.setAttribute('aria-expanded', 'false');
+    }
     if (voiceSel && voiceBtn) {
       const prevVoiceVal = voiceSel.value;
       voiceSel.style.display = voices.length ? '' : 'none';
@@ -6140,8 +6146,12 @@ function bindEvents() {
   });
 
   // Gaveta recolhível de Áudio Estratégico & Catálogo no Composer do Inbox
-  document.getElementById('btnToggleComposerMediaTray')?.addEventListener('click', () => {
-    document.getElementById('inboxVoiceQuickRow')?.classList.toggle('open');
+  document.getElementById('btnToggleComposerMediaTray')?.addEventListener('click', (event) => {
+    const tray = document.getElementById('inboxVoiceQuickRow');
+    if (!tray) return;
+    const isOpen = tray.classList.toggle('open');
+    event.currentTarget.setAttribute('aria-expanded', String(isOpen));
+    event.currentTarget.setAttribute('aria-label', isOpen ? 'Fechar opções de áudio estratégico e catálogo' : 'Abrir opções de áudio estratégico e catálogo');
   });
 
   // Atalhos de Teclado (Ctrl+K e Escape)
@@ -7692,14 +7702,35 @@ function bindEvents() {
     }
   });
 
-  document.querySelectorAll('#crmFilterBar .filter-pill').forEach((pill) => {
+  document.querySelectorAll('#crmFilterBar .filter-pill[data-crmfilter]').forEach((pill) => {
     pill.addEventListener('click', () => {
-      document.querySelectorAll('#crmFilterBar .filter-pill').forEach((p) => p.classList.remove('active'));
+      document.querySelectorAll('#crmFilterBar .filter-pill[data-crmfilter]').forEach((p) => p.classList.remove('active'));
       pill.classList.add('active');
       state.activeCrmFilter = pill.dataset.crmfilter;
       renderCrmBoard();
     });
   });
+
+  const advancedFilterToggle = document.getElementById('btnToggleAdvancedCrmFilters');
+  const advancedFilterPanel = document.getElementById('crmAdvancedFiltersPanel');
+  const advancedFilterIds = ['crmFilterSlotSelect', 'crmFilterStageSelect', 'crmFilterTagSelect', 'crmFilterDealSelect'];
+  if (advancedFilterToggle && advancedFilterPanel) {
+    const refreshAdvancedFilterState = () => {
+      const activeCount = advancedFilterIds.reduce((count, id) => count + (document.getElementById(id)?.value ? 1 : 0), 0);
+      const countLabel = document.getElementById('crmAdvancedFilterCount');
+      if (countLabel) countLabel.textContent = activeCount ? String(activeCount) : '';
+      advancedFilterToggle.classList.toggle('has-active', activeCount > 0);
+      advancedFilterToggle.setAttribute('aria-label', activeCount ? `Filtros avançados, ${activeCount} ativo(s)` : 'Abrir filtros avançados');
+      if (activeCount > 0) advancedFilterPanel.hidden = false;
+      advancedFilterToggle.setAttribute('aria-expanded', String(!advancedFilterPanel.hidden));
+    };
+    advancedFilterToggle.addEventListener('click', () => {
+      advancedFilterPanel.hidden = !advancedFilterPanel.hidden;
+      advancedFilterToggle.setAttribute('aria-expanded', String(!advancedFilterPanel.hidden));
+    });
+    advancedFilterIds.forEach((id) => document.getElementById(id)?.addEventListener('change', refreshAdvancedFilterState));
+    refreshAdvancedFilterState();
+  }
 
   document.querySelectorAll('.kanban-col[data-stage]').forEach((colEl) => {
     colEl.addEventListener('dragover', (e) => {

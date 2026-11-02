@@ -1299,37 +1299,53 @@
           </div>
         </div>
 
-        <!-- Trilho Horizontal Deslizante de Filtros (1 Linha Única — Zero Quebra Vertical) -->
-        <div id="crmFilterBar" class="filter-pills">
-          <button type="button" class="filter-pill active" data-crmfilter="all">Ativas <span id="fltCntAll" style="opacity:0.75;"></span></button>
-          <button type="button" class="filter-pill" data-crmfilter="unread">Não Lidas <span id="fltCntUnread" style="opacity:0.85;"></span></button>
-          <button type="button" class="filter-pill" data-crmfilter="human">Com Você <span id="fltCntHuman" style="opacity:0.85;"></span></button>
-          <button type="button" class="filter-pill" data-crmfilter="hot">Quentes <span id="fltCntHot" style="opacity:0.75;"></span></button>
-          <button type="button" class="filter-pill" data-crmfilter="followup">Retorno S19 <span id="fltCntFollowup" style="opacity:0.75;"></span></button>
-          <button type="button" class="filter-pill" data-crmfilter="archived">Arquivadas <span id="fltCntArchived" style="opacity:0.75;"></span></button>
-          <select id="crmFilterSlotSelect" class="crm-inline-filter-select" aria-label="Filtrar conversas por Chip WhatsApp">
-            <option value="">Canal: Todos os Chips</option>
-            <option value="slot_1">Chip 1</option>
-            <option value="slot_2">Chip 2</option>
-            <option value="slot_3">Chip 3</option>
-          </select>
-          <select id="crmFilterStageSelect" class="crm-inline-filter-select" aria-label="Filtrar por etapa do funil">
-            <option value="">Etapa: Todas</option>
-            <option value="novo">Novo Contato</option>
-            <option value="qualificando">Qualificando</option>
-            <option value="em_atendimento">Em Atendimento</option>
-            <option value="aguardando_humano">Aguardando Você</option>
-            <option value="concluido">Concluído</option>
-          </select>
-          <select id="crmFilterTagSelect" class="crm-inline-filter-select" aria-label="Filtrar por etiqueta">
-            <option value="">Etiqueta: Todas</option>
-          </select>
-          <select id="crmFilterDealSelect" class="crm-inline-filter-select" aria-label="Filtrar por resultado comercial">
-            <option value="">Negócio: Todos</option>
-            <option value="won">✅ Ganhos</option>
-            <option value="lost">❌ Perdidos</option>
-            <option value="with_value">💰 Com Valor R$</option>
-          </select>
+        <!-- Filtros da caixa: rotinas frequentes à vista; filtros especializados preservados em painel expansível. -->
+        <div id="crmFilterBar" class="crm-filter-toolbar">
+          <div class="filter-pills" id="crmQuickFilterPills" role="group" aria-label="Filtros rápidos de conversas">
+            <button type="button" class="filter-pill active" data-crmfilter="all">Ativas <span id="fltCntAll" style="opacity:0.75;"></span></button>
+            <button type="button" class="filter-pill" data-crmfilter="unread">Não Lidas <span id="fltCntUnread" style="opacity:0.85;"></span></button>
+            <button type="button" class="filter-pill" data-crmfilter="human">Com Você <span id="fltCntHuman" style="opacity:0.85;"></span></button>
+            <button type="button" class="filter-pill" data-crmfilter="hot">Quentes <span id="fltCntHot" style="opacity:0.75;"></span></button>
+            <button type="button" class="filter-pill" data-crmfilter="followup">Retorno S19 <span id="fltCntFollowup" style="opacity:0.75;"></span></button>
+            <button type="button" class="filter-pill" data-crmfilter="archived">Arquivadas <span id="fltCntArchived" style="opacity:0.75;"></span></button>
+            <button type="button" id="btnToggleAdvancedCrmFilters" class="filter-pill crm-advanced-filter-toggle" aria-expanded="false" aria-controls="crmAdvancedFiltersPanel" aria-label="Abrir filtros avançados">
+              <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M7 12h10m-7 5h4"></path></svg>
+              <span>Filtros</span><span id="crmAdvancedFilterCount" class="crm-filter-count" aria-live="polite"></span>
+            </button>
+          </div>
+          <div id="crmAdvancedFiltersPanel" class="crm-advanced-filter-panel" role="group" aria-label="Filtros avançados de conversas" hidden>
+            <label class="crm-filter-field"><span>Canal</span>
+              <select id="crmFilterSlotSelect" class="crm-inline-filter-select" aria-label="Filtrar conversas por Chip WhatsApp">
+                <option value="">Todos os Chips</option>
+                <option value="slot_1">Chip 1</option>
+                <option value="slot_2">Chip 2</option>
+                <option value="slot_3">Chip 3</option>
+              </select>
+            </label>
+            <label class="crm-filter-field"><span>Etapa</span>
+              <select id="crmFilterStageSelect" class="crm-inline-filter-select" aria-label="Filtrar por etapa do funil">
+                <option value="">Todas</option>
+                <option value="novo">Novo Contato</option>
+                <option value="qualificando">Qualificando</option>
+                <option value="em_atendimento">Em Atendimento</option>
+                <option value="aguardando_humano">Aguardando Você</option>
+                <option value="concluido">Concluído</option>
+              </select>
+            </label>
+            <label class="crm-filter-field"><span>Etiqueta</span>
+              <select id="crmFilterTagSelect" class="crm-inline-filter-select" aria-label="Filtrar por etiqueta">
+                <option value="">Todas</option>
+              </select>
+            </label>
+            <label class="crm-filter-field"><span>Negócio</span>
+              <select id="crmFilterDealSelect" class="crm-inline-filter-select" aria-label="Filtrar por resultado comercial">
+                <option value="">Todos</option>
+                <option value="won">✅ Ganhos</option>
+                <option value="lost">❌ Perdidos</option>
+                <option value="with_value">💰 Com Valor R$</option>
+              </select>
+            </label>
+          </div>
         </div>
 
         <!-- Barra de Seleção Múltipla / Ações em Massa na Lista -->
@@ -1529,7 +1545,7 @@
                       <button type="button" class="composer-tool-btn" onclick="openSendContactCardModal('into_chat')" title="Enviar cartão de contato (vCard) nesta conversa">
                         🪪 Contato
                       </button>
-                      <button type="button" id="btnToggleComposerMediaTray" class="composer-tool-btn" title="Enviar Áudio Estratégico ou Item do Catálogo">
+                      <button type="button" id="btnToggleComposerMediaTray" class="composer-tool-btn" title="Abrir opções de áudio estratégico e catálogo" aria-label="Abrir opções de áudio estratégico e catálogo" aria-controls="inboxVoiceQuickRow" aria-expanded="false">
                         + Mídia
                       </button>
                     </div>

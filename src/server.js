@@ -549,7 +549,7 @@ app.use('/api', async (req, res, next) => {
 
       // Estas operações não leem nem alteram o workspace; evitam carregar conversas privadas.
       if ((req.path === '/campaigns' || req.path.startsWith('/campaigns/')) ||
-          (req.method === 'GET' && (req.path === '/cloud/realtime-config' || /^\/cloud\/commands\/[^/]+\/status\/?$/.test(req.path)))) {
+          (req.method === 'GET' && (req.path === '/cloud/realtime-config' || /^\/cloud\/commands\/[^/]+\/status\/?$/.test(req.path) || req.path === '/evolution-cloud/diagnostics/read-only'))) {
         req.cloudAuth = { client: verified.client, authUser: verified.authUser, profile: verified.profile, isRemoteImpersonation: false };
         return next();
       }

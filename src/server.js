@@ -941,8 +941,10 @@ function normalizeDirectoryContact(contact = {}) {
   const phoneCandidate = [contact.phone, jidPhone].find((value) => isLikelyRealPhone(value)) || '';
   const phone = phoneCandidate ? normalizePhoneDigits(phoneCandidate) : '';
   const name = storage.isGenericContactName(contact.name) ? '' : String(contact.name || '').trim();
-  const isLongNonPhonePn = /@s\.whatsapp\.net$/i.test(rawChatId) && /^\d{14,16}$/.test(rawChatId.split('@')[0].split(':')[0]);
-  const chatId = isLongNonPhonePn ? `${slotPrefix}${rawChatId.split('@')[0].split(':')[0]}@lid` : originalChatId;
+  const localId = rawChatId.split('@')[0].split(':')[0];
+  const isLongOpaqueId = /^\d{14,16}$/.test(rawChatId) ||
+    (/@s\.whatsapp\.net$/i.test(rawChatId) && /^\d{14,16}$/.test(localId));
+  const chatId = isLongOpaqueId ? `${slotPrefix}${localId}@lid` : originalChatId;
   return { ...contact, chatId, phone, name };
 }
 

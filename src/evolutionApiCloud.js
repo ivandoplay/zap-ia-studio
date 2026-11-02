@@ -347,6 +347,56 @@ export async function getEvolutionApiSlotStatus(userId = null) {
   return result;
 }
 
+function evolutionPhoneCandidate(value) {
+  const raw = String(value || '').trim();
+  if (!raw || /@lid$/i.test(raw)) return '';
+  if (raw.includes('@') && !/@s\.whatsapp\.net$/i.test(raw)) return '';
+  const local = raw.includes('@') ? raw.split('@')[0].split(':')[0] : raw;
+  const digits = local.replace(/\D/g, '');
+  return digits.length >= 10 && digits.length <= 13 ? digits : '';
+}
+
+function evolutionContactPhone(raw = {}) {
+  const messageKey = raw.lastMessage?.key || {};
+  const candidates = [
+    raw.phoneNumber, raw.phone, raw.number, raw.pn, raw.pnJid,
+    raw.remoteJidAlt, raw.remoteJIDAlt, raw.wuid, raw.remoteJid, raw.id,
+    messageKey.remoteJidAlt, messageKey.participantAlt,
+    raw.lastMessage?.remoteJidAlt, raw.lastMessage?.phoneNumber, raw.lastMessage?.number,
+  ];
+  for (const candidate of candidates) {
+    const phone = evolutionPhoneCandidate(candidate);
+    if (phone) return phone;
+  }
+  return '';
+}
+
+function evolutionContactJid(raw = {}) {
+  const candidates = [raw.remoteJid, raw.id, raw.wuid, raw.jid, raw.chatId];
+  const rawId = candidates.map((value) => String(value || '').trim()).find(Boolean) || '';
+  if (rawId.includes('@')) return rawId;
+  const rawDigits = rawId.replace(/\D/g, '');
+  // WhatsApp LIDs are opaque identifiers, not telephone numbers. Keep the
+  // identity in the correct namespace instead of fabricating a PN JID.
+  if (rawDigits.length >= 14 && rawDigits.length <= 16) return `${rawDigits}@lid`;
+  const phone = evolutionContactPhone(raw);
+  if (phone) return `${phone}@s.whatsapp.net`;
+  return '';
+}
+
+function isGenericEvolutionContactName(value) {
+  const name = String(value || '').trim();
+  return !name || /^(?:você|voce|you|me|yourself)$/i.test(name) ||
+    /^(?:cliente|contato|contato whatsapp|whatsapp)(?:\s+\+?\d+)?$/i.test(name) ||
+    /^\+?\d{8,}$/.test(name.replace(/[\s()-]/g, '')) ||
+    /@(s\.whatsapp\.net|lid)$/i.test(name);
+}
+
+function evolutionContactName(raw = {}) {
+  const candidates = [raw.name, raw.displayName, raw.verifiedName, raw.notify, raw.pushName];
+  return candidates.map((value) => String(value || '').trim()).find((name) => !isGenericEvolutionContactName(name)) || null;
+}
+
 export async function getEvolutionApiChats(userId = null, { limit = 200, offset = 0 } = {}) {
   if (!userId) return [];
   const rows = (await listInstances()).filter((item) => instanceOwnedBy(item, userId));
@@ -364,13 +414,26 @@ export async function getEvolutionApiChats(userId = null, { limit = 200, offset 
     const list = Array.isArray(data) ? data : data.chats || data.data || data.response || [];
     if (Array.isArray(list) && list.length >= safeLimit) hasMore = true;
     for (const row of Array.isArray(list) ? list : []) {
-      const remoteJid = String(row.remoteJid || row.lastMessage?.key?.remoteJid || row.lastMessage?.remoteJid || '').trim();
+      const remoteJid = evolutionContactJid({
+        ...row,
+        remoteJid: row.remoteJid || row.lastMessage?.key?.remoteJid || row.lastMessage?.remoteJid || '',
+        remoteJidAlt: row.remoteJidAlt || row.lastMessage?.key?.remoteJidAlt || row.lastMessage?.remoteJidAlt || '',
+      });
       if (!remoteJid || /@(g\.us|broadcast|newsletter)$/i.test(remoteJid)) continue;
       const chatId = slotId === 'slot_1' ? remoteJid : `${slotId}::${remoteJid}`;
       if (chats.has(chatId)) continue;
+      const name = evolutionContactName({
+        ...row,
+        name: row.name || row.contact?.name,
+        pushName: row.pushName || row.lastMessagePushName || row.lastMessage?.pushName,
+      });
+      const phone = evolutionContactPhone({
+        ...row,
+        remoteJidAlt: row.remoteJidAlt || row.lastMessage?.key?.remoteJidAlt || row.lastMessage?.remoteJidAlt,
+      });
       chats.set(chatId, {
-        chatId, remoteJid, slotId,
-        name: row.pushName || row.name || row.lastMessagePushName || row.lastMessage?.pushName || null,
+        chatId, remoteJid, slotId, ...(phone ? { phone } : {}),
+        name,
         lastMessageAt: historyTimestamp(row.updatedAt || row.lastMessage?.messageTimestamp || row.lastMessageMessageTimestamp),
       });
     }
@@ -379,10 +442,7 @@ export async function getEvolutionApiChats(userId = null, { limit = 200, offset 
 }
 
 function contactJidFromEvolution(raw = {}) {
-  const rawId = String(raw.remoteJid || raw.id || raw.wuid || '').trim();
-  if (rawId.includes('@')) return rawId;
-  const phone = String(raw.number || raw.phoneNumber || rawId).replace(/\D/g, '');
-  return phone ? `${phone}@s.whatsapp.net` : '';
+  return evolutionContactJid(raw);
 }
 
 export async function getEvolutionApiContacts(userId = null) {
@@ -407,8 +467,8 @@ export async function getEvolutionApiContacts(userId = null) {
         if (!jid || /@(g\.us|broadcast|newsletter)$/i.test(jid)) continue;
         // JIDs are only unique inside one WhatsApp instance; retain the slot in the key.
         const chatId = slotId === 'slot_1' ? jid : `${slotId}::${jid}`;
-        const name = raw.pushName || raw.name || raw.verifiedName || null;
-        const phone = String(raw.number || raw.phoneNumber || raw.wuid || jid.split('@')[0]).replace(/\D/g, '');
+        const name = evolutionContactName(raw);
+        const phone = evolutionContactPhone(raw);
         contacts.set(chatId, {
           chatId, slotId, phone, name,
           avatarUrl: raw.profilePictureUrl || raw.profilePicUrl || '',

@@ -56,6 +56,7 @@ import {
   tenantStorageContext,
   uid,
   normalizePhoneDigits,
+  isLikelyRealPhone,
   normalizeCatalogItem,
   buildContactVCard
 } from './storage.js';
@@ -932,6 +933,19 @@ function normalizeDirectoryChatId(contact = {}) {
   return `${local.toLowerCase()}@${domain}`;
 }
 
+function normalizeDirectoryContact(contact = {}) {
+  const originalChatId = String(contact.chatId || '').trim();
+  const slotPrefix = originalChatId.match(/^(slot_[1-3]::)/i)?.[1] || '';
+  const rawChatId = originalChatId.replace(/^slot_[1-3]::/i, '');
+  const jidPhone = /@s\.whatsapp\.net$/i.test(rawChatId) ? rawChatId.split('@')[0].split(':')[0] : '';
+  const phoneCandidate = [contact.phone, jidPhone].find((value) => isLikelyRealPhone(value)) || '';
+  const phone = phoneCandidate ? normalizePhoneDigits(phoneCandidate) : '';
+  const name = storage.isGenericContactName(contact.name) ? '' : String(contact.name || '').trim();
+  const isLongNonPhonePn = /@s\.whatsapp\.net$/i.test(rawChatId) && /^\d{14,16}$/.test(rawChatId.split('@')[0].split(':')[0]);
+  const chatId = isLongNonPhonePn ? `${slotPrefix}${rawChatId.split('@')[0].split(':')[0]}@lid` : originalChatId;
+  return { ...contact, chatId, phone, name };
+}
+
 app.get('/api/bootstrap', async (req, res) => {
   storage.ensureDailyRollover();
   const ffmpegBin = usesCloudBridge(req) ? 'cloud' : await resolveFfmpegPath();
@@ -969,7 +983,8 @@ app.get('/api/crm/contact-directory', async (req, res) => {
     const imported = await getCachedEvolutionContactDirectory(userId);
     const saved = Object.values(storage.data.contacts || {});
     const contactsById = new Map();
-    for (const contact of saved) {
+    for (const rawContact of saved) {
+      const contact = normalizeDirectoryContact(rawContact);
       if (contact?.chatId) contactsById.set(contact.chatId, contact);
     }
 
@@ -977,13 +992,15 @@ app.get('/api/crm/contact-directory', async (req, res) => {
     let hiddenUnnamed = 0;
     let invalidIds = 0;
     let duplicateIds = 0;
-    for (const contact of saved) {
+    for (const rawContact of saved) {
+      const contact = normalizeDirectoryContact(rawContact);
       const normalized = normalizeDirectoryChatId(contact);
       if (!normalized) continue;
       const slotId = contact.slotId || String(contact.chatId).match(/^(slot_[1-3])::/i)?.[1] || 'slot_1';
       seenBySlot.add(`${slotId}|${normalized}`);
     }
-    for (const contact of imported) {
+    for (const rawContact of imported) {
+      const contact = normalizeDirectoryContact(rawContact);
       const normalized = normalizeDirectoryChatId(contact);
       if (!normalized) {
         invalidIds += 1;
@@ -991,16 +1008,28 @@ app.get('/api/crm/contact-directory', async (req, res) => {
       }
       const slotId = contact.slotId || String(contact.chatId).match(/^(slot_[1-3])::/i)?.[1] || 'slot_1';
       const dedupeKey = `${slotId}|${normalized}`;
+      if (contactsById.has(contact.chatId)) {
+        const existing = normalizeDirectoryContact(contactsById.get(contact.chatId));
+        const existingName = String(existing.name || '').trim();
+        const usefulExistingName = !storage.isGenericContactName(existingName);
+        contactsById.set(contact.chatId, normalizeDirectoryContact({
+          ...contact,
+          ...existing,
+          phone: isLikelyRealPhone(existing.phone) ? existing.phone : contact.phone,
+          name: existing.savedContact && usefulExistingName ? existingName : (contact.name || (usefulExistingName ? existingName : '')),
+          avatarUrl: existing.avatarUrl || contact.avatarUrl || '',
+          savedContact: Boolean(existing.savedContact || contact.savedContact),
+        }));
+        seenBySlot.add(dedupeKey);
+        duplicateIds += 1;
+        continue;
+      }
       if (seenBySlot.has(dedupeKey)) {
         duplicateIds += 1;
         continue;
       }
       seenBySlot.add(dedupeKey);
-      if (contactsById.has(contact.chatId)) {
-        duplicateIds += 1;
-        continue;
-      }
-      if (!String(contact.name || '').trim()) {
+      if (!contact.name && !isLikelyRealPhone(contact.phone)) {
         hiddenUnnamed += 1;
         if (!includeUnnamed) continue;
       }
@@ -1550,6 +1579,7 @@ app.post('/api/wa/sync-history', async (req, res) => {
         if (!existing || chat.name || chat.lastMessageAt) {
           storage.upsertContact(chat.chatId, {
             ...(chat.name ? { name: String(chat.name).slice(0, 120) } : {}),
+            ...(isLikelyRealPhone(chat.phone) ? { phone: normalizePhoneDigits(chat.phone) } : {}),
             ...(chat.lastMessageAt ? { lastMessageAt: chat.lastMessageAt } : {}),
             slotId: chat.slotId
           }, { deferSave:true, preferAddressBookName:true });

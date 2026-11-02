@@ -6,6 +6,12 @@ Data da revisão: 2026-11-02. Escopo: chamadas CRM ↔ Evolution API e eventos q
 
 `connectedInstanceForTenant()` agora exige conexão do slot gravado no `chatId` (`slot_1`, `slot_2` ou `slot_3`). Se o slot não existe ou está desconectado, a chamada falha com HTTP 503; não tenta outro chip. Isso evita envio, reação, edição, exclusão, leitura ou bloqueio no WhatsApp errado. Há teste de regressão que confirma que, com o slot 2 desconectado e o slot 1 conectado, nenhuma mensagem é enviada e o estado do slot 1 nem é consultado.
 
+## Correção de exibição de contato
+
+Também foi corrigido o tratamento de identidade dos contatos Evolution: LIDs numéricos de 14–16 dígitos não são mais convertidos em telefones `@s.whatsapp.net`; apenas telefones plausíveis (10–13 dígitos no contrato brasileiro do CRM) são exibidos como números. Quando a resposta oferece telefone alternativo, ele é usado para preencher a ficha CRM mantendo o JID/LID de origem. A escolha do nome agora prioriza o campo de agenda (`name`) antes do `pushName` de perfil e descarta rótulos de autoidentidade como “Você”, além de nomes que sejam apenas números. A agenda mostra o telefone válido quando não há nome; se a Evolution não fornecer um PN para um LID, a interface informa que o número não foi fornecido, sem inventá-lo.
+
+A sanitização de contatos já salvos é feita no payload de apresentação, sem uma migração ou reescrita em massa dos dados. O próximo sync normal pode corrigir o nome/telefone da ficha; não executei nenhuma rota de sincronização real.
+
 ## Cobertura observada no código
 
 | Capacidade | Situação | Observação |

@@ -433,6 +433,7 @@ function deduplicateContactsMap(rawContacts = {}) {
     const pickName = (n) => {
       const s = String(n || '').trim();
       if (!s) return false;
+      if (/^(?:você|voce|you|me|yourself)$/i.test(s)) return false;
       if (/^(Cliente|Contato|Contato WhatsApp|WhatsApp)\b/i.test(s)) return false;
       if (/Teste Lojista/i.test(s)) return false;
       if (/^\+?\d{7,}$/.test(s.replace(/[\s()-]/g, ''))) return false;
@@ -1057,6 +1058,7 @@ export class Storage {
   isGenericContactName(name = '', ownerName = '') {
     const clean = String(name || '').trim();
     if (!clean) return true;
+    if (/^(?:você|voce|you|me|yourself)$/i.test(clean)) return true;
     if (clean === 'Cliente' || /^Cliente\s+\d+$/i.test(clean) || /^Contato\s+\+?\d+$/i.test(clean) || /^\+?\d{8,}$/.test(clean)) {
       return true;
     }
@@ -1175,8 +1177,8 @@ export class Storage {
         if (this.isGenericContactName(existing.name, ownerSelfName) || opts.preferAddressBookName) {
           return String(patch.name).trim();
         }
-      } else if (this.isGenericContactName(existing.name, ownerSelfName) && candidatePhone) {
-        return `+${candidatePhone}`;
+      } else if (this.isGenericContactName(existing.name, ownerSelfName)) {
+        return candidatePhone ? `+${candidatePhone}` : 'Contato WhatsApp';
       }
       return existing.name;
     })();

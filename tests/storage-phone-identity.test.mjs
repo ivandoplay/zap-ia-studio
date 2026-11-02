@@ -62,6 +62,18 @@ test('nono dígito brasileiro só unifica quando o telefone canônico é exatame
   assert.equal(phonesMatch('5586912345678', '5586812345678'), false, 'não usar apenas DDD + últimos oito dígitos');
 });
 
+test('rótulos de autoidentidade não substituem o nome ou telefone de um contato', () => {
+  const lid = '203869363691598@lid';
+  const phone = '5588999991111';
+  const storage = new Storage({ inMemory: true, initialData: { contacts: {
+    [lid]: contact(lid, { name: 'Você', phone: '187359475818564' })
+  } } });
+  assert.equal(storage.isGenericContactName('Você'), true);
+  const updated = storage.upsertContact(lid, { phone }, { deferSave: true });
+  assert.equal(updated.phone, phone);
+  assert.equal(updated.name, `+${phone}`);
+});
+
 test('contatos legados duplicados são consolidados preservando ambos os históricos e a ficha salva', () => {
   const storage = new Storage({ inMemory: true, initialData: { contacts: {
     [olderJid]: contact(olderJid, {

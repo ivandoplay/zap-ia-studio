@@ -757,7 +757,7 @@ function checkClientSideDueFollowUps(seedOnly = false) {
     if (!notifiedFollowUpSessionKeys.has(key)) {
       notifiedFollowUpSessionKeys.add(key);
       playHandoffChime();
-      const msg = `Hora do retorno agendado (S19) com ${c.name || 'Cliente'}!`;
+      const msg = `Hora do retorno agendado (S19) com ${getContactDisplayName(c, 'Cliente')}!`;
       showToast(msg);
       fireDesktopNotification('Ienvia • Retorno Agendado (S19)', msg, c.chatId);
     }
@@ -859,18 +859,41 @@ function applyReturnedContactToState(contact, fallbackChatId = '') {
   renderCrmBoard();
 }
 
+function validContactPhoneDigits(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.length >= 10 && digits.length <= 13 ? digits : '';
+}
+
+function getContactPhoneDigits(contact) {
+  const direct = validContactPhoneDigits(contact?.phone);
+  if (direct) return direct;
+  const chatId = String(contact?.chatId || '').replace(/^slot_[123]::/i, '');
+  if (!chatId.endsWith('@s.whatsapp.net')) return '';
+  return validContactPhoneDigits(chatId.split('@')[0].split(':')[0]);
+}
+
 function formatContactSubtitle(c) {
-  const rawPhone = String(c?.phone || '').trim();
-  if (rawPhone && !rawPhone.includes('@')) {
-    return `+${rawPhone.replace(/^slot_[123]::/i, '').replace(/^\+/, '')}`;
-  }
+  const phoneDigits = getContactPhoneDigits(c);
+  if (phoneDigits) return `+${phoneDigits}`;
   const cid = String(c?.chatId || '').replace(/^slot_[123]::/i, '');
-  if (cid.endsWith('@s.whatsapp.net')) {
-    const digits = cid.split('@')[0].split(':')[0].replace(/\D/g, '');
-    if (digits) return `+${digits}`;
-  }
   if (cid.startsWith('demo_')) return 'Conversa de Exemplo';
+  if (cid.endsWith('@s.whatsapp.net') || cid.endsWith('@lid')) return 'Número não informado pelo WhatsApp';
   return 'WhatsApp Conectado';
+}
+
+function isGenericContactDisplayLabel(value) {
+  const name = String(value || '').trim();
+  return !name || /^(?:você|voce|you|me|yourself)$/i.test(name) ||
+    /^\+?\d{8,}$/.test(name.replace(/[\s()-]/g, '')) ||
+    /@(s\.whatsapp\.net|lid)$/i.test(name) ||
+    /^(?:cliente|contato|contato whatsapp|whatsapp)(?:\s+\+?\d+)?$/i.test(name);
+}
+
+function getContactDisplayName(contact, fallback = 'Contato') {
+  const name = String(contact?.name || '').trim();
+  if (!isGenericContactDisplayLabel(name)) return name;
+  const subtitle = formatContactSubtitle(contact);
+  return subtitle.startsWith('+') || subtitle === 'Número não informado pelo WhatsApp' ? subtitle : fallback;
 }
 
 let liveRefreshQueued = false;
@@ -914,7 +937,7 @@ async function refreshLiveStateOnly() {
       if (newHumans.length > 0) {
         playHandoffChime();
         const first = newHumans[0];
-        const msg = `${first.name || 'Cliente'} aguarda atendimento humano no CRM!`;
+        const msg = `${getContactDisplayName(first, 'Cliente')} aguarda atendimento humano no CRM!`;
         showToast(msg);
         fireDesktopNotification('Ienvia • Passagem Humana', msg, first.chatId);
       }
@@ -3460,7 +3483,7 @@ function renderCrmInbox(filteredList) {
             ? '<span class="deal-pill lost">Perdido</span>'
             : '';
         const customTagsMini = (c.tags || []).slice(0, 2).map((t) => renderColoredTagPill(t)).join('');
-        const contactName = c.name || 'Contato';
+        const contactName = getContactDisplayName(c);
         const selection = state.crmBulkMode
           ? `<label class="crm-bulk-select-control"><input type="checkbox" ${bulkChecked ? 'checked' : ''} onclick="toggleBulkChatItem('${encId}', event)" aria-label="Selecionar conversa com ${escapeHtml(contactName)}" /></label>`
           : '';
@@ -3542,7 +3565,7 @@ function renderActiveInboxConversation() {
   emptyEl.style.display = 'none';
   paneEl.style.display = 'flex';
 
-  document.getElementById('inboxContactName').textContent = c.name || 'Cliente';
+  document.getElementById('inboxContactName').textContent = getContactDisplayName(c, 'Cliente');
   document.getElementById('inboxContactPhone').textContent = formatContactSubtitle(c);
   const slotHeadBadge = document.getElementById('inboxSlotBadge');
   if (slotHeadBadge) {
@@ -3788,10 +3811,10 @@ function renderActiveInboxConversation() {
             `;
           }
 
-          const who = m.role === 'user' ? c.name || 'Cliente' : m.role === 'owner' ? 'Você (Manual)' : 'Equipe (IA)';
+          const who = m.role === 'user' ? getContactDisplayName(c, 'Cliente') : m.role === 'owner' ? 'Você (Manual)' : 'Equipe (IA)';
           const mediaExtra = m.deletedForEveryone ? '' : renderBubbleMediaHtml(m);
           const quotedHtml = m.quoted?.text
-            ? `<div class="wa-quoted-box"><strong>${m.quoted.role === 'user' ? escapeHtml(c.name || 'Cliente') : 'Você'}</strong><div>${escapeHtml(m.quoted.text)}</div></div>`
+            ? `<div class="wa-quoted-box"><strong>${m.quoted.role === 'user' ? escapeHtml(getContactDisplayName(c, 'Cliente')) : 'Você'}</strong><div>${escapeHtml(m.quoted.text)}</div></div>`
             : '';
 
           const ackNum = Number(m.ack) || (m.role !== 'user' ? 1 : 0);
@@ -3977,7 +4000,7 @@ function renderInboxInspector360(c) {
   activeBox.style.display = 'flex';
 
   const nameEl = document.getElementById('inspNameTitle');
-  if (nameEl) nameEl.textContent = c.name || 'Cliente';
+  if (nameEl) nameEl.textContent = getContactDisplayName(c, 'Cliente');
 
   // Valor da Negociação (R$) & Status Ganho/Perdido
   const dealValInp = document.getElementById('inspDealValueInput');
@@ -4206,7 +4229,7 @@ window.quoteInboxMessage = function quoteInboxMessage(msgId) {
   if (banner) {
     banner.style.display = 'flex';
     document.getElementById('composerQuoteSender').textContent =
-      m.role === 'user' ? `Respondendo a ${c.name || 'Cliente'}` : 'Respondendo à sua mensagem';
+      m.role === 'user' ? `Respondendo a ${getContactDisplayName(c, 'Cliente')}` : 'Respondendo à sua mensagem';
     document.getElementById('composerQuoteText').textContent = state.inboxQuotedMsg.text;
   }
   window.setInboxComposerMode('reply');
@@ -4305,7 +4328,7 @@ window.renderForwardContactsList = function renderForwardContactsList(query = ''
       (c) => `
       <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-card-subtle);">
         <div style="min-width:0;">
-          <strong style="font-size:12.5px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(c.name || 'Contato')}</strong>
+          <strong style="font-size:12.5px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(getContactDisplayName(c))}</strong>
           <span style="font-size:11px; color:var(--text-secondary);">${escapeHtml(formatContactSubtitle(c))}</span>
         </div>
         <button type="button" class="btn btn-primary btn-sm" onclick="confirmForwardMessage('${escapeJsArg(c.chatId)}')">Enviar ↪</button>
@@ -4547,7 +4570,7 @@ window.quickRenameActiveContact = async function quickRenameActiveContact() {
   const chatId = state.selectedInboxChatId;
   const c = (state.contacts || []).find((x) => x.chatId === chatId);
   if (!chatId || !c) return;
-  const nextName = prompt('Editar nome do contato:', c.name || '');
+  const nextName = prompt('Editar nome do contato:', isGenericContactDisplayLabel(c.name) ? '' : (c.name || ''));
   if (!nextName || !nextName.trim()) return;
   try {
     const res = await api(`/api/crm/${encodeURIComponent(chatId)}`, {
@@ -4869,7 +4892,7 @@ window.openListRowMenu = function openListRowMenu(encodedChatId, ev) {
   const unread = Math.max(0, Number(c.unreadCount) || 0) > 0;
 
   pop.innerHTML = `
-    <div style="font-size:11px; font-weight:700; color:var(--text-muted); padding:4px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(c.name || c.phone || 'Conversa')}</div>
+    <div style="font-size:11px; font-weight:700; color:var(--text-muted); padding:4px 8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(getContactDisplayName(c, 'Conversa'))}</div>
     <button type="button" class="crm-popover-opt" onclick="closeAllCrmPopovers(); openSaveContactModalById('${enc}')">👤 ${c.savedContact ? 'Editar Contato Salvo' : 'Salvar Contato na Agenda'}</button>
     <button type="button" class="crm-popover-opt" onclick="closeAllCrmPopovers(); downloadSingleContactVcf('${enc}')">📲 Salvar no Celular (.vcf)</button>
     <button type="button" class="crm-popover-opt" onclick="closeAllCrmPopovers(); toggleRowReadStatus('${enc}', ${unread ? 'true' : 'false'})">● Marcar como ${unread ? 'Lida' : 'Não Lida'}</button>
@@ -4952,9 +4975,9 @@ window.openSaveContactModalById = function openSaveContactModalById(encodedChatI
 
   document.getElementById('saveContactChatId').value = c.chatId;
   document.getElementById('saveContactModalTitle').textContent = c.savedContact ? '✏️ Editar Contato Salvo' : '👤 Salvar Contato na Agenda';
-  const cleanName = /^\+?\d{8,}$/.test(String(c.name || '').trim()) ? '' : (c.name || '');
+  const cleanName = isGenericContactDisplayLabel(c.name) ? '' : String(c.name || '').trim();
   document.getElementById('saveContactName').value = cleanName;
-  document.getElementById('saveContactPhone').value = c.phone || String(c.chatId || '').replace(/@.+$/, '');
+  document.getElementById('saveContactPhone').value = getContactPhoneDigits(c);
   document.getElementById('saveContactCompany').value = c.company || '';
   document.getElementById('saveContactLeadSource').value = c.leadSource || '';
   document.getElementById('saveContactEmail').value = c.email || '';
@@ -5117,7 +5140,7 @@ window.toggleBlockContactById = async function toggleBlockContactById(encodedCha
   const c = (state.contacts || []).find((x) => x.chatId === chatId);
   if (!c) return;
   const nextBlocked = !c.waBlocked;
-  if (nextBlocked && !confirm(`Bloquear "${c.name || c.phone || chatId}" no WhatsApp e silenciar a IA?`)) return;
+  if (nextBlocked && !confirm(`Bloquear "${getContactDisplayName(c)}" no WhatsApp e silenciar a IA?`)) return;
   try {
     const res = await api(`/api/crm/${encodeURIComponent(chatId)}/block`, {
       method: 'POST',
@@ -5142,7 +5165,7 @@ window.openSendContactCardModal = function openSendContactCardModal(mode = 'into
   if (sub) {
     sub.textContent = mode === 'into_chat'
       ? 'Escolha qual cartão de contato enviar nesta conversa aberta:'
-      : `Escolha para qual conversa enviar o cartão de "${srcContact?.name || 'Contato'}":`;
+      : `Escolha para qual conversa enviar o cartão de "${getContactDisplayName(srcContact)}":`;
   }
   const customBox = document.getElementById('customVcardDetailsBox');
   if (customBox) customBox.style.display = mode === 'into_chat' ? '' : 'none';
@@ -5177,7 +5200,7 @@ window.renderSendContactCardList = function renderSendContactCardList(query = ''
       return `
         <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-card-subtle);">
           <div style="min-width:0;">
-            <strong style="font-size:12.5px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(c.name || 'Contato')}</strong>
+            <strong style="font-size:12.5px; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(getContactDisplayName(c))}</strong>
             <span style="font-size:11px; color:var(--text-secondary);">${escapeHtml(formatContactSubtitle(c))}</span>
           </div>
           <button type="button" class="btn btn-primary btn-sm" onclick="dispatchSendContactCard('${targetEnc}', '${srcEnc}')">Enviar 🪪</button>
@@ -5427,7 +5450,7 @@ window.renderContactsAgendaView = function renderContactsAgendaView() {
           <div class="crm-inbox-avatar" style="width:40px; height:40px; font-size:13px; flex-shrink:0; ${avatarTint}">${renderContactAvatarContent(c)}</div>
           <div style="min-width:0; flex:1;">
             <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
-              <strong style="font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(c.name || 'Contato')}</strong>
+              <strong style="font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(getContactDisplayName(c))}</strong>
               ${c.savedContact ? '<span class="deal-pill won">📇 Salvo</span>' : isDirectoryImport ? '<span class="tag">Importado</span>' : ''}
               ${c.waBlocked ? '<span class="deal-pill lost">🚫 Bloqueado</span>' : ''}
             </div>
@@ -5660,7 +5683,7 @@ window.openLeadModal = function openLeadModal(encodedChatId) {
   state.selectedLeadChatId = chatId;
   state.selectedLeadTags = [...(c.tags || [])];
 
-  document.getElementById('crmModalClientName').textContent = c.name;
+  document.getElementById('crmModalClientName').textContent = getContactDisplayName(c, 'Cliente');
   document.getElementById('crmModalClientPhone').textContent = `+${c.phone || chatId}`;
   document.getElementById('crmStageSelect').value = c.stage || 'em_atendimento';
   document.getElementById('crmFollowUpInput').value = c.followUpAt ? String(c.followUpAt).slice(0, 16) : '';
@@ -9109,7 +9132,7 @@ window.copyActiveLeadDossier = async function copyActiveLeadDossier() {
   if (!c || !c.handoffDossier) return;
   const slotMeta = getSlotUiMeta(getContactSlotId(c));
   const text = [
-    `📋 DOSSIÊ DE PASSAGEM — ${c.name || 'Cliente'} (${formatContactSubtitle(c)})`,
+    `📋 DOSSIÊ DE PASSAGEM — ${getContactDisplayName(c, 'Cliente')} (${formatContactSubtitle(c)})`,
     `📱 Canal: ${slotMeta.label}`,
     `1. Cenário: ${c.handoffDossier.scenario || 'N/D'}`,
     `2. Gatilho: ${c.handoffDossier.trigger || 'N/D'}`,

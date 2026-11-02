@@ -101,6 +101,30 @@ test('findChats importa somente conversas do slot do tenant e respeita a pagina�
 });
 
 
+test('findChats conserva LID, associa telefone alternativo e descarta o rótulo “Você”', async () => {
+  globalThis.fetch = async (url, options = {}) => {
+    const href = String(url);
+    requests.push({ url: href, options });
+    let body = {};
+    if (href.endsWith('/instance/fetchInstances')) body = [{ instanceName: 'zap-ia-slot_1', connectionStatus: 'open' }];
+    else if (href.includes('/instance/connectionState/')) body = { instance: { state: 'open' } };
+    else if (href.includes('/chat/findChats/')) body = [
+      { remoteJid: '187359475818564@lid', remoteJidAlt: '5588999991111@s.whatsapp.net', name: 'Maria Costa', pushName: 'Você' },
+      { remoteJid: '203869363691598', pushName: '203869363691598' },
+    ];
+    return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+  };
+  requests.length = 0;
+  const result = await getEvolutionApiChats('tenant-1', { limit: 25 });
+  assert.equal(result.chats.length, 2);
+  assert.equal(result.chats[0].chatId, '187359475818564@lid');
+  assert.equal(result.chats[0].phone, '5588999991111');
+  assert.equal(result.chats[0].name, 'Maria Costa');
+  assert.equal(result.chats[1].chatId, '203869363691598@lid');
+  assert.equal(result.chats[1].phone, undefined);
+  assert.equal(result.chats[1].name, null);
+});
+
 test('findContacts lê o contrato documentado, usa number como fallback e mantém escopo por slot', async () => {
   globalThis.fetch = async (url, options = {}) => {
     const href = String(url);
@@ -135,6 +159,33 @@ test('findContacts lê o contrato documentado, usa number como fallback e manté
   const calls = requests.filter((r) => r.url.includes('/chat/findContacts/'));
   assert.equal(calls.length, 2);
   for (const call of calls) assert.deepEqual(JSON.parse(call.options.body), { where: {}, take: 1000, skip: 0 });
+});
+
+test('findContacts não mostra LID como telefone, ignora “Você” e prioriza o nome salvo', async () => {
+  globalThis.fetch = async (url, options = {}) => {
+    const href = String(url);
+    requests.push({ url: href, options });
+    let body = {};
+    if (href.endsWith('/instance/fetchInstances')) body = [{ instanceName: 'zap-ia-slot_1', connectionStatus: 'open' }];
+    else if (href.includes('/instance/connectionState/')) body = { instance: { state: 'open' } };
+    else if (href.includes('/chat/findContacts/')) body = [
+      { id: '187359475818564@lid', number: '187359475818564', phoneNumber: '5588999991111', name: '', pushName: 'Você' },
+      { id: '203869363691598', number: '203869363691598', pushName: '203869363691598' },
+      { id: '5588999992222@s.whatsapp.net', number: '5588999992222', name: 'Ana Salva', pushName: 'Ana WhatsApp' },
+    ];
+    return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+  };
+  requests.length = 0;
+  const contacts = await getEvolutionApiContacts('tenant-1');
+  assert.equal(contacts.length, 3);
+  assert.equal(contacts[0].chatId, '187359475818564@lid');
+  assert.equal(contacts[0].phone, '5588999991111');
+  assert.equal(contacts[0].name, null, '“Você” não é nome de um contato');
+  assert.equal(contacts[1].chatId, '203869363691598@lid', 'identificador longo sem JID não deve virar número @s.whatsapp.net');
+  assert.equal(contacts[1].phone, '', 'não apresentar LID como telefone real');
+  assert.equal(contacts[1].name, null, 'LID numérico também não deve aparecer como nome');
+  assert.equal(contacts[2].name, 'Ana Salva', 'nome da agenda tem prioridade sobre pushName de perfil');
+  assert.equal(contacts[2].phone, '5588999992222');
 });
 
 test('findContacts percorre páginas de 1000 usando skip até o final', async () => {

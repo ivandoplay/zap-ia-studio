@@ -303,24 +303,49 @@ export async function getEvolutionApiChats(userId = null, { limit = 200, offset 
   return { chats: [...chats.values()], hasMore };
 }
 
+function contactJidFromEvolution(raw = {}) {
+  const rawId = String(raw.remoteJid || raw.id || raw.wuid || '').trim();
+  if (rawId.includes('@')) return rawId;
+  const phone = String(raw.number || raw.phoneNumber || rawId).replace(/\D/g, '');
+  return phone ? `${phone}@s.whatsapp.net` : '';
+}
+
 export async function getEvolutionApiContacts(userId = null) {
   if (!userId) return [];
   const rows = (await listInstances()).filter((item) => instanceOwnedBy(item, userId));
-  const contacts = {};
+  const contacts = new Map();
+  const pageSize = 1000;
+  const maxPages = 10; // Fail-safe: never fetch an unbounded directory from one request.
   for (const item of rows) {
     const state = await connectionState(item.name).catch(() => ({ state: item.state }));
     if (state.state !== 'open') continue;
     const slotId = item.name.match(/zap-ia-(slot_[1-3])/)?.[1] || 'slot_1';
-    const data = await apiCall(`/chat/findContacts/${encodeURIComponent(item.name)}`, { method: 'POST', body: { where: {}, take: 1000, skip: 0 } });
-    const list = Array.isArray(data) ? data : data.contacts || data.data || data.response || [];
-    for (const raw of Array.isArray(list) ? list : []) {
-      const jid = raw.remoteJid || raw.id || raw.wuid;
-      if (!jid || contacts[jid]) continue;
-      const key = slotId === 'slot_1' ? jid : `${slotId}::${jid}`;
-      contacts[key] = { chatId: key, name: raw.pushName || raw.name || raw.verifiedName || null, stage: 'novo', lastMessageAt: raw.updatedAt || null, messages: [], savedContact: true };
+    for (let page = 0; page < maxPages; page += 1) {
+      const skip = page * pageSize;
+      const data = await apiCall(`/chat/findContacts/${encodeURIComponent(item.name)}`, {
+        method: 'POST', body: { where: {}, take: pageSize, skip }
+      });
+      const list = Array.isArray(data) ? data : data.contacts || data.data || data.response || [];
+      const pageRows = Array.isArray(list) ? list : [];
+      for (const raw of pageRows) {
+        const jid = contactJidFromEvolution(raw);
+        if (!jid || /@(g\.us|broadcast|newsletter)$/i.test(jid)) continue;
+        // JIDs are only unique inside one WhatsApp instance; retain the slot in the key.
+        const chatId = slotId === 'slot_1' ? jid : `${slotId}::${jid}`;
+        const name = raw.pushName || raw.name || raw.verifiedName || null;
+        const phone = String(raw.number || raw.phoneNumber || raw.wuid || jid.split('@')[0]).replace(/\D/g, '');
+        contacts.set(chatId, {
+          chatId, slotId, phone, name,
+          avatarUrl: raw.profilePictureUrl || raw.profilePicUrl || '',
+          stage: 'novo', lastMessageAt: raw.updatedAt || null,
+          // Evolution address-book membership is not the same as a CRM-saved contact.
+          messages: [], savedContact: false, directoryImport: true
+        });
+      }
+      if (pageRows.length < pageSize) break;
     }
   }
-  return Object.values(contacts);
+  return [...contacts.values()];
 }
 
 function resolveWebhookBaseUrl(req) {

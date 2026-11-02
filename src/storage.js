@@ -119,16 +119,25 @@ export function isLikelyRealPhone(digits = '') {
   return false;
 }
 
+function canonicalPhoneIdentity(raw = '') {
+  const digits = normalizePhoneDigits(raw);
+  if (!isLikelyRealPhone(digits)) return '';
+  let national = digits;
+  if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) {
+    national = digits.slice(2);
+  }
+  // Brazil: phone numbers may be stored with or without the mobile ninth digit.
+  // Only remove it at the canonical position (immediately after the two-digit DDD).
+  if (national.length === 11 && national[2] === '9') {
+    national = `${national.slice(0, 2)}${national.slice(3)}`;
+  }
+  return national;
+}
+
 export function phonesMatch(phoneA = '', phoneB = '') {
-  const a = normalizePhoneDigits(phoneA);
-  const b = normalizePhoneDigits(phoneB);
-  if (!isLikelyRealPhone(a) || !isLikelyRealPhone(b)) return false;
-  if (a === b) return true;
-  const dddA = a.startsWith('55') && a.length >= 12 ? a.slice(2, 4) : a.slice(0, 2);
-  const dddB = b.startsWith('55') && b.length >= 12 ? b.slice(2, 4) : b.slice(0, 2);
-  const tailA = a.slice(-8);
-  const tailB = b.slice(-8);
-  return dddA === dddB && tailA === tailB;
+  const a = canonicalPhoneIdentity(phoneA);
+  const b = canonicalPhoneIdentity(phoneB);
+  return Boolean(a && b && a === b);
 }
 
 export function normalizeCatalogItem(item = {}) {
@@ -341,12 +350,7 @@ function deduplicateContactsMap(rawContacts = {}) {
   // sem comparar cada ficha contra todas as outras a cada sincronização.
   const jidIndex = new Map();
   const phoneIndex = new Map();
-  const phoneSignature = (phone) => {
-    if (!isLikelyRealPhone(phone)) return '';
-    const d = normalizePhoneDigits(phone);
-    const ddd = d.startsWith('55') && d.length >= 12 ? d.slice(2, 4) : d.slice(0, 2);
-    return `${ddd}:${d.slice(-8)}`;
-  };
+  const phoneSignature = (phone) => canonicalPhoneIdentity(phone);
   const indexKey = (slot, value) => `${slot}\u0000${value}`;
   const updateIndex = (map, key, index, add) => {
     if (!key) return;
@@ -362,7 +366,7 @@ function deduplicateContactsMap(rawContacts = {}) {
   const indexItem = (entry, index, add) => {
     const slot = normalizeSlotId(entry.slotId || parseContactChannelKey(entry.chatId).slotId);
     updateIndex(jidIndex, indexKey(slot, entry.chatId), index, add);
-    const phone = phoneSignature(entry.phone);
+    const phone = phoneSignature(entry.phone || extractPhoneFromJidIfPn(entry.chatId));
     if (phone) updateIndex(phoneIndex, indexKey(slot, phone), index, add);
   };
   const firstIndex = (indices) => {
@@ -372,7 +376,7 @@ function deduplicateContactsMap(rawContacts = {}) {
   };
   for (const item of entries) {
     const itemSlot = normalizeSlotId(item.slotId || parseContactChannelKey(item.chatId).slotId);
-    const phone = phoneSignature(item.phone);
+    const phone = phoneSignature(item.phone || extractPhoneFromJidIfPn(item.chatId));
     const matchIndex = Math.min(
       firstIndex(jidIndex.get(indexKey(itemSlot, item.chatId))),
       phone ? firstIndex(phoneIndex.get(indexKey(itemSlot, phone))) : Infinity
@@ -640,8 +644,20 @@ export class Storage {
     this.saveTimer = null;
 
     if (this.inMemory) {
+      const sourceContacts = options.initialData?.contacts || {};
+      const sourceContactMap = Array.isArray(sourceContacts)
+        ? Object.fromEntries(sourceContacts.filter((contact) => contact?.chatId).map((contact) => [contact.chatId, contact]))
+        : sourceContacts;
       this.data = this.hydrateFromSnapshot(options.initialData || createDefaultDatabase(), options.fallbackClean);
-      this.initialContactKeys = new Set(Object.keys(this.data.contacts || {}));
+      // Preserve source IDs so the cloud flush can persist deduplication as DELETE + upsert,
+      // rather than showing a merged list only in memory and resurrecting duplicates next load.
+      this.initialContactKeys = new Set(Object.keys(sourceContactMap || {}));
+      for (const sourceId of this.initialContactKeys) {
+        if (this.data.contacts[sourceId]) continue;
+        this.deletedContactIds.add(sourceId);
+        const siblingKey = this.findSiblingContactKey(sourceId, sourceContactMap[sourceId]?.phone || '');
+        if (siblingKey && this.data.contacts[siblingKey]) this.dirtyContactIds.add(siblingKey);
+      }
     } else {
       this.data = this.load();
       this.initialContactKeys = new Set(Object.keys(this.data.contacts || {}));
@@ -1028,8 +1044,9 @@ export class Storage {
     for (const [existingJid, c] of Object.entries(this.data.contacts)) {
       const existingSlot = normalizeSlotId(c?.slotId || parseContactChannelKey(existingJid).slotId);
       if (existingSlot !== slotId) continue;
-      if (!String(existingJid).endsWith('@lid') || isLikelyRealPhone(c.phone)) {
-        if (phonesMatch(c.phone, checkPhone)) {
+      const existingPhone = c.phone || extractPhoneFromJidIfPn(existingJid);
+      if (!String(existingJid).endsWith('@lid') || isLikelyRealPhone(existingPhone)) {
+        if (phonesMatch(existingPhone, checkPhone)) {
           return existingJid;
         }
       }
@@ -1070,7 +1087,8 @@ export class Storage {
         if (otherKey === chatId) continue;
         const otherSlot = normalizeSlotId(otherCard?.slotId || parseContactChannelKey(otherKey).slotId);
         if (otherSlot !== slotId) continue;
-        if (!phonesMatch(otherCard.phone, candidatePhone)) continue;
+        const otherPhone = otherCard.phone || extractPhoneFromJidIfPn(otherKey);
+        if (!phonesMatch(otherPhone, candidatePhone)) continue;
 
         const preferNew = String(chatId).endsWith('@lid') && !String(otherKey).endsWith('@lid');
         const winnerKey = preferNew ? chatId : otherKey;

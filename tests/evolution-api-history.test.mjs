@@ -29,6 +29,19 @@ test('Evolution API v2.3.7 history rows normalize into chronological CRM message
   assert.equal(normalized[2].historyMediaUnavailable, true);
 });
 
+test('nome legível do chat substitui nome numérico genérico sem tocar no histórico', () => {
+  const storage = new Storage({ inMemory: true, initialData: { contacts: {} } });
+  const initial = storage.upsertContact(jid, {
+    name: '5586999998888', phone: '5586999998888', messages: [
+      { id: 'keep-1', waMsgId: 'keep-1', role: 'user', text: 'Histórico preservado', timestamp: '2024-01-01T00:00:00.000Z' }
+    ]
+  });
+  const refreshed = storage.upsertContact(jid, { name: 'Ana' }, { preferAddressBookName: true });
+  assert.equal(initial.name, '+5586999998888');
+  assert.equal(refreshed.name, 'Ana');
+  assert.deepEqual(refreshed.messages.map((message) => message.waMsgId), ['keep-1']);
+});
+
 test('history pages persist in CRM, deduplicate by WhatsApp ID, remain chronological and do not increment unread', () => {
   const storage = new Storage({ inMemory: true, initialData: { contacts: {} } });
   const imported = mergeEvolutionApiHistoryPage(storage, `slot_2::${jid}`, firstPage, { page: 1, pageSize: 2 });

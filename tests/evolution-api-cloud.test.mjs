@@ -21,7 +21,7 @@ globalThis.fetch = async (url, options = {}) => {
   }
   return { ok: true, status: 201, text: async () => JSON.stringify(body) };
 };
-const { sendEvolutionApiText, sendEvolutionApiMedia, sendEvolutionApiContact, reactEvolutionApiMessage, editEvolutionApiMessage, deleteEvolutionApiMessage, markEvolutionApiRead, requestEvolutionApiHistory, getEvolutionApiChats } = await import('../src/evolutionApiCloud.js');
+const { sendEvolutionApiText, sendEvolutionApiMedia, sendEvolutionApiContact, reactEvolutionApiMessage, editEvolutionApiMessage, deleteEvolutionApiMessage, markEvolutionApiRead, requestEvolutionApiHistory, getEvolutionApiChats, getEvolutionApiContacts } = await import('../src/evolutionApiCloud.js');
 
 test('Evolution API v2 envia texto pela instância do tenant e usa endpoint/payload v2', async () => {
   requests.length = 0;
@@ -73,6 +73,67 @@ test('findChats importa somente conversas do slot do tenant e respeita a pagina�
   assert.deepEqual(JSON.parse(query.options.body), { where: {}, take: 25, skip: 50 });
 });
 
+
+test('findContacts lê o contrato documentado, usa number como fallback e mantém escopo por slot', async () => {
+  globalThis.fetch = async (url, options = {}) => {
+    const href = String(url);
+    requests.push({ url: href, options });
+    let body = {};
+    if (href.endsWith('/instance/fetchInstances')) {
+      body = [
+        { instanceName: 'zap-ia-slot_1', connectionStatus: 'open' },
+        { instanceName: 'zap-ia-slot_2', connectionStatus: 'open' }
+      ];
+    } else if (href.includes('/instance/connectionState/')) {
+      body = { instance: { state: 'open' } };
+    } else if (href.includes('/chat/findContacts/zap-ia-slot_1')) {
+      body = [{ id: '5586999998888@s.whatsapp.net', pushName: 'Ana', number: '5586999998888', profilePictureUrl: 'https://img.test/ana.jpg' }];
+    } else if (href.includes('/chat/findContacts/zap-ia-slot_2')) {
+      // A documentação da API também permite resposta contendo apenas number.
+      body = [{ pushName: 'Ana (outro chip)', number: '5586999998888' }];
+    }
+    return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+  };
+  requests.length = 0;
+  const contacts = await getEvolutionApiContacts('tenant-1');
+  assert.equal(contacts.length, 2, 'o mesmo JID em dois chips deve continuar em dois escopos distintos');
+  assert.equal(contacts[0].chatId, '5586999998888@s.whatsapp.net');
+  assert.equal(contacts[0].name, 'Ana');
+  assert.equal(contacts[0].phone, '5586999998888');
+  assert.equal(contacts[0].avatarUrl, 'https://img.test/ana.jpg');
+  assert.equal(contacts[0].savedContact, false, 'contato da agenda Evolution não é automaticamente salvo no CRM');
+  assert.equal(contacts[0].directoryImport, true);
+  assert.equal(contacts[1].chatId, 'slot_2::5586999998888@s.whatsapp.net');
+  assert.equal(contacts[1].name, 'Ana (outro chip)');
+  const calls = requests.filter((r) => r.url.includes('/chat/findContacts/'));
+  assert.equal(calls.length, 2);
+  for (const call of calls) assert.deepEqual(JSON.parse(call.options.body), { where: {}, take: 1000, skip: 0 });
+});
+
+test('findContacts percorre páginas de 1000 usando skip até o final', async () => {
+  globalThis.fetch = async (url, options = {}) => {
+    const href = String(url);
+    requests.push({ url: href, options });
+    let body = {};
+    if (href.endsWith('/instance/fetchInstances')) body = [{ instanceName: 'zap-ia-slot_1', connectionStatus: 'open' }];
+    else if (href.includes('/instance/connectionState/')) body = { instance: { state: 'open' } };
+    else if (href.includes('/chat/findContacts/')) {
+      const { skip } = JSON.parse(options.body);
+      const count = skip === 0 ? 1000 : 2;
+      body = Array.from({ length: count }, (_, i) => ({
+        id: `${5586000000000 + skip + i}@s.whatsapp.net`,
+        number: String(5586000000000 + skip + i),
+        pushName: `Pessoa ${skip + i}`
+      }));
+    }
+    return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+  };
+  requests.length = 0;
+  const contacts = await getEvolutionApiContacts('tenant-1');
+  assert.equal(contacts.length, 1002);
+  const calls = requests.filter((r) => r.url.includes('/chat/findContacts/'));
+  assert.deepEqual(calls.map((call) => JSON.parse(call.options.body).skip), [0, 1000]);
+});
 
 test('contratos auxiliares usam os payloads definidos no Evolution API v2.3.7', async () => {
   globalThis.fetch = async (url, options = {}) => {

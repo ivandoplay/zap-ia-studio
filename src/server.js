@@ -1544,7 +1544,10 @@ app.post('/api/wa/sync-history', async (req, res) => {
       const remoteChats = (directory.chats || []).filter((chat) => !slotId || normalizeSlotId(chat.slotId) === slotId);
       for (const chat of remoteChats) {
         const existingKey = storage.findSiblingContactKey(chat.chatId) || chat.chatId;
-        if (!storage.data.contacts[existingKey]) {
+        const existing = storage.data.contacts[existingKey];
+        // Refresh names even for existing rows: old generic/numeric names otherwise
+        // survive forever because the previous path only inserted missing contacts.
+        if (!existing || chat.name || chat.lastMessageAt) {
           storage.upsertContact(chat.chatId, {
             ...(chat.name ? { name: String(chat.name).slice(0, 120) } : {}),
             ...(chat.lastMessageAt ? { lastMessageAt: chat.lastMessageAt } : {}),

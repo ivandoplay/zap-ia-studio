@@ -33,8 +33,8 @@ services:
       retries: 3
       start_period: 15s
 
-  # ======================== WEBHOOK Evolution Go ========================
-  # Recebe mensagens do Evolution Go, processa com IA do Ienvia Motor e responde
+  # ======================== WEBHOOK Evolution API ========================
+  # Recebe mensagens do Evolution API, processa com IA do Ienvia Motor e responde
   webhook:
     build:
       context: .
@@ -44,10 +44,10 @@ services:
     ports:
       - "3001:3001"
     environment:
-      # URL do Evolution Go (pool/API)
-      - EVOLUTION_GO_URL=${EVOLUTION_GO_URL:-https://pool-evolution-go-025.cloud2.pageup.dev.br}
+      # URL do Evolution API (pool/API)
+      - EVOLUTION_API_URL=${EVOLUTION_API_URL:-https://pool-evolution-api-067.cloud2.pageup.dev.br}
       # Chave global da API (para listar instâncias)
-      - EVOLUTION_GO_API_KEY=${EVOLUTION_GO_API_KEY:-de641771b68731fb4340696241bd2cd6}
+      - EVOLUTION_API_KEY=${EVOLUTION_API_KEY}
       # IA do Ienvia Motor (cada cliente coloca suas chaves)
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}

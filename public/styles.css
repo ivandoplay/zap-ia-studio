@@ -1802,7 +1802,7 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 34px;
+  min-height: 40px;
   padding: 5px 13px;
   border-radius: 8px;
   border: 1px solid transparent;
@@ -1873,7 +1873,7 @@ textarea {
 }
 
 .filter-pill {
-  min-height: 32px;
+  min-height: 36px;
   padding: 4px 12px;
   border-radius: 999px;
   border: 1px solid var(--border);
@@ -1956,34 +1956,80 @@ textarea {
 
 .crm-inbox-item {
   width: 100%;
-  text-align: left;
-  background: transparent;
-  border: none;
+  border: 0;
   border-left: 3px solid transparent;
   border-bottom: 1px solid var(--border);
-  padding: 11px 13px;
-  cursor: pointer;
+  padding: 7px 7px 7px 9px;
   display: flex;
-  gap: 10px;
-  align-items: flex-start;
+  align-items: center;
+  gap: 7px;
   color: var(--text-main);
-  font-family: inherit;
-  transition: background-color 120ms ease;
+  transition: background-color 120ms ease, border-color 120ms ease;
 }
-.crm-inbox-item:hover {
-  background: var(--bg-card-subtle);
-}
+.crm-inbox-item:hover { background: var(--bg-card-subtle); }
 .crm-inbox-item.active {
   background: var(--accent-soft);
   border-left-color: var(--accent);
 }
-.crm-inbox-item.unread .crm-inbox-item-name {
-  font-weight: 700;
+.crm-inbox-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
 }
+.crm-inbox-item-main:focus-visible,
+.inbox-row-kebab:focus-visible,
+.crm-bulk-select-control input:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 2px;
+}
+.crm-inbox-item.unread .crm-inbox-item-name { font-weight: 700; }
 .crm-inbox-item.unread .crm-inbox-item-preview {
   color: var(--text-main);
   font-weight: 500;
 }
+.crm-inbox-item-phone {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.crm-list-mark {
+  color: var(--accent-bright);
+  margin-right: 3px;
+  font-size: 11px;
+}
+.crm-bulk-select-control {
+  width: 28px;
+  min-height: 40px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 28px;
+}
+.crm-bulk-select-control input { margin: 0; }
+.crm-inbox-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 16px;
+  color: var(--text-secondary);
+  text-align: center;
+  font-size: 12px;
+}
+.crm-inbox-empty strong { color: var(--text-main); font-size: 13px; }
+.crm-inbox-empty span { max-width: 26ch; line-height: 1.5; }
 
 .crm-inbox-avatar {
   width: 40px;
@@ -2096,13 +2142,60 @@ textarea {
   min-width: 185px;
   flex: 1 1 185px;
 }
-
+.crm-chat-contact { min-width: 0; flex: 1; }
+.crm-chat-identity-line,
+.crm-chat-contact-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.crm-chat-identity-line { flex-wrap: wrap; }
+.crm-chat-contact-meta {
+  gap: 8px;
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  flex-wrap: wrap;
+}
+#inboxContactName {
+  min-width: 0;
+  max-width: 34ch;
+  overflow: hidden;
+  color: var(--text-main);
+  font-size: 14.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#btnQuickRenameContact,
+#btnCopyInboxPhone {
+  padding: 2px 4px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-bright);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+#btnQuickRenameContact { color: var(--text-muted); }
+.crm-chat-save-contact {
+  padding: 2px 8px;
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-bright);
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
 .crm-chat-head-right {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
   justify-content: flex-end;
+  min-width: 0;
 }
 
 .crm-inbox-back-mob {
@@ -2114,7 +2207,37 @@ textarea {
   min-height: 0;
   overflow-y: auto;
   background: var(--wa-canvas);
+  overscroll-behavior: contain;
+  scroll-behavior: auto;
 }
+.btn-load-older-chat {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: calc(100% - 20px);
+  margin: 0 0 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+.btn-load-older-chat:hover {
+  border-color: var(--accent-border);
+  color: var(--accent-bright);
+}
+.btn-load-older-chat span {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 500;
+}
+.crm-inbox-messages:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* Internal Team Note Bubble */
 .wa-bubble.internal_note {
@@ -2168,10 +2291,15 @@ textarea {
   align-items: center;
   gap: 8px;
   overflow-x: auto;
-  scrollbar-width: none;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
-.composer-top-bar::-webkit-scrollbar {
-  display: none;
+.composer-top-bar::-webkit-scrollbar { height: 4px; }
+.composer-top-bar::-webkit-scrollbar-track { background: transparent; }
+.composer-top-bar::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
 }
 
 .composer-mode-tabs {
@@ -3055,18 +3183,41 @@ textarea {
   }
 
   .crm-inbox-chat-head {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
     padding: calc(8px + env(safe-area-inset-top, 0px)) 10px 8px;
-    gap: 6px;
+    gap: 7px;
     flex-wrap: nowrap;
   }
   .crm-chat-head-left {
     min-width: 0;
-    flex: 1 1 auto;
+    width: 100%;
+    flex: 0 0 auto;
+    gap: 8px;
   }
-
-  .crm-chat-head-right .hide-mob-chat {
-    display: none !important;
+  .crm-chat-identity-line {
+    flex-wrap: nowrap;
+    gap: 5px;
   }
+  #inboxContactName { flex: 1 1 auto; max-width: none; }
+  .crm-chat-contact-meta { flex-wrap: nowrap; overflow: hidden; }
+  .crm-chat-contact-copy,
+  .crm-chat-save-contact { display: none !important; }
+  .crm-chat-head-right {
+    width: 100%;
+    flex: 0 0 auto;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    padding: 0 2px 2px 48px;
+  }
+  .crm-chat-head-right #btnInboxTogglePause { min-height: 36px; flex: 0 0 auto; }
+  .crm-chat-head-right .hide-mob-chat { display: none !important; }
+  .crm-chat-head-right #btnToggleInspectorCol { flex: 0 0 auto; }
+  .crm-inbox-chat-head button { flex: 0 0 auto; }
 
   .crm-inbox-composer {
     padding: 8px 10px calc(10px + env(safe-area-inset-bottom, 0px));
@@ -3896,20 +4047,32 @@ mark.chat-search-hit.current {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  align-self: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
   color: var(--text-muted);
-  font-size: 15px;
+  font-family: inherit;
+  font-size: 17px;
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
   user-select: none;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 .inbox-row-kebab:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-primary);
+  background: var(--bg-card-subtle);
+  border-color: var(--border);
+  color: var(--text-main);
+}
+.contacts-book-meta {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  min-height: 18px;
 }
 .contacts-book-grid {
   display: grid;
@@ -3919,6 +4082,22 @@ mark.chat-search-hit.current {
 @media (max-width: 480px) {
   .contacts-book-grid {
     grid-template-columns: 1fr;
+  }
+  .contacts-book-controls > input,
+  .contacts-book-controls > select {
+    flex: 1 1 100%;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+  .contacts-book-controls label {
+    min-height: 40px;
+  }
+  .contacts-book-pager {
+    flex-wrap: wrap;
+  }
+  .contacts-book-pager .contacts-book-meta {
+    flex: 1 0 100%;
+    text-align: center;
   }
 }
 .contact-book-card {

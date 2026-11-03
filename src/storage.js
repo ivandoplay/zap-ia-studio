@@ -1409,6 +1409,7 @@ export class Storage {
     const nextAck = Math.max(Number(msg.ack) || 0, Number(ackLevel) || 0);
     if (nextAck === (Number(msg.ack) || 0)) return contact;
     msg.ack = nextAck;
+    if (msg.deliveryStatus === 'accepted') delete msg.deliveryStatus;
     this.dirtyContactIds.add(contact.chatId);
     this.saveSoon();
     return contact;

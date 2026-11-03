@@ -62,11 +62,12 @@ export function criarServicoMediaCampanha({client,admin,supabaseUrl,gerarId=rand
    if(url.origin!==origin.origin||url.username||url.password||url.hash||url.pathname!==`/storage/v1/object/upload/sign/${BUCKET}/${path}`||url.searchParams.get('token')!==data.token)throw new Error('URL de upload inválida.');
    return {arquivoId,signedUrl:url.href};
   },
-  async ticket({userId,arquivoId}={}){
+  async ticket({userId,arquivoId,segundos=60}={}){
    if(!UUID.test(userId)||!UUID.test(arquivoId))throw new Error('Arquivo inválido.');
+   if(!Number.isSafeInteger(segundos)||segundos<30||segundos>600)throw new Error('Validade da mídia inválida.');
    const {data:f,error}=await client.from('ienvia_campanha_arquivos').select('owner_id,pasta_id,arquivo_id,caminho,mime,tamanho,sha256').eq('owner_id',userId).eq('arquivo_id',arquivoId).eq('excluindo',false).maybeSingle();
    if(error||!f||f.owner_id!==userId||f.arquivo_id!==arquivoId||!UUID.test(f.pasta_id)||f.caminho!==caminho(userId,f.pasta_id,arquivoId)||!Number.isSafeInteger(f.tamanho)||f.tamanho<1||f.tamanho>MAX||!/^([a-f0-9]{64})$/.test(f.sha256||'')||typeof f.mime!=='string')throw new Error('Arquivo não encontrado.');
-   await verificarBucket();const out=await admin.storage.from(BUCKET).createSignedUrl(f.caminho,60);
+   await verificarBucket();const out=await admin.storage.from(BUCKET).createSignedUrl(f.caminho,segundos);
    if(out.error||!out.data?.signedUrl)throw new Error('Não foi possível acessar o arquivo.');
    let url;try{url=new URL(out.data.signedUrl);}catch{throw new Error('URL de arquivo inválida.');}
    if(url.origin!==origin.origin||url.username||url.password||url.hash||url.pathname!==`/storage/v1/object/sign/${BUCKET}/${f.caminho}`||!url.searchParams.get('token'))throw new Error('URL de arquivo inválida.');

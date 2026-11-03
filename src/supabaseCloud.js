@@ -35,6 +35,7 @@ import { enableHistoryJournal, isHistoryJournalEnabled, countJournalFiles } from
 import { backupSlotAuth } from './pairingSafety.js';
 import { conectarMotorCampanhas } from './campanhaIntegracaoMotor.js';
 import { criarLeitorMediaCampanha } from './campanhaDownload.js';
+import { criarCanalCampanhaEvolution } from './campanhaCanalEvolution.js';
 import { convertToCanonicalWhatsAppVoice } from './audioProcessor.js';
 import { fetchScopedCloudContact } from './cloudSendScope.js';
 
@@ -2372,12 +2373,17 @@ class CloudWorkerBridge {
     if (process.env.IENVIA_CAMPANHAS_EXPERIMENTAL !== '0' && this.whatsappManager?.slots) {
       try {
         const client = this.client, owner = this.user.id;
-        const carregarArquivo = criarLeitorMediaCampanha({client,userId:owner,panelUrl:'https://zap-ia-studio.vercel.app',supabaseUrl:SUPABASE_URL});
+        const painelCampanhas = String(process.env.IENVIA_CLOUD_PANEL_URL || 'https://zap-ia-studio.vercel.app').trim();
+        const carregarArquivo = criarLeitorMediaCampanha({client,userId:owner,panelUrl:painelCampanhas,supabaseUrl:SUPABASE_URL});
+        // Chips que vivem na Evolution API não têm socket aqui: o envio é feito pelo painel.
+        let canalEvolution = null;
+        try { canalEvolution = criarCanalCampanhaEvolution({client,userId:owner,panelUrl:painelCampanhas}); }
+        catch (err) { console.warn('[Campanhas] Canal Evolution indisponível:', err.message); }
         let motor;
         const sessaoAtiva = () => this.campaignMotor === motor && this.client === client && this.user?.id === owner;
         motor = conectarMotorCampanhas({
           client,userId:owner,workerId:crypto.randomUUID(),deviceId:this.deviceIdentity.deviceId,
-          whatsapp:this.whatsappManager,storage:localStorageInstance,sessaoAtiva,carregarArquivo,
+          whatsapp:this.whatsappManager,storage:localStorageInstance,sessaoAtiva,carregarArquivo,canalEvolution,
           maxWaSlots:()=>clampMaxWaSlots(this.user?.maxWaSlots,this.user?.role),
           converterVoz:convertToCanonicalWhatsAppVoice,
           registrar:({acao,enviado,jid})=>{

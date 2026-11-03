@@ -31,7 +31,6 @@ git push origin master:main
 
 ### Token GitHub (para push)
 - **Token:** <REMOVIDO — use o token do seu ambiente, não commitar secrets>
-- **Usuário:** `ivandoplay`
 - **Como usar no push:**
 ```bash
 git push -u https://ivandoplay:$GITHUB_TOKEN@github.com/ivandoplay/zap-ia-studio.git master:main
@@ -39,15 +38,12 @@ git push -u https://ivandoplay:$GITHUB_TOKEN@github.com/ivandoplay/zap-ia-studio
 - **Autor dos commits:** `ivandoplay` / `ivandoplay@users.noreply.github.com`
 
 ### Login painel (Ienvia)
-- **Usuário:** `jeffersonivan`
-- **Senha:** `Davi32ivan@#`
-- **user_id Supabase:** `28f17e53-1ab8-4ec7-8556-666df0d4add6`
 
-### Evolution Go (API WhatsApp na nuvem)
-- **URL:** `https://pool-evolution-go-025.cloud2.pageup.dev.br`
-- **Chave global (GLOBAL_API_KEY):** `de641771b68731fb4340696241bd2cd6`
-- **Documentação Swagger:** `https://pool-evolution-go-025.cloud2.pageup.dev.br/swagger/idoc.json`
-- **Documentação webhooks:** `https://docs.evolutionfoundation.com.br/evolution-go/webhooks`
+### Evolution API (API WhatsApp na nuvem)
+- **URL:** `https://pool-evolution-api-067.cloud2.pageup.dev.br`
+- **Chave global:** configure apenas como segredo `EVOLUTION_API_KEY` na Vercel; não registrar neste arquivo.
+- **Documentação Swagger:** `https://pool-evolution-api-067.cloud2.pageup.dev.br/swagger/idoc.json`
+- **Documentação:** consulte `https://doc.evolution-api.com`.
 
 ### Supabase
 - **SUPABASE_URL** e **SUPABASE_SERVICE_ROLE_KEY** — definidos em `.env` (não revelar publicamente)
@@ -64,7 +60,7 @@ git push -u https://ivandoplay:$GITHUB_TOKEN@github.com/ivandoplay/zap-ia-studio
 2. **Nunca commitar `.env` com secrets.** O `.env` deve estar no `.gitignore`.
 3. **Usar o token GitHub apenas para push, não para clone público.**
 4. **As senhas do painel são do usuário, não compartilhar publicamente.**
-5. **O `EVOLUTION_GO_API_KEY` é a chave global — tratar como secret.**
+5. **O `EVOLUTION_API_KEY` é a chave global — tratar como secret.**
 6. **Fazer commits com autor `ivandoplay`** (configurar `git config user.name "ivandoplay"`).
 
 ---
@@ -104,7 +100,7 @@ curl https://zap-ia-studio.vercel.app/api/evolution-cloud/status
 curl -X POST https://zap-ia-studio.vercel.app/api/auth/login -H 'Content-Type: application/json' -d '{"username":"jeffersonivan","password":"Davi32ivan@#"}'
 ```
 
-### Testar webhook (sem auth, como a Evolution Go envia)
+### Testar webhook (sem auth, como a Evolution API envia)
 ```bash
 curl -X POST https://zap-ia-studio.vercel.app/api/evolution-webhook/webhook -H 'Content-Type: application/json' -d '{"event":"MESSAGE","instance":"zap-ia-slot_1","data":{"key":{"remoteJid":"...","fromMe":false,"id":"..."},"message":{"conversation":"Olá"},"messageType":"text"}}'
 ```

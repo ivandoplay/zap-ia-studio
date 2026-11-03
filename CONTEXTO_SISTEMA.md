@@ -78,6 +78,9 @@ Endpoint `POST /chat/history-sync` com `messageInfo` (âncora: ID, Timestamp, Is
 ### Sequência esperada após pareamento
 `PairSuccess` → `Connected` → vários `HistorySync` → `OfflineSyncCompleted`.
 
+### Observação — conversas aparecendo no início
+Quando o Evolution Go foi adicionado ao sistema pela primeira vez, as conversas já apareceram no painel sem configuração adicional de histórico. Isso ocorreu porque o pareamento inicial já empurrou o histórico via `HistorySync`. O fato de as conversas aparecerem logo após o pareamento é o comportamento esperado.
+
 ---
 
 ## 4. Bugs Resolvidos (commits no main)

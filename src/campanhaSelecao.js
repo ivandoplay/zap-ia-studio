@@ -33,9 +33,11 @@ export function criarSeletorCampanha({client,userId,chipDisponivel,podeEnviarDes
    }
    escolhido=prepararMaterialCampanha({plano:c.plano,bloco:b,destinatario:{telefone:row.telefone,nome:row.nome||'',campos:row.campos||{},ordem:row.ordem},arquivos:arquivos.map(f=>({id:f.arquivo_id,pastaId:f.pasta_id,tipo:f.tipo})),random});
   }
-  if(!await chipDisponivel(escolhido.slotId))return null;
+  const rota=await chipDisponivel(escolhido.slotId);if(!rota)return null;
+  const provedor=rota===true?'baileys':rota;
+  if(!['baileys','evolution_api'].includes(provedor))throw new Error('Provedor do chip inválido.');
   let anexo;
-  if(escolhido.material.tipo==='imagem'||escolhido.material.tipo==='audio'){
+  if((escolhido.material.tipo==='imagem'||escolhido.material.tipo==='audio')&&provedor==='baileys'){
    if(typeof carregarArquivo!=='function')throw new Error('Mídia indisponível.');
    let arquivo=arquivos.find(f=>f.arquivo_id===escolhido.material.arquivoId&&f.pasta_id===escolhido.material.pastaId);
    if(!arquivo){const q=await client.from('ienvia_campanha_arquivos').select('owner_id,arquivo_id,pasta_id,tipo,mime,tamanho,sha256,ordem').eq('owner_id',userId).eq('arquivo_id',escolhido.material.arquivoId).eq('excluindo',false).maybeSingle();if(q.error)throw new Error('Não foi possível consultar o arquivo.');arquivo=q.data;}
@@ -49,6 +51,6 @@ export function criarSeletorCampanha({client,userId,chipDisponivel,podeEnviarDes
     anexo={...anexo,voz};
    }
   }
-  return {destinatarioId:row.destinatario_id,telefone:row.telefone,nome:row.nome||'',etapa:row.etapa,revisao:row.revisao,slotId:escolhido.slotId,material:escolhido.material,...(anexo?{anexo}:{})};
+  return {destinatarioId:row.destinatario_id,telefone:row.telefone,nome:row.nome||'',etapa:row.etapa,revisao:row.revisao,slotId:escolhido.slotId,provedor,material:escolhido.material,...(anexo?{anexo}:{})};
  };
 }

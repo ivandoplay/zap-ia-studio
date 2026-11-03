@@ -14,8 +14,7 @@ evolutionApiCloudRouter.use(express.json({ limit: '10mb' }));
 evolutionApiCloudRouter.use((req, res, next) => {
   if (process.env.VERCEL) {
     const userId = req.cloudAuth?.authUser?.id;
-    const allowed = Boolean(userId && userId === process.env.EVOLUTION_DEFAULT_USER_ID && !req.cloudAuth?.isRemoteImpersonation);
-    if (!allowed) return res.status(userId ? 403 : 401).json({ ok: false, error: 'Esta conta não tem Evolution API configurada.' });
+    if (!userId || req.cloudAuth?.isRemoteImpersonation) return res.status(userId ? 403 : 401).json({ ok: false, error: 'Entre na conta titular para usar a Evolution API.' });
   }
   next();
 });
@@ -23,15 +22,24 @@ evolutionApiCloudRouter.use((req, res, next) => {
 const API_URL = String(process.env.EVOLUTION_API_URL || 'https://pool-evolution-api-067.cloud2.pageup.dev.br').replace(/\/+$/, '');
 const API_KEY = process.env.EVOLUTION_API_KEY || '';
 const slotCache = new Map();
+const cacheKey = (userId, slotId) => `${String(userId || '')}:${slotId}`;
 const readOnlyDiagnosticRuns = new Map();
 const EVENTS = ['APPLICATION_STARTUP', 'QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'SEND_MESSAGE', 'CONTACTS_UPDATE', 'CHATS_UPDATE'];
 
 function ownerMap() {
   try { return JSON.parse(process.env.EVOLUTION_INSTANCE_USERS || '{}'); } catch { return {}; }
 }
-function instanceName(slotId) { return `zap-ia-${slotId}`; }
+function instanceName(slotId, userId) {
+  const safeSlot = /^slot_[1-3]$/.test(String(slotId)) ? String(slotId) : 'slot_1';
+  const defaultUser = process.env.EVOLUTION_DEFAULT_USER_ID || '';
+  // Preserva os nomes legados da conta principal; cada outra conta recebe instâncias isoladas.
+  if (userId && userId === defaultUser) return `zap-ia-${safeSlot}`;
+  return userId ? `zap-ia-${userId}-${safeSlot}` : `zap-ia-${safeSlot}`;
+}
 function instanceOwnedBy(instance, userId) {
   const name = instance?.name || instance?.instanceName || instance?.instance?.instanceName || '';
+  const tenant = name.match(/^zap-ia-([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})-slot_[1-3]$/i)?.[1];
+  if (tenant) return Boolean(userId && tenant.toLowerCase() === String(userId).toLowerCase());
   return Boolean(userId && (ownerMap()[name] || process.env.EVOLUTION_DEFAULT_USER_ID) === userId);
 }
 function normalizeInstance(raw = {}) {
@@ -92,7 +100,7 @@ async function setWebhook(name, webhookUrl) {
 }
 async function ensureInstance(slotId, userId) {
   const safeSlot = /^slot_[1-3]$/.test(String(slotId)) ? String(slotId) : 'slot_1';
-  const name = instanceName(safeSlot);
+  const name = instanceName(safeSlot, userId);
   const existing = (await listInstances()).find((item) => item.name === name && instanceOwnedBy(item, userId));
   if (existing) return existing;
   const created = await apiCall('/instance/create', {
@@ -120,7 +128,7 @@ async function connectedInstanceForTenant(userId, chatId = '') {
   if (!userId) throw Object.assign(new Error('Conta inválida para Evolution API.'), { statusCode: 403 });
   const rows = (await listInstances()).filter((item) => instanceOwnedBy(item, userId));
   const requested = slotForChat(chatId);
-  const item = rows.find((candidate) => candidate.name === instanceName(requested));
+  const item = rows.find((candidate) => candidate.name === instanceName(requested, userId));
   if (!item) {
     throw Object.assign(new Error(`Não há instância Evolution API configurada para o chip selecionado (${requested}).`), { statusCode: 503 });
   }
@@ -145,6 +153,10 @@ export async function sendEvolutionApiText(userId, chatId, text, options = {}) {
 export async function sendEvolutionApiMedia(userId, chatId, { url, type = 'document', caption = '', filename = '', mimeType = '' } = {}) {
   if (!url) throw Object.assign(new Error('URL de mídia ausente.'), { statusCode: 400 });
   return tenantCall(userId, chatId, '/message/sendMedia', 'POST', { number: numberForChat(chatId), mediatype: type, media: url, caption, fileName: filename, ...(mimeType ? { mimetype: mimeType } : {}) });
+}
+export async function sendEvolutionApiVoice(userId, chatId, url) {
+  if (!url) throw Object.assign(new Error('URL de áudio ausente.'), { statusCode: 400 });
+  return tenantCall(userId, chatId, '/message/sendWhatsAppAudio', 'POST', { number: numberForChat(chatId), audio: url });
 }
 export async function sendEvolutionApiContact(userId, chatId, contact = {}) {
   const phone = String(contact.phone || '').replace(/\D/g, '');
@@ -303,8 +315,8 @@ export async function getEvolutionApiReadOnlyDiagnostics(userId) {
   if (!Array.isArray(rawRows)) return { ok: false, readOnly: true, errorCategory: 'invalid_response_shape', slots: [] };
   const ownedByName = new Map(rawRows.map(normalizeInstance).filter((row) => row.name && instanceOwnedBy(row, userId)).map((row) => [row.name, row]));
   const slots = ['slot_1', 'slot_2', 'slot_3'];
-  const readInstance = (slotId) => ownedByName.get(instanceName(slotId)) || null;
-  const pathFor = (endpoint, slotId) => `/chat/${endpoint}/${encodeURIComponent(instanceName(slotId))}`;
+  const readInstance = (slotId) => ownedByName.get(instanceName(slotId, userId)) || null;
+  const pathFor = (endpoint, slotId) => `/chat/${endpoint}/${encodeURIComponent(instanceName(slotId, userId))}`;
 
   const result = await runReadOnlyEvolutionDiagnostics({
     slots,
@@ -331,11 +343,11 @@ export async function getEvolutionApiSlotStatus(userId = null) {
   const rows = (await listInstances()).filter((item) => instanceOwnedBy(item, userId));
   const result = {};
   for (const item of rows) {
-    const match = item.name.match(/zap-ia-(slot_[1-3])/);
+    const match = item.name.match(/zap-ia-(?:[0-9a-f-]{36}-)?(slot_[1-3])$/i);
     if (!match) continue;
     const slotId = match[1];
     const state = await connectionState(item.name).catch(() => ({ state: item.state }));
-    const cached = slotCache.get(slotId) || {};
+    const cached = slotCache.get(cacheKey(userId, slotId)) || {};
     result[slotId] = {
       slotId, instanceId: item.id, name: item.name,
       status: state.state === 'open' ? 'connected' : state.state === 'connecting' ? 'connecting' : 'disconnected',
@@ -407,7 +419,7 @@ export async function getEvolutionApiChats(userId = null, { limit = 200, offset 
   for (const item of rows) {
     const state = await connectionState(item.name).catch(() => ({ state: item.state }));
     if (state.state !== 'open') continue;
-    const slotId = item.name.match(/zap-ia-(slot_[1-3])/)?.[1] || 'slot_1';
+    const slotId = item.name.match(/zap-ia-(?:[0-9a-f-]{36}-)?(slot_[1-3])$/i)?.[1] || 'slot_1';
     const data = await apiCall(`/chat/findChats/${encodeURIComponent(item.name)}`, {
       method: 'POST', body: { where: {}, take: safeLimit, skip: safeOffset }
     });
@@ -454,7 +466,7 @@ export async function getEvolutionApiContacts(userId = null) {
   for (const item of rows) {
     const state = await connectionState(item.name).catch(() => ({ state: item.state }));
     if (state.state !== 'open') continue;
-    const slotId = item.name.match(/zap-ia-(slot_[1-3])/)?.[1] || 'slot_1';
+    const slotId = item.name.match(/zap-ia-(?:[0-9a-f-]{36}-)?(slot_[1-3])$/i)?.[1] || 'slot_1';
     for (let page = 0; page < maxPages; page += 1) {
       const skip = page * pageSize;
       const data = await apiCall(`/chat/findContacts/${encodeURIComponent(item.name)}`, {
@@ -534,7 +546,7 @@ async function connectSlot(slotId, userId, baseUrl, pairingPhone = null) {
   const connected = state.state === 'open';
   const status = connected ? 'connected' : qrDataUrl || pairingCode ? 'qr_ready' : 'connecting';
   const slot = { instanceId: instance.id, name: instance.name, status, qrDataUrl: connected ? null : qrDataUrl, pairingCode: connected ? null : pairingCode };
-  slotCache.set(slotId, slot);
+  slotCache.set(cacheKey(userId, slotId), slot);
   return { slotId, ...slot };
 }
 
@@ -568,6 +580,41 @@ evolutionApiCloudRouter.get('/status', async (req, res) => {
     return res.json({ ok: false, available: false, error: err.message, slots: {} });
   }
 });
+
+// Envia somente a etapa já reservada para este titular; a rota nunca escolhe outro chip.
+evolutionApiCloudRouter.post('/campaign-send', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const userId=req.cloudAuth?.authUser?.id, client=req.cloudAuth?.client, b=req.body||{};
+  const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if(!userId||!client||req.cloudAuth?.isRemoteImpersonation)return res.status(401).json({ok:false,error:'Autenticação de titular obrigatória.'});
+  if(!UUID.test(b.campaignId)||!UUID.test(b.recipientId)||!UUID.test(b.tentativaId)||!Number.isSafeInteger(b.etapa)||b.etapa<0||b.etapa>=100||!/^slot_[1-3]$/.test(b.slotId))return res.status(400).json({ok:false,error:'Reserva de campanha inválida.'});
+  try {
+    const q=await client.from('ienvia_campanha_checkpoints').select('owner_id,campanha_id,destinatario_id,etapa,status,tentativa_id,material').eq('owner_id',userId).eq('campanha_id',b.campaignId).eq('destinatario_id',b.recipientId).eq('etapa',b.etapa).maybeSingle();
+    const cp=q.data;
+    if(q.error||!cp||cp.owner_id!==userId||cp.campanha_id!==b.campaignId||cp.destinatario_id!==b.recipientId||cp.etapa!==b.etapa||cp.status!=='em_envio'||cp.tentativa_id!==b.tentativaId||cp.material?.slotId!==b.slotId||cp.material?.provedor!=='evolution_api'||!cp.material?.bloco)return res.status(409).json({ok:false,error:'A etapa não possui uma reserva Evolution válida.'});
+    const d=await client.from('ienvia_campanha_destinatarios').select('owner_id,campanha_id,destinatario_id,telefone').eq('owner_id',userId).eq('campanha_id',b.campaignId).eq('destinatario_id',b.recipientId).maybeSingle();
+    const destino=d.data;
+    if(d.error||!destino||destino.owner_id!==userId||destino.campanha_id!==b.campaignId||destino.destinatario_id!==b.recipientId||!/^\d{8,15}$/.test(destino.telefone||''))return res.status(409).json({ok:false,error:'Destinatário da reserva inválido.'});
+    const chatId=`${b.slotId}::${destino.telefone}@s.whatsapp.net`, m=cp.material.bloco; let sent;
+    if(m.tipo==='texto'&&typeof m.texto==='string'&&m.texto.trim()&&m.texto.length<=10000){sent=await sendEvolutionApiText(userId,chatId,m.texto);}
+    else if((m.tipo==='imagem'||m.tipo==='audio')&&UUID.test(m.arquivoId||'')&&UUID.test(m.pastaId||'')&&typeof b.mediaUrl==='string'){
+      const f=await client.from('ienvia_campanha_arquivos').select('owner_id,pasta_id,arquivo_id,tipo,mime,tamanho,sha256,excluindo').eq('owner_id',userId).eq('pasta_id',m.pastaId).eq('arquivo_id',m.arquivoId).maybeSingle();
+      const file=f.data;
+      if(f.error||!file||file.owner_id!==userId||file.pasta_id!==m.pastaId||file.arquivo_id!==m.arquivoId||file.tipo!==m.tipo||file.excluindo!==false||!Number.isSafeInteger(file.tamanho)||file.tamanho<1||file.tamanho>35*1024*1024||!/^([a-f0-9]{64})$/.test(file.sha256||'')||(m.tipo==='imagem'&&!['image/jpeg','image/png','image/webp'].includes(file.mime))||(m.tipo==='audio'&&!['audio/ogg','audio/mpeg','audio/mp4','audio/wav','audio/webm'].includes(file.mime)))return res.status(409).json({ok:false,error:'Mídia da reserva inválida.'});
+      const storageUrl=new URL(process.env.SUPABASE_URL||process.env.NEXT_PUBLIC_SUPABASE_URL||'https://iuysmojhaxplnhfrxqkv.supabase.co');
+      let mediaUrl;try{mediaUrl=new URL(b.mediaUrl);}catch{return res.status(400).json({ok:false,error:'Ticket de mídia inválido.'});}
+      const expected=`/storage/v1/object/sign/ienvia-campanhas-privadas/${userId}/${m.pastaId}/${m.arquivoId}`;
+      if(mediaUrl.origin!==storageUrl.origin||mediaUrl.username||mediaUrl.password||mediaUrl.hash||mediaUrl.pathname!==expected||!mediaUrl.searchParams.get('token'))return res.status(400).json({ok:false,error:'Ticket de mídia não corresponde à conta.'});
+      if(m.tipo==='imagem')sent=await sendEvolutionApiMedia(userId,chatId,{url:mediaUrl.href,type:'image',filename:`imagem-${m.arquivoId}.${({'image/jpeg':'jpg','image/png':'png','image/webp':'webp'})[file.mime]}`,mimeType:file.mime});
+      else if(m.notaVoz===true)sent=await sendEvolutionApiVoice(userId,chatId,mediaUrl.href);
+      else if(m.notaVoz===false)sent=await sendEvolutionApiMedia(userId,chatId,{url:mediaUrl.href,type:'document',filename:`audio-${m.arquivoId}.${({'audio/ogg':'ogg','audio/mpeg':'mp3','audio/mp4':'m4a','audio/wav':'wav','audio/webm':'webm'})[file.mime]}`,mimeType:file.mime});
+      else return res.status(409).json({ok:false,error:'Configuração de áudio inválida.'});
+    } else return res.status(409).json({ok:false,error:'Material da reserva inválido.'});
+    const messageId=sent?.key?.id||sent?.data?.key?.id||sent?.data?.id||sent?.id;
+    if(typeof messageId!=='string'||!messageId)return res.status(502).json({ok:false,error:'A Evolution API não confirmou um identificador; a etapa ficará incerta e não será reenviada automaticamente.'});
+    return res.json({ok:true,accepted:true,messageId});
+  } catch(err) { return res.status(err.statusCode||502).json({ok:false,error:err.message||'Falha segura no envio Evolution.'}); }
+});
 evolutionApiCloudRouter.post('/connect', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   try {
@@ -587,7 +634,7 @@ evolutionApiCloudRouter.post('/refresh-qr', async (req, res) => {
 evolutionApiCloudRouter.post('/reconnect', async (req, res) => {
   try {
     const slotId = /^slot_[1-3]$/.test(String(req.body?.slotId || '')) ? req.body.slotId : 'slot_1';
-    const name = instanceName(slotId);
+    const name = instanceName(slotId, req.cloudAuth?.authUser?.id || null);
     await apiCall(`/instance/restart/${encodeURIComponent(name)}`, { method: 'POST', body: {} });
     const baseUrl = resolveWebhookBaseUrl(req);
     return res.json({ ok: true, ...(await connectSlot(slotId, req.cloudAuth?.authUser?.id || null, baseUrl)) });
@@ -596,9 +643,10 @@ evolutionApiCloudRouter.post('/reconnect', async (req, res) => {
 evolutionApiCloudRouter.post('/disconnect', async (req, res) => {
   try {
     const slotId = /^slot_[1-3]$/.test(String(req.body?.slotId || '')) ? req.body.slotId : 'slot_1';
-    const name = instanceName(slotId);
+    const userId = req.cloudAuth?.authUser?.id || null;
+    const name = instanceName(slotId, userId);
     await apiCall(`/instance/logout/${encodeURIComponent(name)}`, { method: 'DELETE' });
-    slotCache.delete(slotId);
+    slotCache.delete(cacheKey(userId, slotId));
     return res.json({ ok: true, slotId });
   } catch (err) { return res.status(err.statusCode || 502).json({ ok: false, error: err.message }); }
 });
@@ -606,8 +654,8 @@ evolutionApiCloudRouter.post('/delete', async (req, res) => {
   try {
     const slotId = /^slot_[1-3]$/.test(String(req.body?.slotId || '')) ? req.body.slotId : '';
     if (!slotId) return res.status(400).json({ ok: false, error: 'Informe um slot válido.' });
-    await apiCall(`/instance/delete/${encodeURIComponent(instanceName(slotId))}`, { method: 'DELETE' });
-    slotCache.delete(slotId);
+    await apiCall(`/instance/delete/${encodeURIComponent(instanceName(slotId, req.cloudAuth?.authUser?.id || null))}`, { method: 'DELETE' });
+    slotCache.delete(cacheKey(req.cloudAuth?.authUser?.id || null, slotId));
     return res.json({ ok: true });
   } catch (err) { return res.status(err.statusCode || 502).json({ ok: false, error: err.message }); }
 });

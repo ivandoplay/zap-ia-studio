@@ -8,7 +8,7 @@ function textoCurto(x) { return typeof x==='string' && x.length>0 && x.length<=2
 function reservaValida(acao,campanhaId,tentativaId) {
   if(!acao||typeof acao!=='object'||acao.campanhaId!==campanhaId||acao.tentativaId!==tentativaId||
      !textoCurto(acao.destinatarioId)||typeof acao.telefone!=='string'||!/^[1-9][0-9]{7,14}$/.test(acao.telefone)||!Number.isSafeInteger(acao.etapa)||acao.etapa<0||acao.etapa>=100||
-     !['slot_1','slot_2','slot_3'].includes(acao.slotId)||!acao.material||typeof acao.material!=='object'||
+     !['slot_1','slot_2','slot_3'].includes(acao.slotId)||(acao.provedor!==undefined&&!['baileys','evolution_api'].includes(acao.provedor))||!acao.material||typeof acao.material!=='object'||
      Array.isArray(acao.material)||!['texto','imagem','audio'].includes(acao.material.tipo))return false;
   try { const material=JSON.stringify(acao.material);return typeof material==='string'&&material.length<=16000; } catch { return false; }
 }
@@ -19,7 +19,7 @@ export async function executarPassoCampanha({repositorio,campanhaId,enviar}={}) 
   let acao;
   try { acao=await repositorio.reservar({campanhaId,tentativaId}); }
   catch (erro) {
-    const codigo=erro?.code==='contato_restrito'?'contato_restrito':typeof erro?.message==='string'&&erro.message.startsWith('Campo não informado:')?'campos':'preparacao';
+    const codigo=['contato_restrito','chip_indisponivel','chip_provedor_ambiguo'].includes(erro?.code)?erro.code:typeof erro?.message==='string'&&erro.message.startsWith('Campo não informado:')?'campos':'preparacao';
     return {status:'erro_reserva',codigo};
   }
   if(!acao)return {status:'indisponivel'};

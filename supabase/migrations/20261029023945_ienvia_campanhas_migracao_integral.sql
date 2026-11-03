@@ -1075,12 +1075,12 @@ GRANT EXECUTE ON FUNCTION public.ienvia_remover_destinatario_campanha(uuid,uuid)
 -- ==== 20261029_campanha_falhas.sql ====
 -- Erro de preparação interrompe a campanha em vez de ficar em loop silencioso.
 -- Código controlado não grava número, texto, credenciais ou mensagens de erro externas.
-ALTER TABLE public.ienvia_campanhas_controle ADD COLUMN falha_codigo text CHECK(falha_codigo IN ('contato_restrito','campos','preparacao'));
+ALTER TABLE public.ienvia_campanhas_controle ADD COLUMN falha_codigo text CHECK(falha_codigo IN ('contato_restrito','campos','preparacao','chip_indisponivel','chip_provedor_ambiguo'));
 CREATE FUNCTION ienvia_private.registrar_falha_campanha(p_campanha uuid,p_codigo text)
 RETURNS SETOF public.ienvia_campanhas_controle LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
 BEGIN
  IF (SELECT public.zapia_is_user_active(auth.uid())) IS NOT TRUE THEN RETURN; END IF;
- IF p_codigo IS NULL OR p_codigo NOT IN ('contato_restrito','campos','preparacao') THEN RAISE EXCEPTION 'Código inválido' USING ERRCODE='23514'; END IF;
+ IF p_codigo IS NULL OR p_codigo NOT IN ('contato_restrito','campos','preparacao','chip_indisponivel','chip_provedor_ambiguo') THEN RAISE EXCEPTION 'Código inválido' USING ERRCODE='23514'; END IF;
  RETURN QUERY UPDATE public.ienvia_campanhas_controle c SET status='pausada',falha_codigo=p_codigo,revisao=c.revisao+1
  WHERE c.owner_id=(SELECT auth.uid()) AND c.campanha_id=p_campanha AND c.status='ativa' RETURNING c.*;
 END $$;

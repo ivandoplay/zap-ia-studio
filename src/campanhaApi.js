@@ -89,7 +89,7 @@ export async function detalharCampanha({client,user,campanhaId}={}){
   revisao={...x,destinatario:d.data};
  }
  let pendente=null;
- if(c.data.status==='pausada'&&['contato_restrito','campos','preparacao'].includes(c.data.falha_codigo)&&!revisao){
+ if(c.data.status==='pausada'&&['contato_restrito','campos','preparacao','chip_indisponivel','chip_provedor_ambiguo'].includes(c.data.falha_codigo)&&!revisao){
   const x=await consulta('ienvia_campanha_proxima_falha','owner_id,campanha_id,destinatario_id,nome,telefone,etapa').maybeSingle();
   if(x.error||!valida(x.data)||(x.data&&(!UUID.test(x.data.destinatario_id)||!/^\d{8,15}$/.test(x.data.telefone))))throw new Error('Dados da próxima etapa inconsistentes.');
   pendente=x.data;

@@ -242,3 +242,25 @@ test('contratos auxiliares usam os payloads definidos no Evolution API v2.3.7', 
   assert.deepEqual(await markEvolutionApiRead('tenant-1', '558899999999@s.whatsapp.net', []), { skipped: true, reason: 'no-message-ids' });
   assert.equal(requests.length, callsBeforeEmptyRead, 'lista vazia não deve chamar a API que rejeita readMessages vazio');
 });
+
+test('Evolution API cria rotas distintas por tenant com URL e chave compartilhadas', async () => {
+  const ownerA='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', ownerB='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  requests.length=0;
+  globalThis.fetch=async(url,options={})=>{
+    const href=String(url);requests.push({url:href,options});
+    let body=[];
+    if(href.endsWith('/instance/fetchInstances'))body=[
+      {instanceName:`zap-ia-${ownerA}-slot_1`,connectionStatus:'open'},
+      {instanceName:`zap-ia-${ownerB}-slot_1`,connectionStatus:'open'},
+      {instanceName:'zap-ia-slot_1',connectionStatus:'open'},
+    ];
+    else if(href.includes('/instance/connectionState/'))body={instance:{state:'open'}};
+    else body={key:{id:'tenant-message'}};
+    return {ok:true,status:200,text:async()=>JSON.stringify(body)};
+  };
+  await sendEvolutionApiText(ownerA,'slot_1::558899999999@s.whatsapp.net','Somente conta A');
+  await sendEvolutionApiText(ownerB,'slot_1::558899999998@s.whatsapp.net','Somente conta B');
+  const sends=requests.filter(x=>x.url.includes('/message/sendText/')).map(x=>x.url);
+  assert.ok(sends.some(x=>x.endsWith(`/zap-ia-${ownerA}-slot_1`)));
+  assert.ok(sends.some(x=>x.endsWith(`/zap-ia-${ownerB}-slot_1`)));
+});

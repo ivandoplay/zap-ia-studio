@@ -42,7 +42,7 @@ const memoryHistory = new Map(); // chatId -> [messages] (uso quando sem Supabas
 
 // ======================== RESOLVER USUÁRIO (tenant) ========================
 function scopedChatId(instanceName, jid) {
-  const slot = String(instanceName || '').match(/zap-ia-(slot_\d+)/)?.[1] || 'slot_1';
+  const slot = String(instanceName || '').match(/zap-ia-(?:[0-9a-f-]{36}-)?(slot_[1-3])$/i)?.[1] || 'slot_1';
   return buildContactChannelKey(slot, jid);
 }
 
@@ -51,7 +51,8 @@ function resolveUserId(instanceName) {
   try {
     map = JSON.parse(process.env.EVOLUTION_INSTANCE_USERS || '{}');
   } catch {}
-  return map[instanceName] || process.env.EVOLUTION_DEFAULT_USER_ID || null;
+  const tenant = String(instanceName || '').match(/^zap-ia-([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})-slot_[1-3]$/i)?.[1];
+  return tenant || map[instanceName] || process.env.EVOLUTION_DEFAULT_USER_ID || null;
 }
 
 // ======================== CARREGAR BUSINESS + SETTINGS (Supabase) ========================

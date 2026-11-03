@@ -16,6 +16,7 @@ export async function ingestEvolutionWebhook(payload, { resolveTenant, repositor
   }
 
   const events = normalizeEvolutionEvent(payload);
+  if (!events.length) return { ok: true, accepted: 0, inserted: 0, duplicates: 0 };
   let tenantId;
   try {
     tenantId = await resolveTenant(events[0].instanceName);

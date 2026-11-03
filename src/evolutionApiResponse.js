@@ -19,6 +19,8 @@ export function assertEvolutionApiAccepted(data) {
     || nested.success === false
     || body.status === false
     || nested.status === false
+    || (Number.isFinite(Number(body.status)) && Number(body.status) >= 400)
+    || (Number.isFinite(Number(nested.status)) && Number(nested.status) >= 400)
     || ['error', 'failed', 'failure', 'rejected'].includes(status)
     || Boolean(errorText);
 
@@ -27,5 +29,15 @@ export function assertEvolutionApiAccepted(data) {
     throw Object.assign(new Error(message), { statusCode: 502 });
   }
 
+  return data;
+}
+
+/** Só um identificador do provedor permite classificar um envio como aceito. */
+export function requireEvolutionMessageId(data) {
+  assertEvolutionApiAccepted(data);
+  const id = data?.key?.id || data?.data?.key?.id || data?.data?.id || data?.id;
+  if (typeof id !== 'string' || !id.trim() || id.length > 300) {
+    throw Object.assign(new Error('Envio incerto: a Evolution API não retornou um identificador. Confira a conversa antes de reenviar.'), { statusCode: 502, deliveryUncertain: true });
+  }
   return data;
 }

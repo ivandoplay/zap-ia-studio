@@ -1,0 +1,1409 @@
+TAP version 13
+# OK: navegador preserva sessão rotacionada, não autoriza durante erro e evita refresh automático no status temporário.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/auth-profile-browser.test.mjs
+ok 1 - /tmp/ienvia-tests-2iBo0n/project/tests/auth-profile-browser.test.mjs
+  ---
+  duration_ms: 1388.377398
+  ...
+# OK: HTTP distingue indisponibilidade de autorização e preserva token rotacionado sem liberar acesso.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/auth-profile-http.test.mjs
+ok 2 - /tmp/ienvia-tests-2iBo0n/project/tests/auth-profile-http.test.mjs
+  ---
+  duration_ms: 464.052997
+  ...
+# OK: login, refresh e verificação recusam perfil ausente, bloqueado ou erro; perfil ativo funciona.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/auth-profile-security.test.mjs
+ok 3 - /tmp/ienvia-tests-2iBo0n/project/tests/auth-profile-security.test.mjs
+  ---
+  duration_ms: 205.775976
+  ...
+# OK: pacote corrompido recusado; pacote íntegro atualiza preservando dados.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/auto-update-integrity.test.mjs
+ok 4 - /tmp/ienvia-tests-2iBo0n/project/tests/auto-update-integrity.test.mjs
+  ---
+  duration_ms: 591.857151
+  ...
+# ======================================================
+# 🚀 Ienvia rodando na porta 3000
+# 👉 Painel Local: http://localhost:3000
+# ======================================================
+# OK: HTTP e WebSocket restringem origens; ações entre origens, inclusive formulário simples, são bloqueadas.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/browser-origin-isolation.test.mjs
+ok 5 - /tmp/ienvia-tests-2iBo0n/project/tests/browser-origin-isolation.test.mjs
+  ---
+  duration_ms: 848.988223
+  ...
+# ======================================================
+# 🚀 Ienvia rodando na porta 3000
+# 👉 Painel Local: http://localhost:3000
+# ======================================================
+# OK: navegador Chromium bloqueia execução de POST e WebSocket de outra origem; painel da própria origem continua funcionando.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/browser-origin-playwright.test.mjs
+ok 6 - /tmp/ienvia-tests-2iBo0n/project/tests/browser-origin-playwright.test.mjs
+  ---
+  duration_ms: 1811.061319
+  ...
+# OK: portas, localhost/LAN, DNS rebinding, prévias e requisições diretas.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/browser-origin-policy.test.mjs
+ok 7 - /tmp/ienvia-tests-2iBo0n/project/tests/browser-origin-policy.test.mjs
+  ---
+  duration_ms: 60.239415
+  ...
+# Subtest: campanhas exigem login
+ok 8 - campanhas exigem login
+  ---
+  duration_ms: 42.153166
+  ...
+# Subtest: cria rascunho autenticado sem carregar conversas
+ok 9 - cria rascunho autenticado sem carregar conversas
+  ---
+  duration_ms: 32.776115
+  ...
+# Subtest: lista e pausa somente para a conta autenticada
+ok 10 - lista e pausa somente para a conta autenticada
+  ---
+  duration_ms: 10.542118
+  ...
+# Subtest: bloqueia chip não autorizado antes da RPC
+ok 11 - bloqueia chip não autorizado antes da RPC
+  ---
+  duration_ms: 7.838298
+  ...
+# Subtest: cria campanha em uma transação RPC com lista normalizada
+ok 12 - cria campanha em uma transação RPC com lista normalizada
+  ---
+  duration_ms: 2.82649
+  ...
+# Subtest: recusa slots fora da conta, números duplicados, opções e campos inválidos antes do banco
+ok 13 - recusa slots fora da conta, números duplicados, opções e campos inválidos antes do banco
+  ---
+  duration_ms: 0.857156
+  ...
+# Subtest: edição e ações são limitadas ao dono e não apresentam dados de outro tenant
+ok 14 - edição e ações são limitadas ao dono e não apresentam dados de outro tenant
+  ---
+  duration_ms: 0.5389
+  ...
+# Subtest: nota de voz com resultado incerto não dispara uma segunda chamada ao WhatsApp
+ok 15 - nota de voz com resultado incerto não dispara uma segunda chamada ao WhatsApp
+  ---
+  duration_ms: 1.726535
+  ...
+# Subtest: nota de voz aceita usa o canal PTT e devolve identificação do envio
+ok 16 - nota de voz aceita usa o canal PTT e devolve identificação do envio
+  ---
+  duration_ms: 0.247501
+  ...
+# Subtest: voz recusa mudança de sessão antes do envio, mesmo após uma espera
+ok 17 - voz recusa mudança de sessão antes do envio, mesmo após uma espera
+  ---
+  duration_ms: 1.597832
+  ...
+# Subtest: recusa bucket público ou sem limite antes de criar URL
+ok 18 - recusa bucket público ou sem limite antes de criar URL
+  ---
+  duration_ms: 2.528193
+  ...
+# Subtest: ciclo de vida inicia por padrão e pode ser desligado ou encerrado com a sessão
+ok 19 - ciclo de vida inicia por padrão e pode ser desligado ou encerrado com a sessão
+  ---
+  duration_ms: 3.368847
+  ...
+# Subtest: lista somente destinatários da conta e exige confirmação para remover pendente
+ok 20 - lista somente destinatários da conta e exige confirmação para remover pendente
+  ---
+  duration_ms: 1.98507
+  ...
+# Subtest: detalhes incluem progresso e tentativa para revisão humana, sem dados de outra conta
+ok 21 - detalhes incluem progresso e tentativa para revisão humana, sem dados de outra conta
+  ---
+  duration_ms: 1.537202
+  ...
+# Subtest: campanha sem tentativa não pede revisão
+ok 22 - campanha sem tentativa não pede revisão
+  ---
+  duration_ms: 0.257435
+  ...
+# Subtest: baixa mídia por ticket autenticado, origem fixa e sem redirects
+ok 23 - baixa mídia por ticket autenticado, origem fixa e sem redirects
+  ---
+  duration_ms: 20.925804
+  ...
+# Subtest: recusa ticket de outra origem sem expor sessão ou fazer download
+ok 24 - recusa ticket de outra origem sem expor sessão ou fazer download
+  ---
+  duration_ms: 0.61568
+  ...
+# Subtest: registra identificação da mensagem como enviada pelo robô para evitar eco da própria mensagem
+ok 25 - registra identificação da mensagem como enviada pelo robô para evitar eco da própria mensagem
+  ---
+  duration_ms: 1.368232
+  ...
+# Subtest: envia uma mensagem por chamada usando o chip exato e confirma apenas resposta com id
+ok 26 - envia uma mensagem por chamada usando o chip exato e confirma apenas resposta com id
+  ---
+  duration_ms: 1.713407
+  ...
+# Subtest: imagem e áudio como anexo usam um arquivo já carregado
+ok 27 - imagem e áudio como anexo usam um arquivo já carregado
+  ---
+  duration_ms: 0.353092
+  ...
+# Subtest: nota de voz usa conversão previamente concluída e não repete após exceção
+ok 28 - nota de voz usa conversão previamente concluída e não repete após exceção
+  ---
+  duration_ms: 0.451841
+  ...
+# Subtest: chip indisponível e resposta sem identificador não são aceitação
+ok 29 - chip indisponível e resposta sem identificador não são aceitação
+  ---
+  duration_ms: 0.247333
+  ...
+# Subtest: falha de preparação tem código controlado sem expor número ou erro externo
+ok 30 - falha de preparação tem código controlado sem expor número ou erro externo
+  ---
+  duration_ms: 3.031029
+  ...
+# Subtest: lote conta pessoas e pausa depois do número sorteado
+ok 31 - lote conta pessoas e pausa depois do número sorteado
+  ---
+  duration_ms: 1.51231
+  ...
+# Subtest: interrupção durante envio gera incerteza e nunca reenvia automaticamente
+ok 32 - interrupção durante envio gera incerteza e nunca reenvia automaticamente
+  ---
+  duration_ms: 0.317841
+  ...
+# Subtest: pausa e retomada preservam prazo e pular pausa exige espera ativa
+ok 33 - pausa e retomada preservam prazo e pular pausa exige espera ativa
+  ---
+  duration_ms: 0.312441
+  ...
+# Subtest: estado imutável, duplicados e parâmetros inválidos não são aceitos
+ok 34 - estado imutável, duplicados e parâmetros inválidos não são aceitos
+  ---
+  duration_ms: 0.259782
+  ...
+# Subtest: estimativa respeita pausa e janela semanal sem prometer envio
+ok 35 - estimativa respeita pausa e janela semanal sem prometer envio
+  ---
+  duration_ms: 17.723285
+  ...
+# Subtest: interrupção em áudio nunca reenvia o texto confirmado
+ok 36 - interrupção em áudio nunca reenvia o texto confirmado
+  ---
+  duration_ms: 1.8718
+  ...
+# Subtest: confirmação de etapa incerta exige retomada manual e conserva progresso
+ok 37 - confirmação de etapa incerta exige retomada manual e conserva progresso
+  ---
+  duration_ms: 0.238538
+  ...
+# Subtest: pausa solicitada durante o envio entra em vigor após confirmação
+ok 38 - pausa solicitada durante o envio entra em vigor após confirmação
+  ---
+  duration_ms: 0.252569
+  ...
+# Subtest: listas inválidas, opções inválidas e alterações do material escolhido são rejeitadas
+ok 39 - listas inválidas, opções inválidas e alterações do material escolhido são rejeitadas
+  ---
+  duration_ms: 0.233492
+  ...
+# Subtest: campanha escolhe Evolution somente no slot Evolution e persiste o provedor na reserva
+ok 40 - campanha escolhe Evolution somente no slot Evolution e persiste o provedor na reserva
+  ---
+  duration_ms: 6.015628
+  ...
+# Subtest: duas conexões para o mesmo chip pausam sem chamar qualquer provedor
+ok 41 - duas conexões para o mesmo chip pausam sem chamar qualquer provedor
+  ---
+  duration_ms: 0.592287
+  ...
+# Subtest: chip indisponível pausa mesmo com outro chip conectado, sem rotação entre números
+ok 42 - chip indisponível pausa mesmo com outro chip conectado, sem rotação entre números
+  ---
+  duration_ms: 0.32528
+  ...
+# Subtest: excluir mídia remove objeto antes de liberar metadados e quota
+ok 43 - excluir mídia remove objeto antes de liberar metadados e quota
+  ---
+  duration_ms: 1.881278
+  ...
+# Subtest: falha do Storage preserva registro e permite tentar novamente
+ok 44 - falha do Storage preserva registro e permite tentar novamente
+  ---
+  duration_ms: 0.510966
+  ...
+# Subtest: recusa resposta adulterada de outra conta antes de tocar no Storage
+ok 45 - recusa resposta adulterada de outra conta antes de tocar no Storage
+  ---
+  duration_ms: 0.29445
+  ...
+# Subtest: repositório leva telefone e anexo validados somente em memória ao emissor
+ok 46 - repositório leva telefone e anexo validados somente em memória ao emissor
+  ---
+  duration_ms: 2.443631
+  ...
+# Subtest: reserva antes de enviar e confirma apenas depois da aceitação do motor
+ok 47 - reserva antes de enviar e confirma apenas depois da aceitação do motor
+  ---
+  duration_ms: 1.449199
+  ...
+# Subtest: dois workers concorrentes nunca chamam o envio duas vezes quando a reserva é exclusiva
+ok 48 - dois workers concorrentes nunca chamam o envio duas vezes quando a reserva é exclusiva
+  ---
+  duration_ms: 16.347137
+  ...
+# Subtest: resultado incerto ou erro do motor bloqueia reenvio automático
+ok 49 - resultado incerto ou erro do motor bloqueia reenvio automático
+  ---
+  duration_ms: 0.730017
+  ...
+# Subtest: falha ao registrar confirmação ou incerteza nunca libera uma nova tentativa
+ok 50 - falha ao registrar confirmação ou incerteza nunca libera uma nova tentativa
+  ---
+  duration_ms: 0.520255
+  ...
+# Subtest: reserva que não corresponde ao identificador é barrada antes de enviar
+ok 51 - reserva que não corresponde ao identificador é barrada antes de enviar
+  ---
+  duration_ms: 0.205856
+  ...
+# Subtest: evento fromMe e registro de campanha preservam identificação sem duplicar mensagem
+ok 52 - evento fromMe e registro de campanha preservam identificação sem duplicar mensagem
+  ---
+  duration_ms: 2.989646
+  ...
+# Subtest: respeita hora local, dias úteis e fim exclusivo
+ok 53 - respeita hora local, dias úteis e fim exclusivo
+  ---
+  duration_ms: 14.492635
+  ...
+# Subtest: encontra o próximo horário permitido com fuso da campanha
+ok 54 - encontra o próximo horário permitido com fuso da campanha
+  ---
+  duration_ms: 17.235178
+  ...
+# Subtest: janela que atravessa meia-noite usa o dia inicial
+ok 55 - janela que atravessa meia-noite usa o dia inicial
+  ---
+  duration_ms: 0.55121
+  ...
+# Subtest: horários, dias, fuso e timestamps incorretos são recusados
+ok 56 - horários, dias, fuso e timestamps incorretos são recusados
+  ---
+  duration_ms: 0.824154
+  ...
+# Subtest: não envia resposta se chave da IA mudar durante a leitura
+ok 57 - não envia resposta se chave da IA mudar durante a leitura
+  ---
+  duration_ms: 402.525379
+  ...
+# Subtest: exige autenticação antes de chamar IA
+ok 58 - exige autenticação antes de chamar IA
+  ---
+  duration_ms: 39.783702
+  ...
+# Subtest: usa somente chave da conta ativa, sem carregar conversas
+ok 59 - usa somente chave da conta ativa, sem carregar conversas
+  ---
+  duration_ms: 29.914706
+  ...
+# Subtest: conta sem chave não usa chave de outra conta nem chama provedor
+ok 60 - conta sem chave não usa chave de outra conta nem chama provedor
+  ---
+  duration_ms: 7.757097
+  ...
+# Subtest: usa o provedor configurado para gerar o conjunto em uma chamada sintética
+ok 61 - usa o provedor configurado para gerar o conjunto em uma chamada sintética
+  ---
+  duration_ms: 20.518137
+  ...
+# Subtest: gera todo o conjunto em uma única chamada e preserva campos personalizados
+ok 62 - gera todo o conjunto em uma única chamada e preserva campos personalizados
+  ---
+  duration_ms: 4.006625
+  ...
+# Subtest: prompt personalizado é incluído, mas a resposta continua sujeita às validações
+ok 63 - prompt personalizado é incluído, mas a resposta continua sujeita às validações
+  ---
+  duration_ms: 0.355431
+  ...
+# Subtest: falha não usa original automaticamente: oferece tentativa ou uso consciente
+ok 64 - falha não usa original automaticamente: oferece tentativa ou uso consciente
+  ---
+  duration_ms: 0.564494
+  ...
+# Subtest: rejeita parâmetros excessivos sem chamar serviço externo
+ok 65 - rejeita parâmetros excessivos sem chamar serviço externo
+  ---
+  duration_ms: 0.546957
+  ...
+# Subtest: bloqueia importação anônima
+ok 66 - bloqueia importação anônima
+  ---
+  duration_ms: 40.96817
+  ...
+# Subtest: aceita texto colado e não grava dados
+ok 67 - aceita texto colado e não grava dados
+  ---
+  duration_ms: 23.940048
+  ...
+# Subtest: aceita planilha real sintética via upload em memória
+ok 68 - aceita planilha real sintética via upload em memória
+  ---
+  duration_ms: 36.562335
+  ...
+# Subtest: rejeita extensão não suportada e UTF-8 inválido
+ok 69 - rejeita extensão não suportada e UTF-8 inválido
+  ---
+  duration_ms: 11.285395
+  ...
+# Subtest: CSV interpreta campos entre aspas, escape, quebra de linha e BOM
+ok 70 - CSV interpreta campos entre aspas, escape, quebra de linha e BOM
+  ---
+  duration_ms: 1.628675
+  ...
+# Subtest: CSV inválido é rejeitado e separador é explícito
+ok 71 - CSV inválido é rejeitado e separador é explícito
+  ---
+  duration_ms: 0.566702
+  ...
+# Subtest: normaliza números sem assegurar existência no WhatsApp
+ok 72 - normaliza números sem assegurar existência no WhatsApp
+  ---
+  duration_ms: 0.237276
+  ...
+# Subtest: importa CSV por cabeçalho e sinaliza inválidos e repetidos sem descartá-los silenciosamente
+ok 73 - importa CSV por cabeçalho e sinaliza inválidos e repetidos sem descartá-los silenciosamente
+  ---
+  duration_ms: 0.686476
+  ...
+# Subtest: importa lista de texto com um telefone por linha, sem permitir conteúdo ilimitado
+ok 74 - importa lista de texto com um telefone por linha, sem permitir conteúdo ilimitado
+  ---
+  duration_ms: 1.445479
+  ...
+# Subtest: preserva campos adicionais seguros para personalização e recusa cabeçalhos ambíguos
+ok 75 - preserva campos adicionais seguros para personalização e recusa cabeçalhos ambíguos
+  ---
+  duration_ms: 0.632433
+  ...
+# Subtest: informa a linha física correta no CSV, incluindo vazias e campos multilinha
+ok 76 - informa a linha física correta no CSV, incluindo vazias e campos multilinha
+  ---
+  duration_ms: 0.199427
+  ...
+# Subtest: contato previamente ignorado pausa a campanha sem reservar nem chamar socket
+ok 77 - contato previamente ignorado pausa a campanha sem reservar nem chamar socket
+  ---
+  duration_ms: 3.088119
+  ...
+# Subtest: integra plano, reserva por worker e envio no chip correto sem socket real
+ok 78 - integra plano, reserva por worker e envio no chip correto sem socket real
+  ---
+  duration_ms: 6.562995
+  ...
+# Subtest: cria upload temporário restrito ao dono, pasta e arquivo sem upsert
+ok 79 - cria upload temporário restrito ao dono, pasta e arquivo sem upsert
+  ---
+  duration_ms: 1.955934
+  ...
+# Subtest: confirma bytes em armazenamento, formato e hash antes de registrar
+ok 80 - confirma bytes em armazenamento, formato e hash antes de registrar
+  ---
+  duration_ms: 1.330533
+  ...
+# Subtest: recusa arquivo que não corresponde à pasta e evita registrar
+ok 81 - recusa arquivo que não corresponde à pasta e evita registrar
+  ---
+  duration_ms: 0.78258
+  ...
+# Subtest: não retorna URL de outra origem nem caminho divergente
+ok 82 - não retorna URL de outra origem nem caminho divergente
+  ---
+  duration_ms: 0.343495
+  ...
+# Subtest: gera acesso temporário somente ao arquivo da conta e sem divulgar chave administrativa
+ok 83 - gera acesso temporário somente ao arquivo da conta e sem divulgar chave administrativa
+  ---
+  duration_ms: 2.289588
+  ...
+# Subtest: recupera lote em uma chamada antes de processar ações prontas
+ok 84 - recupera lote em uma chamada antes de processar ações prontas
+  ---
+  duration_ms: 2.020031
+  ...
+# Subtest: envia heartbeat, limita concorrência e não repete campanha já em processamento
+ok 85 - envia heartbeat, limita concorrência e não repete campanha já em processamento
+  ---
+  duration_ms: 1.692401
+  ...
+# Subtest: não inicia nenhum envio quando heartbeat falha ou motor foi parado
+ok 86 - não inicia nenhum envio quando heartbeat falha ou motor foi parado
+  ---
+  duration_ms: 0.42853
+  ...
+# Subtest: pedido associado à última saída da campanha recebe apenas resposta cordial sem promessa falsa
+ok 87 - pedido associado à última saída da campanha recebe apenas resposta cordial sem promessa falsa
+  ---
+  duration_ms: 1.250605
+  ...
+# Subtest: pedido explícito em português é reconhecido mesmo sem ação da IA
+ok 88 - pedido explícito em português é reconhecido mesmo sem ação da IA
+  ---
+  duration_ms: 1.457188
+  ...
+# Subtest: não muda comportamento antigo fora do contexto da última saída de campanha
+ok 89 - não muda comportamento antigo fora do contexto da última saída de campanha
+  ---
+  duration_ms: 0.236085
+  ...
+# Subtest: campanha: IA desligada não responde; ligada responde sem bloqueio automático
+ok 90 - campanha: IA desligada não responde; ligada responde sem bloqueio automático
+  ---
+  duration_ms: 38.250212
+  ...
+# Subtest: pedido explícito é respeitado mesmo se a IA não retornar marcador
+ok 91 - pedido explícito é respeitado mesmo se a IA não retornar marcador
+  ---
+  duration_ms: 4.034379
+  ...
+# Subtest: contexto de campanha acompanha resposta da IA em conversa subsequente
+ok 92 - contexto de campanha acompanha resposta da IA em conversa subsequente
+  ---
+  duration_ms: 5.023686
+  ...
+# Subtest: desligar a IA durante geração impede resposta pendente
+ok 93 - desligar a IA durante geração impede resposta pendente
+  ---
+  duration_ms: 1.699483
+  ...
+# Subtest: fora de campanha a proteção global anterior é preservada
+ok 94 - fora de campanha a proteção global anterior é preservada
+  ---
+  duration_ms: 2.250826
+  ...
+# ======================================================
+# 🚀 Ienvia rodando na porta 3000
+# 👉 Painel Local: http://localhost:3000
+# ======================================================
+# OK: campanhas em 320px
+# OK: campanhas em 375px
+# OK: campanhas em 768px
+# OK: campanhas em 1440px
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/campanha-painel-playwright.test.mjs
+ok 43 - /tmp/ienvia-tests-2iBo0n/project/tests/campanha-painel-playwright.test.mjs
+  ---
+  duration_ms: 6695.245334
+  ...
+# Subtest: pastas exigem autenticação
+ok 96 - pastas exigem autenticação
+  ---
+  duration_ms: 35.193392
+  ...
+# Subtest: lista e cria pastas autenticadas sem carregar conversas
+ok 97 - lista e cria pastas autenticadas sem carregar conversas
+  ---
+  duration_ms: 49.025449
+  ...
+# Subtest: arquivos de pasta são listados por conta
+ok 98 - arquivos de pasta são listados por conta
+  ---
+  duration_ms: 6.038243
+  ...
+# Subtest: campos usados em qualquer variação são verificados para todos antes de gravar
+ok 99 - campos usados em qualquer variação são verificados para todos antes de gravar
+  ---
+  duration_ms: 6.638493
+  ...
+# Subtest: não prepara conteúdo divergente do bloco aprovado no plano
+ok 100 - não prepara conteúdo divergente do bloco aprovado no plano
+  ---
+  duration_ms: 2.200368
+  ...
+# Subtest: valida plano nomeado, ordem dos blocos, chips e retomada sem mutar entrada
+ok 101 - valida plano nomeado, ordem dos blocos, chips e retomada sem mutar entrada
+  ---
+  duration_ms: 1.946245
+  ...
+# Subtest: seleciona texto inteiro, substitui campos e gira chip por pessoa
+ok 102 - seleciona texto inteiro, substitui campos e gira chip por pessoa
+  ---
+  duration_ms: 0.95857
+  ...
+# Subtest: seleciona um item de cada pasta, em sequência ou sorteio, e preserva modo áudio
+ok 103 - seleciona um item de cada pasta, em sequência ou sorteio, e preserva modo áudio
+  ---
+  duration_ms: 1.720645
+  ...
+# Subtest: texto fixo é literal, enquanto spintax interpreta alternativas
+ok 104 - texto fixo é literal, enquanto spintax interpreta alternativas
+  ---
+  duration_ms: 1.292461
+  ...
+# Subtest: recusa dados ambíguos, campo ausente e pastas vazias
+ok 105 - recusa dados ambíguos, campo ausente e pastas vazias
+  ---
+  duration_ms: 0.70702
+  ...
+# Subtest: destinatário pessoal ou ignorado é recusado antes de reservar
+ok 106 - destinatário pessoal ou ignorado é recusado antes de reservar
+  ---
+  duration_ms: 1.786032
+  ...
+# Subtest: motor local encaminha apenas mídia autenticada à origem fixa sem divulgar token
+ok 107 - motor local encaminha apenas mídia autenticada à origem fixa sem divulgar token
+  ---
+  duration_ms: 24.436036
+  ...
+# Subtest: rejeita troca de identidade e caminhos arbitrários
+ok 108 - rejeita troca de identidade e caminhos arbitrários
+  ---
+  duration_ms: 0.429672
+  ...
+# Subtest: não envia se material confirmado pela reserva diverge do escolhido
+ok 109 - não envia se material confirmado pela reserva diverge do escolhido
+  ---
+  duration_ms: 2.155551
+  ...
+# Subtest: executa reserva RPC e confirmação da mesma tentativa após envio sintético
+ok 110 - executa reserva RPC e confirmação da mesma tentativa após envio sintético
+  ---
+  duration_ms: 2.31262
+  ...
+# Subtest: erro ou resposta desconhecida do emissor registra incerteza e bloqueia a próxima execução
+ok 111 - erro ou resposta desconhecida do emissor registra incerteza e bloqueia a próxima execução
+  ---
+  duration_ms: 0.405316
+  ...
+# Subtest: erro Supabase é tratado mesmo quando o cliente devolve {error} sem lançar exceção
+ok 112 - erro Supabase é tratado mesmo quando o cliente devolve {error} sem lançar exceção
+  ---
+  duration_ms: 0.30945
+  ...
+# Subtest: conflito de exclusividade SQL é indisponibilidade, nunca autorização de enviar
+ok 113 - conflito de exclusividade SQL é indisponibilidade, nunca autorização de enviar
+  ---
+  duration_ms: 0.232515
+  ...
+# Subtest: resposta malformada da reserva nunca chama o emissor
+ok 114 - resposta malformada da reserva nunca chama o emissor
+  ---
+  duration_ms: 0.249975
+  ...
+# Subtest: resolver incerteza exige revisão explícita e compara resultado com a tentativa
+ok 115 - resolver incerteza exige revisão explícita e compara resultado com a tentativa
+  ---
+  duration_ms: 1.606711
+  ...
+# Subtest: prepara texto e número a partir da mesma revisão, sem reservar ou enviar
+ok 116 - prepara texto e número a partir da mesma revisão, sem reservar ou enviar
+  ---
+  duration_ms: 3.250943
+  ...
+# Subtest: não usa plano divergente ou revisão velha
+ok 117 - não usa plano divergente ou revisão velha
+  ---
+  duration_ms: 0.40406
+  ...
+# Subtest: etapa iniciada e resolvida usa material já salvo, inclusive chip anterior
+ok 118 - etapa iniciada e resolvida usa material já salvo, inclusive chip anterior
+  ---
+  duration_ms: 0.28775
+  ...
+# Subtest: para mídia, pré-carrega e valida o arquivo antes de reservar
+ok 119 - para mídia, pré-carrega e valida o arquivo antes de reservar
+  ---
+  duration_ms: 1.017221
+  ...
+# Subtest: não usa outro socket se a sessão mudar durante a checagem
+ok 120 - não usa outro socket se a sessão mudar durante a checagem
+  ---
+  duration_ms: 1.637663
+  ...
+# Subtest: nota de voz exige checagem de sessão imediatamente antes da chamada do socket
+ok 121 - nota de voz exige checagem de sessão imediatamente antes da chamada do socket
+  ---
+  duration_ms: 0.360625
+  ...
+# Subtest: não emite URL sem intenção de upload e tamanho válidos
+ok 122 - não emite URL sem intenção de upload e tamanho válidos
+  ---
+  duration_ms: 2.821203
+  ...
+# Subtest: remove objeto expirado antes da intenção, sem cruzar contas
+ok 123 - remove objeto expirado antes da intenção, sem cruzar contas
+  ---
+  duration_ms: 2.037298
+  ...
+# Subtest: não libera quota nem apaga intenção se remoção do objeto falhar
+ok 124 - não libera quota nem apaga intenção se remoção do objeto falhar
+  ---
+  duration_ms: 0.263297
+  ...
+# Subtest: registro é exclusivamente privilegiado após verificação dos bytes reais
+ok 125 - registro é exclusivamente privilegiado após verificação dos bytes reais
+  ---
+  duration_ms: 2.752913
+  ...
+# Subtest: Spintax, campos e variações aninhadas não interpretam conteúdo dos contatos
+ok 126 - Spintax, campos e variações aninhadas não interpretam conteúdo dos contatos
+  ---
+  duration_ms: 2.257649
+  ...
+# Subtest: Spintax inválido é rejeitado antes do envio, sem estourar pilha
+ok 127 - Spintax inválido é rejeitado antes do envio, sem estourar pilha
+  ---
+  duration_ms: 0.688761
+  ...
+# Subtest: campos ausentes são identificados e não substituídos silenciosamente
+ok 128 - campos ausentes são identificados e não substituídos silenciosamente
+  ---
+  duration_ms: 0.221943
+  ...
+# Subtest: alternância sequencial e sorteio preservam índices válidos
+ok 129 - alternância sequencial e sorteio preservam índices válidos
+  ---
+  duration_ms: 0.79586
+  ...
+# Subtest: sorteio inclusivo de lote e intervalo valida os limites
+ok 130 - sorteio inclusivo de lote e intervalo valida os limites
+  ---
+  duration_ms: 0.449451
+  ...
+# Subtest: prepara OGG/Opus antes da reserva; falha de conversão não provoca envio
+ok 131 - prepara OGG/Opus antes da reserva; falha de conversão não provoca envio
+  ---
+  duration_ms: 3.181659
+  ...
+# Subtest: reserva somente com identificação do processo que mantém heartbeat
+ok 132 - reserva somente com identificação do processo que mantém heartbeat
+  ---
+  duration_ms: 1.657674
+  ...
+# Subtest: importa a primeira planilha XLSX, identifica duplicados e inválidos
+ok 133 - importa a primeira planilha XLSX, identifica duplicados e inválidos
+  ---
+  duration_ms: 33.101513
+  ...
+# Subtest: recusa arquivo inválido, expansão excessiva e entradas duplicadas
+ok 134 - recusa arquivo inválido, expansão excessiva e entradas duplicadas
+  ---
+  duration_ms: 87.699191
+  ...
+# Subtest: recusa coordenadas esparsas excessivas e declarações XML
+ok 135 - recusa coordenadas esparsas excessivas e declarações XML
+  ---
+  duration_ms: 198.117141
+  ...
+# Subtest: rejeita planilha apontada por relações para arquivo que escaparia à validação XML
+ok 136 - rejeita planilha apontada por relações para arquivo que escaparia à validação XML
+  ---
+  duration_ms: 14.576626
+  ...
+# OK: catálogo usa cache da conta e salva URL correta.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/catalog-media-cache-isolation.test.mjs
+ok 62 - /tmp/ienvia-tests-2iBo0n/project/tests/catalog-media-cache-isolation.test.mjs
+  ---
+  duration_ms: 1457.905151
+  ...
+# OK: cache de mídia remota separado por conta; arquivo legado intacto.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/cloud-media-cache-isolation.test.mjs
+ok 63 - /tmp/ienvia-tests-2iBo0n/project/tests/cloud-media-cache-isolation.test.mjs
+  ---
+  duration_ms: 154.834097
+  ...
+# [CloudMedia] Não foi possível baixar mídia autorizada.
+# OK: downloads aceitam apenas Storage da própria conta; recusam rede interna, redirecionamento e arquivos excessivos.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/cloud-media-security.test.mjs
+ok 64 - /tmp/ienvia-tests-2iBo0n/project/tests/cloud-media-security.test.mjs
+  ---
+  duration_ms: 227.82246
+  ...
+# OK: API cloud aceita mesma origem e recusa outra origem Vercel.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/cloud-origin-isolation.test.mjs
+ok 65 - /tmp/ienvia-tests-2iBo0n/project/tests/cloud-origin-isolation.test.mjs
+  ---
+  duration_ms: 451.049462
+  ...
+# OK: consulta escopada por conta e conversa; snapshot parcial não apaga outras fichas.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/cloud-send-scope.test.mjs
+ok 66 - /tmp/ienvia-tests-2iBo0n/project/tests/cloud-send-scope.test.mjs
+  ---
+  duration_ms: 417.930573
+  ...
+# Subtest: mutações sucessivas não adiam indefinidamente a primeira sincronização
+ok 142 - mutações sucessivas não adiam indefinidamente a primeira sincronização
+  ---
+  duration_ms: 1.366859
+  ...
+# OK: HTTP autenticado, não expõe conversa e isola por usuário; suporte indevido bloqueado.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/command-status-http.test.mjs
+ok 68 - /tmp/ienvia-tests-2iBo0n/project/tests/command-status-http.test.mjs
+  ---
+  duration_ms: 532.813443
+  ...
+# OK: estado do envio sem conteúdo de conversas, vinculado ao usuário e id.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/command-status.test.mjs
+ok 69 - /tmp/ienvia-tests-2iBo0n/project/tests/command-status.test.mjs
+  ---
+  duration_ms: 64.162008
+  ...
+# Subtest: normaliza mensagens em formato Evolution sem perder identidade, direção ou evento
+ok 145 - normaliza mensagens em formato Evolution sem perder identidade, direção ou evento
+  ---
+  duration_ms: 2.263666
+  ...
+# Subtest: chaves idempotentes não dependem da ordem de propriedades nem do timestamp reemitido
+ok 146 - chaves idempotentes não dependem da ordem de propriedades nem do timestamp reemitido
+  ---
+  duration_ms: 0.317214
+  ...
+# Subtest: expande histórico por conversa e preserva o JID associado a cada mensagem
+ok 147 - expande histórico por conversa e preserva o JID associado a cada mensagem
+  ---
+  duration_ms: 0.278823
+  ...
+# Subtest: atualizações de recibo da mesma mensagem usam chaves distintas por status
+ok 148 - atualizações de recibo da mesma mensagem usam chaves distintas por status
+  ---
+  duration_ms: 0.313465
+  ...
+# Subtest: lotes de mensagens produzem eventos independentes
+ok 149 - lotes de mensagens produzem eventos independentes
+  ---
+  duration_ms: 0.844266
+  ...
+# Subtest: webhook grava evento e outbox antes de confirmar; repetição é idempotente
+ok 150 - webhook grava evento e outbox antes de confirmar; repetição é idempotente
+  ---
+  duration_ms: 0.604113
+  ...
+# Subtest: instância sem mapeamento é rejeitada antes de qualquer persistência
+ok 151 - instância sem mapeamento é rejeitada antes de qualquer persistência
+  ---
+  duration_ms: 0.552911
+  ...
+# Subtest: falha de persistência impede ACK de sucesso
+ok 152 - falha de persistência impede ACK de sucesso
+  ---
+  duration_ms: 0.405974
+  ...
+# Subtest: Evolution API v2 envia texto pela instância do tenant e usa endpoint/payload v2
+ok 153 - Evolution API v2 envia texto pela instância do tenant e usa endpoint/payload v2
+  ---
+  duration_ms: 2.36373
+  ...
+# Subtest: não desvia operação para outro chip quando o chip selecionado está desconectado
+ok 154 - não desvia operação para outro chip quando o chip selecionado está desconectado
+  ---
+  duration_ms: 0.940132
+  ...
+# Subtest: Histórico usa chat/findMessages com JID, paginação e offset limitado
+ok 155 - Histórico usa chat/findMessages com JID, paginação e offset limitado
+  ---
+  duration_ms: 0.46139
+  ...
+# Subtest: resposta HTTP 2xx com rejeição de aplicação não é tratada como envio aceito
+ok 156 - resposta HTTP 2xx com rejeição de aplicação não é tratada como envio aceito
+  ---
+  duration_ms: 0.229547
+  ...
+# Subtest: findChats importa somente conversas do slot do tenant e respeita a paginação
+ok 157 - findChats importa somente conversas do slot do tenant e respeita a paginação
+  ---
+  duration_ms: 1.361092
+  ...
+# Subtest: findChats conserva LID, associa telefone alternativo e descarta o rótulo “Você”
+ok 158 - findChats conserva LID, associa telefone alternativo e descarta o rótulo “Você”
+  ---
+  duration_ms: 0.765886
+  ...
+# Subtest: findContacts lê o contrato documentado, usa number como fallback e mantém escopo por slot
+ok 159 - findContacts lê o contrato documentado, usa number como fallback e mantém escopo por slot
+  ---
+  duration_ms: 0.741481
+  ...
+# Subtest: findContacts não mostra LID como telefone, ignora “Você” e prioriza o nome salvo
+ok 160 - findContacts não mostra LID como telefone, ignora “Você” e prioriza o nome salvo
+  ---
+  duration_ms: 0.541179
+  ...
+# Subtest: findContacts percorre páginas de 1000 usando skip até o final
+ok 161 - findContacts percorre páginas de 1000 usando skip até o final
+  ---
+  duration_ms: 12.036641
+  ...
+# Subtest: contratos auxiliares usam os payloads definidos no Evolution API v2.3.7
+ok 162 - contratos auxiliares usam os payloads definidos no Evolution API v2.3.7
+  ---
+  duration_ms: 1.572648
+  ...
+# Subtest: Evolution API cria rotas distintas por tenant com URL e chave compartilhadas
+ok 163 - Evolution API cria rotas distintas por tenant com URL e chave compartilhadas
+  ---
+  duration_ms: 0.582344
+  ...
+# Subtest: pareamento por QR usa base64 para a imagem e nunca confunde `code` com `pairingCode`
+ok 164 - pareamento por QR usa base64 para a imagem e nunca confunde `code` com `pairingCode`
+  ---
+  duration_ms: 51.134737
+  ...
+# Subtest: pareamento por número usa apenas pairingCode e passa o número como query
+ok 165 - pareamento por número usa apenas pairingCode e passa o número como query
+  ---
+  duration_ms: 64.990389
+  ...
+# OK: o status aceito fica pendente até surgir ACK real do WhatsApp.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/evolution-api-delivery-status.test.mjs
+ok 73 - /tmp/ienvia-tests-2iBo0n/project/tests/evolution-api-delivery-status.test.mjs
+  ---
+  duration_ms: 338.000538
+  ...
+# OK: mensagem histórica aparece na conversa existente sem gerar não lidas; interface em navegador real, dados sintéticos.
+# Subtest: CRM mostra no fio da conversa a mensagem antiga carregada do histórico
+ok 167 - CRM mostra no fio da conversa a mensagem antiga carregada do histórico
+  ---
+  duration_ms: 1129.376676
+  ...
+# Subtest: Evolution API v2.3.7 history rows normalize into chronological CRM messages and media placeholders
+ok 168 - Evolution API v2.3.7 history rows normalize into chronological CRM messages and media placeholders
+  ---
+  duration_ms: 1.620925
+  ...
+# Subtest: nome legível do chat substitui nome numérico genérico sem tocar no histórico
+ok 169 - nome legível do chat substitui nome numérico genérico sem tocar no histórico
+  ---
+  duration_ms: 1.552127
+  ...
+# Subtest: history pages persist in CRM, deduplicate by WhatsApp ID, remain chronological and do not increment unread
+ok 170 - history pages persist in CRM, deduplicate by WhatsApp ID, remain chronological and do not increment unread
+  ---
+  duration_ms: 1.741783
+  ...
+# OK: browser real exibiu QR decodificável; separou QR de pairingCode; enviou telefone; limpou QR/código após conectar; sem requisições ou mensagens reais.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/evolution-api-qr-ui.test.mjs
+ok 76 - /tmp/ienvia-tests-2iBo0n/project/tests/evolution-api-qr-ui.test.mjs
+  ---
+  duration_ms: 5743.979988
+  ...
+# Subtest: diagnóstico de produção usa somente endpoints de leitura e devolve indicadores agregados
+ok 172 - diagnóstico de produção usa somente endpoints de leitura e devolve indicadores agregados
+  ---
+  duration_ms: 5.008035
+  ...
+# Subtest: resposta HTTP 403 é classificada como falha de autenticação sem texto bruto
+ok 173 - resposta HTTP 403 é classificada como falha de autenticação sem texto bruto
+  ---
+  duration_ms: 0.664295
+  ...
+# Subtest: rota temporária exige usuário dono, limita chamadas e não cria fluxo de escrita
+ok 174 - rota temporária exige usuário dono, limita chamadas e não cria fluxo de escrita
+  ---
+  duration_ms: 39.010302
+  ...
+# OK: falhas de aplicação em HTTP 2xx são rejeitadas; aceitação não implica entrega.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/evolution-api-response.test.mjs
+ok 78 - /tmp/ienvia-tests-2iBo0n/project/tests/evolution-api-response.test.mjs
+  ---
+  duration_ms: 43.654518
+  ...
+# Subtest: persists Evolution API v2 fromMe events instead of discarding them
+ok 176 - persists Evolution API v2 fromMe events instead of discarding them
+  ---
+  duration_ms: 57.224657
+  ...
+# Subtest: accepts Evolution API delivery/read updates without treating them as incoming messages
+ok 177 - accepts Evolution API delivery/read updates without treating them as incoming messages
+  ---
+  duration_ms: 22.954329
+  ...
+# Subtest: ingests legacy HistorySync messages and normalizes them as history events
+ok 178 - ingests legacy HistorySync messages and normalizes them as history events
+  ---
+  duration_ms: 7.047458
+  ...
+# Subtest: disables unauthenticated maintenance routes
+ok 179 - disables unauthenticated maintenance routes
+  ---
+  duration_ms: 8.916612
+  ...
+# Subtest: envia apenas a mensagem da reserva autorizada pelo titular e pela instância própria
+ok 180 - envia apenas a mensagem da reserva autorizada pelo titular e pela instância própria
+  ---
+  duration_ms: 35.380074
+  ...
+# Subtest: não envia quando não existe checkpoint reservado
+ok 181 - não envia quando não existe checkpoint reservado
+  ---
+  duration_ms: 6.374356
+  ...
+# Subtest: áudio Evolution usa URL privada assinada e o endpoint PTT no slot da conta
+ok 182 - áudio Evolution usa URL privada assinada e o endpoint PTT no slot da conta
+  ---
+  duration_ms: 5.515243
+  ...
+# Subtest: Evolution API cloud bridge is behind API authentication
+ok 183 - Evolution API cloud bridge is behind API authentication
+  ---
+  duration_ms: 76.365944
+  ...
+# Subtest: diagnóstico agrega contatos/conversas, testa offsets e nunca devolve payloads pessoais
+ok 184 - diagnóstico agrega contatos/conversas, testa offsets e nunca devolve payloads pessoais
+  ---
+  duration_ms: 9.204233
+  ...
+# Subtest: diagnóstico classifica falha de endpoint e mantém resposta redigida
+ok 185 - diagnóstico classifica falha de endpoint e mantém resposta redigida
+  ---
+  duration_ms: 0.669619
+  ...
+# Subtest: conexão offline não dispara consultas de contatos, chats ou histórico
+ok 186 - conexão offline não dispara consultas de contatos, chats ou histórico
+  ---
+  duration_ms: 0.265334
+  ...
+# OK: encaminhamento não acessa nem envia destino interno.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/forward-media-security.test.mjs
+ok 83 - /tmp/ienvia-tests-2iBo0n/project/tests/forward-media-security.test.mjs
+  ---
+  duration_ms: 631.549835
+  ...
+# Subtest: motor usa o orçamento ampliado na chamada Gemini real mockada
+ok 188 - motor usa o orçamento ampliado na chamada Gemini real mockada
+  ---
+  duration_ms: 58.243715
+  ...
+# Subtest: permite resposta lenta de 31 segundos antes de abortar
+ok 189 - permite resposta lenta de 31 segundos antes de abortar
+  ---
+  duration_ms: 1.332987
+  ...
+# Subtest: troca de modelo rapidamente para erro recuperável e respeita o prazo restante
+ok 190 - troca de modelo rapidamente para erro recuperável e respeita o prazo restante
+  ---
+  duration_ms: 0.864033
+  ...
+# Subtest: não tenta nova chave ou modelo após esgotar o prazo
+ok 191 - não tenta nova chave ou modelo após esgotar o prazo
+  ---
+  duration_ms: 0.71199
+  ...
+# Subtest: erro permanente encerra sem repetir e chaves não são exibidas
+ok 192 - erro permanente encerra sem repetir e chaves não são exibidas
+  ---
+  duration_ms: 2.183461
+  ...
+# Subtest: publica chip desconectado com identificador vazio exigido pelo banco
+ok 193 - publica chip desconectado com identificador vazio exigido pelo banco
+  ---
+  duration_ms: 1.641606
+  ...
+# [WA Sync] Falha ao solicitar FULL_HISTORY_SYNC_ON_DEMAND: falha simulada
+# OK: histórico inicial por chip e distinção entre resposta recebida e espera.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/history-bootstrap.test.mjs
+ok 87 - /tmp/ienvia-tests-2iBo0n/project/tests/history-bootstrap.test.mjs
+  ---
+  duration_ms: 869.48313
+  ...
+# OK: pull aplica fronteira local e programa correção do cache remoto.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/history-clear-cloud-pull.test.mjs
+ok 88 - /tmp/ienvia-tests-2iBo0n/project/tests/history-clear-cloud-pull.test.mjs
+  ---
+  duration_ms: 173.746365
+  ...
+# OK: reconciliação aplica limpeza remota mesmo com lista de mensagens vazia.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/history-clear-cloud-reconciliation.test.mjs
+ok 89 - /tmp/ienvia-tests-2iBo0n/project/tests/history-clear-cloud-reconciliation.test.mjs
+  ---
+  duration_ms: 180.110528
+  ...
+# OK: diagnóstico local por chip sem incluir texto das conversas.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/history-diagnostics.test.mjs
+ok 90 - /tmp/ienvia-tests-2iBo0n/project/tests/history-diagnostics.test.mjs
+  ---
+  duration_ms: 463.029295
+  ...
+# OK: lote realista de 125 gravado no diário antes do cache limitado, sem outros chips.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/history-journal-ingest-isolated.test.mjs
+ok 91 - /tmp/ienvia-tests-2iBo0n/project/tests/history-journal-ingest-isolated.test.mjs
+  ---
+  duration_ms: 958.185673
+  ...
+# OK: diário local opcional, 5.000 mensagens, isolamento por conta/chip e permissões.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/history-journal.test.mjs
+ok 92 - /tmp/ienvia-tests-2iBo0n/project/tests/history-journal.test.mjs
+  ---
+  duration_ms: 83.060812
+  ...
+# OK: resposta de protocolo restrita à própria conta e sem conteúdo.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/history-protocol-status.test.mjs
+ok 93 - /tmp/ienvia-tests-2iBo0n/project/tests/history-protocol-status.test.mjs
+  ---
+  duration_ms: 1068.546487
+  ...
+# OK: resposta de histórico correlacionada à solicitação; concorrência, lote vazio e falha.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/history-request-correlation.test.mjs
+ok 94 - /tmp/ienvia-tests-2iBo0n/project/tests/history-request-correlation.test.mjs
+  ---
+  duration_ms: 927.505487
+  ...
+# OK: exclusão preservada após recriação manual, sem expiração arbitrária e com isolamento por chip.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/history-tombstone-retention.test.mjs
+ok 95 - /tmp/ienvia-tests-2iBo0n/project/tests/history-tombstone-retention.test.mjs
+  ---
+  duration_ms: 566.218134
+  ...
+# node:internal/modules/run_main:123
+#     triggerUncaughtException(
+#     ^
+# AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+# 500 !== 200
+#     at file:///tmp/ienvia-tests-2iBo0n/project/tests/ienvia-branding.test.mjs:13:68
+#     at process.processTicksAndRejections (node:internal/process/task_queues:95:5) {
+#   generatedMessage: true,
+#   code: 'ERR_ASSERTION',
+#   actual: 500,
+#   expected: 200,
+#   operator: 'strictEqual'
+# }
+# Node.js v20.20.2
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/ienvia-branding.test.mjs
+not ok 96 - /tmp/ienvia-tests-2iBo0n/project/tests/ienvia-branding.test.mjs
+  ---
+  duration_ms: 637.111099
+  location: '/tmp/ienvia-tests-2iBo0n/project/tests/ienvia-branding.test.mjs:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# OK: vitrine e login em 320, 375, 768 e 1440px; navegação por teclado e calculadora.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/landing-browser.test.mjs
+ok 97 - /tmp/ienvia-tests-2iBo0n/project/tests/landing-browser.test.mjs
+  ---
+  duration_ms: 6103.809291
+  ...
+# ======================================================
+# 🚀 Ienvia rodando na porta 3000
+# 👉 Painel Local: http://localhost:3000
+# ======================================================
+# OK: endpoint local com chips 1 e 2, e bloqueio seguro quando chip 3 está offline.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/local-multichip-send.test.mjs
+ok 98 - /tmp/ienvia-tests-2iBo0n/project/tests/local-multichip-send.test.mjs
+  ---
+  duration_ms: 1560.513746
+  ...
+# OK: criação é aprovada apenas com provisionamento completo; falhas são sinalizadas.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/managed-user-provisioning.test.mjs
+ok 99 - /tmp/ienvia-tests-2iBo0n/project/tests/managed-user-provisioning.test.mjs
+  ---
+  duration_ms: 187.214409
+  ...
+# Subtest: mensagem comum recebida é adicionada ao CRM com IA desligada
+ok 207 - mensagem comum recebida é adicionada ao CRM com IA desligada
+  ---
+  duration_ms: 3.763396
+  ...
+# Subtest: mensagem de outro chip próprio é registrada, mas não gera resposta de IA
+ok 208 - mensagem de outro chip próprio é registrada, mas não gera resposta de IA
+  ---
+  duration_ms: 0.839283
+  ...
+# Subtest: mensagem enviada do telefone aparece no CRM
+ok 209 - mensagem enviada do telefone aparece no CRM
+  ---
+  duration_ms: 1.39312
+  ...
+# Subtest: mensagem do aparelho endereçada ao próprio JID conserva telefone do destinatário
+ok 210 - mensagem do aparelho endereçada ao próprio JID conserva telefone do destinatário
+  ---
+  duration_ms: 0.559514
+  ...
+# Subtest: diagnóstico diferencia JID próprio e grupo sem armazenar identidades
+ok 211 - diagnóstico diferencia JID próprio e grupo sem armazenar identidades
+  ---
+  duration_ms: 0.282416
+  ...
+# Subtest: diagnóstico agregado não contém conteúdo nem identificadores
+ok 212 - diagnóstico agregado não contém conteúdo nem identificadores
+  ---
+  duration_ms: 0.169876
+  ...
+# OK: status do site e motor, offline, versão desconhecida e confirmação sem falso sucesso.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/motor-update-status.test.mjs
+ok 101 - /tmp/ienvia-tests-2iBo0n/project/tests/motor-update-status.test.mjs
+  ---
+  duration_ms: 64.352541
+  ...
+# OK: isolamento por chip, histórico inicial, paginação de 1.251 conversas e retry seguro.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/multichip-sync.test.mjs
+ok 102 - /tmp/ienvia-tests-2iBo0n/project/tests/multichip-sync.test.mjs
+  ---
+  duration_ms: 783.327241
+  ...
+# ======================================================
+# 🚀 Ienvia rodando na porta 3000
+# 👉 Painel Local: http://localhost:3000
+# ======================================================
+# locator.selectOption: Timeout 30000ms exceeded.
+# Call log:
+#   - waiting for locator('\#crmFilterSlotSelect')
+#     - locator resolved to <select id="crmFilterSlotSelect" class="crm-inline-filter-select" aria-label="Filtrar conversas por Chip WhatsApp" data-slot-sig="3|slot_1:Chip 1:disconnected:|slot_2:Chip 2:disconnected:|slot_3:Chip 3:disconnected:">…</select>
+#   - attempting select option action
+#     2 × waiting for element to be visible and enabled
+#       - element is not visible
+#     - retrying select option action
+#     - waiting 20ms
+#     2 × waiting for element to be visible and enabled
+#       - element is not visible
+#     - retrying select option action
+#       - waiting 100ms
+#     60 × waiting for element to be visible and enabled
+#        - element is not visible
+#      - retrying select option action
+#        - waiting 500ms
+#     at /tmp/ienvia-tests-2iBo0n/project/tests/painel-fluxos-playwright.test.mjs:16:149 {
+#   log: [
+#     "  - waiting for locator('\#crmFilterSlotSelect')",
+#     '    - locator resolved to <select id="crmFilterSlotSelect" class="crm-inline-filter-select" aria-label="Filtrar conversas por Chip WhatsApp" data-slot-sig="3|slot_1:Chip 1:disconnected:|slot_2:Chip 2:disconnected:|slot_3:Chip 3:disconnected:">…</select>',
+#     '  - attempting select option action',
+#     '    2 × waiting for element to be visible and enabled',
+#     '      - element is not visible',
+#     '    - retrying select option action',
+#     '    - waiting 20ms',
+#     '    2 × waiting for element to be visible and enabled',
+#     '      - element is not visible',
+#     '    - retrying select option action',
+#     '      - waiting 100ms',
+#     '    60 × waiting for element to be visible and enabled',
+#     '       - element is not visible',
+#     '     - retrying select option action',
+#     '       - waiting 500ms'
+#   ],
+#   name: 'TimeoutError'
+# }
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/painel-fluxos-playwright.test.mjs
+not ok 103 - /tmp/ienvia-tests-2iBo0n/project/tests/painel-fluxos-playwright.test.mjs
+  ---
+  duration_ms: 32162.188807
+  location: '/tmp/ienvia-tests-2iBo0n/project/tests/painel-fluxos-playwright.test.mjs:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# OK: número diferente bloqueia a operação antes do acesso ao cofre.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/pairing-command-guard.test.mjs
+ok 104 - /tmp/ienvia-tests-2iBo0n/project/tests/pairing-command-guard.test.mjs
+  ---
+  duration_ms: 563.174343
+  ...
+# OK: backup restrito ao chip correto, sem apagar dados ou seguir links.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/pairing-safety.test.mjs
+ok 105 - /tmp/ienvia-tests-2iBo0n/project/tests/pairing-safety.test.mjs
+  ---
+  duration_ms: 50.214776
+  ...
+# [Auto-Fallback] Provedor principal (openrouter) falhou; acionando reserva (gemini)...
+# Subtest: Gemini usa o modelo padrão gemini-3.5-flash-lite quando não definido
+ok 218 - Gemini usa o modelo padrão gemini-3.5-flash-lite quando não definido
+  ---
+  duration_ms: 2.401077
+  ...
+# Subtest: Gemini aceita modelo personalizado e chave configurada
+ok 219 - Gemini aceita modelo personalizado e chave configurada
+  ---
+  duration_ms: 0.232248
+  ...
+# Subtest: Gemini parsea pool de chaves (GEMINI_KEY_POOL)
+ok 220 - Gemini parsea pool de chaves (GEMINI_KEY_POOL)
+  ---
+  duration_ms: 0.198187
+  ...
+# Subtest: OpenRouter usa deepseek/deepseek-chat como padrão quando o modelo não foi definido
+ok 221 - OpenRouter usa deepseek/deepseek-chat como padrão quando o modelo não foi definido
+  ---
+  duration_ms: 0.139497
+  ...
+# Subtest: OpenRouter aceita modelo personalizado
+ok 222 - OpenRouter aceita modelo personalizado
+  ---
+  duration_ms: 0.108987
+  ...
+# Subtest: provedor desconhecido retorna fallback para Gemini
+ok 223 - provedor desconhecido retorna fallback para Gemini
+  ---
+  duration_ms: 0.083556
+  ...
+# Subtest: providerMode auto: áudio vai para Gemini, texto vai para OpenRouter
+ok 224 - providerMode auto: áudio vai para Gemini, texto vai para OpenRouter
+  ---
+  duration_ms: 27.474383
+  ...
+# Subtest: providerMode fallback: reserva é acionada quando o provedor principal falha
+ok 225 - providerMode fallback: reserva é acionada quando o provedor principal falha
+  ---
+  duration_ms: 3.557032
+  ...
+# Subtest: transcrição de áudio usa Gemini quando a chave está configurada
+ok 226 - transcrição de áudio usa Gemini quando a chave está configurada
+  ---
+  duration_ms: 1.394242
+  ...
+# Subtest: transcrição de áudio falha sem chave de Gemini
+ok 227 - transcrição de áudio falha sem chave de Gemini
+  ---
+  duration_ms: 0.723353
+  ...
+# OK: confirmação, falha ambígua, timeout e backoff sem reenviar.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/queued-send-notifications.test.mjs
+ok 107 - /tmp/ienvia-tests-2iBo0n/project/tests/queued-send-notifications.test.mjs
+  ---
+  duration_ms: 45.813665
+  ...
+# Subtest: assina somente a conta autenticada, recebe sinal e substitui a sessão
+ok 229 - assina somente a conta autenticada, recebe sinal e substitui a sessão
+  ---
+  duration_ms: 2.181228
+  ...
+# Subtest: não conecta sem parâmetros confiáveis; ao trocar conta encerra canal anterior
+ok 230 - não conecta sem parâmetros confiáveis; ao trocar conta encerra canal anterior
+  ---
+  duration_ms: 0.279443
+  ...
+# Subtest: evento de reconexão sinaliza busca de dados para cobrir intervalos offline
+ok 231 - evento de reconexão sinaliza busca de dados para cobrir intervalos offline
+  ---
+  duration_ms: 0.315397
+  ...
+# OK: navegador antecipa atualização após evento e desliga o canal em modo suporte.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/realtime-painel-browser.test.mjs
+ok 109 - /tmp/ienvia-tests-2iBo0n/project/tests/realtime-painel-browser.test.mjs
+  ---
+  duration_ms: 1848.887339
+  ...
+# file:///tmp/ienvia-tests-2iBo0n/project/src/updateSignature.js:30
+#   if(doc?.format!==1 || doc.version!==expectedVersion)throw new Error('Versão do pacote assinado não corresponde à versão anunciada.');
+#                                                             ^
+# Error: Versão do pacote assinado não corresponde à versão anunciada.
+#     at verifySignedManifest (file:///tmp/ienvia-tests-2iBo0n/project/src/updateSignature.js:30:61)
+#     at file:///tmp/ienvia-tests-2iBo0n/project/tests/static-release-package.test.mjs:9:1
+# Node.js v20.20.2
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/static-release-package.test.mjs
+not ok 110 - /tmp/ienvia-tests-2iBo0n/project/tests/static-release-package.test.mjs
+  ---
+  duration_ms: 363.071627
+  location: '/tmp/ienvia-tests-2iBo0n/project/tests/static-release-package.test.mjs:1:1'
+  failureType: 'testCodeFailure'
+  exitCode: 1
+  signal: ~
+  error: 'test failed'
+  code: 'ERR_TEST_FAILURE'
+  ...
+# OK: 70 cenários e 7.500 fichas (53ms).
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/storage-dedup-performance.test.mjs
+ok 111 - /tmp/ienvia-tests-2iBo0n/project/tests/storage-dedup-performance.test.mjs
+  ---
+  duration_ms: 1554.394938
+  ...
+# Subtest: nono dígito brasileiro só unifica quando o telefone canônico é exatamente igual
+ok 235 - nono dígito brasileiro só unifica quando o telefone canônico é exatamente igual
+  ---
+  duration_ms: 1.214638
+  ...
+# Subtest: rótulos de autoidentidade não substituem o nome ou telefone de um contato
+ok 236 - rótulos de autoidentidade não substituem o nome ou telefone de um contato
+  ---
+  duration_ms: 1.53078
+  ...
+# Subtest: contatos legados duplicados são consolidados preservando ambos os históricos e a ficha salva
+ok 237 - contatos legados duplicados são consolidados preservando ambos os históricos e a ficha salva
+  ---
+  duration_ms: 1.742688
+  ...
+# Subtest: flush da nuvem remove o JID redundante e grava a ficha com histórico agregado
+ok 238 - flush da nuvem remove o JID redundante e grava a ficha com histórico agregado
+  ---
+  duration_ms: 1.368829
+  ...
+# Subtest: fichas de chips diferentes nunca são consolidadas por telefone
+ok 239 - fichas de chips diferentes nunca são consolidadas por telefone
+  ---
+  duration_ms: 0.440402
+  ...
+# Subtest: launcher Termux passa no parser Bash e se protege de auto-substituição durante o update
+ok 240 - launcher Termux passa no parser Bash e se protege de auto-substituição durante o update
+  ---
+  duration_ms: 7.85864
+  ...
+# Subtest: scripts Termux incluídos no kit passam no parser Bash
+ok 241 - scripts Termux incluídos no kit passam no parser Bash
+  ---
+  duration_ms: 4.76324
+  ...
+# OK: pacotes de contas sintéticas isolados mesmo com IDs iguais e cache master previamente carregado.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/training-pack-tenant-isolation.test.mjs
+ok 114 - /tmp/ienvia-tests-2iBo0n/project/tests/training-pack-tenant-isolation.test.mjs
+  ---
+  duration_ms: 334.63884
+  ...
+# Subtest: horário enviado pelo Baileys não recalibra o relógio confiável nem atrasa a mensagem manual
+ok 243 - horário enviado pelo Baileys não recalibra o relógio confiável nem atrasa a mensagem manual
+  ---
+  duration_ms: 2.747361
+  ...
+# OK: conteúdo de ZIP é determinístico entre CRLF e LF; binários intactos.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/update-package-line-endings.test.mjs
+ok 116 - /tmp/ienvia-tests-2iBo0n/project/tests/update-package-line-endings.test.mjs
+  ---
+  duration_ms: 283.554719
+  ...
+# OK: assinatura válida aceita; adulteração, assinatura inválida, versão incorreta, repetição e arquivo ausente rejeitados.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/update-signature.test.mjs
+ok 117 - /tmp/ienvia-tests-2iBo0n/project/tests/update-signature.test.mjs
+  ---
+  duration_ms: 41.576989
+  ...
+# OK: falha e interrupção recuperam arquivos, dados protegidos permanecem e links são bloqueados.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/update-transaction.test.mjs
+ok 118 - /tmp/ienvia-tests-2iBo0n/project/tests/update-transaction.test.mjs
+  ---
+  duration_ms: 83.582523
+  ...
+# OK: configuração inclui o manifesto e o arquivo vercel.json no pacote da função.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/vercel-update-package.test.mjs
+ok 119 - /tmp/ienvia-tests-2iBo0n/project/tests/vercel-update-package.test.mjs
+  ---
+  duration_ms: 33.363506
+  ...
+# OK: voz remota e backup usam arquivo da conta.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/voice-media-cache-isolation.test.mjs
+ok 120 - /tmp/ienvia-tests-2iBo0n/project/tests/voice-media-cache-isolation.test.mjs
+  ---
+  duration_ms: 451.688109
+  ...
+# OK: motor só ativa perfil existente e ativo; falha de consulta preserva sessão.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/worker-auth-profile.test.mjs
+ok 121 - /tmp/ienvia-tests-2iBo0n/project/tests/worker-auth-profile.test.mjs
+  ---
+  duration_ms: 106.895715
+  ...
+# OK: ZIPs íntegros aceitos; dados, tamanho, diretório e método inválidos rejeitados.
+# Subtest: /tmp/ienvia-tests-2iBo0n/project/tests/zip-integrity.test.mjs
+ok 122 - /tmp/ienvia-tests-2iBo0n/project/tests/zip-integrity.test.mjs
+  ---
+  duration_ms: 40.43094
+  ...
+1..250
+# tests 250
+# suites 0
+# pass 247
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 91751.398583

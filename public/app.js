@@ -3825,7 +3825,9 @@ function renderActiveInboxConversation() {
 
           const ackNum = Number(m.ack) || (m.role !== 'user' ? 1 : 0);
           const ackHtml = m.role !== 'user' && !m.deletedForEveryone
-            ? m.deliveryStatus === 'accepted'
+            ? m.deliveryStatus === 'uncertain'
+              ? '<span class="wa-ack-checks" title="Envio incerto; confira a conversa antes de reenviar">⚠</span>'
+              : m.deliveryStatus === 'accepted'
               ? '<span class="wa-ack-checks" title="API aceitou a solicitação; entrega ao WhatsApp ainda não confirmada">…</span>'
               : `<span class="wa-ack-checks ${ackNum >= 3 ? 'read' : ''}" title="${ackNum >= 3 ? 'Lida' : ackNum === 2 ? 'Entregue' : 'Enviada'}">${ackNum >= 2 ? '✓✓' : '✓'}</span>`
             : '';

@@ -11,3 +11,8 @@ storage.applyMessageAck(chatId, 'provider-id', 1);
 assert.equal(contact.messages.at(-1).ack, 1);
 assert.equal(contact.messages.at(-1).deliveryStatus, undefined);
 console.log('OK: o status aceito fica pendente até surgir ACK real do WhatsApp.');
+
+const uncertain = storage.appendContactMessage(chatId, {role:'assistant',text:'Resposta incerta',waMsgId:'uncertain-id',deliveryStatus:'uncertain'});
+assert.equal(uncertain.messages.at(-1).deliveryStatus,'uncertain');
+storage.applyMessageAck(chatId,'uncertain-id',2);
+assert.equal(uncertain.messages.at(-1).deliveryStatus,undefined);assert.equal(uncertain.messages.at(-1).ack,2);

@@ -23,6 +23,7 @@ import {
   WA_SLOT_IDS,
   normalizeSlotId,
   parseContactChannelKey,
+  buildContactChannelKey,
   normalizeWaSlotsSettings,
   createCleanDatabaseForNewTenant,
   localStorageInstance,
@@ -2383,9 +2384,9 @@ class CloudWorkerBridge {
           registrar:({acao,enviado,jid})=>{
             if(!sessaoAtiva())return;
             const slot=this.whatsappManager.slots[acao.slotId];
-            const chatId=slot.toStorageKey(jid),key={id:enviado.key.id,remoteJid:jid,fromMe:true};
+            const chatId=slot?.toStorageKey?.(jid)||buildContactChannelKey(acao.slotId,jid),key={id:enviado.key.id,remoteJid:jid,fromMe:true};
             const text=acao.material.tipo==='texto'?acao.material.texto:acao.material.tipo==='imagem'?'[Imagem enviada pela campanha]':'[Áudio enviado pela campanha]';
-            localStorageInstance.appendContactMessage(chatId,{role:'assistant',text,phone:acao.telefone,contactName:acao.nome,campaignId:acao.campanhaId,waMsgId:enviado.key.id,waMsgKey:key,ack:1,timestamp:trueNowIso()});
+            localStorageInstance.appendContactMessage(chatId,{role:'assistant',text,phone:acao.telefone,contactName:acao.nome,campaignId:acao.campanhaId,waMsgId:enviado.key.id,waMsgKey:key,...(acao.provedor==='evolution_api'?{deliveryStatus:'accepted'}:{ack:1}),timestamp:trueNowIso()});
             this.broadcastFn?.('crm_updated',{chatId});
           },aoErro:()=>console.error('[Campanhas] Falha de processamento. Verifique o estado antes de qualquer reenvio.')
         });

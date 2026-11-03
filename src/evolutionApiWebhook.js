@@ -1,364 +1,173 @@
-/**
- * Evolution API v2 Webhook Router
- * Recebe mensagens do Evolution API v2, processa com a IA do Ienvia Motor (skills) e responde.
- * Funciona no Vercel (serverless) e na VPS/Docker (motor ou servidor standalone).
- *
- * Integração: Evolution API v2 → POST /webhook → IA (Gemini/OpenRouter) → Resposta via API Evolution API v2
- *
- * Suporte: texto, áudio (voz) e imagem. Aceita os dois formatos de payload do Evolution API v2:
- *   1. {event, instance, data: {key, message}}          — formato novo (evolution-api)
- *   2. {event, instance, data: {Info, Message}}         — formato evolution-foundation
- *
- * Configuração (env):
- *   EVOLUTION_API_URL         — URL do pool Evolution API v2 (default: pool pageup)
- *   EVOLUTION_API_KEY     — Chave global (para /instance/all)
- *   EVOLUTION_INSTANCE_USERS — Mapa instância → user_id Supabase (multi-tenant)
- *   EVOLUTION_DEFAULT_USER_ID — user_id padrão (se não tiver mapa)
- *   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY — business/settings/histórico no Supabase
- *
- * Mount no motor: app.use('/api/evolution-webhook', evolutionApiWebhookRouter)
- * Servidor standalone: evolution-webhook.mjs (root)
- */
-
-import { Router } from 'express';
-import express from 'express';
+/** Ingresso Evolution: autenticação, isolamento, persistência antes de IA e envio sem retry. */
+import express, { Router } from 'express';
+import { timingSafeEqual, randomUUID } from 'node:crypto';
 import { generateSmartReply } from './aiEngine.js';
 import { getAdminClient } from './supabaseCloud.js';
-import { convertToCanonicalWhatsAppVoice } from './audioProcessor.js';
-import { trueNowIso } from './trueClock.js';
 import { buildContactChannelKey } from './storage.js';
-import { assertEvolutionApiAccepted } from './evolutionApiResponse.js';
+import { trueNowIso } from './trueClock.js';
+import { requireEvolutionMessageId } from './evolutionApiResponse.js';
+import { evolutionInstanceIdentity, evolutionBoolean, evolutionTimestamp, evolutionAck, unwrapEvolutionMessage } from './evolutionIdentity.js';
+import { pedidoExplicitoParada } from './campanhaResposta.js';
 
-export const evolutionApiWebhookRouter = Router();
-
-// Parse de JSON (o motor já tem, mas o server standalone precisa)
-evolutionApiWebhookRouter.use(express.json({ limit: '10mb' }));
-
-const EVOLUTION_API_URL = String(process.env.EVOLUTION_API_URL || 'https://pool-evolution-api-067.cloud2.pageup.dev.br').replace(/\/+$/, '');
-const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY || '';
-
-const HAS_SUPABASE = Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
-const memoryHistory = new Map(); // chatId -> [messages] (uso quando sem Supabase)
-
-// ======================== RESOLVER USUÁRIO (tenant) ========================
-function scopedChatId(instanceName, jid) {
-  const slot = String(instanceName || '').match(/zap-ia-(?:[0-9a-f-]{36}-)?(slot_[1-3])$/i)?.[1] || 'slot_1';
-  return buildContactChannelKey(slot, jid);
+function textOf(m) {
+  return m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || m.videoMessage?.caption || m.documentMessage?.caption || m.buttonsResponseMessage?.selectedDisplayText || m.listResponseMessage?.title || '';
+}
+function placeholder(m) {
+  return m.audioMessage ? '[Áudio recebido]' : m.imageMessage ? '[Imagem recebida]' : m.videoMessage ? '[Vídeo recebido]' : m.documentMessage ? '[Documento recebido]' : m.stickerMessage ? '[Figurinha recebida]' : '';
+}
+function secureEquals(a, b) {
+  const x = Buffer.from(String(a || '')), y = Buffer.from(String(b || ''));
+  return x.length > 0 && x.length === y.length && timingSafeEqual(x, y);
 }
 
-function resolveUserId(instanceName) {
-  let map = {};
-  try {
-    map = JSON.parse(process.env.EVOLUTION_INSTANCE_USERS || '{}');
-  } catch {}
-  const tenant = String(instanceName || '').match(/^zap-ia-([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})-slot_[1-3]$/i)?.[1];
-  return tenant || map[instanceName] || process.env.EVOLUTION_DEFAULT_USER_ID || null;
-}
+// Factory permite testar o mesmo router com Supabase/IA/transporte sintéticos, sem abrir WhatsApp.
+export function createEvolutionWebhookRouter({ env = process.env, adminClient = getAdminClient, replyGenerator = generateSmartReply, fetcher = globalThis.fetch } = {}) {
+  const router = Router(), memory = new Map(), seen = new Set(), receipts = new Map();
+  const cloud = Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY);
+  router.use(express.json({ limit: '10mb' }));
+  router.get('/health', (_req, res) => res.json({ ok: true }));
+  router.get('/status', (_req, res) => res.json({ ok: true, evolutionApiConfigured: Boolean(env.EVOLUTION_API_KEY), webhookAuthenticated: Boolean(env.EVOLUTION_WEBHOOK_SECRET), supabase: cloud }));
+  router.post(['/send', '/clear'], (_req, res) => res.status(404).json({ ok: false, error: 'Rota desativada.' }));
 
-// ======================== CARREGAR BUSINESS + SETTINGS (Supabase) ========================
-async function loadTenant(instanceName) {
-  if (!HAS_SUPABASE) return { profile: {}, settings: {}, userId: null };
-  const userId = resolveUserId(instanceName);
-  if (!userId) {
-    console.warn(`[EvolutionWebhook] Nenhum user_id mapeado para a instância "${instanceName}" — veja EVOLUTION_INSTANCE_USERS`);
-    return { profile: {}, settings: {}, userId: null };
-  }
-  const admin = getAdminClient();
-  const { data, error } = await admin
-    .from('zapia_workspaces')
-    .select('business, settings')
-    .eq('user_id', userId)
-    .maybeSingle();
-  if (error || !data) {
-    console.warn(`[EvolutionWebhook] Workspace não encontrado para user_id ${userId}: ${error?.message || 'sem dados'}`);
-    return { profile: {}, settings: {}, userId };
-  }
-  return { profile: data.business || {}, settings: data.settings || {}, userId };
-}
-
-// ======================== HISTÓRICO DA CONVERSA ========================
-async function loadHistory(userId, chatId) {
-  if (!userId) return memoryHistory.get(chatId) || [];
-  const admin = getAdminClient();
-  const { data, error } = await admin
-    .from('zapia_contacts')
-    .select('data')
-    .eq('user_id', userId)
-    .eq('chat_id', chatId)
-    .maybeSingle();
-  if (error || !data?.data) return [];
-  return (data.data.messages || []).filter((m) => m && m.role !== 'internal_note');
-}
-
-async function saveHistory(userId, chatId, messages, contactName) {
-  const incoming = (Array.isArray(messages) ? messages : []).filter(Boolean).map((m) => {
-    const timestamp = new Date(m.timestamp || m.ts || Date.now()).toISOString();
-    const waMsgId = String(m.waMsgId || m.id || '');
-    return { ...m, id: m.id || waMsgId || `evo-${timestamp}`, ...(waMsgId ? { waMsgId } : {}), timestamp };
-  });
-  if (!userId) {
-    const prior = memoryHistory.get(chatId) || [];
-    const map = new Map(prior.map((m) => [m.waMsgId || m.id, m]));
-    for (const m of incoming) map.set(m.waMsgId || m.id, { ...(map.get(m.waMsgId || m.id) || {}), ...m });
-    memoryHistory.set(chatId, [...map.values()].slice(-120)); return { error: null };
-  }
-  const admin = getAdminClient();
-  const { data: row, error: readError } = await admin.from('zapia_contacts').select('data').eq('user_id', userId).eq('chat_id', chatId).maybeSingle();
-  if (readError) return { error: readError.message };
-  const existing = row?.data && typeof row.data === 'object' ? row.data : {};
-  const byKey = new Map((Array.isArray(existing.messages) ? existing.messages : []).map((m) => [String(m.waMsgId || m.id || `${m.role}|${m.timestamp}|${m.text}`), m]));
-  for (const m of incoming) {
-    const k = String(m.waMsgId || m.id || `${m.role}|${m.timestamp}|${m.text}`);
-    let target = byKey.get(k);
-    // Merge a paired IA SEND_MESSAGE webhook with the assistant turn that the same
-    // serverless invocation may have persisted before/after the webhook callback.
-    if (!target && (m.role === 'owner' || m.role === 'assistant') && m.text) {
-      const t = Date.parse(m.timestamp || 0);
-      target = [...byKey.values()].find((old) => ['owner','assistant'].includes(old.role) && old.text === m.text && Math.abs(Date.parse(old.timestamp || 0) - t) <= 60_000);
-    }
-    if (target) {
-      Object.assign(target, m, { role:target.role === 'assistant' && m.role === 'owner' ? 'assistant' : m.role });
-      if (m.waMsgId) target.waMsgId = m.waMsgId;
-    } else byKey.set(k, m);
-  }
-  const merged = [...new Set(byKey.values())].sort((x,y) => Date.parse(x.timestamp || 0)-Date.parse(y.timestamp || 0)).slice(-120);
-  const latest = merged.at(-1)?.timestamp || existing.lastMessageAt || trueNowIso();
-  const contact = { ...existing, ...(contactName && (!existing.name || existing.name === chatId) ? { name: contactName } : {}), messages: merged, lastMessageAt: latest };
-  const { error } = await admin.from('zapia_contacts').upsert({ user_id:userId, chat_id:chatId, data:contact, last_message_at:latest, updated_at:trueNowIso() }, { onConflict:'user_id,chat_id' });
-  if (error) console.warn(`[EvolutionWebhook] Falha ao salvar histórico: ${error.message}`);
-  return { error:error?.message || null };
-}
-function ackLevelFromEvolutionUpdate(value) {
-  if (typeof value === 'number') return value >= 4 ? 3 : value === 3 ? 2 : value === 2 ? 1 : 0;
-  const status = String(value || '').toUpperCase();
-  if (status === 'READ' || status === 'PLAYED') return 3;
-  if (status === 'DELIVERY_ACK' || status === 'DELIVERED') return 2;
-  if (status === 'SERVER_ACK' || status === 'SENT') return 1;
-  return 0;
-}
-
-async function persistMessageAck(userId, chatId, messageId, ack) {
-  if (!userId || !messageId || ack < 1) return false;
-  const admin = getAdminClient();
-  const { data: row, error: readError } = await admin.from('zapia_contacts').select('data').eq('user_id', userId).eq('chat_id', chatId).maybeSingle();
-  if (readError || !row?.data || !Array.isArray(row.data.messages)) return false;
-  const message = row.data.messages.find((item) => String(item.waMsgId || item.id || '') === String(messageId));
-  if (!message) return false;
-  message.ack = Math.max(Number(message.ack) || 0, ack);
-  delete message.deliveryStatus;
-  const { error } = await admin.from('zapia_contacts').upsert({ user_id: userId, chat_id: chatId, data: row.data, last_message_at: row.data.lastMessageAt || null, updated_at: trueNowIso() }, { onConflict: 'user_id,chat_id' });
-  if (error) console.warn(`[EvolutionWebhook] Falha ao salvar confirmação de entrega: ${error.message}`);
-  return !error;
-}
-
-function extractMessageText(message = {}) {
-  return message.conversation || message.extendedTextMessage?.text || message.imageMessage?.caption || message.videoMessage?.caption || message.documentMessage?.caption || message.buttonsResponseMessage?.selectedDisplayText || message.listResponseMessage?.title || '';
-}
-
-// ======================== ENVIAR MENSAGEM (Evolution API v2) ========================
-async function sendMessage(instanceName, number, text) {
-  if (!EVOLUTION_API_KEY) return { error: 'EVOLUTION_API_KEY não configurada.' };
-  try {
-    const response = await fetch(`${EVOLUTION_API_URL}/message/sendText/${encodeURIComponent(instanceName)}`, {
-      method: 'POST',
-      headers: { apikey: EVOLUTION_API_KEY, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ number, text }),
-    });
-    const raw = await response.text();
-    let data;
-    try { data = raw ? JSON.parse(raw) : {}; } catch { data = { raw }; }
-    if (!response.ok) {
-      const errorText = typeof data?.error === 'string' ? data.error : data?.error?.message;
-      return { error: errorText || data?.message || `Evolution API HTTP ${response.status}` };
-    }
-    try { return assertEvolutionApiAccepted(data); }
-    catch (err) { return { error: err.message }; }
-  } catch (err) {
-    return { error: err.message };
-  }
-}
-
-// ======================== ROTAS ========================
-evolutionApiWebhookRouter.post('/webhook', async (req, res) => {
-  // Aceita os dois formatos de payload do Evolution API v2
-  const instanceName = req.body?.instance?.data?.instance || req.body?.instance;
-  const data = req.body?.instance?.data || req.body?.data || {};
-  const info = data.Info || {};
-  const message = data.message || data.Message || req.body?.instance?.data?.message || req.body?.instance?.data?.Message || {};
-  const event = req.body?.event || data.event || 'MESSAGE';
-
-  if (!instanceName) {
-    return res.status(400).json({ error: 'Invalid webhook payload', received: req.body });
-  }
-
-  // Ignorar eventos que não são mensagens
-  const eventKey = String(event).trim().toUpperCase().replace(/[.\s-]+/g, '_');
-  if (eventKey === 'MESSAGES_UPDATE') {
-    const updates = Array.isArray(data) ? data : Array.isArray(data.data) ? data.data : [data];
-    const userId = resolveUserId(instanceName);
-    let updated = 0;
-    for (const item of updates) {
-      const updateKey = item?.key || item?.data?.key || {};
-      const remote = updateKey.remoteJid || item?.remoteJid || '';
-      const messageId = updateKey.id || item?.id || '';
-      const status = item?.update?.status ?? item?.status ?? item?.ack ?? item?.data?.status;
-      const ack = ackLevelFromEvolutionUpdate(status);
-      if (remote && messageId && ack > 0 && await persistMessageAck(userId, scopedChatId(instanceName, remote), String(messageId), ack)) updated += 1;
-    }
-    return res.status(200).json({ ok: true, updated, event: eventKey });
-  }
-  const isHistoryEvent = eventKey.includes('HISTORY_SYNC') || eventKey === 'HISTORYSYNC';
-  const isMessageEvent = ['MESSAGE', 'MESSAGE_RECEIVED', 'MESSAGES_UPSERT', 'SEND_MESSAGE'].includes(eventKey) || isHistoryEvent;
-  if (!isMessageEvent) return res.status(200).json({ ok: true, ignored: 'event', event });
-
-  // Remetente/destinatário (aceita key.remoteJid e Info.Chat/Sender)
-  const key = data.key || {};
-  const remoteJid = key.remoteJid || info.Chat || info.Sender || '';
-  if (!remoteJid && !isHistoryEvent) return res.status(200).json({ ok: true, ignored: 'no-jid' });
-  const fromMe = Boolean(key.fromMe ?? key.IsFromMe ?? info.IsFromMe ?? data.fromMe ?? data.IsFromMe);
-  if (isHistoryEvent) {
-    const tenant = await loadTenant(instanceName);
-    const conversations = data.conversations || data.Conversations;
-    const entries = data.messages || data.Messages || data.history || data.History || (Array.isArray(conversations) ? conversations.flatMap((c) => (c.messages || c.Messages || []).map((m) => ({ ...m, _chat: c.id || c.chat || c.Info?.Chat || c.Jid }))) : []);
-    const list = Array.isArray(entries) ? entries : (entries ? [entries] : []); let saved = 0;
-    for (const entry of list) {
-      const ei = entry.Info || entry.info || {}; const ek = entry.key || ei.Key || {}; const jid = ek.remoteJid || ei.Chat || entry.chat || entry._chat || remoteJid;
-      if (!jid || jid.endsWith('@g.us')) continue;
-      const payload = entry.message || entry.Message || entry; const text = extractMessageText(payload); const id = ek.id || ei.ID || entry.id || ei.Id;
-      const raw = entry.messageTimestamp || ei.Timestamp || entry.timestamp || ei.TimestampMS; const n = Number(raw); const ts = new Date(n > 1e12 ? n : n > 0 ? n*1000 : Date.now()).toISOString();
-      if (!id && !text) continue;
-      await saveHistory(tenant.userId, scopedChatId(instanceName, jid), [{ id:String(id || `history-${ts}`), ...(id ? {waMsgId:String(id)} : {}), waMsgKey:ek, role:(ek.fromMe ?? ei.IsFromMe) ? 'owner' : 'user', text:text || '[mídia]', timestamp:ts, historical:true }], jid.split('@')[0]); saved++;
-    }
-    return res.status(200).json({ ok:true, historical:true, saved });
-  }
-  if (remoteJid.endsWith('@g.us') || info.IsGroup) {
-    return res.status(200).json({ ok: true, ignored: 'group' });
-  }
-
-  const phoneNumber = remoteJid.split('@')[0];
-  const chatId = scopedChatId(instanceName, remoteJid);
-
-  // Extrair texto e mídia da mensagem
-  let userText = '';
-  let media = null;
-
-  if (message.conversation) {
-    userText = message.conversation;
-  } else if (message.extendedTextMessage?.text) {
-    userText = message.extendedTextMessage.text;
-  } else if (message.imageMessage?.caption) {
-    userText = message.imageMessage.caption;
-  }
-
-  // Áudio / imagem (base64 do payload)
-  if (message.audioMessage || message.imageMessage) {
-    const b64Raw = data.base64 || message.base64 || '';
-    if (b64Raw) {
-      const b64 = String(b64Raw).replace(/^data:[^;]+;base64,/, '');
-      const buf = Buffer.from(b64, 'base64');
-      if (buf.length > 0) {
-        if (message.audioMessage) {
-          try {
-            // Converte para voz canônica do WhatsApp (Ogg/Opus) — ffmpeg se disponível, JS puro se já for Ogg/Opus
-            const canonical = await convertToCanonicalWhatsAppVoice(buf, 'audio.ogg');
-            media = { mimeType: canonical.mimeType, buffer: canonical.buffer, durationSec: canonical.durationSec };
-          } catch (err) {
-            console.warn('[EvolutionWebhook] Áudio não convertível (mídia bruta enviada):', err.message);
-            media = { mimeType: 'audio/ogg', buffer: buf };
-          }
-        } else if (message.imageMessage) {
-          media = { mimeType: message.imageMessage.mimetype || 'image/jpeg', buffer: buf };
-        }
-      }
-    }
-  }
-
-  if (!userText && !media) userText = extractMessageText(message) || (message.videoMessage ? '[vídeo]' : message.documentMessage ? '[documento]' : '');
-  if (!userText && !media) return res.status(200).json({ ok: true, ignored: 'no-text' });
-  if (fromMe || eventKey === 'SEND_MESSAGE') {
-    try { const tenant = await loadTenant(instanceName); const id = key.id || info.ID || data.id; const raw = data.messageTimestamp || info.Timestamp || data.timestamp; const n = Number(raw); const ts = new Date(n > 1e12 ? n : n > 0 ? n*1000 : Date.now()).toISOString();
-      await saveHistory(tenant.userId, chatId, [{id:String(id || `out-${ts}`), ...(id ? {waMsgId:String(id)} : {}), waMsgKey:key, role:'owner', text:userText || '[mídia]', timestamp:ts}], phoneNumber);
-      return res.status(200).json({ok:true, persisted:true, role:'owner'}); } catch(err) { return res.status(200).json({ok:false,error:err.message}); }
-  }
-
-  try {
-    // Carregar tenant (business + settings) e histórico — paralelo para reduzir latency
-    const userId = resolveUserId(instanceName);
-    const [tenant, history] = await Promise.all([
-      loadTenant(instanceName),
-      loadHistory(userId, chatId),
+  async function tenantFor(identity) {
+    if (!cloud) return { settings: { botEnabled: false }, profile: {}, slotEnabled: false };
+    const admin = adminClient();
+    const [u, w, slot] = await Promise.all([
+      admin.from('zapia_users').select('is_active,max_wa_slots,role').eq('user_id', identity.userId).maybeSingle(),
+      admin.from('zapia_workspaces').select('business,settings').eq('user_id', identity.userId).maybeSingle(),
+      admin.from('zapia_wa_slots').select('ai_enabled').eq('user_id', identity.userId).eq('slot_id', identity.slotId).maybeSingle(),
     ]);
-    const rawTs = data.messageTimestamp || info.Timestamp || data.timestamp; const n = Number(rawTs); const timestamp = new Date(n > 1e12 ? n : n > 0 ? n*1000 : Date.now()).toISOString();
-    const waMsgId = key.id || info.ID || data.id;
-    const userTurn = { id:String(waMsgId || `in-${timestamp}`), ...(waMsgId ? {waMsgId:String(waMsgId)} : {}), waMsgKey:key, role:'user', text:userText || '[mídia]', timestamp };
-    if (waMsgId && history.some((m) => String(m.waMsgId || m.id || '') === String(waMsgId))) {
-      return res.status(200).json({ ok:true, duplicate:true });
-    }
-    const nextHistory = [...history, userTurn];
-
-    // Verificar se IA está ligada para este número (settings.botEnabled do workspace)
-    const iaEnabled = tenant.settings?.botEnabled !== false;
-
-    let reply;
-    if (iaEnabled) {
-      // Gerar resposta com IA (skills do Ienvia Motor — demo fallback se sem chaves)
-      reply = await generateSmartReply({
-        profile: tenant.profile,
-        settings: tenant.settings,
-        history: nextHistory.slice(0, -1),
-        userText,
-        media,
-        contactName: phoneNumber,
-        allowDemoFallback: true,
-      });
-
-      // Enviar resposta
-      if (reply.cleanText) {
-        const sent = await sendMessage(instanceName, phoneNumber, reply.cleanText);
-        if (sent?.error) throw new Error(sent.error);
-      }
-    } else {
-      // IA desligada para este número: apenas registrar a mensagem, não responder
-      // (opcional: settings.iaOffReply — mensagem de fallback)
-      const offReply = tenant.settings?.iaOffReply || '';
-      if (offReply) {
-        const sent = await sendMessage(instanceName, phoneNumber, offReply);
-        if (sent?.error) throw new Error(sent.error);
-        reply = { cleanText: offReply, providerUsed: 'ia_off_fallback' };
-      } else {
-        reply = { cleanText: '', providerUsed: 'ia_off' };
-      }
-    }
-
-    // Persistir histórico (sem resposta da IA se desligada)
-    if (reply.cleanText) nextHistory.push({ id:`ai-${Date.now()}`, role:'assistant', text:reply.cleanText, timestamp:trueNowIso() });
-    if (nextHistory.length > 120) nextHistory.splice(0, nextHistory.length - 120);
-    const saveResult = await saveHistory(tenant.userId, chatId, nextHistory, phoneNumber);
-
-    console.log(
-      `[EvolutionWebhook] ${instanceName} → ${phoneNumber}: "${userText || '[mídia]'}" → "${String(reply.cleanText).slice(0, 60)}" (IA: ${iaEnabled ? 'on' : 'off'})`
-    );
-    return res.status(200).json({ ok: true, reply: reply.cleanText, provider: reply.providerUsed, iaEnabled });
-  } catch (err) {
-    console.error('[EvolutionWebhook] Erro:', err.message);
-    return res.status(200).json({ ok: false, error: err.message });
+    if (u.error || w.error || slot.error) throw new Error('tenant_read_failed');
+    if (!u.data?.is_active || !w.data || (u.data.role !== 'master' && Number(identity.slotId.slice(-1)) > Number(u.data.max_wa_slots || 1))) throw Object.assign(new Error('tenant_inactive'), { statusCode: 403 });
+    return { settings: w.data.settings || {}, profile: w.data.business || {}, slotEnabled: slot.data?.ai_enabled !== false && w.data.settings?.waSlots?.[identity.slotId]?.aiEnabled !== false };
   }
-});
+  async function merge(identity, chatId, messages = [], { name = '', event = '', ackId = '', ack = 0, patch = {} } = {}) {
+    if (cloud) {
+      const { data, error } = await adminClient().rpc('ienvia_merge_evolution_contact', { p_owner: identity.userId, p_chat: chatId, p_messages: messages, p_name: name, p_event: event, p_ack_id: ackId, p_ack: ack, p_patch: patch });
+      if (error || !data?.contact || typeof data.inserted !== 'boolean') throw new Error('projection_failed');
+      return data;
+    }
+    const scope = `${identity.userId || identity.instanceName}:${chatId}`, eventKey = `${scope}:${event}`;
+    const inserted = !event || !seen.has(eventKey);
+    if (event) seen.add(eventKey);
+    const contact = memory.get(scope) || { messages: [] };
+    if (ackId) receipts.set(`${scope}:${ackId}`, Math.max(receipts.get(`${scope}:${ackId}`) || 0, ack));
+    for (const m of messages) {
+      const old = contact.messages.find(x => (x.waMsgId || x.id) === (m.waMsgId || m.id) || x.id === m.id);
+      if (old) Object.assign(old, m); else contact.messages.push({ ...m });
+    }
+    for (const m of contact.messages) { const level = receipts.get(`${scope}:${m.waMsgId || m.id}`); if (level) { m.ack = Math.max(m.ack || 0, level); delete m.deliveryStatus; } }
+    Object.assign(contact, patch); memory.set(scope, contact);
+    return { inserted, contact };
+  }
+  async function send(instanceName, number, text) {
+    const response = await fetcher(`${String(env.EVOLUTION_API_URL || 'https://pool-evolution-api-067.cloud2.pageup.dev.br').replace(/\/+$/, '')}/message/sendText/${encodeURIComponent(instanceName)}`, {
+      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20000),
+      headers: { apikey: env.EVOLUTION_API_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ number, text }),
+    });
+    if (!response.ok) throw new Error('provider_rejected');
+    const result = requireEvolutionMessageId(JSON.parse(await response.text()));
+    return result.key?.id || result.data?.key?.id || result.data?.id || result.id;
+  }
+  async function processRecord(identity, tenant, data, eventKey, historical = false) {
+    const info = data.Info || data.info || {}, key = data.key || info.Key || {};
+    const jid = String(key.remoteJid || info.Chat || info.Sender || data._chat || data.remoteJid || '');
+    // Broadcast, status, grupos e newsletters nunca entram no atendimento automático.
+    if (!/^\d+(?::\d+)?@(s\.whatsapp\.net|lid)$/.test(jid)) return { ignored: 'jid' };
+    const chatId = buildContactChannelKey(identity.slotId, jid.replace(/:\d+@/, '@'));
+    if (eventKey === 'MESSAGES_UPDATE') {
+      const id = key.id || data.id;
+      const ack = evolutionAck(data.update?.status ?? data.status ?? data.ack ?? data.data?.status);
+      if (!id || !ack) return { updated: 0 };
+      await merge(identity, chatId, [], { ackId: String(id), ack }); return { updated: cloud ? 1 : 0 };
+    }
+    const m = unwrapEvolutionMessage(data.message || data.Message || {}), text = textOf(m), fallback = placeholder(m);
+    let media = null;
+    const b64 = data.base64 || m.base64;
+    const mimeType = m.audioMessage?.mimetype || m.imageMessage?.mimetype;
+    if (typeof b64 === 'string' && b64.length <= 10 * 1024 * 1024 && /^(audio\/(ogg|mpeg|mp4|wav|webm)|image\/(jpeg|png|webp))(;.*)?$/.test(mimeType || '')) {
+      const raw = b64.replace(/^data:[^;]+;base64,/, '');
+      if (/^[A-Za-z0-9+/]*={0,2}$/.test(raw)) { const buffer = Buffer.from(raw, 'base64'); if (buffer.length && buffer.length <= 7 * 1024 * 1024) media = { mimeType, buffer }; }
+    }
+    if (!text && !fallback && !media) return { ignored: 'no-text' };
+    const id = String(key.id || info.ID || info.Id || data.id || '');
+    // Sem ID não há deduplicação segura; não gerar resposta nem simular identidade com Date.now().
+    if (!id || id.length > 300) return { ignored: 'missing-id' };
+    const fromMe = evolutionBoolean(key.fromMe ?? key.IsFromMe ?? info.IsFromMe ?? data.fromMe ?? data.IsFromMe) || eventKey === 'SEND_MESSAGE';
+    const timestamp = evolutionTimestamp(data.messageTimestamp ?? info.Timestamp ?? info.TimestampMS ?? data.timestamp);
+    const turn = { id, waMsgId: id, waMsgKey: key, role: fromMe ? 'owner' : 'user', text: text || fallback, timestamp, ...(historical ? { historical: true } : {}), ...(fallback ? { historyMediaUnavailable: true } : {}) };
+    // O ingresso fica durável ANTES da chamada de IA. Repetição não autoriza uma segunda resposta.
+    const saved = await merge(identity, chatId, [turn], { name: String(data.pushName || jid.split('@')[0]), event: `message:${id}` });
+    if (historical) return { historical: true, saved: 1 };
+    if (fromMe) return { persisted: true, role: 'owner' };
+    if (!saved.inserted) return { duplicate: true };
+    const contact = saved.contact, settings = tenant.settings;
+    const phone = jid.endsWith('@s.whatsapp.net') ? jid.split('@')[0].split(':')[0] : '';
+    const ignored = contact.aiIgnored || (settings.ignoredContacts || []).some(x => String(x.phone || '').replace(/\D/g, '') === phone);
+    const paused = contact.pausedUntil === 'forever' || Date.parse(contact.pausedUntil || '') > Date.now();
+    if (pedidoExplicitoParada(text)) {
+      await merge(identity, chatId, [], { patch: { aiIgnored: true, pausedUntil: 'forever', pauseReason: 'Pedido explícito de não receber mensagens.' } });
+      return { persisted: true, optOut: true };
+    }
+    const iaEnabled = settings.botEnabled !== false && tenant.slotEnabled && !ignored && !paused;
+    // Sem base64 não fingir compreender um áudio vazio. Não baixar URLs arbitrárias do evento.
+    if (!iaEnabled || !env.EVOLUTION_API_KEY || !phone || (!text && !media)) return { persisted: true, iaEnabled: false };
+    let pending;
+    try {
+      const reply = await replyGenerator({ profile: tenant.profile, settings, history: contact.messages.filter(x => x.id !== id && x.role !== 'internal_note').slice(-60), userText: text, media, contactName: contact.name || phone, allowDemoFallback: false });
+      if (!reply?.cleanText || reply.actions?.optOutReason || reply.actions?.courtesySilence || reply.actions?.silentPauseReason) {
+        if (reply?.actions?.optOutReason) await merge(identity, chatId, [], { patch: { aiIgnored: true, pausedUntil: 'forever', pauseReason: 'Opt-out detectado.' } });
+        return { persisted: true, iaEnabled };
+      }
+      // Revalidar switches/pausa depois da latência de IA e antes de qualquer efeito externo.
+      const fresh = await tenantFor(identity), current = await merge(identity, chatId);
+      if (fresh.settings.botEnabled === false || !fresh.slotEnabled || current.contact.aiIgnored || current.contact.pausedUntil === 'forever' || Date.parse(current.contact.pausedUntil || '') > Date.now()) return { persisted: true, iaEnabled: false };
+      pending = { id: `evo-ai-${randomUUID()}`, role: 'assistant', text: reply.cleanText, timestamp: trueNowIso(), deliveryStatus: 'uncertain' };
+      await merge(identity, chatId, [pending]);
+      const sentId = await send(identity.instanceName, phone, reply.cleanText);
+      await merge(identity, chatId, [{ ...pending, waMsgId: sentId, deliveryStatus: 'accepted' }]);
+      return { persisted: true, accepted: true, iaEnabled };
+    } catch {
+      // Entrada já salva: não pedir retry cego ao provedor após possível envio.
+      // A resposta incerta permanece visível para reconciliação manual, sem repetir.
+      console.warn('[EvolutionWebhook] Falha de resposta; entrada preservada, sem reenvio automático.');
+      return { persisted: true, replyUncertain: Boolean(pending), replyFailed: true };
+    }
+  }
 
-evolutionApiWebhookRouter.get('/health', (req, res) => res.json({ ok: true, ts: Date.now() }));
-
-evolutionApiWebhookRouter.get('/status', (req, res) => {
-  res.json({
-    ok: true,
-    evolutionApiUrl: EVOLUTION_API_URL,
-    evolutionApiConfigured: Boolean(EVOLUTION_API_KEY),
-    supabase: HAS_SUPABASE,
-    instances: HAS_SUPABASE ? Object.keys(JSON.parse(process.env.EVOLUTION_INSTANCE_USERS || '{}')) : [],
+  router.post('/webhook', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const secret = env.EVOLUTION_WEBHOOK_SECRET;
+    const isolated = env.ZAPIA_ISOLATED_TEST === '1' && !env.VERCEL && !env.VERCEL_ENV && !cloud;
+    if (!cloud && !isolated) return res.status(503).json({ ok: false, error: 'Persistência durável do webhook não configurada.' });
+    if (!secret && !isolated) return res.status(503).json({ ok: false, error: 'Autenticação do webhook não configurada.' });
+    if (secret && !secureEquals(req.get('x-ienvia-webhook-secret'), secret)) return res.status(401).json({ ok: false, error: 'Webhook não autorizado.' });
+    const instanceName = req.body?.instance?.data?.instance || req.body?.instance?.instanceName || req.body?.instance;
+    let identity = evolutionInstanceIdentity(instanceName, env);
+    if (!identity && isolated && /^zap-ia-slot_[1-3]$/.test(instanceName)) identity = { userId: null, slotId: instanceName.slice(-6) };
+    if (!identity) return res.status(403).json({ ok: false, error: 'Instância sem mapeamento autorizado.' });
+    identity = { ...identity, instanceName };
+    const data = req.body?.instance?.data || req.body?.data || {};
+    const event = String(req.body?.event || data.event || 'MESSAGE').trim().toUpperCase().replace(/[.\s-]+/g, '_');
+    const historical = ['HISTORY_SYNC', 'HISTORYSYNC', 'MESSAGES_SET'].includes(event);
+    if (!historical && !['MESSAGE', 'MESSAGE_RECEIVED', 'MESSAGES_UPSERT', 'SEND_MESSAGE', 'MESSAGES_UPDATE'].includes(event)) return res.json({ ok: true, ignored: 'event' });
+    let rows = Array.isArray(data) ? data : Array.isArray(data.data) ? data.data : [data];
+    if (historical) {
+      const conversations = data.conversations || data.Conversations;
+      rows = data.messages || data.Messages || data.history || data.History || (Array.isArray(conversations) ? conversations.flatMap(c => (c.messages || c.Messages || []).map(m => ({ ...m, _chat: c.id || c.chat || c.Info?.Chat || c.Jid }))) : []);
+    }
+    if (!Array.isArray(rows) || rows.length > 500) return res.status(400).json({ ok: false, error: 'Lote inválido.' });
+    try {
+      const tenant = await tenantFor(identity), results = [];
+      for (const row of rows) results.push(await processRecord(identity, tenant, row || {}, event, historical));
+      if (event === 'MESSAGES_UPDATE') return res.json({ ok: true, updated: results.reduce((n, r) => n + (r.updated || 0), 0), event });
+      if (historical) return res.json({ ok: true, historical: true, saved: results.reduce((n, r) => n + (r.saved || 0), 0) });
+      return res.json({ ok: true, ...(results.length === 1 ? results[0] : { processed: results.length, results }) });
+    } catch (error) {
+      // Falha ANTES da projeção: o provedor pode repetir; dedupe no banco protege os já persistidos.
+      return res.status(error.statusCode || 503).json({ ok: false, error: 'Não foi possível persistir o evento Evolution.' });
+    }
   });
-});
-
-// Enviar mensagem manual (teste)
-evolutionApiWebhookRouter.post('/send', (_req, res) => res.status(404).json({ ok: false, error: 'Rota desativada.' }));
-
-// LIMPAR conversas de teste no CRM (temporário)
-evolutionApiWebhookRouter.post('/clear', (_req, res) => res.status(404).json({ ok: false, error: 'Rota desativada.' }));
+  return router;
+}
+export const evolutionApiWebhookRouter = createEvolutionWebhookRouter();

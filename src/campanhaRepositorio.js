@@ -5,7 +5,7 @@ const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function candidatoValido(c) {
   return c && UUID.test(c.destinatarioId) && typeof c.telefone==='string' && /^[1-9][0-9]{7,14}$/.test(c.telefone) && typeof c.nome==='string' && c.nome.length<=200 && Number.isSafeInteger(c.etapa) && c.etapa>=0 && c.etapa<100 &&
     Number.isSafeInteger(c.revisao) && c.revisao>=0 && ['slot_1','slot_2','slot_3'].includes(c.slotId) && (c.provedor===undefined||['baileys','evolution_api'].includes(c.provedor)) && c.material && typeof c.material==='object' && !Array.isArray(c.material) &&
-    (c.material.tipo==='texto' || (['imagem','audio'].includes(c.material.tipo) && c.anexo && Buffer.isBuffer(c.anexo.buffer) && c.anexo.buffer.length>0 && c.anexo.buffer.length<=35*1024*1024 && typeof c.anexo.mime==='string'));
+    (c.material.tipo==='texto' || (['imagem','audio'].includes(c.material.tipo) && (c.provedor==='evolution_api' ? UUID.test(c.material.arquivoId||'') && UUID.test(c.material.pastaId||'') : c.anexo && Buffer.isBuffer(c.anexo.buffer) && c.anexo.buffer.length>0 && c.anexo.buffer.length<=35*1024*1024 && typeof c.anexo.mime==='string')));
 }
 export function criarRepositorioCampanhaSupabase({client,selecionar,workerId}={}) {
   if(!client||typeof client.rpc!=='function'||typeof selecionar!=='function'||!UUID.test(workerId))throw new Error('Repositório de campanha inválido.');

@@ -4,6 +4,8 @@ import express from 'express';
 
 process.env.EVOLUTION_API_URL = 'https://evolution.test';
 process.env.EVOLUTION_API_KEY = 'global-test-key';
+process.env.ZAPIA_ISOLATED_TEST = '1';
+delete process.env.VERCEL;
 delete process.env.SUPABASE_URL;
 delete process.env.SUPABASE_SERVICE_ROLE_KEY;
 const { evolutionApiWebhookRouter } = await import('../src/evolutionApiWebhook.js');

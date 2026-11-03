@@ -6,3 +6,10 @@
 - Distinga aceite em fila, confirmação do motor e leitura pelo destinatário. Em caso de falha ou timeout incerto de envio, não reenvie automaticamente; verifique a conversa para evitar duplicidade.
 - Não abra um socket WhatsApp concorrente para testes. Não acesse, registre ou publique segredos e dados privados. Testes com dados sintéticos e isolamento por tenant são preferíveis.
 - As interfaces e documentação do produto devem permanecer em português brasileiro.
+
+
+## Credenciais locais fornecidas pelo titular
+
+- Por instrução explícita do titular, salvar tokens, chaves e credenciais que ele fornecer no `.env` local da raiz, com nomes de variável apropriados. Preservar configurações existentes e não imprimir valores.
+- Antes de gravar segredos, conferir que `.env` está ignorado e não está versionado; usar permissões restritas. Nunca incluir segredos em commits, patches, ZIPs, relatórios, logs ou `.env.example`.
+- Usar o `.env` em integrações reais autorizadas. A suíte automatizada isolada deve continuar sem carregar credenciais reais. A disponibilidade de uma credencial não amplia a autorização para envios, destinos, deploys ou alterações remotas.

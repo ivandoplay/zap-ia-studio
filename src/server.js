@@ -173,7 +173,7 @@ app.get('/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
 
 // ======================== WEBHOOK EVOLUTION GO ========================
 // Recebe mensagens do Evolution API → IA do Ienvia Motor → resposta.
-// Montado ANTES do middleware /api de auth (o webhook é público — o Evolution API não autentica).
+// Montado antes de /api de auth: o webhook valida seu segredo próprio, não uma sessão de usuário.
 app.use('/api/evolution-webhook', evolutionApiWebhookRouter);
 
 app.get(['/venda', '/venda.html'], (req, res) => res.redirect(302, `${IS_VERCEL ? '/' : '/vitrine'}${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`));
@@ -550,6 +550,7 @@ app.use('/api', async (req, res, next) => {
 
       // Estas operações não leem nem alteram o workspace; evitam carregar conversas privadas.
       if ((req.path === '/campaigns' || req.path.startsWith('/campaigns/')) ||
+          req.path === '/evolution-cloud/campaign-send' ||
           (req.method === 'GET' && (req.path === '/cloud/realtime-config' || /^\/cloud\/commands\/[^/]+\/status\/?$/.test(req.path) || req.path === '/evolution-cloud/diagnostics/read-only'))) {
         req.cloudAuth = { client: verified.client, authUser: verified.authUser, profile: verified.profile, isRemoteImpersonation: false };
         return next();

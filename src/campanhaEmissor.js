@@ -10,6 +10,8 @@ export function criarEmissorCampanha({obterSlot,podeEnviar=()=>true,enviarEvolut
    if(!await podeEnviar(acao))throw new Error('Sessão ou contato indisponível para envio.');
    const enviado=await enviarEvolution(acao);
    if(typeof enviado?.key?.id!=='string'||!enviado.key.id)return {status:'incerta'};
+   try { await registrar({acao,jid:`${acao.telefone}@s.whatsapp.net`,enviado,slot:null}); }
+   catch { try { aoErro('Envio aceito; falha ao registrar histórico Evolution. Não reenviar.'); } catch {} }
    return {status:'aceita'};
   }
   const slot=obterSlot(acao.slotId);if(!slot||slot.slotId&&slot.slotId!==acao.slotId||slot.status!=='connected'||!slot.sock)throw new Error('Chip indisponível.');

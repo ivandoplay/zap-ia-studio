@@ -1,0 +1,371 @@
+
+> ienvia@5.8.28 test:evolution
+> node scripts/test-isolated.mjs "evolution|crm-v2-event-ingress|campanha-evolution|campanha-historico"
+
+TAP version 13
+# Subtest: campanha escolhe Evolution somente no slot Evolution e persiste o provedor na reserva
+ok 1 - campanha escolhe Evolution somente no slot Evolution e persiste o provedor na reserva
+  ---
+  duration_ms: 5.053142
+  ...
+# Subtest: duas conexões para o mesmo chip pausam sem chamar qualquer provedor
+ok 2 - duas conexões para o mesmo chip pausam sem chamar qualquer provedor
+  ---
+  duration_ms: 0.531922
+  ...
+# Subtest: chip indisponível pausa mesmo com outro chip conectado, sem rotação entre números
+ok 3 - chip indisponível pausa mesmo com outro chip conectado, sem rotação entre números
+  ---
+  duration_ms: 0.31498
+  ...
+# Subtest: evento fromMe e registro de campanha preservam identificação sem duplicar mensagem
+ok 4 - evento fromMe e registro de campanha preservam identificação sem duplicar mensagem
+  ---
+  duration_ms: 2.903365
+  ...
+# Subtest: normaliza mensagens em formato Evolution sem perder identidade, direção ou evento
+ok 5 - normaliza mensagens em formato Evolution sem perder identidade, direção ou evento
+  ---
+  duration_ms: 2.398288
+  ...
+# Subtest: chaves idempotentes não dependem da ordem de propriedades nem do timestamp reemitido
+ok 6 - chaves idempotentes não dependem da ordem de propriedades nem do timestamp reemitido
+  ---
+  duration_ms: 0.425991
+  ...
+# Subtest: expande histórico por conversa e preserva o JID associado a cada mensagem
+ok 7 - expande histórico por conversa e preserva o JID associado a cada mensagem
+  ---
+  duration_ms: 0.304664
+  ...
+# Subtest: atualizações de recibo da mesma mensagem usam chaves distintas por status
+ok 8 - atualizações de recibo da mesma mensagem usam chaves distintas por status
+  ---
+  duration_ms: 0.346337
+  ...
+# Subtest: lotes de mensagens produzem eventos independentes
+ok 9 - lotes de mensagens produzem eventos independentes
+  ---
+  duration_ms: 0.761332
+  ...
+# Subtest: webhook grava evento e outbox antes de confirmar; repetição é idempotente
+ok 10 - webhook grava evento e outbox antes de confirmar; repetição é idempotente
+  ---
+  duration_ms: 0.512808
+  ...
+# Subtest: instância sem mapeamento é rejeitada antes de qualquer persistência
+ok 11 - instância sem mapeamento é rejeitada antes de qualquer persistência
+  ---
+  duration_ms: 0.720372
+  ...
+# Subtest: falha de persistência impede ACK de sucesso
+ok 12 - falha de persistência impede ACK de sucesso
+  ---
+  duration_ms: 1.456335
+  ...
+# Subtest: Evolution API v2 envia texto pela instância do tenant e usa endpoint/payload v2
+ok 13 - Evolution API v2 envia texto pela instância do tenant e usa endpoint/payload v2
+  ---
+  duration_ms: 3.057116
+  ...
+# Subtest: não desvia operação para outro chip quando o chip selecionado está desconectado
+ok 14 - não desvia operação para outro chip quando o chip selecionado está desconectado
+  ---
+  duration_ms: 0.844114
+  ...
+# Subtest: Histórico usa chat/findMessages com JID, paginação e offset limitado
+ok 15 - Histórico usa chat/findMessages com JID, paginação e offset limitado
+  ---
+  duration_ms: 0.744974
+  ...
+# Subtest: resposta HTTP 2xx com rejeição de aplicação não é tratada como envio aceito
+ok 16 - resposta HTTP 2xx com rejeição de aplicação não é tratada como envio aceito
+  ---
+  duration_ms: 0.293483
+  ...
+# Subtest: findChats importa somente conversas do slot do tenant e respeita a paginação
+ok 17 - findChats importa somente conversas do slot do tenant e respeita a paginação
+  ---
+  duration_ms: 1.405238
+  ...
+# Subtest: findChats conserva LID, associa telefone alternativo e descarta o rótulo “Você”
+ok 18 - findChats conserva LID, associa telefone alternativo e descarta o rótulo “Você”
+  ---
+  duration_ms: 0.802701
+  ...
+# Subtest: findContacts lê o contrato documentado, usa number como fallback e mantém escopo por slot
+ok 19 - findContacts lê o contrato documentado, usa number como fallback e mantém escopo por slot
+  ---
+  duration_ms: 0.887436
+  ...
+# Subtest: findContacts não mostra LID como telefone, ignora “Você” e prioriza o nome salvo
+ok 20 - findContacts não mostra LID como telefone, ignora “Você” e prioriza o nome salvo
+  ---
+  duration_ms: 0.520194
+  ...
+# Subtest: findContacts percorre páginas de 1000 usando skip até o final
+ok 21 - findContacts percorre páginas de 1000 usando skip até o final
+  ---
+  duration_ms: 6.514853
+  ...
+# Subtest: contratos auxiliares usam os payloads definidos no Evolution API v2.3.7
+ok 22 - contratos auxiliares usam os payloads definidos no Evolution API v2.3.7
+  ---
+  duration_ms: 1.967063
+  ...
+# Subtest: Evolution API cria rotas distintas por tenant com URL e chave compartilhadas
+ok 23 - Evolution API cria rotas distintas por tenant com URL e chave compartilhadas
+  ---
+  duration_ms: 0.688937
+  ...
+# Subtest: pareamento por QR usa base64 para a imagem e nunca confunde `code` com `pairingCode`
+ok 24 - pareamento por QR usa base64 para a imagem e nunca confunde `code` com `pairingCode`
+  ---
+  duration_ms: 46.292668
+  ...
+# Subtest: pareamento por número usa apenas pairingCode e passa o número como query
+ok 25 - pareamento por número usa apenas pairingCode e passa o número como query
+  ---
+  duration_ms: 51.444578
+  ...
+# Subtest: chip inválido e segredo ausente não causam efeitos externos
+ok 26 - chip inválido e segredo ausente não causam efeitos externos
+  ---
+  duration_ms: 12.192635
+  ...
+# OK: o status aceito fica pendente até surgir ACK real do WhatsApp.
+# Subtest: /tmp/ienvia-tests-yuPeex/project/tests/evolution-api-delivery-status.test.mjs
+ok 6 - /tmp/ienvia-tests-yuPeex/project/tests/evolution-api-delivery-status.test.mjs
+  ---
+  duration_ms: 306.386494
+  ...
+# OK: mensagem histórica aparece na conversa existente sem gerar não lidas; interface em navegador real, dados sintéticos.
+# Subtest: CRM mostra no fio da conversa a mensagem antiga carregada do histórico
+ok 28 - CRM mostra no fio da conversa a mensagem antiga carregada do histórico
+  ---
+  duration_ms: 750.241829
+  ...
+# Subtest: Evolution API v2.3.7 history rows normalize into chronological CRM messages and media placeholders
+ok 29 - Evolution API v2.3.7 history rows normalize into chronological CRM messages and media placeholders
+  ---
+  duration_ms: 1.537994
+  ...
+# Subtest: nome legível do chat substitui nome numérico genérico sem tocar no histórico
+ok 30 - nome legível do chat substitui nome numérico genérico sem tocar no histórico
+  ---
+  duration_ms: 1.431844
+  ...
+# Subtest: history pages persist in CRM, deduplicate by WhatsApp ID, remain chronological and do not increment unread
+ok 31 - history pages persist in CRM, deduplicate by WhatsApp ID, remain chronological and do not increment unread
+  ---
+  duration_ms: 1.914023
+  ...
+# ⚠️  [Motor 24h Blindado] Exceção recuperada automaticamente: locator.waitFor: Timeout 15000ms exceeded.
+# Call log:
+#   - waiting for locator('\#qrStage img.qr-image') to be visible
+# Subtest: /tmp/ienvia-tests-yuPeex/project/tests/evolution-api-qr-ui.test.mjs
+ok 9 - /tmp/ienvia-tests-yuPeex/project/tests/evolution-api-qr-ui.test.mjs
+  ---
+  duration_ms: 16736.224468
+  ...
+# Subtest: diagnóstico de produção usa somente endpoints de leitura e devolve indicadores agregados
+ok 33 - diagnóstico de produção usa somente endpoints de leitura e devolve indicadores agregados
+  ---
+  duration_ms: 3.702543
+  ...
+# Subtest: resposta HTTP 403 é classificada como falha de autenticação sem texto bruto
+ok 34 - resposta HTTP 403 é classificada como falha de autenticação sem texto bruto
+  ---
+  duration_ms: 0.74008
+  ...
+# Subtest: rota temporária exige usuário dono, limita chamadas e não cria fluxo de escrita
+ok 35 - rota temporária exige usuário dono, limita chamadas e não cria fluxo de escrita
+  ---
+  duration_ms: 21.905859
+  ...
+# OK: falhas de aplicação em HTTP 2xx são rejeitadas; aceitação não implica entrega.
+# Subtest: /tmp/ienvia-tests-yuPeex/project/tests/evolution-api-response.test.mjs
+ok 11 - /tmp/ienvia-tests-yuPeex/project/tests/evolution-api-response.test.mjs
+  ---
+  duration_ms: 36.29488
+  ...
+# Subtest: persists Evolution API v2 fromMe events instead of discarding them
+ok 37 - persists Evolution API v2 fromMe events instead of discarding them
+  ---
+  duration_ms: 39.063529
+  ...
+# Subtest: accepts Evolution API delivery/read updates without treating them as incoming messages
+ok 38 - accepts Evolution API delivery/read updates without treating them as incoming messages
+  ---
+  duration_ms: 5.724971
+  ...
+# Subtest: ingests legacy HistorySync messages and normalizes them as history events
+ok 39 - ingests legacy HistorySync messages and normalizes them as history events
+  ---
+  duration_ms: 4.076896
+  ...
+# Subtest: disables unauthenticated maintenance routes
+ok 40 - disables unauthenticated maintenance routes
+  ---
+  duration_ms: 6.075464
+  ...
+# Subtest: Evolution imagem: repositório aceita mídia por ticket sem exigir Buffer Baileys
+ok 41 - Evolution imagem: repositório aceita mídia por ticket sem exigir Buffer Baileys
+  ---
+  duration_ms: 2.922917
+  ...
+# Subtest: Evolution audio: repositório aceita mídia por ticket sem exigir Buffer Baileys
+ok 42 - Evolution audio: repositório aceita mídia por ticket sem exigir Buffer Baileys
+  ---
+  duration_ms: 0.219977
+  ...
+# Subtest: Baileys continua exigindo bytes locais e Evolution exige identificadores de mídia válidos
+ok 43 - Baileys continua exigindo bytes locais e Evolution exige identificadores de mídia válidos
+  ---
+  duration_ms: 0.620031
+  ...
+# Subtest: envia apenas a mensagem da reserva autorizada pelo titular e pela instância própria
+ok 44 - envia apenas a mensagem da reserva autorizada pelo titular e pela instância própria
+  ---
+  duration_ms: 24.275328
+  ...
+# Subtest: não envia quando não existe checkpoint reservado
+ok 45 - não envia quando não existe checkpoint reservado
+  ---
+  duration_ms: 5.051958
+  ...
+# Subtest: áudio Evolution usa URL privada assinada e o endpoint PTT no slot da conta
+ok 46 - áudio Evolution usa URL privada assinada e o endpoint PTT no slot da conta
+  ---
+  duration_ms: 4.672827
+  ...
+# Subtest: replay da mesma tentativa não dispara duas vezes, inclusive com clientes diferentes
+ok 47 - replay da mesma tentativa não dispara duas vezes, inclusive com clientes diferentes
+  ---
+  duration_ms: 6.706828
+  ...
+# Subtest: Evolution API cloud bridge is behind API authentication
+ok 48 - Evolution API cloud bridge is behind API authentication
+  ---
+  duration_ms: 53.583026
+  ...
+# Subtest: diagnóstico agrega contatos/conversas, testa offsets e nunca devolve payloads pessoais
+ok 49 - diagnóstico agrega contatos/conversas, testa offsets e nunca devolve payloads pessoais
+  ---
+  duration_ms: 6.866801
+  ...
+# Subtest: diagnóstico classifica falha de endpoint e mantém resposta redigida
+ok 50 - diagnóstico classifica falha de endpoint e mantém resposta redigida
+  ---
+  duration_ms: 0.515877
+  ...
+# Subtest: conexão offline não dispara consultas de contatos, chats ou histórico
+ok 51 - conexão offline não dispara consultas de contatos, chats ou histórico
+  ---
+  duration_ms: 0.200276
+  ...
+# Subtest: SQL: migração compila em PostgreSQL embarcado; trava tentativa e isola tenant
+ok 52 - SQL: migração compila em PostgreSQL embarcado; trava tentativa e isola tenant
+  ---
+  duration_ms: 15.958645
+  ...
+# Subtest: SQL: ingresso repetido é idempotente e não elimina histórico ou metadados
+ok 53 - SQL: ingresso repetido é idempotente e não elimina histórico ou metadados
+  ---
+  duration_ms: 14.222605
+  ...
+# Subtest: SQL: ACK antes da mensagem não se perde e nunca regride
+ok 54 - SQL: ACK antes da mensagem não se perde e nunca regride
+  ---
+  duration_ms: 5.687427
+  ...
+# Subtest: SQL: callback de saída e confirmação IA convergem por ID, não por texto
+ok 55 - SQL: callback de saída e confirmação IA convergem por ID, não por texto
+  ---
+  duration_ms: 4.575867
+  ...
+# Subtest: SQL: tombstone não ressuscita mensagens antigas e histórico não é truncado em 120
+ok 56 - SQL: tombstone não ressuscita mensagens antigas e histórico não é truncado em 120
+  ---
+  duration_ms: 41.690699
+  ...
+# Subtest: SQL: projeção é exclusiva de service_role e tabelas de controle têm RLS
+ok 57 - SQL: projeção é exclusiva de service_role e tabelas de controle têm RLS
+  ---
+  duration_ms: 11.008947
+  ...
+# Subtest: SQL: saída de campanha mantém campaignId e não inventa ACK
+ok 58 - SQL: saída de campanha mantém campaignId e não inventa ACK
+  ---
+  duration_ms: 4.576462
+  ...
+# Subtest: SQL: conta inativa, campanha pausada e opt-out impedem claim novo
+ok 59 - SQL: conta inativa, campanha pausada e opt-out impedem claim novo
+  ---
+  duration_ms: 16.481095
+  ...
+# Subtest: webhook rejeita segredo ausente/incorreto e instância desconhecida sem chamar banco/IA/envio
+ok 60 - webhook rejeita segredo ausente/incorreto e instância desconhecida sem chamar banco/IA/envio
+  ---
+  duration_ms: 43.361237
+  ...
+# Subtest: duas notificações concorrentes têm uma única resposta; entrada é persistida antes da IA
+ok 61 - duas notificações concorrentes têm uma única resposta; entrada é persistida antes da IA
+  ---
+  duration_ms: 12.008367
+  ...
+# Subtest: string false representa mensagem recebida e wrappers efêmeros são interpretados
+ok 62 - string false representa mensagem recebida e wrappers efêmeros são interpretados
+  ---
+  duration_ms: 13.774387
+  ...
+# Subtest: falha do Supabase antes da persistência retorna 503 e não envia
+ok 63 - falha do Supabase antes da persistência retorna 503 e não envia
+  ---
+  duration_ms: 7.719963
+  ...
+# [EvolutionWebhook] Falha de resposta; entrada preservada, sem reenvio automático.
+# Subtest: timeout após gravação preserva entrada/saída incerta e não repete o envio
+ok 64 - timeout após gravação preserva entrada/saída incerta e não repete o envio
+  ---
+  duration_ms: 6.352146
+  ...
+# Subtest: respeita switch por chip, bot global, pausa de contato e opt-out antes da IA
+ok 65 - respeita switch por chip, bot global, pausa de contato e opt-out antes da IA
+  ---
+  duration_ms: 11.511192
+  ...
+# Subtest: lote processa todos os registros; broadcast não dispara IA; timestamp inválido não quebra ingresso
+ok 66 - lote processa todos os registros; broadcast não dispara IA; timestamp inválido não quebra ingresso
+  ---
+  duration_ms: 3.194432
+  ...
+# Subtest: áudio sem base64 fica registrado, sem resposta de IA a entrada vazia
+ok 67 - áudio sem base64 fica registrado, sem resposta de IA a entrada vazia
+  ---
+  duration_ms: 5.666931
+  ...
+# Subtest: identidade nunca usa conta padrão para nome arbitrário, requer slot em mapa personalizado
+ok 68 - identidade nunca usa conta padrão para nome arbitrário, requer slot em mapa personalizado
+  ---
+  duration_ms: 0.937288
+  ...
+# Subtest: lote vazio no ingresso CRM não acessa events[0] nem resolve tenant inexistente
+ok 69 - lote vazio no ingresso CRM não acessa events[0] nem resolve tenant inexistente
+  ---
+  duration_ms: 0.4456
+  ...
+# Subtest: HTTP 2xx vazio não prova aceite; status numérico 400 também é rejeição
+ok 70 - HTTP 2xx vazio não prova aceite; status numérico 400 também é rejeição
+  ---
+  duration_ms: 0.516015
+  ...
+1..70
+# tests 70
+# suites 0
+# pass 70
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 24050.415038

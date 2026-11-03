@@ -1,3 +1,4 @@
+import { evolutionBoolean } from '../evolutionIdentity.js';
 import { createHash } from 'node:crypto';
 
 const EVENT_KIND = new Map([
@@ -150,7 +151,7 @@ export function normalizeEvolutionEvent(payload = {}) {
       kind,
       chatId: chatId || null,
       messageId: messageId || null,
-      fromMe: fromMeValue === undefined ? null : Boolean(fromMeValue),
+      fromMe: fromMeValue === undefined ? null : evolutionBoolean(fromMeValue),
       status: status === undefined ? null : status,
       timestamp,
       providerKey: key,

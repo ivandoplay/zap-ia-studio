@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 process.env.EVOLUTION_API_URL = 'https://evolution.test';
 process.env.EVOLUTION_API_KEY = 'global-test-key';
-process.env.EVOLUTION_DEFAULT_USER_ID = 'tenant-1';
+process.env.EVOLUTION_DEFAULT_USER_ID = '11111111-1111-4111-8111-111111111111';
 process.env.EVOLUTION_INSTANCE_USERS = '{}';
 
 const requests = [];
@@ -25,7 +25,7 @@ const { sendEvolutionApiText, sendEvolutionApiMedia, sendEvolutionApiContact, re
 
 test('Evolution API v2 envia texto pela instância do tenant e usa endpoint/payload v2', async () => {
   requests.length = 0;
-  const result = await sendEvolutionApiText('tenant-1', '558899999999@s.whatsapp.net', 'Olá');
+  const result = await sendEvolutionApiText('11111111-1111-4111-8111-111111111111', '558899999999@s.whatsapp.net', 'Olá');
   assert.deepEqual(result, { key: { id: 'message-1' }, status: 'PENDING' });
   const send = requests.find((r) => r.url.includes('/message/sendText/'));
   assert.ok(send);
@@ -53,7 +53,7 @@ test('não desvia operação para outro chip quando o chip selecionado está des
   };
 
   await assert.rejects(
-    () => sendEvolutionApiText('tenant-1', 'slot_2::558899999999@s.whatsapp.net', 'Não enviar'),
+    () => sendEvolutionApiText('11111111-1111-4111-8111-111111111111', 'slot_2::558899999999@s.whatsapp.net', 'Não enviar'),
     (error) => error.statusCode === 503 && /não será encaminhada para outro chip/.test(error.message)
   );
   assert.equal(requests.some((request) => request.url.includes('/message/sendText/')), false);
@@ -62,21 +62,21 @@ test('não desvia operação para outro chip quando o chip selecionado está des
 
 test('Histórico usa chat/findMessages com JID, paginação e offset limitado', async () => {
   requests.length = 0;
-  await requestEvolutionApiHistory('tenant-1', '558899999999@s.whatsapp.net', 35, { id: 'wa-id-1' });
+  await requestEvolutionApiHistory('11111111-1111-4111-8111-111111111111', '558899999999@s.whatsapp.net', 35, { id: 'wa-id-1' });
   const history = requests.find((r) => r.url.includes('/chat/findMessages/'));
   assert.ok(history);
   assert.deepEqual(JSON.parse(history.options.body), {
     where: { key: { remoteJid: '558899999999@s.whatsapp.net' } }, page: 1, offset: 35
   });
   requests.length = 0;
-  await requestEvolutionApiHistory('tenant-1', '558899999999@s.whatsapp.net', 35, {}, 2);
+  await requestEvolutionApiHistory('11111111-1111-4111-8111-111111111111', '558899999999@s.whatsapp.net', 35, {}, 2);
   const nextPage = requests.find((r) => r.url.includes('/chat/findMessages/'));
   assert.equal(JSON.parse(nextPage.options.body).page, 2);
 });
 
 test('resposta HTTP 2xx com rejeição de aplicação não é tratada como envio aceito', async () => {
   globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => JSON.stringify({ success: false, message: 'Instância sem conexão' }) });
-  await assert.rejects(() => sendEvolutionApiText('tenant-1', '558899999999@s.whatsapp.net', 'Não enviar'), /Instância sem conexão/);
+  await assert.rejects(() => sendEvolutionApiText('11111111-1111-4111-8111-111111111111', '558899999999@s.whatsapp.net', 'Não enviar'), /Instância sem conexão/);
 });
 
 
@@ -92,7 +92,7 @@ test('findChats importa somente conversas do slot do tenant e respeita a pagina�
     return { ok: true, status: 200, text: async () => JSON.stringify(body) };
   };
   requests.length = 0;
-  const result = await getEvolutionApiChats('tenant-1', { limit: 25, offset: 50 });
+  const result = await getEvolutionApiChats('11111111-1111-4111-8111-111111111111', { limit: 25, offset: 50 });
   assert.equal(result.chats.length, 1);
   assert.equal(result.chats[0].chatId, '558899999999@s.whatsapp.net');
   assert.equal(result.chats[0].name, 'Ana');
@@ -115,7 +115,7 @@ test('findChats conserva LID, associa telefone alternativo e descarta o rótulo 
     return { ok: true, status: 200, text: async () => JSON.stringify(body) };
   };
   requests.length = 0;
-  const result = await getEvolutionApiChats('tenant-1', { limit: 25 });
+  const result = await getEvolutionApiChats('11111111-1111-4111-8111-111111111111', { limit: 25 });
   assert.equal(result.chats.length, 2);
   assert.equal(result.chats[0].chatId, '187359475818564@lid');
   assert.equal(result.chats[0].phone, '5588999991111');
@@ -146,7 +146,7 @@ test('findContacts lê o contrato documentado, usa number como fallback e manté
     return { ok: true, status: 200, text: async () => JSON.stringify(body) };
   };
   requests.length = 0;
-  const contacts = await getEvolutionApiContacts('tenant-1');
+  const contacts = await getEvolutionApiContacts('11111111-1111-4111-8111-111111111111');
   assert.equal(contacts.length, 2, 'o mesmo JID em dois chips deve continuar em dois escopos distintos');
   assert.equal(contacts[0].chatId, '5586999998888@s.whatsapp.net');
   assert.equal(contacts[0].name, 'Ana');
@@ -176,7 +176,7 @@ test('findContacts não mostra LID como telefone, ignora “Você” e prioriza 
     return { ok: true, status: 200, text: async () => JSON.stringify(body) };
   };
   requests.length = 0;
-  const contacts = await getEvolutionApiContacts('tenant-1');
+  const contacts = await getEvolutionApiContacts('11111111-1111-4111-8111-111111111111');
   assert.equal(contacts.length, 3);
   assert.equal(contacts[0].chatId, '187359475818564@lid');
   assert.equal(contacts[0].phone, '5588999991111');
@@ -207,7 +207,7 @@ test('findContacts percorre páginas de 1000 usando skip até o final', async ()
     return { ok: true, status: 200, text: async () => JSON.stringify(body) };
   };
   requests.length = 0;
-  const contacts = await getEvolutionApiContacts('tenant-1');
+  const contacts = await getEvolutionApiContacts('11111111-1111-4111-8111-111111111111');
   assert.equal(contacts.length, 1002);
   const calls = requests.filter((r) => r.url.includes('/chat/findContacts/'));
   assert.deepEqual(calls.map((call) => JSON.parse(call.options.body).skip), [0, 1000]);
@@ -223,12 +223,12 @@ test('contratos auxiliares usam os payloads definidos no Evolution API v2.3.7', 
     return { ok: true, status: 201, text: async () => JSON.stringify(body) };
   };
   requests.length = 0;
-  await sendEvolutionApiMedia('tenant-1', '558899999999@s.whatsapp.net', { url: 'https://files.test/photo.png', type: 'image', caption: 'Foto', filename: 'foto.png', mimeType: 'image/png' });
-  await sendEvolutionApiContact('tenant-1', '558899999999@s.whatsapp.net', { name: 'Contato', phone: '558899999999', company: 'Empresa' });
-  await reactEvolutionApiMessage('tenant-1', '558899999999@s.whatsapp.net', 'msg-1', '👍', false);
-  await editEvolutionApiMessage('tenant-1', '558899999999@s.whatsapp.net', 'msg-1', 'Corrigida');
-  await deleteEvolutionApiMessage('tenant-1', '558899999999@s.whatsapp.net', 'msg-1');
-  await markEvolutionApiRead('tenant-1', '558899999999@s.whatsapp.net', ['msg-1']);
+  await sendEvolutionApiMedia('11111111-1111-4111-8111-111111111111', '558899999999@s.whatsapp.net', { url: 'https://files.test/photo.png', type: 'image', caption: 'Foto', filename: 'foto.png', mimeType: 'image/png' });
+  await sendEvolutionApiContact('11111111-1111-4111-8111-111111111111', '558899999999@s.whatsapp.net', { name: 'Contato', phone: '558899999999', company: 'Empresa' });
+  await reactEvolutionApiMessage('11111111-1111-4111-8111-111111111111', '558899999999@s.whatsapp.net', 'msg-1', '👍', false);
+  await editEvolutionApiMessage('11111111-1111-4111-8111-111111111111', '558899999999@s.whatsapp.net', 'msg-1', 'Corrigida');
+  await deleteEvolutionApiMessage('11111111-1111-4111-8111-111111111111', '558899999999@s.whatsapp.net', 'msg-1');
+  await markEvolutionApiRead('11111111-1111-4111-8111-111111111111', '558899999999@s.whatsapp.net', ['msg-1']);
 
   const bodyFor = (path) => JSON.parse(requests.find((r) => r.url.includes(path)).options.body);
   assert.deepEqual(bodyFor('/message/sendMedia/'), { number: '558899999999', mediatype: 'image', media: 'https://files.test/photo.png', caption: 'Foto', fileName: 'foto.png', mimetype: 'image/png' });
@@ -239,7 +239,7 @@ test('contratos auxiliares usam os payloads definidos no Evolution API v2.3.7', 
   assert.deepEqual(bodyFor('/chat/markMessageAsRead/'), { readMessages: [{ id: 'msg-1', remoteJid: '558899999999@s.whatsapp.net', fromMe: false }] });
 
   const callsBeforeEmptyRead = requests.length;
-  assert.deepEqual(await markEvolutionApiRead('tenant-1', '558899999999@s.whatsapp.net', []), { skipped: true, reason: 'no-message-ids' });
+  assert.deepEqual(await markEvolutionApiRead('11111111-1111-4111-8111-111111111111', '558899999999@s.whatsapp.net', []), { skipped: true, reason: 'no-message-ids' });
   assert.equal(requests.length, callsBeforeEmptyRead, 'lista vazia não deve chamar a API que rejeita readMessages vazio');
 });
 

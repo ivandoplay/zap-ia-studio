@@ -27,6 +27,8 @@ whatsappManager.autoRestoreIfSessionExists = async () => {};
 const chatId = '5586999998888@s.whatsapp.net';
 store.upsertContact(chatId, { name: 'Cliente Histórico Sintético', phone: '5586999998888' }, { deferSave: true });
 store.appendContactMessage(chatId, { role: 'user', text: 'Mensagem recente já no CRM', waMsgId: 'live-1' });
+store.appendContactMessage(chatId, {role:'assistant',text:'Resposta incerta sintética',waMsgId:'uncertain-1',deliveryStatus:'uncertain'});
+store.appendContactMessage(chatId, {role:'assistant',text:'Resposta aceita sintética',waMsgId:'accepted-1',deliveryStatus:'accepted'});
 whatsappManager.fetchOlderMessagesForChat = async (requestedChatId) => {
   const contact = store.appendContactMessage(requestedChatId, {
     role: 'user', text: 'Mensagem antiga importada do histórico', waMsgId: 'history-1', historical: true,
@@ -59,6 +61,8 @@ test('CRM mostra no fio da conversa a mensagem antiga carregada do histórico', 
     await page.locator('.nav-btn[data-tab="crm"]').click();
     await page.locator('#crmInboxList .crm-inbox-item').filter({ hasText: 'Cliente Histórico Sintético' }).click();
     await page.locator('#crmInboxMessages').getByText('Mensagem recente já no CRM').waitFor();
+    assert.equal(await page.locator('#crmInboxMessages .wa-ack-checks[title*="Envio incerto"]').textContent(),'⚠');
+    assert.equal(await page.locator('#crmInboxMessages .wa-ack-checks[title*="API aceitou"]').textContent(),'…');
     const historyButton = page.locator('#crmInboxMessages .btn-fetch-older-history');
     await historyButton.waitFor({ state: 'visible', timeout: 5000 });
     await historyButton.click();

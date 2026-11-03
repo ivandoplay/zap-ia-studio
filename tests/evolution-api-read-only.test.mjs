@@ -6,7 +6,7 @@ import express from 'express';
 
 process.env.EVOLUTION_API_URL = 'https://evolution.read-only.test';
 process.env.EVOLUTION_API_KEY = 'synthetic-evolution-test-key';
-process.env.EVOLUTION_DEFAULT_USER_ID = 'owner-1';
+process.env.EVOLUTION_DEFAULT_USER_ID = '11111111-1111-4111-8111-111111111111';
 process.env.EVOLUTION_INSTANCE_USERS = '{}';
 process.env.VERCEL = '1';
 
@@ -39,7 +39,7 @@ const { getEvolutionApiReadOnlyDiagnostics, evolutionApiCloudRouter } = await im
 test('diagnóstico de produção usa somente endpoints de leitura e devolve indicadores agregados', async () => {
   calls.length = 0;
   contactsStatus = 200;
-  const result = await getEvolutionApiReadOnlyDiagnostics('owner-1');
+  const result = await getEvolutionApiReadOnlyDiagnostics('11111111-1111-4111-8111-111111111111');
   assert.equal(result.ok, true);
   assert.equal(result.readOnly, true);
   assert.equal(result.connectedInstanceCount, 1);
@@ -60,7 +60,7 @@ test('diagnóstico de produção usa somente endpoints de leitura e devolve indi
 test('resposta HTTP 403 é classificada como falha de autenticação sem texto bruto', async () => {
   calls.length = 0;
   contactsStatus = 403;
-  const result = await getEvolutionApiReadOnlyDiagnostics('owner-1');
+  const result = await getEvolutionApiReadOnlyDiagnostics('11111111-1111-4111-8111-111111111111');
   assert.equal(result.ok, false);
   assert.equal(result.slots[0].contacts.errorCategory, 'authentication');
   assert.equal(result.slots[0].contacts.statusCode, 403);
@@ -91,11 +91,11 @@ test('rota temporária exige usuário dono, limita chamadas e não cria fluxo de
     const unauthorized = await request({ 'x-test-user': 'other-user' });
     assert.equal(unauthorized.status, 403);
     assert.equal(calls.length, 0);
-    const first = await request({ 'x-test-user': 'owner-1' });
+    const first = await request({ 'x-test-user': '11111111-1111-4111-8111-111111111111' });
     assert.equal(first.status, 200);
     assert.equal(first.body.readOnly, true);
     assert.equal(JSON.stringify(first.body).includes('PRIVATE_MESSAGE_BODY'), false);
-    const repeated = await request({ 'x-test-user': 'owner-1' });
+    const repeated = await request({ 'x-test-user': '11111111-1111-4111-8111-111111111111' });
     assert.equal(repeated.status, 429);
     assert.equal(calls.some((call) => /\/(sendText|sendMedia|updateBlockStatus|deleteMessage)/i.test(call.path)), false);
   } finally {

@@ -5,7 +5,8 @@ import express from 'express';
 const nativeFetch = globalThis.fetch;
 process.env.EVOLUTION_API_URL = 'https://evolution.test';
 process.env.EVOLUTION_API_KEY = 'global-test-key';
-process.env.EVOLUTION_DEFAULT_USER_ID = 'tenant-1';
+process.env.EVOLUTION_WEBHOOK_SECRET = 'synthetic-hook-secret';
+process.env.EVOLUTION_DEFAULT_USER_ID = '11111111-1111-4111-8111-111111111111';
 process.env.EVOLUTION_INSTANCE_USERS = '{}';
 delete process.env.VERCEL;
 
@@ -29,7 +30,7 @@ globalThis.fetch = async (url, options = {}) => {
 const { evolutionApiCloudRouter } = await import('../src/evolutionApiCloud.js');
 const app = express();
 app.use(express.json());
-app.use((req, _res, next) => { req.cloudAuth = { authUser: { id: 'tenant-1' } }; next(); });
+app.use((req, _res, next) => { req.cloudAuth = { authUser: { id: '11111111-1111-4111-8111-111111111111' } }; next(); });
 app.use('/cloud', evolutionApiCloudRouter);
 const server = app.listen(0, '127.0.0.1');
 await new Promise((resolve) => server.once('listening', resolve));
@@ -46,7 +47,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
   assert.equal(result.pairingCode, null);
   const webhook = requests.find((r) => r.url.includes('/webhook/set/'));
   assert.ok(webhook);
-  assert.deepEqual(JSON.parse(webhook.options.body), { webhook: { enabled: true, url: `${base}/api/evolution-webhook/webhook`, byEvents: false, base64: true, events: ['APPLICATION_STARTUP', 'QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'SEND_MESSAGE', 'CONTACTS_UPDATE', 'CHATS_UPDATE'] } });
+  assert.deepEqual(JSON.parse(webhook.options.body), { webhook: { enabled: true, url: `${base}/api/evolution-webhook/webhook`, byEvents: false, base64: true, headers: { 'x-ienvia-webhook-secret': 'synthetic-hook-secret' }, events: ['APPLICATION_STARTUP', 'QRCODE_UPDATED', 'CONNECTION_UPDATE', 'MESSAGES_UPSERT', 'MESSAGES_UPDATE', 'SEND_MESSAGE', 'CONTACTS_UPDATE', 'CHATS_UPDATE'] } });
 });
 
 test('pareamento por número usa apenas pairingCode e passa o número como query', async () => {
@@ -58,6 +59,15 @@ test('pareamento por número usa apenas pairingCode e passa o número como query
   assert.equal(result.pairingCode, '12345678');
   assert.ok(result.qrDataUrl.startsWith('data:image/png;base64,'), 'gera uma imagem se a API devolver somente o code cru');
   assert.ok(requests.some((r) => r.url.includes('/instance/connect/zap-ia-slot_1?number=5586999998888')));
+});
+
+test('chip inválido e segredo ausente não causam efeitos externos', async () => {
+ requests.length=0;
+ let response=await nativeFetch(`${base}/cloud/connect`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({slotId:'slot_9'})});
+ assert.equal(response.status,400);assert.equal(requests.length,0);
+ delete process.env.EVOLUTION_WEBHOOK_SECRET;
+ response=await nativeFetch(`${base}/cloud/reconnect`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({slotId:'slot_1'})});
+ assert.equal(response.status,503);assert.equal(requests.length,0);process.env.EVOLUTION_WEBHOOK_SECRET='synthetic-hook-secret';
 });
 
 test.after(() => new Promise((resolve, reject) => server.close((err) => err ? reject(err) : resolve())));

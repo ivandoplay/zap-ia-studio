@@ -38,3 +38,7 @@ O código funcional e a migração pendente são versionados na branch, mas **n�
 Use **Gerenciar este chip** para avaliar nome/IA, escolha de transporte, pareamento e confirmações. Todos os adaptadores deste projeto são locais: “salvar” muda somente a memória desta demonstração; QR não é gerado e o código mostrado é fictício. Selecione o cenário vazio para experimentar o fluxo de pareamento de qualquer chip. No cenário suporte, controles ficam bloqueados.
 
 URL pública confirmada: https://ienvia-reforma-visual.vercel.app/conexoes/ . Os endereços longos do deploy podem exigir login Vercel; use o domínio curto.
+
+## Base de canais independentes
+
+https://ienvia-reforma-visual.vercel.app/canais/ mostra 32 canais fictícios com paginação, busca, etiquetas e opções independentes de CRM/IA/campanhas. É possível adicionar mais cadastros na memória do exemplo. O simulador de CRM permite ver ocultos sem apagar mensagens. Nenhum número é conectado; motores, CRM e campanhas reais ainda precisam da migração operacional descrita em `docs/CANAIS-INDEPENDENTES.md`. Cadastro sem teto não é garantia de conexões ilimitadas de provedor/hardware.

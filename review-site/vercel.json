@@ -5,6 +5,14 @@
   "outputDirectory": "public",
   "rewrites": [
     {
+      "source": "/canais",
+      "destination": "/canais/index.html"
+    },
+    {
+      "source": "/canais/",
+      "destination": "/canais/index.html"
+    },
+    {
       "source": "/visao-geral",
       "destination": "/visao-geral/index.html"
     },

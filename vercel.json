@@ -22,6 +22,14 @@
   ],
   "rewrites": [
     {
+      "source": "/canais",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/canais/",
+      "destination": "/api/index.js"
+    },
+    {
       "source": "/conexoes",
       "destination": "/v2/connections.html"
     },
@@ -176,6 +184,15 @@
     },
     {
       "source": "/conexoes/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/canais/:path*",
       "headers": [
         {
           "key": "Cache-Control",

@@ -1,6 +1,7 @@
 import { composeConnectionState } from './dashboard/connections.js';
 import { createDashboardRouter } from './dashboard/router.js';
 import { createConnectionsRouter } from './connections/router.js';
+import {createChannelsRouter} from './channels/router.js';
 import {validateConnectionControl} from './connections/controls.js';
 import 'dotenv/config';
 import dns from 'node:dns';
@@ -190,6 +191,7 @@ app.get(['/visao-geral', '/visao-geral/'], (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(ROOT_DIR, 'public', 'v2', 'index.html'));
 });
+app.get(['/canais','/canais/'],(_req,res)=>{res.setHeader('Cache-Control','no-cache');res.sendFile(path.join(ROOT_DIR,'public','v2','channels.html'));});
 app.get(['/conexoes', '/conexoes/'], (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(ROOT_DIR, 'public', 'v2', 'connections.html'));
@@ -517,7 +519,7 @@ function attachAtomicCloudFlush(res, tenantStore) {
   };
 }
 
-const isDashboardRequest = (req) => /^(?:\/dashboard\/(?:summary|appearance)|\/connections\/(?:summary|configuration|pairing))\/?$/.test(req.path);
+const isDashboardRequest = (req) => /^\/channels(?:\/|$)/.test(req.path)||/^(?:\/dashboard\/(?:summary|appearance)|\/connections\/(?:summary|configuration|pairing))\/?$/.test(req.path);
 async function makeDashboardContext(verified, actAsUserId = '') {
   const profile = verified.profile;
   const viewer = { id: verified.authUser.id, displayName: profile.display_name || profile.displayName || profile.username || 'Minha conta', role: profile.role || 'user' };
@@ -691,6 +693,7 @@ const workspaceReadDependencies = {
 };
 app.use('/api/dashboard', createDashboardRouter(workspaceReadDependencies));
 app.use('/api/connections', createConnectionsRouter(workspaceReadDependencies));
+app.use('/api/channels',createChannelsRouter(workspaceReadDependencies));
 
 app.use('/api/evolution-cloud', evolutionApiCloudRouter);
 

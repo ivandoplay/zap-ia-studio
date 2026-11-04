@@ -31,3 +31,7 @@ test('comandos de conexão nunca fazem refresh/replay automático em 401, erro o
   await assert.rejects(api.command('/api/wa/disconnect',{slotId:'slot_1',clearSession:false}));assert.equal(calls,1);
  }
 });
+
+test('canais POST/PATCH não renovam sessão nem repetem gravação automaticamente',async()=>{
+ for(const [path,method]of [['/api/channels','POST'],['/api/channels/11111111-1111-4111-8111-111111111111','PATCH']]){let calls=0;const api=createSessionClient({localStore:local(),sessionStore:storage(),fetcher:async()=>{calls++;return response({ok:false,authRequired:true},401);}});await assert.rejects(api.request(path,{method,body:{name:'Teste'}}),e=>e.status===401);assert.equal(calls,1);}
+});

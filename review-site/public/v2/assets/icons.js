@@ -1,4 +1,5 @@
 const paths = {
+  plus: '<path d="M12 5v14M5 12h14"/>',
   refresh: '<path d="M20 7v5h-5M4 17v-5h5M6 6a8 8 0 0 1 13 2M18 18a8 8 0 0 1-13-2"/>',
   server: '<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01M12 6.5h5M12 17.5h5"/>',
   settings: '<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM10 2h4l1 3 3 1 3 3-2 3 1 4-3 3-3-1-2 4-4-1-1-4-4-2 1-4 3-2 1-4Z"/>',

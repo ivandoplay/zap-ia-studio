@@ -6,9 +6,11 @@ export function createSessionClient({fetcher=globalThis.fetch,localStore,session
  const actingId=()=>{try{const value=JSON.parse(read(sessionStore,'zapia_act_as'));return typeof value?.userId==='string'?value.userId:'';}catch{return '';}};
  const scope=()=>JSON.stringify([auth().accessToken||'',read(sessionStore,'zapia_act_as'),read(sessionStore,'zapia_pin')]);
  const operations=new Set(['/api/wa/connect','/api/wa/disconnect','/api/wa/slot-config','/api/evolution-cloud/connect','/api/evolution-cloud/disconnect','/api/evolution-cloud/delete']);
+ const channelRoute=path=>/^\/api\/channels(?:\/[0-9a-f-]{36})?(?:\?|$)/i.test(path);
+ const nonReplay=(path,method)=>operations.has(path)||(channelRoute(path)&&method!=='GET');
  let refreshing;
  async function raw(path,{method='GET',body,signal,acting=true}={}) {
-  if(!operations.has(path)&&!path.startsWith('/api/connections/pairing?')&&!['/api/connections/configuration','/api/auth/status','/api/auth/refresh','/api/dashboard/summary','/api/dashboard/appearance','/api/connections/summary'].includes(path))throw new Error('Rota não permitida');
+  if(!channelRoute(path)&&!operations.has(path)&&!path.startsWith('/api/connections/pairing?')&&!['/api/connections/configuration','/api/auth/status','/api/auth/refresh','/api/dashboard/summary','/api/dashboard/appearance','/api/connections/summary'].includes(path))throw new Error('Rota não permitida');
   const headers={Accept:'application/json'},stored=auth(),pin=read(sessionStore,'zapia_pin'),target=actingId();
   if(stored.accessToken)headers.Authorization=`Bearer ${stored.accessToken}`;
   if(pin)headers['x-panel-pin']=pin;
@@ -16,7 +18,7 @@ export function createSessionClient({fetcher=globalThis.fetch,localStore,session
   if(body!==undefined)headers['Content-Type']='application/json';
   const timeout=AbortSignal.timeout(20000);
   let response;
-  try{response=await fetcher(path,{method,headers,body:body===undefined?undefined:JSON.stringify(body),signal:signal?AbortSignal.any([signal,timeout]):timeout,cache:'no-store',credentials:'same-origin',redirect:'error'});}catch(error){if(signal?.aborted)throw error;throw new SessionError(operations.has(path)?'Resultado não confirmado. Não repita a operação: consulte os sinais antes de decidir.':'Sem resposta do servidor. Tente novamente.',503,{uncertain:operations.has(path)});}
+  try{response=await fetcher(path,{method,headers,body:body===undefined?undefined:JSON.stringify(body),signal:signal?AbortSignal.any([signal,timeout]):timeout,cache:'no-store',credentials:'same-origin',redirect:'error'});}catch(error){if(signal?.aborted)throw error;throw new SessionError(nonReplay(path,method)?'Resultado não confirmado. Não repita a operação: consulte os sinais antes de decidir.':'Sem resposta do servidor. Tente novamente.',503,{uncertain:nonReplay(path,method)});}
   let data;try{data=await response.json();}catch{throw new SessionError('Resposta inválida do servidor.',503);}
   if(!response.ok||data.ok===false)throw new SessionError(data.error||'Não foi possível concluir a consulta.',response.status,data);
   return data;
@@ -36,7 +38,7 @@ export function createSessionClient({fetcher=globalThis.fetch,localStore,session
   const before=scope();
   try{const data=await raw(path,options);if(before!==scope())throw new SessionError('O contexto mudou.',409,{scopeChanged:true});return data;}catch(error){
    if(before!==scope())throw new SessionError('O contexto mudou.',409,{scopeChanged:true});
-   if(operations.has(path)||error.status!==401||error.detail.pinRequired||!error.detail.authRequired)throw error;
+   if(nonReplay(path,options.method||'GET')||error.status!==401||error.detail.pinRequired||!error.detail.authRequired)throw error;
    await refresh();
    // Refresh pode trocar apenas o token. Uma troca de conta/chip não pode reaproveitar esta resposta.
    const old=JSON.parse(before),current=JSON.parse(scope());

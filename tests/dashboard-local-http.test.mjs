@@ -1,3 +1,4 @@
+import {validateLegacyApiReferences} from '../src/channels/legacyIdentity.js';
 import {validateConnectionControl} from '../src/connections/controls.js';
 // Middleware real em VM + router real HTTP; não importa server.js nem inicializa motor/socket.
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import crypto from 'node:crypto';import {readFileSync} from 'node:fs';import express from 'express';import {createDashboardRouter} from '../src/dashboard/router.js';
@@ -8,7 +9,7 @@ const pinSource=source.slice(source.indexOf('function safeComparePin('),source.i
 const helpers=source.slice(source.indexOf('const isDashboardRequest ='),source.indexOf('// Middleware Multi-Tenant'));
 const storage={data:{settings:{securityPin:'2468'},contacts:{a:{stage:'aguardando_humano',lastMessageAt:new Date().toISOString()}}}};
 let reads=0;const worker={configured:false,loggedIn:false,user:null};
-const sandbox={validateConnectionControl,IS_VERCEL:false,Buffer,crypto,storage,cloudWorker:{getStatus:()=>worker},extractActAsUserId:req=>req.headers['x-zapia-act-as']||'',UUID_RE:/^[0-9a-f-]{36}$/i,clampMaxWaSlots:v=>v||1,loadTenantContextAsMasterSupport:()=>{throw Error('Bootstrap proibido neste teste');},getAdminClient:()=>{throw Error('Admin inesperado');}};
+const sandbox={validateLegacyApiReferences,validateConnectionControl,IS_VERCEL:false,Buffer,crypto,storage,cloudWorker:{getStatus:()=>worker},extractActAsUserId:req=>req.headers['x-zapia-act-as']||'',UUID_RE:/^[0-9a-f-]{36}$/i,clampMaxWaSlots:v=>v||1,loadTenantContextAsMasterSupport:()=>{throw Error('Bootstrap proibido neste teste');},getAdminClient:()=>{throw Error('Admin inesperado');}};
 const middleware=vm.runInNewContext(`${pinSource}\n${helpers}\n(${body})`,sandbox);
 const app=express();app.use(express.json());app.use('/api',middleware);app.use('/api/dashboard',createDashboardRouter({getLocalContext:()=>{reads++;return {mode:'local_worker',viewer:{id:null,displayName:'Painel local'},tenant:{id:null,maxWaSlots:1},permissions:{master:true},data:storage.data,runtime:{maxWaSlots:1,slots:{slot_1:{status:'disconnected',workerOnline:true,workerHeartbeatAt:new Date().toISOString()}}}};}}));
 const server=await new Promise(r=>{const s=app.listen(0,'127.0.0.1',()=>r(s));});test.after(()=>new Promise(r=>server.close(r)));
@@ -29,4 +30,8 @@ test('toggle real em VM: booleanos corretos; strings e ausência não escrevem',
  const res={status(n){this.code=n;return this;},json(d){this.body=d;return this;}};
  for(const value of ['false','0',0,null,undefined]){res.code=200;handler({body:value===undefined?{}:{enabled:value}},res);assert.equal(res.code,400);assert.equal(writes,0);}
  for(const enabled of [false,true]){handler({body:{enabled}},res);assert.equal(s.data.settings.botEnabled,enabled);}assert.equal(writes,2);assert.equal(emits,2);
+});
+
+test('local: canais UUID não passam ao legado mesmo com PIN e login válidos',async()=>{
+ const r=await fetch(url+'/api/crm/new-contact',{method:'POST',headers:{'content-type':'application/json','x-panel-pin':'2468'},body:JSON.stringify({channelId:'33333333-3333-4333-8333-333333333333',phone:'558600000000'})});assert.equal(r.status,409);assert.equal(reads,1);
 });

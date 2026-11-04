@@ -53,3 +53,9 @@ O filtro do CRM desta rodada é uma projeção pura validada e uma demonstraçã
 A futura migração precisa preservar identidade de conta/canal/mensagem, dedupe, ACK, executor explícito, intervalos e bloqueios de campanhas. Não converter IDs novos em `slot_1`, não renomear pastas de autenticação e não desconectar/reparear para fazer o mapeamento. O problema do release assinado continua pendente: não falsificar versão ou assinatura para atualizar motores.
 
 Regressão completa desta rodada: **347/349** (`channels-full-suite.log`), apenas as falhas históricas de `ienvia-branding.test.mjs` e `static-release-package.test.mjs`. Depois, um ajuste visual de quebra de etiquetas/nomes longos recebeu regressão adicional de browser/revisão estática (5/5), incluindo 320px. Nenhum pacote/assinatura foi alterado.
+
+## Rodada seguinte — etapa 2A local
+
+Ponte de identidade implementada e validada em `docs/PONTE-CANAIS-LEGADOS.md`: importação administrativa idempotente de slots antigos para UUID, FK composta/RLS/rollback, plano offline sem aplicação, consulta autenticada de vínculo e bloqueios de referências UUID em rotas/motores ainda legados. O normalizador não converte mais um identificador explícito desconhecido em Chip 1; modo desconhecido também não vira rodízio. A etapa 2 inteira **ainda não terminou**: catálogo dinâmico/dispatcher, persistência, CRM/realtime e consumidores de políticas continuam pendentes. Sem aplicação remota, sessão real ou publicação do backend.
+
+Validação final desta rodada: **82/82 selecionados** e **363/365 na suíte completa**; apenas as duas falhas históricas de pacote/release assinado. Houve ajuste do teste local em VM para injetar a nova dependência de validação real; o teste não foi afrouxado e ganhou um caso de bloqueio com PIN/login válidos. O manifesto estático foi regenerado e permanece com os mesmos 30 assets; não houve alteração visual nesta etapa.

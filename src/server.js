@@ -2,6 +2,7 @@ import { composeConnectionState } from './dashboard/connections.js';
 import { createDashboardRouter } from './dashboard/router.js';
 import { createConnectionsRouter } from './connections/router.js';
 import {createChannelsRouter} from './channels/router.js';
+import {validateLegacyApiReferences} from './channels/legacyIdentity.js';
 import {validateConnectionControl} from './connections/controls.js';
 import 'dotenv/config';
 import dns from 'node:dns';
@@ -556,6 +557,7 @@ app.use('/api', async (req, res, next) => {
       }
 
       req.realMasterProfile = verified.profile;
+      validateLegacyApiReferences(req.path,{body:req.body,query:req.query});
       if(req.method==='POST'){validateConnectionControl(req.path,req.body,{maxSlots:clampMaxWaSlots(verified.profile.max_wa_slots,verified.profile.role),support:!!actAsUserId&&actAsUserId!==verified.authUser.id});}
       if (req.path === '/wa/toggle-bot' && typeof req.body?.enabled !== 'boolean') return res.status(400).json({ ok: false, error: 'enabled deve ser booleano (true ou false).' });
       if (isDashboardRequest(req)) {
@@ -632,7 +634,7 @@ app.use('/api', async (req, res, next) => {
   }
 
   req.realMasterProfile = workerSt.user || { role: 'master' };
-  if(req.method==='POST'){try{validateConnectionControl(req.path,req.body,{maxSlots:workerSt.user?clampMaxWaSlots(workerSt.user.maxWaSlots??workerSt.user.max_wa_slots,workerSt.user.role):3,support:!!actAsUserId&&actAsUserId!==workerSt.user?.id});}catch(error){return res.status(error.statusCode||400).json({ok:false,error:error.message});}}
+  {try{validateLegacyApiReferences(req.path,{body:req.body,query:req.query});if(req.method==='POST')validateConnectionControl(req.path,req.body,{maxSlots:workerSt.user?clampMaxWaSlots(workerSt.user.maxWaSlots??workerSt.user.max_wa_slots,workerSt.user.role):3,support:!!actAsUserId&&actAsUserId!==workerSt.user?.id});}catch(error){return res.status(error.statusCode||400).json({ok:false,error:error.message});}}
   if (req.path === '/wa/toggle-bot' && typeof req.body?.enabled !== 'boolean') return res.status(400).json({ ok: false, error: 'enabled deve ser booleano (true ou false).' });
   if (isDashboardRequest(req) && actAsUserId && actAsUserId !== workerSt.user?.id) {
     try {

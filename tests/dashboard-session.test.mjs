@@ -35,3 +35,7 @@ test('comandos de conexão nunca fazem refresh/replay automático em 401, erro o
 test('canais POST/PATCH não renovam sessão nem repetem gravação automaticamente',async()=>{
  for(const [path,method]of [['/api/channels','POST'],['/api/channels/11111111-1111-4111-8111-111111111111','PATCH']]){let calls=0;const api=createSessionClient({localStore:local(),sessionStore:storage(),fetcher:async()=>{calls++;return response({ok:false,authRequired:true},401);}});await assert.rejects(api.request(path,{method,body:{name:'Teste'}}),e=>e.status===401);assert.equal(calls,1);}
 });
+
+test('sessão: consulta do vínculo UUID usa GET autenticado e rejeita sufixos fora da allowlist',async()=>{
+ const path='/api/channels/11111111-1111-4111-8111-111111111111/legacy-link';let calls=0;const api=createSessionClient({localStore:local(),sessionStore:storage(),fetcher:async(url,opts)=>{calls++;assert.equal(url,path);assert.equal(opts.method,'GET');assert.equal(opts.headers.Authorization,'Bearer synthetic-old');return response({ok:true});}});assert.equal((await api.request(path)).ok,true);await assert.rejects(api.request(path+'/connect'));assert.equal(calls,1);
+});

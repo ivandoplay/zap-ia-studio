@@ -1,4 +1,5 @@
 import fs from 'fs';
+import {LEGACY_SLOT_IDS,normalizeLegacySlotId,parseLegacyContactKey} from './channels/legacyIdentity.js';
 import path from 'path';
 import crypto from 'crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
@@ -40,31 +41,9 @@ export function uid(prefix = 'id') {
   return `${prefix}_${crypto.randomBytes(5).toString('hex')}`;
 }
 
-export const WA_SLOT_IDS = ['slot_1', 'slot_2', 'slot_3'];
-
-export function normalizeSlotId(slotId = 'slot_1') {
-  const s = String(slotId || '').trim().toLowerCase();
-  return WA_SLOT_IDS.includes(s) ? s : 'slot_1';
-}
-
-export function parseContactChannelKey(contactKey = '') {
-  const raw = String(contactKey || '').trim();
-  const m = raw.match(/^(slot_[123])::(.+)$/i);
-  if (m) {
-    const slotId = normalizeSlotId(m[1]);
-    const rawJid = m[2];
-    return {
-      slotId,
-      rawJid,
-      compositeKey: slotId === 'slot_1' ? rawJid : `${slotId}::${rawJid}`
-    };
-  }
-  return {
-    slotId: 'slot_1',
-    rawJid: raw,
-    compositeKey: raw
-  };
-}
+export const WA_SLOT_IDS = [...LEGACY_SLOT_IDS];
+export const normalizeSlotId = normalizeLegacySlotId;
+export const parseContactChannelKey = parseLegacyContactKey;
 
 export function buildContactChannelKey(slotId = 'slot_1', rawJid = '') {
   const cleanSlot = normalizeSlotId(slotId);

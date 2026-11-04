@@ -6,7 +6,7 @@ export function createSessionClient({fetcher=globalThis.fetch,localStore,session
  const actingId=()=>{try{const value=JSON.parse(read(sessionStore,'zapia_act_as'));return typeof value?.userId==='string'?value.userId:'';}catch{return '';}};
  const scope=()=>JSON.stringify([auth().accessToken||'',read(sessionStore,'zapia_act_as'),read(sessionStore,'zapia_pin')]);
  const operations=new Set(['/api/wa/connect','/api/wa/disconnect','/api/wa/slot-config','/api/evolution-cloud/connect','/api/evolution-cloud/disconnect','/api/evolution-cloud/delete']);
- const channelRoute=path=>/^\/api\/channels(?:\/[0-9a-f-]{36})?(?:\?|$)/i.test(path);
+ const channelRoute=path=>/^\/api\/channels(?:\/[0-9a-f-]{36}(?:\/legacy-link)?)?(?:\?|$)/i.test(path);
  const nonReplay=(path,method)=>operations.has(path)||(channelRoute(path)&&method!=='GET');
  let refreshing;
  async function raw(path,{method='GET',body,signal,acting=true}={}) {

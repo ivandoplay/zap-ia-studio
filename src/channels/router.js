@@ -1,4 +1,5 @@
 import {Router} from 'express';
+import {parseLegacyLinkSnapshot} from './legacyBridge.js';
 import {isChannelId,parseChannelInput} from '../../public/v2/assets/channel-policy.js';
 function dto(value){
  if(!value||!isChannelId(value.id)||!Number.isInteger(value.revision)||value.revision<1||!Number.isFinite(Date.parse(value.createdAt))||!Number.isFinite(Date.parse(value.updatedAt)))throw Error('Invalid channel DTO');
@@ -18,6 +19,11 @@ export function createChannelsRouter({getLocalContext}={}){
   const {data,error}=await ctx.viewerClient.rpc('ienvia_list_channels',{p_owner:ctx.tenant.id,p_limit:Number(raw),p_after:after,p_visibility:visibility,p_search:q}).abortSignal(AbortSignal.timeout(4000));if(error)throw dbError(error);
   if(!data||!Array.isArray(data.items)||data.items.length>Number(raw)||typeof data.hasMore!=='boolean'||data.hasMore&&!isChannelId(data.nextCursor)||!Number.isInteger(data.total)||data.total<0||!data.summary||['total','crmVisible','crmHidden','aiEnabled','campaignsEnabled'].some(k=>!Number.isInteger(data.summary[k])||data.summary[k]<0))throw Error('Invalid channel list');
   return res.json({ok:true,schemaVersion:1,viewer:ctx.viewer,tenant:ctx.tenant,permissions:{canEdit:ctx.viewer.id===ctx.tenant.id},items:data.items.map(dto),total:data.total,hasMore:data.hasMore,nextCursor:data.hasMore?data.nextCursor:null,summary:data.summary,operationalMigrationPending:true});
+ }catch(error){return sendError(res,error);}});
+ router.get('/:id/legacy-link',async(req,res)=>{try{
+  const ctx=await context(req);if(!isChannelId(req.params.id))throw Object.assign(Error('Canal UUID inválido.'),{status:400});
+  const channelId=req.params.id.toLowerCase(),{data,error}=await ctx.viewerClient.rpc('ienvia_get_channel_legacy_link',{p_owner:ctx.tenant.id,p_channel:channelId}).abortSignal(AbortSignal.timeout(4000));if(error)throw dbError(error);
+  const link=parseLegacyLinkSnapshot(data,{ownerId:ctx.tenant.id,channelId});return res.json({ok:true,link,connection:{status:'not_verified'},operationalMigrationPending:true});
  }catch(error){return sendError(res,error);}});
  router.post('/',async(req,res)=>{try{const ctx=await context(req,true),config=parseChannelInput(req.body);const {data,error}=await ctx.viewerClient.rpc('ienvia_create_channel',{p_config:config}).abortSignal(AbortSignal.timeout(5000));if(error)throw dbError(error);return res.status(201).json({ok:true,channel:dto(data)});}catch(error){return sendError(res,error);}});
  router.patch('/:id',async(req,res)=>{try{const ctx=await context(req,true);if(!isChannelId(req.params.id)||!req.body||!Number.isInteger(req.body.expectedRevision)||req.body.expectedRevision<1||Object.keys(req.body).some(k=>!['expectedRevision','patch'].includes(k)))throw Object.assign(Error('Canal ou revisão inválidos.'),{status:400});const patch=parseChannelInput(req.body.patch,{partial:true});const {data,error}=await ctx.viewerClient.rpc('ienvia_update_channel',{p_id:req.params.id,p_revision:req.body.expectedRevision,p_patch:patch}).abortSignal(AbortSignal.timeout(5000));if(error)throw dbError(error);return res.json({ok:true,channel:dto(data)});}catch(error){return sendError(res,error);}});

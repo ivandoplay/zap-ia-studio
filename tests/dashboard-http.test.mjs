@@ -11,7 +11,7 @@ globalThis.fetch=async(input,options={})=>{
  const url=new URL(typeof input==='string'?input:input.url),headers=options.headers||input.headers,uid=actor(headers),method=options.method||'GET';calls.push({path:url.pathname,method,query:url.searchParams,actor:uid});
  if(url.pathname==='/auth/v1/user')return uid?result({id:uid,email:'test@example.invalid'}):result({message:'invalid'},401);
  if(url.pathname==='/rest/v1/zapia_users'){const id=(url.searchParams.get('user_id')||'').replace('eq.','');return result(profiles.has(id)?[profiles.get(id)]:[]);}
- if(url.pathname==='/rest/v1/rpc/ienvia_list_channels')return result({code:'PGRST202',message:'RPC de canais ausente no banco sintético'},404);
+ if(['/rest/v1/rpc/ienvia_list_channels','/rest/v1/rpc/ienvia_get_channel_legacy_link'].includes(url.pathname))return result({code:'PGRST202',message:'RPC de canais ausente no banco sintético'},404);
  if(url.pathname==='/rest/v1/rpc/ienvia_dashboard_summary_v1'){
   if(rpcUnavailable)return result({code:'PGRST202',message:'RPC ausente'},404);
   const owner=JSON.parse(options.body).p_owner;
@@ -84,4 +84,16 @@ test('Conexões controles HTTP: configuração mínima e pareamento vinculados �
 test('Canais HTTP integrado: cadastro sem migração falha explicitamente, sem bootstrap de workspace/contatos',async()=>{
  calls.length=0;const r=await request('/api/channels?limit=20');assert.equal(r.status,503);assert.equal(r.body.code,'CHANNELS_SETUP_REQUIRED');assert.equal(r.body.items,undefined);assert.equal(calls.some(c=>/zapia_workspaces|zapia_contacts|instance/.test(c.path)),false);assert.equal(calls.filter(c=>c.method!=='GET').length,1);
  calls.length=0;const invalid=await request('/api/channels/slot_4',{method:'PATCH',body:{expectedRevision:1,patch:{crmVisible:false}}});assert.equal(invalid.status,400);assert.equal(calls.some(c=>/zapia_workspaces|zapia_contacts/.test(c.path)),false);
+});
+
+test('Ponte HTTP: UUID, escopo misto e conversa não migrada nunca chegam ao workspace/worker/Chip 1',async()=>{
+ const channel='44444444-4444-4444-8444-444444444444';
+ for(const [path,body,status]of [['/api/wa/connect',{slotId:'slot_1',channelId:channel},409],['/api/wa/connect',{slotId:channel},400],['/api/wa/proactive-send',{phone:'558600000000',text:'sintético',channelMode:channel},400],['/api/wa/proactive-send',{phone:'558600000000',text:'sintético',channelMode:'slot_4'},400],['/api/crm/new-contact',{phone:'558600000000',channelId:channel},409],['/api/crm/new-contact',{phone:'558600000000',slotId:channel},400],['/api/wa/disconnect',{slotId:'slot_1',clearSession:false,payload:{channelId:channel}},409]]){
+  calls.length=0;assert.equal((await request(path,{method:'POST',body})).status,status);assert.equal(calls.some(c=>/zapia_workspaces|zapia_contacts|zapia_commands|instance/.test(c.path)),false);
+ }
+ calls.length=0;assert.equal((await request('/api/contacts?chatId='+encodeURIComponent(channel+'::558600000000@s.whatsapp.net'))).status,400);assert.equal(calls.some(c=>/zapia_workspaces|zapia_contacts|zapia_commands/.test(c.path)),false);
+});
+
+test('Ponte HTTP: consulta nova exige a migração, sem inventar vínculo ou carregar CRM legado',async()=>{
+ calls.length=0;const r=await request('/api/channels/44444444-4444-4444-8444-444444444444/legacy-link');assert.equal(r.status,503);assert.equal(r.body.link,undefined);assert.equal(calls.some(c=>/zapia_workspaces|zapia_contacts|instance/.test(c.path)),false);
 });

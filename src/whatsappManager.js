@@ -1,3 +1,4 @@
+import {normalizeLegacyChannelMode} from './channels/legacyIdentity.js';
 import fs from 'fs';
 import path from 'path';
 import pino from 'pino';
@@ -3405,7 +3406,9 @@ class WhatsAppMultiSlotManager {
 
   getSlot(slotId = 'slot_1') {
     const clean = normalizeSlotId(slotId);
-    return this.slots[clean] || this.slots.slot_1;
+    const engine=this.slots[clean];
+    if(!engine)throw Object.assign(new Error('Motor legado indisponível para este chip; nenhum outro chip foi escolhido.'),{code:'LEGACY_ENGINE_UNAVAILABLE',statusCode:503});
+    return engine;
   }
 
   getSlotForChat(chatId = '') {
@@ -3765,6 +3768,7 @@ class WhatsAppMultiSlotManager {
   }
 
   pickSlotForProactive(channelMode = 'auto_rotate') {
+    channelMode=normalizeLegacyChannelMode(channelMode);
     const connected = this.getConnectedSlots();
     if (!connected.length) {
       throw new Error('Conecte pelo menos 1 Chip de WhatsApp antes de disparar abordagens ativas.');
@@ -3811,6 +3815,7 @@ class WhatsAppMultiSlotManager {
   }
 
   enqueueProactiveBatch(items = [], templateText = '', channelMode = 'auto_rotate') {
+    channelMode=normalizeLegacyChannelMode(channelMode);
     const connected = this.getConnectedSlots();
     if (!connected.length) {
       throw new Error('Conecte pelo menos um Chip WhatsApp antes de iniciar a fila de abordagem ativa.');

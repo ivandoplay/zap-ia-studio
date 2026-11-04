@@ -35,6 +35,7 @@ export function createSessionClient({fetcher=globalThis.fetch,localStore,session
   }catch(error){if(before===scope()){if(error.status===401)write(localStore,'zapia_cloud_auth',null);else if(error.status===503&&error.detail.retrySession?.accessToken&&error.detail.retrySession?.refreshToken)write(localStore,'zapia_cloud_auth',JSON.stringify(error.detail.retrySession));}throw error;}finally{refreshing=null;}})();return refreshing;
  }
  async function request(path,options={}) {
+  if(globalThis.navigator?.onLine===false&&options.method&&options.method!=='GET')throw new SessionError('Sem rede. Pedido bloqueado; nada foi guardado para envio automático.',503,{code:'OFFLINE_NOT_QUEUED'});
   const before=scope();
   try{const data=await raw(path,options);if(before!==scope())throw new SessionError('O contexto mudou.',409,{scopeChanged:true});return data;}catch(error){
    if(before!==scope())throw new SessionError('O contexto mudou.',409,{scopeChanged:true});

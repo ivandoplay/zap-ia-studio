@@ -1,19 +1,36 @@
 {
-  "name": "Ienvia — Atendimento Universal no WhatsApp",
+  "name": "Ienvia — Atendimento e instâncias",
   "short_name": "Ienvia",
-  "description": "Plataforma Universal de Atendimento Inteligente no WhatsApp com Multi-IA, Treinamento Turbo e CRM.",
-  "start_url": "/painel",
+  "description": "Atendimento, CRM e gestão de instâncias, com as permissões da sua conta.",
+  "start_url": "/visao-geral/?source=pwa",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
-  "background_color": "#0F172A",
-  "theme_color": "#059669",
+  "orientation": "any",
+  "background_color": "#101815",
+  "theme_color": "#101815",
   "icons": [
     {
-      "src": "/icon-v2.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/pwa-icons/192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa-icons/512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "id": "/",
+  "shortcuts": [
+    {
+      "name": "Instâncias",
+      "url": "/instancias/"
+    },
+    {
+      "name": "Conexões e motores",
+      "url": "/conexoes/"
     }
   ]
 }

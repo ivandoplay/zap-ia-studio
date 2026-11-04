@@ -1,3 +1,4 @@
+import {mountPwaControls} from './pwa-client.js';
 import { getNavigation, findPages } from './navigation.js';
 import { icon } from './icons.js';
 import { mountAppearance } from './appearance.js';
@@ -18,7 +19,7 @@ export function mountShell({ pageId, title, group = 'Operação', currentUser, p
       <div class="brand-row"><a class="brand" href="/visao-geral/" aria-label="Ienvia, visão geral"><img src="/v2/assets/ienvia-icon.png" width="38" height="38" alt=""><span translate="no">ienvia<span class="brand-dot">.</span></span></a><button class="icon-button nav-close" id="close-menu" type="button" aria-label="Fechar menu">${icon('close')}</button></div>
       <div class="workspace-label"><span class="workspace-monogram">D</span><div><strong>Minha conta</strong><span>Resumo da operação</span></div><span class="workspace-dot" aria-hidden="true"></span></div>
       <nav class="side-nav" aria-label="Menu principal">${links}</nav>
-      <div class="sidebar-bottom"><div class="lab-status"><span></span>Resumo somente leitura</div><p>Acompanhe os dados da conta.<br>Esta tela não envia mensagens.</p><button class="sidebar-about" type="button" id="about-preview">${icon('info')}Sobre esta página</button></div>
+      <div class="sidebar-bottom"><div class="lab-status"><span></span>Resumo somente leitura</div><p>Acompanhe os dados da conta.<br>Esta tela não envia mensagens.</p><button class="sidebar-about" type="button" id="pwa-open">Aplicativo no celular</button><button class="sidebar-about" type="button" id="about-preview">${icon('info')}Sobre esta página</button></div>
     </aside>
     <button class="menu-backdrop" id="menu-backdrop" type="button" aria-label="Fechar menu lateral" hidden></button>
     <div class="workspace" id="workspace">
@@ -112,5 +113,6 @@ export function mountShell({ pageId, title, group = 'Operação', currentUser, p
   shell.querySelector('.workspace-label strong').textContent = currentUser?.displayName || 'Painel local';
   for (const item of shell.querySelectorAll('.workspace-monogram, #about-account')) item.textContent = (currentUser?.displayName || 'L').slice(0, 1).toUpperCase();
   const disposeAppearance = mountAppearance({ currentUser, api: appearanceApi });
-  return { showInfo, pages: allPages, dispose() { disposeAppearance(); document.removeEventListener('keydown', onKeyDown); mobile.removeEventListener('change', onMobileChange); document.body.classList.remove('menu-open'); workspace.inert = false; for (const dialog of [searchDialog, infoDialog]) if (dialog.open) dialog.close(); } };
+  const pwa=mountPwaControls(shell,{demo:document.documentElement.hasAttribute('data-review-page'),onOpen:()=>setMenu(false,false)});
+  return { showInfo, pages: allPages, dispose() {pwa.dispose(); disposeAppearance(); document.removeEventListener('keydown', onKeyDown); mobile.removeEventListener('change', onMobileChange); document.body.classList.remove('menu-open'); workspace.inert = false; for (const dialog of [searchDialog, infoDialog]) if (dialog.open) dialog.close(); } };
 }

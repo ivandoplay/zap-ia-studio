@@ -192,7 +192,7 @@ app.get(['/visao-geral', '/visao-geral/'], (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(ROOT_DIR, 'public', 'v2', 'index.html'));
 });
-app.get(['/canais','/canais/'],(_req,res)=>{res.setHeader('Cache-Control','no-cache');res.sendFile(path.join(ROOT_DIR,'public','v2','channels.html'));});
+app.get(['/canais','/canais/','/instancias','/instancias/'],(_req,res)=>{res.setHeader('Cache-Control','no-cache');res.sendFile(path.join(ROOT_DIR,'public','v2','channels.html'));});
 app.get(['/conexoes', '/conexoes/'], (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(ROOT_DIR, 'public', 'v2', 'connections.html'));

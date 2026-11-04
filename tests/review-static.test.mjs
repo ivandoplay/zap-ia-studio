@@ -3,7 +3,7 @@ assert.equal(process.env.ZAPIA_ISOLATED_TEST,'1');
 test('revisão estática: manifesto íntegro, fontes sincronizadas e nenhum runtime ou segredo publicado',()=>{
  execFileSync(process.execPath,['review-site/verify-static.mjs']);const manifest=JSON.parse(fs.readFileSync('review-site/manifest.json'));
  for(const [file,hash]of Object.entries(manifest.sourceHashes))assert.equal(createHash('sha256').update(fs.readFileSync(file)).digest('hex'),hash,'Regere o site antes de publicar: '+file);
- for(const file of Object.keys(manifest.publicHashes))assert.doesNotMatch(file,/session-client|connections-app|history-app|(^|\/)api\/|\.env/);
+ for(const file of Object.keys(manifest.publicHashes))assert.doesNotMatch(file,/session-client|connections-app|history-app|conversations-app|(^|\/)api\/|\.env/);
  assert.equal(fs.existsSync('review-site/public/api'),false);
  const config=JSON.parse(fs.readFileSync('review-site/vercel.json'));assert.ok(config.headers[0].headers.some(h=>h.key==='Content-Security-Policy'&&h.value.includes("connect-src 'none'")));
 });

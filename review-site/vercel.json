@@ -5,6 +5,14 @@
   "outputDirectory": "public",
   "rewrites": [
     {
+      "source": "/conversas",
+      "destination": "/conversas/index.html"
+    },
+    {
+      "source": "/conversas/",
+      "destination": "/conversas/index.html"
+    },
+    {
       "source": "/historico",
       "destination": "/historico/index.html"
     },

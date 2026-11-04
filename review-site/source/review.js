@@ -49,6 +49,6 @@ document.querySelector('.workspace-label div>span').textContent='Ambiente visual
 document.querySelector('.lab-status').lastChild.textContent=' Revisão sem integrações';
 const refresh=document.getElementById(page==='conexoes'?'connections-refresh':'refresh-summary');
 if(refresh){refresh.textContent='Recarregar exemplo';refresh.addEventListener('click',render);}
-document.querySelectorAll('.search-dialog .dialog-footnote').forEach(el=>el.textContent='Visão geral, Instâncias, Histórico e Conexões estão em revisão. Os demais menus indicam páginas ainda não reformadas.');
+document.querySelectorAll('.search-dialog .dialog-footnote').forEach(el=>el.textContent='Visão geral, Conversas, Instâncias, Histórico e Conexões estão em revisão. Os demais menus indicam páginas ainda não reformadas.');
 document.addEventListener('click',event=>{const link=event.target.closest('a');if(!link)return;const url=new URL(link.href,location.href);if(url.origin!==location.origin){event.preventDefault();showPending();return;}if(url.pathname==='/painel'){event.preventDefault();showPending();}});
 render();

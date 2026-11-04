@@ -9,7 +9,13 @@ export async function contrastIssues(page) {
       const text = node.textContent.trim(), element = node.parentElement;
       if (!text || !element || element.closest('.sr-only,script,style,button:disabled') || !element.getClientRects().length) continue;
       const style = getComputedStyle(element), foreground = rgb(style.color);
-      const rect = element.getBoundingClientRect(), x = (rect.left + rect.right) / 2, y = (rect.top + rect.bottom) / 2;
+      const rect = element.getBoundingClientRect();
+      // Texto em listas roláveis pode ter retângulo, mas estar fora da área visível.
+      // Audite a interseção efetivamente pintada, não um ponto atrás do rodapé/viewport.
+      let left=Math.max(0,rect.left),right=Math.min(innerWidth,rect.right),top=Math.max(0,rect.top),bottom=Math.min(innerHeight,rect.bottom);
+      for(let parent=element.parentElement;parent;parent=parent.parentElement){const ps=getComputedStyle(parent),pr=parent.getBoundingClientRect();if(/auto|scroll|hidden|clip/.test(ps.overflowX)){left=Math.max(left,pr.left);right=Math.min(right,pr.right);}if(/auto|scroll|hidden|clip/.test(ps.overflowY)){top=Math.max(top,pr.top);bottom=Math.min(bottom,pr.bottom);}}
+      if(left>=right||top>=bottom)continue;
+      const x=(left+right)/2,y=(top+bottom)/2;
       let ancestor = element, background;
       while (ancestor) { const color = rgb(getComputedStyle(ancestor).backgroundColor); const r = ancestor.getBoundingClientRect(); if ((color.length === 3 || color[3] === 1) && x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) { background = color; break; } ancestor = ancestor.parentElement; }
       background ||= [255, 255, 255];

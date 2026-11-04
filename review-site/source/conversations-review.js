@@ -1,0 +1,7 @@
+// Bootstrap demonstrativo: não importa cliente de sessão, autenticação, API ou motores.
+import {createConversationsDemo} from './conversations-demo.js';
+import {mountConversations} from './conversations-view.js';
+let ui,generation=0;
+const scenarios=[['normal','Exemplo completo'],['empty','Caixa vazia'],['error','Falha na consulta'],['support','Suporte · leitura']];
+async function render(scenario='normal'){const mine=++generation;ui?.dispose();document.body.replaceChildren();const demo=createConversationsDemo({scenario});let initial;try{initial=await demo.catalog();}catch{initial=await createConversationsDemo().catalog();}if(mine!==generation)return;ui=mountConversations({adapter:demo,initial,onExitSupport:()=>void render('normal')});const label=document.createElement('label');label.className='crm-review-scenario';label.append(document.createTextNode('Ambiente de exemplo'));const select=document.createElement('select');select.id='review-scenario';select.setAttribute('aria-label','Cenário da demonstração');for(const [value,name]of scenarios){const o=document.createElement('option');o.value=value;o.textContent=name;select.append(o);}select.value=scenario;select.addEventListener('change',()=>void render(select.value));label.append(select);document.querySelector('.crm-inbox').append(label);void ui.load();}
+window.addEventListener('pagehide',()=>{generation++;ui?.dispose();document.body.replaceChildren();});window.addEventListener('pageshow',event=>{if(event.persisted)void render();});void render();

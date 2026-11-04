@@ -3,7 +3,7 @@ import { getNavigation, findPages } from './navigation.js';
 import { icon } from './icons.js';
 import { mountAppearance } from './appearance.js';
 
-export function mountShell({ pageId, title, group = 'Operação', currentUser, permissions = {}, appearanceApi, aboutText }) {
+export function mountShell({ pageId, title, group = 'Operação', currentUser, permissions = {}, appearanceApi, aboutText, syncDescription }) {
   const page = document.querySelector('main');
   const role = permissions.master ? 'master' : 'user';
   const navigation = getNavigation(role);
@@ -109,7 +109,7 @@ export function mountShell({ pageId, title, group = 'Operação', currentUser, p
   const about = () => showInfo(title, aboutText || 'Esta página consulta um resumo de dados. Não envia mensagens, não inicia campanhas e não reconecta o WhatsApp. Os demais menus continuam no painel atual; Conexões / Motor abre a área atual de conexão até sua reforma.');
   shell.querySelector('#about-preview').addEventListener('click', about);
   shell.querySelector('#about-account').addEventListener('click', () => showInfo('Sua conta', `Operador: ${currentUser?.displayName || 'Painel local'}. A aparência pertence ao operador, inclusive durante o suporte a outra conta.`));
-  shell.querySelector('#notifications').addEventListener('click', () => showInfo('Atualização dos dados', 'O resumo é atualizado a cada 30 segundos enquanto esta aba está visível. Falhas são sinalizadas e o último dado válido é identificado como desatualizado. Online no motor não significa conexão ativa no WhatsApp.'));
+  shell.querySelector('#notifications').addEventListener('click', () => showInfo('Atualização dos dados', syncDescription || 'O resumo é atualizado a cada 30 segundos enquanto esta aba está visível. Falhas são sinalizadas e o último dado válido é identificado como desatualizado. Online no motor não significa conexão ativa no WhatsApp.'));
   shell.querySelector('.workspace-label strong').textContent = currentUser?.displayName || 'Painel local';
   for (const item of shell.querySelectorAll('.workspace-monogram, #about-account')) item.textContent = (currentUser?.displayName || 'L').slice(0, 1).toUpperCase();
   const disposeAppearance = mountAppearance({ currentUser, api: appearanceApi });

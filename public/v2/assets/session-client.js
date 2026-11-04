@@ -6,10 +6,12 @@ export function createSessionClient({fetcher=globalThis.fetch,localStore,session
  const actingId=()=>{try{const value=JSON.parse(read(sessionStore,'zapia_act_as'));return typeof value?.userId==='string'?value.userId:'';}catch{return '';}};
  const scope=()=>JSON.stringify([auth().accessToken||'',read(sessionStore,'zapia_act_as'),read(sessionStore,'zapia_pin')]);
  const operations=new Set(['/api/wa/connect','/api/wa/disconnect','/api/wa/slot-config','/api/evolution-cloud/connect','/api/evolution-cloud/disconnect','/api/evolution-cloud/delete']);
- const channelRoute=path=>/^\/api\/channels(?:\/[0-9a-f-]{36}(?:\/legacy-link)?)?(?:\?|$)/i.test(path);
+ const channelRoute=path=>/^\/api\/channels(?:\/[0-9a-f-]{36}(?:\/(?:legacy-link|execution|threads(?:\/[0-9a-f-]{36}\/messages)?|dispatches\/[0-9a-f-]{36}(?:\/review)?))?)?(?:\?|$)/i.test(path);
+ const historyRoute=path=>/^\/api\/channels\/[0-9a-f-]{36}\/threads(?:\/[0-9a-f-]{36}\/messages)?(?:\?|$)/i.test(path);
  const nonReplay=(path,method)=>operations.has(path)||(channelRoute(path)&&method!=='GET');
  let refreshing;
  async function raw(path,{method='GET',body,signal,acting=true}={}) {
+  if(historyRoute(path)&&method!=='GET')throw new Error('Histórico permite somente consulta.');
   if(!channelRoute(path)&&!operations.has(path)&&!path.startsWith('/api/connections/pairing?')&&!['/api/connections/configuration','/api/auth/status','/api/auth/refresh','/api/dashboard/summary','/api/dashboard/appearance','/api/connections/summary'].includes(path))throw new Error('Rota não permitida');
   const headers={Accept:'application/json'},stored=auth(),pin=read(sessionStore,'zapia_pin'),target=actingId();
   if(stored.accessToken)headers.Authorization=`Bearer ${stored.accessToken}`;

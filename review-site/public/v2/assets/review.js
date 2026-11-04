@@ -1,3 +1,5 @@
+import {mountHistory} from './history-view.js';
+import {createHistoryDemoReader} from './history-demo.js';
 import {mountChannels} from './channels-view.js';
 import {createChannelDemoStore} from './channels-demo.js';
 import {createConnectionControls} from './connections-controls.js';
@@ -12,8 +14,9 @@ let scenario=scenarioValues.includes(params.get('cenario'))?params.get('cenario'
 const data=demoData(scenario);
 const exampleConfig={slots:[1,2,3].map(i=>({slotId:`slot_${i}`,label:`Chip ${i} · exemplo`,aiEnabled:i!==2}))};
 const controls=page==='conexoes'?createConnectionControls({demo:true,readConfiguration:async()=>exampleConfig,operate:async(path,body)=>{if(path.endsWith('/slot-config')){Object.assign(exampleConfig.slots.find(s=>s.slotId===body.slotId),body);return {ok:true};}return {ok:true,status:'qr_ready',pairingCode:'DEMO2026'};}}):null;
-let channelUI;if(page==='overview')mountPage();else if(page==='conexoes')mountConnections();else if(page==='canais')channelUI=mountChannels({adapter:createChannelDemoStore({scenario}),demo:true});
-const shell=mountShell({pageId:page,title:page==='overview'?'Visão geral':page==='conexoes'?'Conexões e motor':page==='canais'?'Instâncias':'Página ainda não reformada',currentUser:data.viewer,permissions:data.permissions,appearanceApi:{account:false},aboutText:'Revisão visual isolada com dados de demonstração. Não existe autenticação real, consulta a banco ou acesso ao WhatsApp. Os botões operacionais são exemplos desativados. O tema é salvo somente neste navegador da revisão.'});
+let channelUI,historyUI;if(page==='overview')mountPage();else if(page==='conexoes')mountConnections();else if(page==='canais')channelUI=mountChannels({adapter:createChannelDemoStore({scenario}),demo:true});
+if(page==='historico')historyUI=mountHistory({reader:createHistoryDemoReader({scenario}),demo:true});
+const shell=mountShell({pageId:page,title:page==='overview'?'Visão geral':page==='conexoes'?'Conexões e motor':page==='canais'?'Instâncias':page==='historico'?'Histórico por instância':'Página ainda não reformada',currentUser:data.viewer,permissions:data.permissions,appearanceApi:{account:false},syncDescription:page==='historico'?'Dados fictícios, sem atualização em tempo real. Use Atualizar para recarregar o exemplo. Não há consulta à API.':undefined,aboutText:'Revisão visual isolada com dados de demonstração. Não existe autenticação real, consulta a banco ou acesso ao WhatsApp. Os botões operacionais são exemplos desativados. O tema é salvo somente neste navegador da revisão.'});
 function showPending(){shell.showInfo('Página ainda não reformada','Esta área ainda não foi implementada na reforma. Ela não abre o painel de produção e não executa operações. Você pode continuar avaliando Visão geral e Conexões / Motor.');}
 function render(){
  const current=demoData(scenario);
@@ -27,6 +30,8 @@ function render(){
   if(scenario==='stale'||scenario==='error')setSyncState('stale',scenario==='error'?'Simulação de falha de consulta. Nenhuma API foi chamada.':'Simulação de diagnóstico desatualizado. Estes estados não pertencem à sua conta.');
  }else if(page==='canais'){
   channelUI?.dispose();channelUI=mountChannels({host:document.getElementById('page-slot'),adapter:createChannelDemoStore({scenario}),demo:true,onExitSupport:exit});void channelUI.load();
+ }else if(page==='historico'){
+  historyUI?.dispose();historyUI=mountHistory({host:document.getElementById('page-slot'),reader:createHistoryDemoReader({scenario}),demo:true,onExitSupport:exit});void historyUI.load();
  }else if(page==='conexoes'){
   renderConnections(current,exit);controls.update(current);
   document.getElementById('connections-sync').textContent='Dados de demonstração';
@@ -44,6 +49,6 @@ document.querySelector('.workspace-label div>span').textContent='Ambiente visual
 document.querySelector('.lab-status').lastChild.textContent=' Revisão sem integrações';
 const refresh=document.getElementById(page==='conexoes'?'connections-refresh':'refresh-summary');
 if(refresh){refresh.textContent='Recarregar exemplo';refresh.addEventListener('click',render);}
-document.querySelectorAll('.search-dialog .dialog-footnote').forEach(el=>el.textContent='Visão geral, Canais e Conexões estão em revisão. Os demais menus indicam páginas ainda não reformadas.');
+document.querySelectorAll('.search-dialog .dialog-footnote').forEach(el=>el.textContent='Visão geral, Instâncias, Histórico e Conexões estão em revisão. Os demais menus indicam páginas ainda não reformadas.');
 document.addEventListener('click',event=>{const link=event.target.closest('a');if(!link)return;const url=new URL(link.href,location.href);if(url.origin!==location.origin){event.preventDefault();showPending();return;}if(url.pathname==='/painel'){event.preventDefault();showPending();}});
 render();

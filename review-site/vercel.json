@@ -5,6 +5,14 @@
   "outputDirectory": "public",
   "rewrites": [
     {
+      "source": "/historico",
+      "destination": "/historico/index.html"
+    },
+    {
+      "source": "/historico/",
+      "destination": "/historico/index.html"
+    },
+    {
       "source": "/instancias",
       "destination": "/instancias/index.html"
     },

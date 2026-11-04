@@ -25,3 +25,10 @@ O gerador copia somente uma allowlist de assets da interface. Não lê `.env`, d
 Configuração do projeto de revisão: `rootDirectory=review-site`, framework `Other/null`, build `npm run build`, output `public`. Não configurar secrets. A branch tem auto-deploy desativado no `vercel.json` da raiz para não gerar um deploy do backend no projeto principal. O `vercel.json` deste diretório é exclusivo da revisão estática.
 
 O código funcional e a migração pendente são versionados na branch, mas **não são executados por este site**. Nenhuma migração é aplicada pelo build. A URL de revisão não substitui aceite autenticado ou teste de produção.
+
+## Projeto separado criado
+
+- Nome: `ienvia-reforma-visual`.
+- ID: `prj_2plMn5ELqUQ3CAVqYvp6NtQSDoBH`.
+- A branch de revisão é habilitada no config deste diretório; `main` fica desabilitada neste projeto. Isso não modifica as configurações do projeto principal.
+- A proteção de acesso padrão da Vercel pode exigir login Vercel. Ela não é autenticação do aplicativo. Verifique a URL sem sessão antes de divulgar como pública.

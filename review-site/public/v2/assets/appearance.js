@@ -8,7 +8,7 @@ export function mountAppearance({currentUser,api}={}) {
  const pendingKey=key?`${key}:pending`:null;
  const pending=()=>{try{return !!pendingKey&&storage?.getItem(pendingKey)==='1';}catch{return false;}};
  function mark(value){try{if(pendingKey)value?storage?.setItem(pendingKey,'1'):storage?.removeItem(pendingKey);}catch{}}
- function apply(theme){document.documentElement.dataset.theme=theme;document.querySelector('meta[name="theme-color"]')?.setAttribute('content',theme==='dark'?'#101815':'#f4f7f5');button.setAttribute('aria-label',theme==='dark'?'Usar tema claro':'Usar tema escuro');button.title=button.getAttribute('aria-label');button.innerHTML=icon(theme==='dark'?'sun':'moon');}
+ function apply(theme){document.documentElement.dataset.theme=theme;document.querySelector('meta[name="theme-color"]')?.setAttribute('content',theme==='dark'?'#0e151f':'#ffffff');button.setAttribute('aria-label',theme==='dark'?'Usar tema claro':'Usar tema escuro');button.title=button.getAttribute('aria-label');button.innerHTML=icon(theme==='dark'?'sun':'moon');}
  function notice(text,retry=false){clearTimeout(timer);feedback.replaceChildren(document.createTextNode(text));feedback.hidden=false;if(retry){const btn=document.createElement('button');btn.className='button button-quiet';btn.textContent='Tentar salvar tema';btn.type='button';btn.addEventListener('click',()=>save(document.documentElement.dataset.theme));feedback.append(btn);}else timer=setTimeout(()=>{if(!disposed)feedback.hidden=true;},5000);}
  async function save(theme){
   if(busy||disposed)return;busy=true;button.disabled=true;version++;apply(theme);

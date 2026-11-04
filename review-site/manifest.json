@@ -2,6 +2,7 @@
   "format": 1,
   "visualOnly": true,
   "sourceHashes": {
+    "public/v2/assets/workspace-theme.css": "1815904f9ba1cef156c5a5a26ea541361772a6dc2d7e212b2efe1852cb5ea26b",
     "public/v2/assets/conversations-hub.js": "ad77c3788bbd410c3da3509669f65a87a31e44b280c1c76ea452cda45ac46a29",
     "public/v2/assets/conversations-crm-contract.js": "1d750aa64a065fc85facbe0caad767a7ad7f14d02bb0e8b05c37138a78e6bb7b",
     "public/v2/assets/conversations-restored.css": "08eec5493b8e4bb0cc88513f91956e5a09a252ecc5dc6e036a8f3fdf65b476a3",
@@ -20,7 +21,7 @@
     "public/v2/assets/FONT-SOURCE.json": "61773c23aade60a90d5081c89a0ae50792f627be80a80af084fa378aa900742f",
     "public/v2/assets/appearance-preferences.js": "cbb241fe8223c3881c551299636899e6d68a1d4c79c4169ae652c94b5b9e2323",
     "public/v2/assets/appearance.css": "de9a9e4d16cbee320fdec98b92f9e9241ec639add7508fda417f670dd5bc812e",
-    "public/v2/assets/appearance.js": "54956902b0d49430bbc9ed4c96da2af586850a867aa3ead4ae0955c59cafb876",
+    "public/v2/assets/appearance.js": "79515da0b7eb098bbe37f864a3b91afa898c7b5985fa1cc8f84d6e03d436557a",
     "public/v2/assets/channel-policy.js": "792217b11ad84c54b1a544e164bc3fb9948858c42c5b408d5f5a94a480e701ca",
     "public/v2/assets/channels-view.js": "355f204234cde80bf24a732193728decc446771a70588ff568a1cc061e7d1f91",
     "public/v2/assets/channels-demo.js": "4d09e060ef7b3f14dac004dc176fc3b5650e18b73bf03eed48df8da5b9b222b8",
@@ -41,19 +42,19 @@
     "public/v2/assets/view.js": "8315a9d6d7e5fc4d9ca8eaf2284f660d8362d90f397f2ea6080984bdd34899c5"
   },
   "publicHashes": {
-    "canais/index.html": "4ec52762c91a7198dd9c70560fbf53833f83317f4e81e971bae5690002580a2e",
-    "conexoes/index.html": "26bdc771862ba8f1bc788769eda2dc7318d74cf6e8698a0386e2ded20cad5269",
+    "canais/index.html": "161da86ce51da4d5a921bf7281bcea440b0b18b62ca4fb504f3259ab60992f80",
+    "conexoes/index.html": "c477ac21ae9d0e0f5fa1493304c3c0e266e24d91a272dceed607059f8412aa16",
     "conversas/index.html": "d0fad409e30b78b574a75e22d48a15c67ce3026d0b959d6f9a7344fa23ab171c",
-    "em-preparo/index.html": "2219752e3ac1b1e5cd30d8641d756bc101db67dc86c854c469d77660bacb1913",
-    "historico/index.html": "00a32c3c11cbddf9f2be779e1382beaec2159a162f17bb808f1f317351e2e0d8",
+    "em-preparo/index.html": "141ebbaedf2c70ec944234e48f2db4f4a45eb152f0f81ae11440064b102729d4",
+    "historico/index.html": "5cb7de09f598541fea127c8da67e2e553a5287f1f1bf28a0eafece2e8552515a",
     "icon-v2.svg": "66468ae850c90e4de7d6872889c2df6b85c03a4a1b434116aa2acf19352cae9f",
-    "index.html": "5d1239c4132b991a554fb4d363eb5f54d829aea464fb99d0a004af98fc3023f3",
-    "instancias/index.html": "4ec52762c91a7198dd9c70560fbf53833f83317f4e81e971bae5690002580a2e",
+    "index.html": "d87c766c5769b2d7b5289ea754debc93f9a3892721e599d134e39be0c1301527",
+    "instancias/index.html": "161da86ce51da4d5a921bf7281bcea440b0b18b62ca4fb504f3259ab60992f80",
     "v2/assets/FONT-LICENSE.txt": "58172e0c0fac2cda8a37b348164bb55e44b0e69051e557e92b1d3f6910141f7b",
     "v2/assets/FONT-SOURCE.json": "61773c23aade60a90d5081c89a0ae50792f627be80a80af084fa378aa900742f",
     "v2/assets/appearance-preferences.js": "cbb241fe8223c3881c551299636899e6d68a1d4c79c4169ae652c94b5b9e2323",
     "v2/assets/appearance.css": "de9a9e4d16cbee320fdec98b92f9e9241ec639add7508fda417f670dd5bc812e",
-    "v2/assets/appearance.js": "54956902b0d49430bbc9ed4c96da2af586850a867aa3ead4ae0955c59cafb876",
+    "v2/assets/appearance.js": "79515da0b7eb098bbe37f864a3b91afa898c7b5985fa1cc8f84d6e03d436557a",
     "v2/assets/channel-policy.js": "792217b11ad84c54b1a544e164bc3fb9948858c42c5b408d5f5a94a480e701ca",
     "v2/assets/channels-demo.js": "4d09e060ef7b3f14dac004dc176fc3b5650e18b73bf03eed48df8da5b9b222b8",
     "v2/assets/channels-view.js": "355f204234cde80bf24a732193728decc446771a70588ff568a1cc061e7d1f91",
@@ -90,6 +91,7 @@
     "v2/assets/shared.css": "f5e5ff88f78240f7d966d50838aea0f4b00f4615b4a36dc49a4ba23117bd0108",
     "v2/assets/shell.js": "58469af714a2eb0d79b870d2e38dca688a6bc00b73596ec9340f54aa44038078",
     "v2/assets/view.js": "8315a9d6d7e5fc4d9ca8eaf2284f660d8362d90f397f2ea6080984bdd34899c5",
-    "visao-geral/index.html": "5d1239c4132b991a554fb4d363eb5f54d829aea464fb99d0a004af98fc3023f3"
+    "v2/assets/workspace-theme.css": "1815904f9ba1cef156c5a5a26ea541361772a6dc2d7e212b2efe1852cb5ea26b",
+    "visao-geral/index.html": "d87c766c5769b2d7b5289ea754debc93f9a3892721e599d134e39be0c1301527"
   }
 }

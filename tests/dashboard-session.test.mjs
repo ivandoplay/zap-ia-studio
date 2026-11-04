@@ -25,3 +25,9 @@ test('PIN e 403 não acionam refresh; rotas fora do resumo nunca são chamadas',
  let calls=0;const api=createSessionClient({localStore:local(),sessionStore:storage(),fetcher:async()=>{calls++;return response({ok:false,pinRequired:true},401);}});
  await assert.rejects(api.request('/api/dashboard/summary'),e=>e.status===401);assert.equal(calls,1);await assert.rejects(api.request('/api/chat/send'));assert.equal(calls,1);
 });
+
+test('comandos de conexão nunca fazem refresh/replay automático em 401, erro ou falha de rede',async()=>{
+ for(const fail of ['auth','network','server']){let calls=0;const api=createSessionClient({localStore:local(),sessionStore:storage(),fetcher:async()=>{calls++;if(fail==='network')throw Error('offline');return response({ok:false,authRequired:true},fail==='auth'?401:503);}});
+  await assert.rejects(api.command('/api/wa/disconnect',{slotId:'slot_1',clearSession:false}));assert.equal(calls,1);
+ }
+});

@@ -1,3 +1,4 @@
+import {validateConnectionControl} from './connections/controls.js';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import os from 'node:os';
@@ -945,12 +946,17 @@ export async function dispatchCommandToWorker(client, userId, action, payload = 
     client.from('zapia_users').select('role, max_wa_slots').eq('user_id', userId).maybeSingle()
   ]);
 
+  if(['wa_connect','wa_disconnect'].includes(action)){
+    validateConnectionControl(action==='wa_connect'?'/wa/connect':'/wa/disconnect',payload,{maxSlots:clampMaxWaSlots(userRes.data?.max_wa_slots,userRes.data?.role)});
+    if([rtRes,slotsRes,devicesRes,userRes].some(r=>r.error))throw Object.assign(new Error('Não foi possível verificar o destino do comando.'),{statusCode:503});
+    if(opts.slotId&&opts.slotId!==payload.slotId)throw Object.assign(new Error('Chip do comando não corresponde ao destino.'),{statusCode:400});
+  }
   const rt = rtRes.data;
   const slotRows = slotsRes.data || [];
   const onlineDevices = (devicesRes.data || []).filter(
-    (d) => Boolean(d?.online) && isWorkerHeartbeatFresh(d?.heartbeat_at)
+    (d) => d?.online === true && isWorkerHeartbeatFresh(d?.heartbeat_at)
   );
-  const legacyOnline = Boolean(rt?.worker_online) && isWorkerHeartbeatFresh(rt?.worker_heartbeat_at);
+  const legacyOnline = rt?.worker_online === true && isWorkerHeartbeatFresh(rt?.worker_heartbeat_at);
 
   if (onlineDevices.length === 0 && !legacyOnline) {
     const err = new Error(
@@ -1023,6 +1029,8 @@ export async function dispatchCommandToWorker(client, userId, action, payload = 
     resolvedTargetDeviceId = onlineDevices[0].device_id;
   }
 
+  if(['wa_connect','wa_disconnect'].includes(action)&&resolvedTargetDeviceId&&!onlineDevices.some(d=>d.device_id===resolvedTargetDeviceId))throw Object.assign(new Error('Motor escolhido indisponível nesta conta. Nenhum outro foi selecionado.'),{statusCode:409});
+  if(['wa_connect','wa_disconnect'].includes(action)&&existingSlotRow?.device_id&&resolvedTargetDeviceId&&existingSlotRow.device_id!==resolvedTargetDeviceId&&(action==='wa_disconnect'||existingSlotRow.status!=='disconnected'))throw Object.assign(new Error('O chip pertence a outro motor. Nenhum destino alternativo foi escolhido.'),{statusCode:409});
   const startedAtIso = trueNowIso();
   const cmdPayload = resolvedSlotId ? { ...payload, slotId: resolvedSlotId } : payload;
   const { data: cmd, error: insErr } = await client
@@ -2499,6 +2507,10 @@ class CloudWorkerBridge {
       }
 
       const p = row.payload || {};
+      if(['wa_connect','wa_disconnect'].includes(row.action)){
+        if(row.user_id!==this.user.id||row.slot_id!==p.slotId)throw new Error('Conta ou chip do comando não corresponde ao destino.');
+        validateConnectionControl(row.action==='wa_connect'?'/wa/connect':'/wa/disconnect',p,{maxSlots:clampMaxWaSlots(this.user.maxWaSlots??this.user.max_wa_slots,this.user.role)});
+      }
       const targetSlotId = normalizeSlotId(row.slot_id || p.slotId || 'slot_1');
       let result = { ok: true };
 
@@ -2526,7 +2538,7 @@ class CloudWorkerBridge {
           break;
         }
         case 'wa_disconnect': {
-          const st = await this.whatsappManager.disconnect(p.clearSession !== false, targetSlotId);
+          const st = await this.whatsappManager.disconnect(p.clearSession, targetSlotId);
           if (p.clearSession !== false && this.client && this.user?.id) {
             await this.client
               .from('zapia_wa_slots')

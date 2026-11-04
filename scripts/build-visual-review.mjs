@@ -3,7 +3,7 @@ import fs from 'node:fs';import path from 'node:path';import {fileURLToPath} fro
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const site=path.join(root,'review-site'),output=path.join(site,'public'),assets=path.join(output,'v2/assets');
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
-const files=['FONT-LICENSE.txt','FONT-SOURCE.json','appearance-preferences.js','appearance.css','appearance.js','connections-view.js','connections.css','dashboard-live.css','dashboard.css','icons.js','ienvia-icon.png','manrope-latin.woff2','navigation.js','shared.css','shell.js','view.js'];
+const files=['FONT-LICENSE.txt','FONT-SOURCE.json','appearance-preferences.js','appearance.css','appearance.js','connections-view.js','connections-controls.js','connections.css','dashboard-live.css','dashboard.css','icons.js','ienvia-icon.png','manrope-latin.woff2','navigation.js','shared.css','shell.js','view.js'];
 fs.rmSync(output,{recursive:true,force:true});fs.mkdirSync(assets,{recursive:true});
 const sourceHashes={};
 for(const name of files){const source=path.join(root,'public/v2/assets',name),bytes=fs.readFileSync(source);sourceHashes[`public/v2/assets/${name}`]=hash(bytes);let result=bytes;

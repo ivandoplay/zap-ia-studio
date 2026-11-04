@@ -32,3 +32,9 @@ O código funcional e a migração pendente são versionados na branch, mas **n�
 - ID: `prj_2plMn5ELqUQ3CAVqYvp6NtQSDoBH`.
 - A branch de revisão é habilitada no config deste diretório; `main` fica desabilitada neste projeto. Isso não modifica as configurações do projeto principal.
 - A proteção de acesso padrão da Vercel pode exigir login Vercel. Ela não é autenticação do aplicativo. Verifique a URL sem sessão antes de divulgar como pública.
+
+## Controles demonstrativos de Conexões
+
+Use **Gerenciar este chip** para avaliar nome/IA, escolha de transporte, pareamento e confirmações. Todos os adaptadores deste projeto são locais: “salvar” muda somente a memória desta demonstração; QR não é gerado e o código mostrado é fictício. Selecione o cenário vazio para experimentar o fluxo de pareamento de qualquer chip. No cenário suporte, controles ficam bloqueados.
+
+URL pública confirmada: https://ienvia-reforma-visual.vercel.app/conexoes/ . Os endereços longos do deploy podem exigir login Vercel; use o domínio curto.

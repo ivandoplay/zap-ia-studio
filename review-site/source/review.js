@@ -1,3 +1,4 @@
+import {createConnectionControls} from './connections-controls.js';
 import {mountShell} from './shell.js';
 import {mountPage,renderSummary,setSyncState} from './view.js';
 import {mountConnections,renderConnections,setConnectionsSync} from './connections-view.js';
@@ -7,6 +8,8 @@ const scenarioValues=['normal','empty','stale','error','support'];
 const params=new URLSearchParams(location.search);
 let scenario=scenarioValues.includes(params.get('cenario'))?params.get('cenario'):'normal';
 const data=demoData(scenario);
+const exampleConfig={slots:[1,2,3].map(i=>({slotId:`slot_${i}`,label:`Chip ${i} · exemplo`,aiEnabled:i!==2}))};
+const controls=page==='conexoes'?createConnectionControls({demo:true,readConfiguration:async()=>exampleConfig,operate:async(path,body)=>{if(path.endsWith('/slot-config')){Object.assign(exampleConfig.slots.find(s=>s.slotId===body.slotId),body);return {ok:true};}return {ok:true,status:'qr_ready',pairingCode:'DEMO2026'};}}):null;
 if(page==='overview')mountPage();else if(page==='conexoes')mountConnections();
 const shell=mountShell({pageId:page,title:page==='overview'?'Visão geral':page==='conexoes'?'Conexões e motor':'Página ainda não reformada',currentUser:data.viewer,permissions:data.permissions,appearanceApi:{account:false},aboutText:'Revisão visual isolada com dados de demonstração. Não existe autenticação real, consulta a banco ou acesso ao WhatsApp. Os botões operacionais são exemplos desativados. O tema é salvo somente neste navegador da revisão.'});
 function showPending(){shell.showInfo('Página ainda não reformada','Esta área ainda não foi implementada na reforma. Ela não abre o painel de produção e não executa operações. Você pode continuar avaliando Visão geral e Conexões / Motor.');}
@@ -21,18 +24,18 @@ function render(){
   document.getElementById('data-tag').textContent='Demonstração';
   if(scenario==='stale'||scenario==='error')setSyncState('stale',scenario==='error'?'Simulação de falha de consulta. Nenhuma API foi chamada.':'Simulação de diagnóstico desatualizado. Estes estados não pertencem à sua conta.');
  }else if(page==='conexoes'){
-  renderConnections(current,exit);
+  renderConnections(current,exit);controls.update(current);
   document.getElementById('connections-sync').textContent='Dados de demonstração';
   document.getElementById('connections-time').textContent='Exemplo visual local · sem consulta à API';
-  if(scenario==='stale'||scenario==='error')setConnectionsSync('stale','Simulação visual de indisponibilidade. Nenhuma sessão real é consultada ou alterada.');
+  if(scenario==='stale'||scenario==='error'){controls.suspend();setConnectionsSync('stale','Simulação visual de indisponibilidade. Nenhuma sessão real é consultada ou alterada.');}
  }
  document.querySelectorAll('a[href^="/painel"]').forEach(link=>{const area=link.hash.slice(1)||'painel';link.href=`/em-preparo/?pagina=${encodeURIComponent(area)}`;link.title='Página ainda não reformada — somente demonstração';});
 }
 const banner=document.createElement('section');banner.className='review-banner';banner.setAttribute('aria-label','Ambiente de revisão visual');
 banner.innerHTML='<div><strong>Revisão visual · dados de demonstração</strong><span>Sem login real, banco de dados ou operações de WhatsApp. O site principal não foi alterado.</span></div><label for="review-scenario">Cenário <select id="review-scenario"><option value="normal">Padrão</option><option value="empty">Vazio</option><option value="stale">Desatualizado</option><option value="error">Falha simulada</option><option value="support">Suporte visual</option></select></label>';
 document.getElementById('page-slot').before(banner);
-const select=document.getElementById('review-scenario');select.value=scenario;
-select.addEventListener('change',()=>{scenario=select.value;const url=new URL(location.href);url.searchParams.set('cenario',scenario);history.replaceState(null,'',url);render();});
+const select=document.getElementById('review-scenario');select.value=scenario;if(page==='pending')select.closest('label').hidden=true;
+select.addEventListener('change',()=>{controls?.suspend();scenario=select.value;const url=new URL(location.href);url.searchParams.set('cenario',scenario);history.replaceState(null,'',url);render();});
 document.querySelector('.workspace-label div>span').textContent='Ambiente visual isolado';
 document.querySelector('.lab-status').lastChild.textContent=' Revisão sem integrações';
 const refresh=document.getElementById(page==='conexoes'?'connections-refresh':'refresh-summary');

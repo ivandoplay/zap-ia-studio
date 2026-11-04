@@ -1,10 +1,10 @@
 # Conexões / Motor — primeira versão de diagnóstico
 
-## Decisão mais recente do titular
+## Histórico da primeira rodada
 
 Concluir as abas do projeto primeiro. **Banco de dados remoto, GitHub e publicação ficam para depois.** Não aplicar a migração pendente da Visão geral nem interpretar aprovação de tela como autorização para publicar ou operar WhatsApp.
 
-## Entrega desta rodada
+## Entrega inicial de diagnóstico
 
 Nova entrada `/conexoes/`, em `public/v2/connections.html`, integrada à navegação modular. A Visão geral agora aponta para esse diagnóstico. O painel atual continua disponível.
 
@@ -81,4 +81,50 @@ Pasta `/home/user/auditoria/arquitetura-v2/previews/conexoes-integrada/`:
 
 São capturas da implementação com **respostas sintéticas**, identificadas na imagem. Não representam o estado atual da conta do titular. Os demais prints dessa pasta são a regressão da Visão geral, não novas páginas entregues.
 
-Nenhum envio, campanha, pareamento, reconexão ou desconexão real foi executado. Nenhum banco remoto foi alterado. Não houve commit, push ou deploy.
+Nenhum envio, campanha, pareamento, reconexão ou desconexão real foi executado. Nenhum banco remoto foi alterado. Naquela entrega inicial ainda não houve commit, push ou deploy; a revisão visual foi publicada posteriormente em projeto separado.
+
+---
+
+## Rodada seguinte — controles por chip (03/11/2026)
+
+O titular escolheu **concluir Conexões / Motor** antes de abrir outra aba. A autorização de publicação limita-se à branch `review/reforma-visual` e ao projeto estático separado. Banco e aplicativo principal continuam sem alterações remotas.
+
+### Implementado no código funcional
+
+- “Gerenciar este chip”, com conta/chip identificados, foco/modal nativo, fechamento acessível e tema responsivo.
+- Nome e IA por chip, lendo uma projeção mínima `settings->waSlots` apenas ao abrir os controles. Valores de IA desconhecidos exigem escolha explícita.
+- Transporte escolhido manualmente: motor local ou Evolution; nunca há fallback automático entre eles.
+- No painel nuvem, motor escolhido explicitamente entre os dispositivos online daquela conta. Destino offline, estranho à conta ou diferente do dono de uma sessão ativa é rejeitado antes de enfileirar.
+- Pareamento por QR ou código alfanumérico de 8 caracteres. QR e código não são confundidos; Evolution pode retornar QR mesmo quando um código foi solicitado.
+- Separação real de semânticas: no motor local, **parar** envia `clearSession:false`, **limpar** envia `true`; na Evolution, desconectar faz logout (não é pausa) e remover exclui a instância do chip.
+- Checkbox de confirmação para qualquer gravação/operação e digitação `CHIP N` para remoção. Pareamento bloqueado pela interface quando o sinal está conectado, desconhecido, em conflito ou desatualizado.
+- Em suporte, os controles, a configuração privada e o pareamento ficam bloqueados também no servidor. Isso vale inclusive para master e para os endpoints legados revisados.
+- Chip é obrigatório e estrito; número inválido não é normalizado para Chip 1. Booleanos `clearSession` e `aiEnabled` são estritos na API e no executor.
+- POST operacional não renova sessão/reenvia automaticamente em 401, erro de transporte ou 5xx. Erro incerto bloqueia o botão naquela interação e orienta consultar sinais.
+- Pareamento enfileirado tem consulta GET pequena, vinculada a usuário + comando `wa_connect` + chip (e dispositivo do comando quando disponível). Uma falha de consulta não cria novo comando. A consulta termina após 25s ou quando a página fica oculta.
+- QR/código ficam apenas em memória/DOM, nunca localStorage ou relatórios reais. Exibição limitada a 45s desde a solicitação, podendo expirar antes no WhatsApp; não há renovação automática. Contexto/tela oculta remove a exibição. Removido log legado que incluía telefone e código de pareamento.
+
+### Organização
+
+- `src/connections/controls.js`: contrato compartilhado e projeção privada de pareamento.
+- `src/connections/router.js`: configuração mínima e consulta privada de comando, além do diagnóstico.
+- `public/v2/assets/connections-controls.js`: UI compartilhada, sem acesso direto a sessão, fetch ou WebSocket; adaptadores fornecidos pelo bootstrap.
+- `connections-app.js`: adaptadores autenticados do aplicativo funcional; `session-client.js` impede replay de operações.
+- `server.js`, `evolutionApiCloud.js`, `supabaseCloud.js`: validação antes de carregar workspace/operar, vínculo do destino e defesa no executor.
+- `review-site/source/review.js`: adaptadores puramente demonstrativos. Nunca importa o bootstrap autenticado. Gerador copia somente a allowlist estática.
+
+### Validação desta rodada
+
+- **76/76 testes selecionados finais**, incluindo contratos, middleware HTTP, worker sintético, browser, auth/Evolution e revisão estática. Log: `/home/user/auditoria/arquitetura-v2/connections-controls-final.log`.
+- **334/336 na regressão completa**; permanecem apenas as duas falhas conhecidas: `ienvia-branding.test.mjs` e `static-release-package.test.mjs`, relativas a ZIP/release assinado. Não foram contornadas nem corrigidas nesta aba.
+- Testes novos cobrem manutenção versus limpeza, `false` real, cota/slot obrigatório, escolha e pertencimento do motor, suporte, não repetição, privacidade e expiração.
+- Não houve operação em WhatsApp real, envio, leitura de registros remotos ou aplicação de SQL.
+
+### Limites explícitos
+
+- O link de revisão demonstra o fluxo: usa QR não gerado/código fictício e alterações somente em memória; não administra a conta real.
+- O aplicativo autenticado ainda não foi publicado no projeto principal. Validação real de pareamento/provedor/worker é pendente e depende de autorização específica, sem usar a conta restrita para experimentar.
+- Consultas de sinais/configuração são pequenas e não carregam contatos. As mutações continuam reaproveitando os caminhos legados; algumas ainda carregam/recarregam o workspace. Não se afirma que todo esse caminho já foi otimizado.
+- Atualizações de settings e metadados do chip não são uma transação única; falha de persistência é apresentada como resultado sem confirmação, não como sucesso nem rollback garantido.
+- O painel local não opera Evolution pela tela nova; essa opção exige abrir a conta no painel nuvem. Não são apagados contatos do aplicativo, retomadas campanhas ou escolhidos executores de campanha por esses controles.
+- A consulta de pareamento na nuvem depende do contrato das tabelas existentes; testes sintéticos não confirmam o schema remoto nem o funcionamento de um motor antigo.

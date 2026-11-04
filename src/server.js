@@ -1,6 +1,7 @@
 import { composeConnectionState } from './dashboard/connections.js';
 import { createDashboardRouter } from './dashboard/router.js';
 import { createConnectionsRouter } from './connections/router.js';
+import {validateConnectionControl} from './connections/controls.js';
 import 'dotenv/config';
 import dns from 'node:dns';
 import http from 'http';
@@ -516,7 +517,7 @@ function attachAtomicCloudFlush(res, tenantStore) {
   };
 }
 
-const isDashboardRequest = (req) => /^(?:\/dashboard\/(?:summary|appearance)|\/connections\/summary)\/?$/.test(req.path);
+const isDashboardRequest = (req) => /^(?:\/dashboard\/(?:summary|appearance)|\/connections\/(?:summary|configuration|pairing))\/?$/.test(req.path);
 async function makeDashboardContext(verified, actAsUserId = '') {
   const profile = verified.profile;
   const viewer = { id: verified.authUser.id, displayName: profile.display_name || profile.displayName || profile.username || 'Minha conta', role: profile.role || 'user' };
@@ -553,6 +554,7 @@ app.use('/api', async (req, res, next) => {
       }
 
       req.realMasterProfile = verified.profile;
+      if(req.method==='POST'){validateConnectionControl(req.path,req.body,{maxSlots:clampMaxWaSlots(verified.profile.max_wa_slots,verified.profile.role),support:!!actAsUserId&&actAsUserId!==verified.authUser.id});}
       if (req.path === '/wa/toggle-bot' && typeof req.body?.enabled !== 'boolean') return res.status(400).json({ ok: false, error: 'enabled deve ser booleano (true ou false).' });
       if (isDashboardRequest(req)) {
         req.dashboardContext = await makeDashboardContext(verified, actAsUserId);
@@ -628,6 +630,7 @@ app.use('/api', async (req, res, next) => {
   }
 
   req.realMasterProfile = workerSt.user || { role: 'master' };
+  if(req.method==='POST'){try{validateConnectionControl(req.path,req.body,{maxSlots:workerSt.user?clampMaxWaSlots(workerSt.user.maxWaSlots??workerSt.user.max_wa_slots,workerSt.user.role):3,support:!!actAsUserId&&actAsUserId!==workerSt.user?.id});}catch(error){return res.status(error.statusCode||400).json({ok:false,error:error.message});}}
   if (req.path === '/wa/toggle-bot' && typeof req.body?.enabled !== 'boolean') return res.status(400).json({ ok: false, error: 'enabled deve ser booleano (true ou false).' });
   if (isDashboardRequest(req) && actAsUserId && actAsUserId !== workerSt.user?.id) {
     try {
@@ -1482,7 +1485,7 @@ app.post('/api/wa/connect', async (req, res) => {
 
 app.post('/api/wa/disconnect', async (req, res) => {
   try {
-    const clearSession = req.body?.clearSession !== false;
+    const clearSession = req.body.clearSession;
     const slotId = normalizeSlotId(req.body?.slotId || 'slot_1');
     if (usesCloudBridge(req)) {
       const out = await dispatchCommandToWorker(
@@ -1519,7 +1522,7 @@ app.post('/api/wa/slot-config', async (req, res) => {
         ? (String(req.body.label || '').trim().slice(0, 42) || `Chip ${slotId.slice(-1)}`)
         : prev.label;
     const nextAiEnabled =
-      req.body?.aiEnabled !== undefined ? Boolean(req.body.aiEnabled) : prev.aiEnabled !== false;
+      req.body?.aiEnabled !== undefined ? req.body.aiEnabled : prev.aiEnabled !== false;
 
     currentSlots[slotId] = { label: nextLabel, aiEnabled: nextAiEnabled };
     storage.data.settings.waSlots = currentSlots;
@@ -1531,12 +1534,13 @@ app.post('/api/wa/slot-config', async (req, res) => {
 
     if (usesCloudBridge(req) && req.cloudAuth?.client && req.cloudAuth?.authUser?.id) {
       try {
-        await req.cloudAuth.client
+        const saved = await req.cloudAuth.client
           .from('zapia_wa_slots')
           .update({ label: nextLabel, ai_enabled: nextAiEnabled, updated_at: trueNowIso() })
           .eq('user_id', req.cloudAuth.authUser.id)
           .eq('slot_id', slotId);
-      } catch (e) {}
+        if(saved.error)throw new Error('Falha ao persistir configuração do chip. Consulte antes de tentar novamente.');
+      } catch (e) { return res.status(503).json({ok:false,error:'Configuração sem confirmação de gravação. Consulte o estado antes de tentar novamente.'}); }
       if (req.cloudAuth.tenantStore?.waRuntime?.slots?.[slotId]) {
         req.cloudAuth.tenantStore.waRuntime.slots[slotId].label = nextLabel;
         req.cloudAuth.tenantStore.waRuntime.slots[slotId].aiEnabled = nextAiEnabled;

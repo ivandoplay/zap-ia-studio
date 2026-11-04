@@ -1116,7 +1116,7 @@ class WhatsAppSlotEngine {
               this.status = 'qr_ready';
               this.connectedUser = null;
               this.emitState();
-              storage.addLog('whatsapp', `Código de pareamento gerado para +${cleanPairingDigits}: ${formatted}`);
+              storage.addLog('whatsapp', 'Código de pareamento gerado para este chip. Consulte apenas o painel autorizado.');
               if (resolvePairingWait) resolvePairingWait();
             } catch (err) {
               if (mySeq !== this.socketSeq) return;

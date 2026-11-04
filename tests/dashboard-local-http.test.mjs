@@ -1,3 +1,4 @@
+import {validateConnectionControl} from '../src/connections/controls.js';
 // Middleware real em VM + router real HTTP; não importa server.js nem inicializa motor/socket.
 import test from 'node:test';import assert from 'node:assert/strict';import vm from 'node:vm';import crypto from 'node:crypto';import {readFileSync} from 'node:fs';import express from 'express';import {createDashboardRouter} from '../src/dashboard/router.js';
 const source=readFileSync(new URL('../src/server.js',import.meta.url),'utf8');
@@ -7,7 +8,7 @@ const pinSource=source.slice(source.indexOf('function safeComparePin('),source.i
 const helpers=source.slice(source.indexOf('const isDashboardRequest ='),source.indexOf('// Middleware Multi-Tenant'));
 const storage={data:{settings:{securityPin:'2468'},contacts:{a:{stage:'aguardando_humano',lastMessageAt:new Date().toISOString()}}}};
 let reads=0;const worker={configured:false,loggedIn:false,user:null};
-const sandbox={IS_VERCEL:false,Buffer,crypto,storage,cloudWorker:{getStatus:()=>worker},extractActAsUserId:req=>req.headers['x-zapia-act-as']||'',UUID_RE:/^[0-9a-f-]{36}$/i,clampMaxWaSlots:v=>v||1,loadTenantContextAsMasterSupport:()=>{throw Error('Bootstrap proibido neste teste');},getAdminClient:()=>{throw Error('Admin inesperado');}};
+const sandbox={validateConnectionControl,IS_VERCEL:false,Buffer,crypto,storage,cloudWorker:{getStatus:()=>worker},extractActAsUserId:req=>req.headers['x-zapia-act-as']||'',UUID_RE:/^[0-9a-f-]{36}$/i,clampMaxWaSlots:v=>v||1,loadTenantContextAsMasterSupport:()=>{throw Error('Bootstrap proibido neste teste');},getAdminClient:()=>{throw Error('Admin inesperado');}};
 const middleware=vm.runInNewContext(`${pinSource}\n${helpers}\n(${body})`,sandbox);
 const app=express();app.use(express.json());app.use('/api',middleware);app.use('/api/dashboard',createDashboardRouter({getLocalContext:()=>{reads++;return {mode:'local_worker',viewer:{id:null,displayName:'Painel local'},tenant:{id:null,maxWaSlots:1},permissions:{master:true},data:storage.data,runtime:{maxWaSlots:1,slots:{slot_1:{status:'disconnected',workerOnline:true,workerHeartbeatAt:new Date().toISOString()}}}};}}));
 const server=await new Promise(r=>{const s=app.listen(0,'127.0.0.1',()=>r(s));});test.after(()=>new Promise(r=>server.close(r)));

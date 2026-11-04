@@ -3,6 +3,7 @@
  * Mantém os contratos internos do painel; URLs e credencial vêm do ambiente.
  */
 import { Router } from 'express';
+import {validateConnectionControl} from './connections/controls.js';
 import express from 'express';
 import { evolutionInstanceIdentity } from './evolutionIdentity.js';
 import { assertEvolutionApiAccepted, requireEvolutionMessageId } from './evolutionApiResponse.js';
@@ -649,10 +650,9 @@ evolutionApiCloudRouter.post('/campaign-send', async (req, res) => {
 });
 evolutionApiCloudRouter.use((req, res, next) => {
   if (req.method !== 'POST' || !['/connect','/refresh-qr','/reconnect','/disconnect','/delete'].includes(req.path)) return next();
-  const slot = req.body?.slotId;
-  if (slot !== undefined && !/^slot_[1-3]$/.test(String(slot))) return res.status(400).json({ok:false,error:'Chip inválido; nenhum outro chip foi selecionado.'});
-  const profile = req.cloudAuth?.profile;
-  if (profile && profile.role !== 'master' && Number(String(slot || 'slot_1').slice(-1)) > Number(profile.max_wa_slots || 1)) return res.status(403).json({ok:false,error:'Chip fora do limite da conta.'});
+  if(!req.cloudAuth?.authUser?.id)return res.status(403).json({ok:false,error:'Abra o painel da conta titular na nuvem para operar a Evolution.'});
+  const profile=req.cloudAuth.profile;
+  try{validateConnectionControl('/evolution-cloud'+req.path,req.body,{maxSlots:profile?.role==='master'?3:profile?Number(profile.max_wa_slots||1):3,support:req.cloudAuth.isRemoteImpersonation===true});}catch(error){return res.status(error.statusCode||400).json({ok:false,error:error.message});}
   if (['/connect','/refresh-qr','/reconnect'].includes(req.path) && !process.env.EVOLUTION_WEBHOOK_SECRET) return res.status(503).json({ok:false,error:'Configure EVOLUTION_WEBHOOK_SECRET antes de conectar a instância.'});
   next();
 });

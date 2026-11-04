@@ -4,7 +4,7 @@ process.env.VERCEL='1';process.env.SUPABASE_URL='http://127.0.0.1:1';process.env
 const A='11111111-1111-4111-8111-111111111111',B='22222222-2222-4222-8222-222222222222',M='33333333-3333-4333-8333-333333333333';
 const jwt=id=>[Buffer.from('{}').toString('base64url'),Buffer.from(JSON.stringify({sub:id,exp:Math.floor(Date.now()/1000)+3600})).toString('base64url'),'synthetic'].join('.');
 const profiles=new Map([[A,{user_id:A,username:'conta-a',display_name:'Conta A',role:'user',is_active:true,max_wa_slots:1}],[B,{user_id:B,username:'conta-b',display_name:'Conta B',role:'user',is_active:true,max_wa_slots:2}],[M,{user_id:M,username:'operador',display_name:'Operador',role:'master',is_active:true,max_wa_slots:3}]]);
-const calls=[];let rpcUnavailable=false,providerUnavailable=false,lastPreferenceOwner;
+const calls=[];let rpcUnavailable=false,providerUnavailable=false,lastPreferenceOwner,controlMode=false;
 const result=(v,status=200)=>new Response(JSON.stringify(v),{status,headers:{'content-type':'application/json'}});
 const actor=headers=>{try{return JSON.parse(Buffer.from(new Headers(headers).get('authorization').split('.')[1],'base64url')).sub;}catch{return null;}};
 globalThis.fetch=async(input,options={})=>{
@@ -18,6 +18,8 @@ globalThis.fetch=async(input,options={})=>{
   const n=owner===A?1002:9,today=new Date().toISOString().slice(0,10);
   return result({schemaVersion:1,tenantId:owner,generatedAt:new Date().toISOString(),timeZone:'America/Fortaleza',counts:{conversations:n,pendingHuman:2,campaigns:137},campaigns:{paused:1,active:0,drafts:136,completed:0},activityDefinition:'last_contact_activity',activity:Array.from({length:7},(_,i)=>{const date=new Date(today+'T12:00:00Z');date.setUTCDate(date.getUTCDate()-6+i);return {date:date.toISOString().slice(0,10),value:i===6?3:0};})});
  }
+ if(controlMode&&url.pathname==='/rest/v1/zapia_workspaces'){assert.equal(url.searchParams.get('select'),'wa_slots:settings->waSlots');return result([{wa_slots:{slot_1:{label:'Chip de teste',aiEnabled:false}},secret:'NUNCA_PUBLICAR'}]);}
+ if(controlMode&&url.pathname==='/rest/v1/zapia_commands')return result([{id:'44444444-4444-4444-8444-444444444444',action:'wa_connect',status:'done',slot_id:'slot_1',created_at:new Date().toISOString(),result:{slotState:{status:'qr_ready',qrDataUrl:'data:image/png;base64,YWJj',pairingCode:'ABCD1234',phone:'NUNCA_PUBLICAR'},secret:'NUNCA_PUBLICAR'}}]);
  if(url.pathname==='/rest/v1/zapia_wa_runtime')return result([{status:'connected',worker_online:false,worker_heartbeat_at:null}]);
  if(url.pathname==='/rest/v1/zapia_wa_slots'||url.pathname==='/rest/v1/zapia_worker_devices')return result([]);
  if(url.pathname==='/rest/v1/ienvia_user_appearance'){lastPreferenceOwner=(url.searchParams.get('user_id')||'').replace('eq.','');return result([{theme:'dark'}]);}
@@ -52,7 +54,7 @@ test('HTTP: contratos inválidos são rejeitados antes de carregar/gravar worksp
 });
 test('Conexões HTTP: sem RPC nova, workspace, contatos ou mutação; acesso do suporte continua isolado',async()=>{
  calls.length=0;
- const r=await request('/api/connections/summary');assert.equal(r.status,200);assert.equal(r.headers['cache-control'],'no-store');assert.equal(r.body.connections.status,'disconnected');assert.equal(r.body.capabilities.canOperate,false);assert.equal(r.body.restrictionStatus,'not_verified');assert.equal(r.body.executionReadiness,'not_verified');assert.equal(r.body.preferenceScope,'browser');
+ const r=await request('/api/connections/summary');assert.equal(r.status,200);assert.equal(r.headers['cache-control'],'no-store');assert.equal(r.body.connections.status,'disconnected');assert.equal(r.body.capabilities.canOperate,true);assert.equal(r.body.restrictionStatus,'not_verified');assert.equal(r.body.executionReadiness,'not_verified');assert.equal(r.body.preferenceScope,'browser');
  assert.equal(calls.some(c=>c.method!=='GET'||/rpc|zapia_workspaces|zapia_contacts/.test(c.path)),false);
  const denied=await request('/api/connections/summary',{actAs:B});assert.equal(denied.status,403);
  calls.length=0;const support=await request('/api/connections/summary',{id:M,actAs:B});assert.equal(support.status,200);assert.equal(support.body.viewer.id,M);assert.equal(support.body.tenant.id,B);assert.equal(support.body.connections.total,2);assert.equal(calls.some(c=>c.method!=='GET'),false);
@@ -60,6 +62,20 @@ test('Conexões HTTP: sem RPC nova, workspace, contatos ou mutação; acesso do 
 });
 test('Conexões HTTP: falha do provedor não vira banimento nem habilita operações',async()=>{
  providerUnavailable=true;const r=await request('/api/connections/summary');providerUnavailable=false;
- assert.equal(r.status,200);assert.equal(r.body.connections.status,'unknown');assert.equal(r.body.restrictionStatus,'not_verified');assert.equal(r.body.capabilities.canOperate,false);assert.ok(r.body.warnings.includes('provider_unavailable'));
+ assert.equal(r.status,200);assert.equal(r.body.connections.status,'unknown');assert.equal(r.body.restrictionStatus,'not_verified');assert.equal(r.body.capabilities.canOperate,true);assert.ok(r.body.warnings.includes('provider_unavailable'));
  assert.equal((await request('/api/connections/summary',{id:null})).status,401);
+});
+
+test('Conexões controles HTTP: valida chip, booleanos e suporte antes de qualquer workspace ou provedor',async()=>{
+ for(const [path,body,status]of [['/api/wa/connect',{},400],['/api/wa/connect',{slotId:'slot_4'},400],['/api/wa/connect',{slotId:'slot_2'},403],['/api/wa/disconnect',{slotId:'slot_1',clearSession:'false'},400],['/api/wa/disconnect',{slotId:'slot_1'},400],['/api/wa/slot-config',{slotId:'slot_1',aiEnabled:'false'},400],['/api/evolution-cloud/delete',{},400]]){calls.length=0;assert.equal((await request(path,{method:'POST',body})).status,status);assert.equal(calls.some(c=>/zapia_workspaces|zapia_commands|instance/.test(c.path)),false);}
+ for(const path of ['/api/wa/connect','/api/wa/disconnect','/api/wa/slot-config','/api/evolution-cloud/connect','/api/evolution-cloud/disconnect','/api/evolution-cloud/delete']){calls.length=0;assert.equal((await request(path,{id:M,actAs:B,method:'POST',body:{slotId:'slot_1',clearSession:false,aiEnabled:false}})).status,403);assert.equal(calls.some(c=>/zapia_workspaces|zapia_commands|instance/.test(c.path)),false);}
+});
+test('Conexões controles HTTP: configuração mínima e pareamento vinculados à conta/comando, sem suporte',async()=>{
+ controlMode=true;try{
+  calls.length=0;const config=await request('/api/connections/configuration');assert.equal(config.status,200);assert.deepEqual(config.body.slots,[{slotId:'slot_1',label:'Chip de teste',aiEnabled:false}]);assert.equal(JSON.stringify(config.body).includes('NUNCA_PUBLICAR'),false);assert.equal(calls.some(c=>c.path.includes('contacts')),false);
+  assert.equal((await request('/api/connections/configuration',{id:M,actAs:B})).status,403);
+  const pair=await request('/api/connections/pairing?slotId=slot_1&commandId=44444444-4444-4444-8444-444444444444');assert.equal(pair.status,200);assert.equal(pair.body.pairingCode,'ABCD1234');assert.equal(JSON.stringify(pair.body).includes('NUNCA_PUBLICAR'),false);assert.match(pair.headers['cache-control'],/no-store/);
+  assert.equal((await request('/api/connections/pairing?slotId=slot_2&commandId=44444444-4444-4444-8444-444444444444')).status,400);
+  assert.equal((await request('/api/connections/pairing?slotId=slot_1&commandId=44444444-4444-4444-8444-444444444444',{id:M,actAs:B})).status,403);
+ }finally{controlMode=false;}
 });

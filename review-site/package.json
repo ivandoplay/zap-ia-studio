@@ -1,0 +1,1 @@
+{"name":"ienvia-visual-review","version":"1.0.0","private":true,"type":"module","scripts":{"build":"node verify-static.mjs"},"engines":{"node":">=20"}}

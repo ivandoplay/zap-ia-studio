@@ -54,13 +54,13 @@ function normalizeInstance(raw = {}) {
 function assertConfigured() {
   if (!API_KEY) throw Object.assign(new Error('Evolution API não configurada. Cadastre EVOLUTION_API_KEY como segredo na Vercel.'), { statusCode: 503 });
 }
-async function apiCall(path, { method = 'GET', body, query = '' } = {}) {
+async function apiCall(path, { method = 'GET', body, query = '', timeoutMs } = {}) {
   assertConfigured();
   let response;
   try {
     response = await fetch(`${API_URL}${path}${query}`, {
       method,
-      signal: AbortSignal.timeout(method === 'GET' ? 5000 : 12000),
+      signal: AbortSignal.timeout(method === 'GET' ? Math.max(250, Math.min(5000, timeoutMs || 5000)) : 12000),
       redirect: 'error',
       headers: { apikey: API_KEY, 'Content-Type': 'application/json' },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
@@ -79,13 +79,14 @@ async function apiCall(path, { method = 'GET', body, query = '' } = {}) {
   try { return assertEvolutionApiAccepted(data); }
   catch (err) { throw Object.assign(err, { statusCode: err.statusCode || 502 }); }
 }
-async function listInstances() {
-  const data = await apiCall('/instance/fetchInstances');
-  const rows = Array.isArray(data) ? data : data.instances || data.data || data.response || [];
-  return (Array.isArray(rows) ? rows : []).map(normalizeInstance);
+async function listInstances(options = {}) {
+  const data = await apiCall('/instance/fetchInstances', options);
+  const rows = Array.isArray(data) ? data : data.instances || data.data || data.response || null;
+  if (!Array.isArray(rows)) throw Object.assign(new Error('Resposta de instâncias inválida.'), { statusCode: 502 });
+  return rows.map(normalizeInstance);
 }
-async function connectionState(name) {
-  const data = await apiCall(`/instance/connectionState/${encodeURIComponent(name)}`);
+async function connectionState(name, options = {}) {
+  const data = await apiCall(`/instance/connectionState/${encodeURIComponent(name)}`, options);
   const raw = data.instance || data.data?.instance || data.data || data;
   const state = String(raw.state || raw.connectionStatus || raw.status || '').toLowerCase();
   return { state: state === 'connected' ? 'open' : state, phone: raw.ownerJid || raw.owner || raw.number || null };
@@ -280,6 +281,7 @@ async function diagnosticReadRequest(path, body) {
   try {
     response = await fetch(`${API_URL}${path}`, {
       method: body === undefined ? 'GET' : 'POST',
+      redirect: 'error',
       headers: { apikey: API_KEY, 'Content-Type': 'application/json' },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
       signal: AbortSignal.timeout(DIAGNOSTIC_READ_TIMEOUT_MS),
@@ -345,24 +347,30 @@ export async function getEvolutionApiReadOnlyDiagnostics(userId) {
   return result;
 }
 
-export async function getEvolutionApiSlotStatus(userId = null) {
+export async function getEvolutionApiSlotStatus(userId = null, { timeoutMs = 5000 } = {}) {
   if (!userId || !API_KEY) return {};
-  const rows = (await listInstances()).filter((item) => instanceOwnedBy(item, userId));
+  const rows = (await listInstances({ timeoutMs })).filter((item) => instanceOwnedBy(item, userId));
   const result = {};
+  const seen = new Set();
   for (const item of rows) {
+    const id = evolutionInstanceIdentity(item.name)?.slotId;
+    if (id && seen.has(id)) throw Object.assign(new Error('Múltiplas instâncias no mesmo chip; revise EVOLUTION_INSTANCE_USERS.'), {statusCode:409});
+    seen.add(id);
+  }
+  await Promise.all(rows.map(async (item) => {
     const slotId = evolutionInstanceIdentity(item.name)?.slotId;
-    if (!slotId) continue;
-    if (result[slotId]) throw Object.assign(new Error('Múltiplas instâncias no mesmo chip; revise EVOLUTION_INSTANCE_USERS.'),{statusCode:409});
-    const state = await connectionState(item.name).catch(() => ({ state: item.state }));
+    if (!slotId) return;
+    const state = await connectionState(item.name, { timeoutMs }).catch(() => ({ state: 'unknown', readFailed: true }));
     const cached = slotCache.get(cacheKey(userId, slotId)) || {};
     result[slotId] = {
       slotId, instanceId: item.id, name: item.name,
-      status: state.state === 'open' ? 'connected' : state.state === 'connecting' ? 'connecting' : 'disconnected',
+      status: state.readFailed || !['open','close','closed','disconnected','connecting'].includes(state.state) ? 'unknown' : state.state === 'open' ? 'connected' : state.state === 'connecting' ? 'connecting' : 'disconnected',
+      checkedAt: new Date().toISOString(), readStatus: state.readFailed ? 'unavailable' : 'updated',
       phone: state.phone || item.phone || null,
       qrDataUrl: cached.qrDataUrl || null,
       pairingCode: cached.pairingCode || null,
     };
-  }
+  }));
   return result;
 }
 
@@ -424,7 +432,7 @@ export async function getEvolutionApiChats(userId = null, { limit = 200, offset 
   const safeOffset = Math.max(0, Number(offset) || 0);
   let hasMore = false;
   for (const item of rows) {
-    const state = await connectionState(item.name).catch(() => ({ state: item.state }));
+    const state = await connectionState(item.name).catch(() => ({ state: 'unknown', readFailed: true }));
     if (state.state !== 'open') continue;
     const slotId = evolutionInstanceIdentity(item.name)?.slotId;
     if (!slotId) continue;
@@ -472,7 +480,7 @@ export async function getEvolutionApiContacts(userId = null) {
   const pageSize = 1000;
   const maxPages = 10; // Fail-safe: never fetch an unbounded directory from one request.
   for (const item of rows) {
-    const state = await connectionState(item.name).catch(() => ({ state: item.state }));
+    const state = await connectionState(item.name).catch(() => ({ state: 'unknown', readFailed: true }));
     if (state.state !== 'open') continue;
     const slotId = evolutionInstanceIdentity(item.name)?.slotId;
     if (!slotId) continue;

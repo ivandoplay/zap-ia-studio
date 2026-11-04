@@ -1,3 +1,6 @@
+import { composeConnectionState } from './dashboard/connections.js';
+import { createDashboardRouter } from './dashboard/router.js';
+import { createConnectionsRouter } from './connections/router.js';
 import 'dotenv/config';
 import dns from 'node:dns';
 import http from 'http';
@@ -86,6 +89,7 @@ const { whatsappManager } = IS_VERCEL
   : await import('./whatsappManager.js');
 import {
   changeOwnPassword,
+  buildCloudMultiSlotWaState,
   clampMaxWaSlots,
   cloudWorker,
   createManagedUser,
@@ -180,6 +184,14 @@ app.get(['/venda', '/venda.html'], (req, res) => res.redirect(302, `${IS_VERCEL 
 app.get(['/painel', '/app'], (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(ROOT_DIR, 'public', 'painel.html'));
+});
+app.get(['/visao-geral', '/visao-geral/'], (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(ROOT_DIR, 'public', 'v2', 'index.html'));
+});
+app.get(['/conexoes', '/conexoes/'], (_req, res) => {
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(ROOT_DIR, 'public', 'v2', 'connections.html'));
 });
 app.get('/vitrine', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
@@ -504,6 +516,24 @@ function attachAtomicCloudFlush(res, tenantStore) {
   };
 }
 
+const isDashboardRequest = (req) => /^(?:\/dashboard\/(?:summary|appearance)|\/connections\/summary)\/?$/.test(req.path);
+async function makeDashboardContext(verified, actAsUserId = '') {
+  const profile = verified.profile;
+  const viewer = { id: verified.authUser.id, displayName: profile.display_name || profile.displayName || profile.username || 'Minha conta', role: profile.role || 'user' };
+  let target = { id: viewer.id, displayName: viewer.displayName, maxWaSlots: clampMaxWaSlots(profile.max_wa_slots ?? profile.maxWaSlots, profile.role) };
+  let dataClient = verified.client;
+  if (actAsUserId && actAsUserId !== viewer.id) {
+    if (viewer.role !== 'master') throw Object.assign(new Error('Suporte permitido somente para master.'), { statusCode: 403 });
+    if (!UUID_RE.test(actAsUserId)) throw Object.assign(new Error('Conta inválida.'), { statusCode: 400 });
+    dataClient = getAdminClient();
+    const result = await dataClient.from('zapia_users').select('user_id,display_name,username,role,max_wa_slots,is_active').eq('user_id', actAsUserId).maybeSingle();
+    if (result.error) throw Object.assign(new Error('Não foi possível verificar a conta.'), { statusCode: 503 });
+    if (!result.data?.is_active) throw Object.assign(new Error('Conta indisponível.'), { statusCode: 403 });
+    target = { id: result.data.user_id, displayName: result.data.display_name || result.data.username, maxWaSlots: clampMaxWaSlots(result.data.max_wa_slots, result.data.role) };
+  }
+  return { mode: 'vercel_cloud', viewerClient: verified.client, dataClient, viewer, tenant: target, permissions: { master: viewer.role === 'master' } };
+}
+
 // Middleware Multi-Tenant Cloud + Modo Suporte 1-Clique (isola 100% dos dados por conta e sincroniza antes do término da Function)
 app.use('/api', async (req, res, next) => {
   if (req.path === '/public/motor-update.zip' || req.path === '/public/version') {
@@ -523,6 +553,11 @@ app.use('/api', async (req, res, next) => {
       }
 
       req.realMasterProfile = verified.profile;
+      if (req.path === '/wa/toggle-bot' && typeof req.body?.enabled !== 'boolean') return res.status(400).json({ ok: false, error: 'enabled deve ser booleano (true ou false).' });
+      if (isDashboardRequest(req)) {
+        req.dashboardContext = await makeDashboardContext(verified, actAsUserId);
+        return next();
+      }
 
       if (actAsUserId && actAsUserId !== verified.authUser.id) {
         if (verified.profile?.role !== 'master') {
@@ -593,6 +628,15 @@ app.use('/api', async (req, res, next) => {
   }
 
   req.realMasterProfile = workerSt.user || { role: 'master' };
+  if (req.path === '/wa/toggle-bot' && typeof req.body?.enabled !== 'boolean') return res.status(400).json({ ok: false, error: 'enabled deve ser booleano (true ou false).' });
+  if (isDashboardRequest(req) && actAsUserId && actAsUserId !== workerSt.user?.id) {
+    try {
+      if (!cloudWorker.client || !workerSt.user?.id) return res.status(403).json({ ok: false, error: 'Entre como master para usar suporte.' });
+      req.dashboardContext = await makeDashboardContext({ client: cloudWorker.client, authUser: workerSt.user, profile: workerSt.user }, actAsUserId);
+      return next();
+    } catch (error) { return res.status(error.statusCode || 503).json({ ok: false, error: error.message }); }
+  }
+
 
   // Se o Admin Master local clicar em "Acessar Painel deste Cliente", carrega o workspace remoto daquele cliente sem mexer no WhatsApp local!
   if (actAsUserId && actAsUserId !== workerSt.user?.id) {
@@ -627,6 +671,24 @@ app.use('/api', async (req, res, next) => {
 });
 
 // O bridge precisa ficar após o middleware /api, que autentica e instala o tenant context.
+const workspaceReadDependencies = {
+  readEvolution: getEvolutionApiSlotStatus,
+  buildRuntime: buildCloudMultiSlotWaState,
+  getLocalContext: () => {
+    if (IS_VERCEL) return null;
+    const worker = cloudWorker.getStatus(), now = new Date().toISOString();
+    const runtime = whatsappManager.getPublicState();
+    const maxWaSlots = worker.user ? clampMaxWaSlots(worker.user.maxWaSlots ?? worker.user.max_wa_slots, worker.user.role) : 3;
+    const slots = Object.fromEntries(Object.entries(runtime.slots || {}).map(([id, value]) => [id, { ...value, workerOnline: true, workerHeartbeatAt: now }]));
+    return { mode: 'local_worker', viewerClient: worker.user?.id ? cloudWorker.client : null,
+      viewer: { id: worker.user?.id || null, displayName: worker.user?.displayName || worker.user?.username || 'Painel local', role: worker.user?.role || null },
+      tenant: { id: worker.user?.id || null, displayName: worker.user?.displayName || 'Este motor local', maxWaSlots },
+      permissions: { master: (worker.user?.role || 'master') === 'master' }, data: storage.data, runtime: { ...runtime, slots, maxWaSlots } };
+  }
+};
+app.use('/api/dashboard', createDashboardRouter(workspaceReadDependencies));
+app.use('/api/connections', createConnectionsRouter(workspaceReadDependencies));
+
 app.use('/api/evolution-cloud', evolutionApiCloudRouter);
 
 // Consulta autenticada e por tenant: não expõe payloads ou conteúdo de conversas.
@@ -1080,46 +1142,11 @@ app.get('/api/cloud/realtime-config', (req, res) => {
 async function mergeEvolutionApiStatus(req, waState) {
   if (!usesCloudBridge(req)) return waState;
   try {
-    const evoSlots = await getEvolutionApiSlotStatus(req.cloudAuth?.authUser?.id || null);
-    if (evoSlots && typeof evoSlots === 'object') {
-      let anyConnected = false;
-      for (const [slotId, evoSlot] of Object.entries(evoSlots)) {
-        if (evoSlot.status === 'connected') {
-          anyConnected = true;
-          if (waState.slots?.[slotId]) {
-            waState.slots[slotId].status = 'connected';
-            waState.slots[slotId].rawStatus = 'connected';
-            waState.slots[slotId].phone = evoSlot.phone || waState.slots[slotId].phone || null;
-            waState.slots[slotId].connectedUser = waState.slots[slotId].connectedUser || waState.slots[slotId].phone || null;
-            waState.slots[slotId].pairingCode = evoSlot.pairingCode || null;
-            waState.slots[slotId].qrDataUrl = evoSlot.qrDataUrl || null;
-            waState.slots[slotId].workerOnline = true;
-          } else {
-            // Slot não existe no waState do worker — cria um mínimo para o render funcionar
-            waState.slots = waState.slots || {};
-            waState.slots[slotId] = {
-              ...waState.slots?.[slotId],
-              slotId,
-              status: 'connected',
-              rawStatus: 'connected',
-              phone: evoSlot.phone || null,
-              connectedUser: evoSlot.phone || null,
-              pairingCode: evoSlot.pairingCode || null,
-              qrDataUrl: evoSlot.qrDataUrl || null,
-              workerOnline: true,
-              workerPlatform: null,
-              workerVersion: null,
-            };
-          }
-        }
-      }
-      if (anyConnected) {
-        waState.status = 'connected';
-        waState.rawStatus = 'connected';
-      }
-    }
-  } catch {}
-  return waState;
+    const slots = await getEvolutionApiSlotStatus(req.cloudAuth?.authUser?.id || null);
+    return composeConnectionState(waState, slots);
+  } catch {
+    return composeConnectionState(waState, {}, { providerFailed: true });
+  }
 }
 
 app.get('/api/cloud/poll', async (req, res) => {
@@ -1648,7 +1675,8 @@ app.post('/api/wa/sync-history', async (req, res) => {
 });
 
 app.post('/api/wa/toggle-bot', (req, res) => {
-  const enabled = Boolean(req.body?.enabled);
+  if (typeof req.body?.enabled !== 'boolean') return res.status(400).json({ ok: false, error: 'enabled deve ser booleano (true ou false).' });
+  const enabled = req.body.enabled;
   storage.data.settings.botEnabled = enabled;
   storage.writeNow();
   storage.addLog('info', enabled ? 'Atendimento automático ATIVADO.' : 'Atendimento automático PAUSADO globalmente.');

@@ -22,6 +22,22 @@
   ],
   "rewrites": [
     {
+      "source": "/conexoes",
+      "destination": "/v2/connections.html"
+    },
+    {
+      "source": "/conexoes/",
+      "destination": "/v2/connections.html"
+    },
+    {
+      "source": "/visao-geral",
+      "destination": "/v2/index.html"
+    },
+    {
+      "source": "/visao-geral/",
+      "destination": "/v2/index.html"
+    },
+    {
       "source": "/painel",
       "destination": "/painel.html"
     },
@@ -139,6 +155,38 @@
           "value": "text/plain; charset=utf-8"
         }
       ]
+    },
+    {
+      "source": "/v2/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/visao-geral/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/conexoes/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "review/reforma-visual": false
+    }
+  }
 }

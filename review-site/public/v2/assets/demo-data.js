@@ -1,0 +1,10 @@
+// Exemplos visuais. Não representam nenhuma conta, sessão ou banco real.
+export function demoData(scenario='normal') {
+ const empty=scenario==='empty',support=scenario==='support',now=new Date();
+ const viewer={id:'visual-operator',displayName:'Operador de demonstração',role:'master'};
+ const tenant={id:support?'visual-support-target':'visual-operator',displayName:support?'Cliente fictício · suporte visual':'Equipe de demonstração',maxWaSlots:3};
+ const slots=[{slotId:'slot_1',status:empty?'disconnected':'connected',transport:'evolution_api',workerOnline:false,readStatus:'updated'},{slotId:'slot_2',status:'disconnected',transport:'local',workerOnline:false,readStatus:'updated'},{slotId:'slot_3',status:empty?'disconnected':'unknown',transport:'evolution_api',workerOnline:false,readStatus:empty?'updated':'unavailable'}];
+ return {ok:true,schemaVersion:1,mode:'vercel_cloud',viewer,tenant,permissions:{master:true},preferenceScope:'browser',generatedAt:now.toISOString(),timeZone:'America/Fortaleza',
+ counts:{conversations:empty?0:1234,pendingHuman:empty?0:12,campaigns:empty?0:137},campaigns:{active:0,paused:empty?0:1,drafts:empty?0:136,completed:0},activityDefinition:'last_contact_activity',activity:[13,22,31,10,24,36,18].map((value,i)=>{const d=new Date(now);d.setUTCDate(d.getUTCDate()-6+i);return {date:d.toISOString().slice(0,10),value:empty?0:value};}),
+ connections:{status:empty?'disconnected':'connected',total:3,connected:empty?0:1,workerOnline:false,providerReadStatus:'updated',checkedAt:now.toISOString(),slots},devices:empty?[]:[{id:'visual-pc',label:'PC de exemplo',platform:'Windows',version:'5.8.28',online:false,heartbeatAt:null,activeSlots:['slot_2']},{id:'visual-termux',label:'Termux de exemplo',platform:'Android / Termux',version:'5.8.28',online:false,heartbeatAt:null,activeSlots:[]}],deviceReadStatus:'updated',warnings:[],restrictionStatus:'not_verified',executionReadiness:'not_verified',capabilities:{readOnly:true,canOperate:false,pairingInLegacy:false}};
+}

@@ -1,0 +1,10 @@
+import { getNavigation } from './navigation.js';
+import { mountShell } from './shell.js';
+const parameters = new URLSearchParams(location.search);
+const groups = getNavigation('master');
+const group = groups.find(section => section.items.some(item => item.id === parameters.get('pagina')));
+const item = group?.items.find(page => page.id === parameters.get('pagina'));
+const child = item?.children?.find(page => page.id === parameters.get('area'));
+const title = child ? `${item.label}: ${child.label}` : item?.label || 'Página em revisão';
+document.querySelector('#review-page-title').textContent = title;
+mountShell({ pageId: item?.id || 'revisao', title, group: group?.label || 'Revisão' });

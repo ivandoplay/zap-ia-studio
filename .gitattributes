@@ -5,3 +5,6 @@
 
 release/*.sig binary
 release/*.zip binary
+
+# Preserve upstream font-license bytes in the hashed static review.
+**/FONT-LICENSE.txt text eol=lf whitespace=-blank-at-eol

@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "framework": null,
+  "buildCommand": "npm run build",
+  "outputDirectory": "public",
+  "rewrites": [
+    {"source":"/visao-geral","destination":"/visao-geral/index.html"},
+    {"source":"/visao-geral/","destination":"/visao-geral/index.html"},
+    {"source":"/conexoes","destination":"/conexoes/index.html"},
+    {"source":"/conexoes/","destination":"/conexoes/index.html"},
+    {"source":"/em-preparo","destination":"/em-preparo/index.html"},
+    {"source":"/em-preparo/","destination":"/em-preparo/index.html"}
+  ],
+  "headers": [{"source":"/(.*)","headers":[
+    {"key":"Cache-Control","value":"no-cache"},
+    {"key":"X-Robots-Tag","value":"noindex, nofollow"},
+    {"key":"X-Content-Type-Options","value":"nosniff"},
+    {"key":"Referrer-Policy","value":"no-referrer"},
+    {"key":"Content-Security-Policy","value":"default-src 'self'; connect-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'; worker-src 'none'; object-src 'none'"}
+  ]}]
+}

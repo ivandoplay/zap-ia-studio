@@ -31,9 +31,22 @@ export function createDashboardRouter({readEvolution,buildRuntime,getLocalContex
     provider=ev.failed?{}:ev.value;providerFailed=ev.failed||rt.failed;
     if(rt.failed)warnings.push('connections_unavailable');if(ev.failed)warnings.push('provider_unavailable');
    } else {
-    data=assertSummary(localSummary(ctx.data,{now,tenantId:ctx.tenant?.id||null}),ctx.tenant?.id||null,{allowLocal:true});
+    // Contatos e atividade vêm da memória deste motor. Campanhas, porém, pertencem à conta:
+    // com a conta conectada, a contagem é lida da nuvem em vez de aparecer como indisponível.
+    data=localSummary(ctx.data,{now,tenantId:ctx.tenant?.id||null});
+    if(ctx.tenant?.id&&ctx.viewerClient){
+     const task=await ctx.viewerClient.rpc('ienvia_dashboard_summary_v1',{p_owner:ctx.tenant.id})
+      .abortSignal(AbortSignal.timeout(6000)).then(r=>({r})).catch(()=>({failed:true}));
+     const counts=task.failed?null:task.r?.data?.counts;
+     if(counts&&Number.isSafeInteger(counts.campaigns)&&counts.campaigns>=0){
+      data.counts.campaigns=counts.campaigns;
+      const detail=task.r.data.campaigns;
+      if(detail&&typeof detail==='object')data.campaigns=detail;
+      warnings.push('local_contacts_with_cloud_campaigns');
+     } else warnings.push('campaigns_unavailable');
+    } else warnings.push('campaigns_not_loaded_in_local_summary');
+    data=assertSummary(data,ctx.tenant?.id||null,{allowLocal:true});
     runtime=ctx.runtime;
-    warnings.push('campaigns_not_loaded_in_local_summary');
    }
    const connections=publicConnectionSummary(composeConnectionState(runtime,provider,{now:Date.now(),providerFailed}));
    return res.json({ok:true,...data,mode:ctx.mode,viewer:ctx.viewer,tenant:ctx.tenant,permissions:ctx.permissions,connections,warnings,preferenceScope:ctx.viewerClient?'account':'browser'});

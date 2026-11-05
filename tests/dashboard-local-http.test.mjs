@@ -35,3 +35,27 @@ test('toggle real em VM: booleanos corretos; strings e ausência não escrevem',
 test('local: canais UUID não passam ao legado mesmo com PIN e login válidos',async()=>{
  const r=await fetch(url+'/api/crm/new-contact',{method:'POST',headers:{'content-type':'application/json','x-panel-pin':'2468'},body:JSON.stringify({channelId:'33333333-3333-4333-8333-333333333333',phone:'558600000000'})});assert.equal(r.status,409);assert.equal(reads,1);
 });
+
+test('local com conta conectada: campanhas vêm da nuvem e falha não vira zero',async()=>{
+ const app2=express();app2.use(express.json());
+ let mode='ok';
+ const rpc=(name)=>({abortSignal:async()=>mode==='ok'
+   ?{data:{counts:{conversations:1,pendingHuman:0,campaigns:2},campaigns:{active:0,paused:1,drafts:0,completed:1}},error:null}
+   :{data:null,error:{code:'57014',message:'timeout'}}});
+ app2.use('/api/dashboard',createDashboardRouter({getLocalContext:()=>({mode:'local_worker',
+  viewer:{id:'11111111-1111-4111-8111-111111111111',displayName:'Conta'},tenant:{id:'11111111-1111-4111-8111-111111111111',maxWaSlots:3},permissions:{master:true},
+  viewerClient:{rpc},data:storage.data,runtime:{maxWaSlots:3,slots:{slot_1:{status:'disconnected',workerOnline:true,workerHeartbeatAt:new Date().toISOString()}}}})}));
+ const s2=await new Promise(r=>{const s=app2.listen(0,'127.0.0.1',()=>r(s));});
+ try{
+  const u2=`http://127.0.0.1:${s2.address().port}`;
+  let d=await (await fetch(u2+'/api/dashboard/summary')).json();
+  assert.equal(d.counts.conversations,1,'conversas seguem vindo da memória do motor');
+  assert.equal(d.counts.campaigns,2,'campanha da conta não aparece como indisponível');
+  assert.equal(d.campaigns?.paused,1);
+  assert.ok(d.warnings.includes('local_contacts_with_cloud_campaigns'));
+  mode='fail';
+  d=await (await fetch(u2+'/api/dashboard/summary')).json();
+  assert.equal(d.counts.campaigns,null,'falha de leitura não é apresentada como zero');
+  assert.ok(d.warnings.includes('campaigns_unavailable'));
+ }finally{await new Promise(r=>s2.close(r));}
+});

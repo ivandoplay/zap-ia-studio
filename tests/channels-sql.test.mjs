@@ -14,7 +14,8 @@ test('SQL canais: cadastro acima de três, defaults seguros, filtros e paginaç�
 });
 test('SQL canais: ocultar conserva registro; configurações independentes e revisão concorrente',async()=>{
  await as(A);const c=(await list()).items[0],next=await update(c,{crmVisible:false,aiEnabled:true});assert.equal(next.crmVisible,false);assert.equal(next.aiEnabled,true);assert.equal(next.campaignsEnabled,false);assert.equal((await list()).total,57);assert.equal((await list(A,20,null,'hidden')).total,1);
- await assert.rejects(update(c,{name:'Sobrescrever revisão antiga'}),e=>e.code==='40001');
+ // Conflito de revisão sinalizado com 22023 + marcador (40001 pendura a resposta no PostgREST).
+ await assert.rejects(update(c,{name:'Sobrescrever revisão antiga'}),e=>e.hint==='CHANNEL_REVISION_CONFLICT'&&e.detail==='CHANNEL_REVISION_CONFLICT');
  for(const patch of [{aiEnabled:'false'},{ownerId:B},{transport:'local_worker'},{crmVisible:null},{tags:['x'.repeat(25)]}])await assert.rejects(update(next,patch),e=>e.code==='22023');
 });
 test('SQL canais: isolamento, master apenas lê alvo, usuário inativo e escrita direta bloqueados',async()=>{

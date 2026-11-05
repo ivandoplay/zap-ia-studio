@@ -7,10 +7,12 @@ export function createSessionClient({fetcher=globalThis.fetch,localStore,session
  const scope=()=>JSON.stringify([auth().accessToken||'',read(sessionStore,'zapia_act_as'),read(sessionStore,'zapia_pin')]);
  const operations=new Set(['/api/wa/connect','/api/wa/disconnect','/api/wa/slot-config','/api/evolution-cloud/connect','/api/evolution-cloud/disconnect','/api/evolution-cloud/delete']);
  const channelRoute=path=>/^\/api\/channels(?:\/[0-9a-f-]{36}(?:\/legacy-link)?)?(?:\?|$)/i.test(path);
+ // Conversas: somente leitura nesta etapa (lista com filtros e mensagens de uma conversa).
+ const conversationsRoute=path=>/^\/api\/conversations(?:\/[^/?]+)?(?:\?|$)/i.test(path);
  const nonReplay=(path,method)=>operations.has(path)||(channelRoute(path)&&method!=='GET');
  let refreshing;
  async function raw(path,{method='GET',body,signal,acting=true}={}) {
-  if(!channelRoute(path)&&!operations.has(path)&&!path.startsWith('/api/connections/pairing?')&&!['/api/connections/configuration','/api/auth/status','/api/auth/refresh','/api/dashboard/summary','/api/dashboard/appearance','/api/connections/summary'].includes(path))throw new Error('Rota não permitida');
+  if(!conversationsRoute(path)&&!channelRoute(path)&&!operations.has(path)&&!path.startsWith('/api/connections/pairing?')&&!['/api/connections/configuration','/api/auth/status','/api/auth/refresh','/api/dashboard/summary','/api/dashboard/appearance','/api/connections/summary'].includes(path))throw new Error('Rota não permitida');
   const headers={Accept:'application/json'},stored=auth(),pin=read(sessionStore,'zapia_pin'),target=actingId();
   if(stored.accessToken)headers.Authorization=`Bearer ${stored.accessToken}`;
   if(pin)headers['x-panel-pin']=pin;

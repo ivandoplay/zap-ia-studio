@@ -2,6 +2,7 @@ import { composeConnectionState } from './dashboard/connections.js';
 import { createDashboardRouter } from './dashboard/router.js';
 import { createConnectionsRouter } from './connections/router.js';
 import {createChannelsRouter} from './channels/router.js';
+import {createConversationsRouter} from './crm/conversations.js';
 import {validateLegacyApiReferences} from './channels/legacyIdentity.js';
 import {validateConnectionControl} from './connections/controls.js';
 import 'dotenv/config';
@@ -193,6 +194,7 @@ app.get(['/visao-geral', '/visao-geral/'], (_req, res) => {
   res.sendFile(path.join(ROOT_DIR, 'public', 'v2', 'index.html'));
 });
 app.get(['/canais','/canais/','/instancias','/instancias/'],(_req,res)=>{res.setHeader('Cache-Control','no-cache');res.sendFile(path.join(ROOT_DIR,'public','v2','channels.html'));});
+app.get(['/conversas','/conversas/'],(_req,res)=>{res.setHeader('Cache-Control','no-cache');res.sendFile(path.join(ROOT_DIR,'public','v2','conversations.html'));});
 app.get(['/conexoes', '/conexoes/'], (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(ROOT_DIR, 'public', 'v2', 'connections.html'));
@@ -690,12 +692,13 @@ const workspaceReadDependencies = {
     return { mode: 'local_worker', viewerClient: worker.user?.id ? cloudWorker.client : null,
       viewer: { id: worker.user?.id || null, displayName: worker.user?.displayName || worker.user?.username || 'Painel local', role: worker.user?.role || null },
       tenant: { id: worker.user?.id || null, displayName: worker.user?.displayName || 'Este motor local', maxWaSlots },
-      permissions: { master: (worker.user?.role || 'master') === 'master' }, data: storage.data, runtime: { ...runtime, slots, maxWaSlots } };
+      permissions: { master: (worker.user?.role || 'master') === 'master' }, data: storage.data, store: storage, runtime: { ...runtime, slots, maxWaSlots } };
   }
 };
 app.use('/api/dashboard', createDashboardRouter(workspaceReadDependencies));
 app.use('/api/connections', createConnectionsRouter(workspaceReadDependencies));
 app.use('/api/channels',createChannelsRouter(workspaceReadDependencies));
+app.use('/api/conversations',createConversationsRouter(workspaceReadDependencies));
 
 app.use('/api/evolution-cloud', evolutionApiCloudRouter);
 

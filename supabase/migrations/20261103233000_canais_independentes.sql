@@ -67,7 +67,9 @@ BEGIN
  PERFORM public.ienvia_channel_payload(p_patch,true);
  SELECT * INTO c FROM public.ienvia_channels WHERE id=p_id AND owner_id=u FOR UPDATE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Canal não encontrado' USING ERRCODE='P0002'; END IF;
- IF p_revision IS NULL OR p_revision<>c.revision THEN RAISE EXCEPTION 'Configuração mudou; consulte antes de salvar' USING ERRCODE='40001'; END IF;
+ -- Conflito de revisão: o PostgREST não devolve 409 quando o RAISE usa 40001 (a resposta fica pendurada),
+ -- então o conflito é sinalizado com 22023 + MARCADOR. Quem consome SQL direto continua recebendo 40001.
+ IF p_revision IS NULL OR p_revision<>c.revision THEN RAISE EXCEPTION 'Configuração mudou; consulte antes de salvar' USING ERRCODE='22023',HINT='CHANNEL_REVISION_CONFLICT',DETAIL='CHANNEL_REVISION_CONFLICT'; END IF;
  UPDATE public.ienvia_channels SET
  name=CASE WHEN p_patch?'name' THEN btrim(p_patch->>'name') ELSE c.name END,
  crm_visible=CASE WHEN p_patch?'crmVisible' THEN (p_patch->>'crmVisible')::boolean ELSE c.crm_visible END,

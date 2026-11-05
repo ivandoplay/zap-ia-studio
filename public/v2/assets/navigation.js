@@ -1,8 +1,8 @@
 const page=(id,label,icon,tab)=>({id,label,icon,href:tab?`/painel#${tab}`:'/visao-geral/'});
 export function getNavigation(role='user') {
- const groups=[{label:'Operação',items:[page('overview','Visão geral','overview'),{id:'conversas',label:'Conversas',icon:'chat',href:'/conversas/'},{id:'historico',label:'Histórico por instância',icon:'chat',href:'/historico/'},page('campanhas','Campanhas','campaign','campanhas'),{id:'canais',label:'Instâncias',icon:'phone',href:'/instancias/'},{id:'conexoes',label:'Conexões / Motor',icon:'connection',href:'/conexoes/'}]},
- {label:'Meu negócio · painel atual',items:[page('treinamento','Treinamento','training','treinamento'),page('catalogo','Catálogo','catalog','catalogo'),page('audios','Áudios','audio','audios'),page('simulador','Simulador','simulator','simulador'),page('ia','Inteligência artificial','spark','ia'),page('config','Configurações','settings','seguranca')]}];
- if(role==='master')groups.push({label:'Administração · painel atual',items:[page('contas','Contas','users','contas')]});
+ const groups=[{label:'Operação',items:[page('overview','Visão geral','overview'),{id:'conversas',label:'Conversas',icon:'chat',href:'/conversas/'},{id:'historico',label:'Histórico por instância',icon:'chat',href:'/historico/'},{id:'campanhas',label:'Campanhas',icon:'campaign',href:'/campanhas/'},{id:'canais',label:'Instâncias',icon:'phone',href:'/instancias/'},{id:'conexoes',label:'Conexões / Motor',icon:'connection',href:'/conexoes/'}]},
+ {label:'Meu negócio',items:[{id:'treinamento',label:'Treinamento',icon:'training',href:'/treinamento/'},{id:'catalogo',label:'Catálogo',icon:'catalog',href:'/catalogo/'},{id:'audios',label:'Áudios',icon:'audio',href:'/audios/'},{id:'simulador',label:'Simulador',icon:'simulator',href:'/simulador/'},{id:'ia',label:'Inteligência artificial',icon:'spark',href:'/inteligencia-artificial/'},{id:'config',label:'Configurações',icon:'settings',href:'/configuracoes/'}]}];
+ if(['master','administrator'].includes(role))groups.push({label:'Administração',items:[{id:'contas',label:'Contas',icon:'users',href:'/contas/'}]});
  return groups;
 }
 export function findPages(query='',role='user') {

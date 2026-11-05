@@ -1,7 +1,7 @@
 // Campos demonstrativos do CRM original. Não é contrato de mutação operacional.
 export const CRM_STAGES=[['novo','Novo contato'],['qualificando','Qualificando'],['em_atendimento','Em atendimento'],['aguardando_humano','Aguardando você'],['concluido','Concluído']];
 const bool=new Set(['pinned','archived','aiEnabled','needsHuman','saved','hot','ignoreAi','blocked']);
-const strings={name:80,company:120,city:80,email:120,phone:20,leadSource:80,note:1000,assignee:64,lostReason:240};
+const strings={name:80,company:120,docNumber:40,city:80,email:120,phone:20,leadSource:80,note:1000,assignee:64,lostReason:240};
 const date=v=>typeof v==='string'&&/^\d{4}-\d{2}-\d{2}T/.test(v)&&Number.isFinite(Date.parse(v));
 const bad=()=>{throw Object.assign(Error('Campo do CRM demonstrativo inválido.'),{status:400});};
 export function validateCrmDemoPatch(patch){if(!patch||typeof patch!=='object'||Array.isArray(patch)||!Object.keys(patch).length)bad();const result={};for(const [key,value]of Object.entries(patch)){

@@ -1,0 +1,6 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {createInstanceDispatchRepository} from '../src/instances/repository.js';import {A,B,C,E} from './helpers/instance-runtime-fixture.mjs';
+test('repositório RPC: conta fixada, deadline, erros sanitizados e nenhuma recuperação em memória',async()=>{
+ let calls=0,error=null;const client={rpc:(_name,args)=>{calls++;assert.equal(args.p_owner,A);return {abortSignal:async signal=>{assert.ok(signal instanceof AbortSignal);return {data:null,error};}};}};
+ assert.throws(()=>createInstanceDispatchRepository({ownerId:A,executorId:E}));const r=createInstanceDispatchRepository({client,ownerId:A,executorId:E});assert.throws(()=>r.resolve({ownerId:B,instanceId:C}),e=>e.code==='INSTANCE_SCOPE_MISMATCH');assert.equal(calls,0);
+ for(const [code,expected] of [['PGRST202','INSTANCE_EXECUTION_SETUP_REQUIRED'],['40001','DISPATCH_CONFLICT'],['55000','INSTANCE_BUSY'],['42501','INSTANCE_OPERATION_FORBIDDEN'],['P0002','INSTANCE_NOT_FOUND'],['0A000','AUTOMATION_INTEGRATION_PENDING'],['UNKNOWN','DISPATCH_REPOSITORY_UNAVAILABLE']]){error={code,message:'PRIVATE_SQL_SECRET'};await assert.rejects(r.resolve({ownerId:A,instanceId:C}),e=>e.code===expected&&!e.message.includes('PRIVATE_SQL_SECRET'));}assert.equal(calls,7);
+});

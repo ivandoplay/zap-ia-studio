@@ -81,3 +81,25 @@ A revisão estática tem 33 assets, incluindo `/instancias/`. Remove links de ma
 ### Resultado final da regressão
 
 **371/373** na suíte completa (`instances-pwa-full.log`). Persistem apenas as falhas históricas `ienvia-branding.test.mjs` e `static-release-package.test.mjs`. Nenhum pacote assinado foi alterado. **90/90** selecionados passaram. Não houve aplicação de SQL, envio, pareamento, atualização do PWA principal ou validação física Android/iOS.
+
+
+### Continuação do backend — catálogo e execução explícita
+
+Etapa local documentada em [Catálogo/execução de instâncias](CATALOGO-EXECUCAO-INSTANCIAS.md): referências UUID sem teto fixo, ledger durável, despacho manual explícito, bloqueios offline/conta/executor/revisões, timeout sem replay e adaptador legado opt-in. Validação selecionada 63/63; completa 391/393 com as mesmas duas falhas históricas. Sem migração remota, publicação operacional ou bootstrap de novas sessões. IA/campanhas e dedupe/conversa canônica permanecem pendentes da integração dos coordenadores.
+
+
+### Reconciliação e executores preparados
+
+[Continuação local](RECONCILIACAO-E-EXECUTORES.md): revisão auditada sem reenvio/liberação cega, composição autenticada opt-in, portas locais UUID com lease e adaptador Evolution protegido por mapa/ID/revisão. **78/78 selecionados e 406/408 completa**, mesmas duas falhas históricas. Os processos existentes não carregam os novos drivers; não houve conexão WhatsApp real nem SQL remoto. Automação e recursos móveis pendentes continuam bloqueados/não anunciados como concluídos.
+
+### Sessões adquiridas e histórico UUID preparados localmente
+
+Os números e pendentes dos blocos acima são históricos. A [nova etapa local](SESSOES-E-HISTORICO-UUID.md) implementa lease durável, porta concreta sobre socket Baileys **já adquirido**, journal privado de ingresso, CRM canônico/dedupe/proveniência e GETs autenticados de histórico. **88/88 selecionados e 436/438 na completa**, mesmas duas falhas históricas. Ocultar CRM preserva o ingresso; conversa PN é unificada apenas na mesma conta/negócio verificado, LID continua provisório. Recebidas, ACKs e intenções de saída agora têm caminhos duráveis testados; contatos/edições/grupos ainda não possuem projeção completa. Sem nova UI de histórico, bootstrap/auth UUID, migração de dados antigos ou ativação real. Sem commit, push, deploy ou SQL remoto. IA/campanhas, coordenação entre motores e recursos PWA push/share continuam pendentes.
+
+### Interface de histórico readonly
+
+A [interface local de histórico](HISTORICO-INTERFACE.md) foi preparada em `/historico/`, com seleção explícita da instância, conversa canônica/origens, filtros/paginação, temas e mobile. Contrato compartilhado, proteção contra respostas atrasadas e limpeza na troca/perda de contexto. **163/163 selecionados, 448/450 completa**, somente as duas falhas históricas. Demonstração separada com 39 assets, sem APIs ou sessões. Nenhuma publicação, SQL remoto ou motor real; dados antigos ainda não migrados. A tela não transforma o PWA em executor contínuo nem implementa push/share, IA ou campanhas coordenadas.
+
+### Demonstração publicada e supervisão local
+
+Autorização posterior do titular publicou somente a revisão estática em https://ienvia-reforma-visual.vercel.app/historico/ — commit `0ffa9ea`, 39 assets conferidos, principal/main inalterados. O [próximo trabalho foi dividido](WORKER-SUPERVISAO-E-MIGRACAO.md) em supervisão do worker e ensaio de migração. Supervisor opt-in sobre porta já adquirida implementado localmente: start/heartbeat/recover/stop sem conectar, reenviar ou liberar lease. **172/172 selecionados e 457/459 completa**, mesmas duas falhas históricas. Nenhum worker real/SQL remoto/migração foi ativado; auth UUID, migração de contatos/histórico e recursos móveis ainda pendentes.

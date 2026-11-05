@@ -2617,6 +2617,7 @@ class WhatsAppSlotEngine {
   }
 
   async sendManualOwnerMessage(chatId, text, pauseAi = true, opts = {}) {
+    if(opts?.requireConnectedNow===true&&(!this.sock||this.status!=='connected'))throw Object.assign(new Error('Instância offline. Nenhuma reconexão ou fila foi iniciada.'),{code:'INSTANCE_OFFLINE',statusCode:503});
     if (!this.sock || this.status !== 'connected') {
       const ok = await this.waitUntilConnected(7000);
       if (!ok || !this.sock) {
@@ -2677,7 +2678,7 @@ class WhatsAppSlotEngine {
     storage.markContactRead(targetJid);
     this.fetchContactAvatarIfNeeded(targetJid).catch(() => {});
     this.broadcastFn('crm_updated', { chatId: targetJid });
-    return true;
+    return opts?.returnDispatchReceipt===true?{accepted:!!sent?.key?.id,providerMessageId:sent?.key?.id||null}:true;
   }
 
   async reactToWhatsappMessage(chatId, msgId, emoji = '') {

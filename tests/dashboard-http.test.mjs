@@ -11,7 +11,7 @@ globalThis.fetch=async(input,options={})=>{
  const url=new URL(typeof input==='string'?input:input.url),headers=options.headers||input.headers,uid=actor(headers),method=options.method||'GET';calls.push({path:url.pathname,method,query:url.searchParams,actor:uid});
  if(url.pathname==='/auth/v1/user')return uid?result({id:uid,email:'test@example.invalid'}):result({message:'invalid'},401);
  if(url.pathname==='/rest/v1/zapia_users'){const id=(url.searchParams.get('user_id')||'').replace('eq.','');return result(profiles.has(id)?[profiles.get(id)]:[]);}
- if(['/rest/v1/rpc/ienvia_list_channels','/rest/v1/rpc/ienvia_get_channel_legacy_link'].includes(url.pathname))return result({code:'PGRST202',message:'RPC de canais ausente no banco sintético'},404);
+ if(['/rest/v1/rpc/ienvia_list_channels','/rest/v1/rpc/ienvia_get_channel_legacy_link','/rest/v1/rpc/ienvia_get_instance_execution','/rest/v1/rpc/ienvia_get_instance_dispatch','/rest/v1/rpc/ienvia_review_instance_dispatch','/rest/v1/rpc/ienvia_list_instance_threads','/rest/v1/rpc/ienvia_read_instance_channel_thread'].includes(url.pathname)||url.pathname.startsWith('/rest/v1/rpc/ienvia_crm_'))return result({code:'PGRST202',message:'RPC CRM/canais ausente no banco sintético'},404);
  if(url.pathname==='/rest/v1/rpc/ienvia_dashboard_summary_v1'){
   if(rpcUnavailable)return result({code:'PGRST202',message:'RPC ausente'},404);
   const owner=JSON.parse(options.body).p_owner;
@@ -21,6 +21,7 @@ globalThis.fetch=async(input,options={})=>{
  }
  if(controlMode&&url.pathname==='/rest/v1/zapia_workspaces'){assert.equal(url.searchParams.get('select'),'wa_slots:settings->waSlots');return result([{wa_slots:{slot_1:{label:'Chip de teste',aiEnabled:false}},secret:'NUNCA_PUBLICAR'}]);}
  if(controlMode&&url.pathname==='/rest/v1/zapia_commands')return result([{id:'44444444-4444-4444-8444-444444444444',action:'wa_connect',status:'done',slot_id:'slot_1',created_at:new Date().toISOString(),result:{slotState:{status:'qr_ready',qrDataUrl:'data:image/png;base64,YWJj',pairingCode:'ABCD1234',phone:'NUNCA_PUBLICAR'},secret:'NUNCA_PUBLICAR'}}]);
+ if(['/rest/v1/zapia_workspaces','/rest/v1/zapia_contacts'].includes(url.pathname))return result({code:'42501',message:'Workspace legado bloqueado no teste de roteamento'},403);
  if(url.pathname==='/rest/v1/zapia_wa_runtime')return result([{status:'connected',worker_online:false,worker_heartbeat_at:null}]);
  if(url.pathname==='/rest/v1/zapia_wa_slots'||url.pathname==='/rest/v1/zapia_worker_devices')return result([]);
  if(url.pathname==='/rest/v1/ienvia_user_appearance'){lastPreferenceOwner=(url.searchParams.get('user_id')||'').replace('eq.','');return result([{theme:'dark'}]);}
@@ -30,8 +31,8 @@ globalThis.fetch=async(input,options={})=>{
 };
 const {app}=await import('../src/server.js');
 const server=await new Promise(resolve=>{const s=app.listen(0,'127.0.0.1',()=>resolve(s));});test.after(()=>new Promise(r=>server.close(r)));
-function request(path,{id=A,method='GET',body,actAs}={}){return new Promise((resolve,reject)=>{const headers={'content-type':'application/json'};if(id)headers.Authorization='Bearer '+jwt(id);if(actAs)headers['x-zapia-act-as']=actAs;
- const req=http.request({hostname:'127.0.0.1',port:server.address().port,path,method,headers},res=>{let text='';res.on('data',c=>text+=c);res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,body:JSON.parse(text)}));});req.on('error',reject);if(body!==undefined)req.write(JSON.stringify(body));req.end();});}
+function request(path,{id=A,method='GET',body,actAs,json=true}={}){return new Promise((resolve,reject)=>{const headers={'content-type':'application/json'};if(id)headers.Authorization='Bearer '+jwt(id);if(actAs)headers['x-zapia-act-as']=actAs;
+ const req=http.request({hostname:'127.0.0.1',port:server.address().port,path,method,headers},res=>{let text='';res.on('data',c=>text+=c);res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,body:json?JSON.parse(text):text}));});req.on('error',reject);if(body!==undefined)req.write(JSON.stringify(body));req.end();});}
 test('HTTP: resumo autenticado não carrega workspace, contatos, bootstrap nem faz escrita',async()=>{
  calls.length=0;const r=await request('/api/dashboard/summary');assert.equal(r.status,200);assert.equal(r.body.counts.conversations,1002);assert.equal(r.body.connections.status,'disconnected');assert.equal(r.body.connections.workerOnline,false);assert.equal(r.headers['cache-control'],'no-store');assert.ok(Buffer.byteLength(JSON.stringify(r.body))<4500);
  assert.equal(calls.some(c=>['/rest/v1/zapia_workspaces','/rest/v1/zapia_contacts'].includes(c.path)),false);assert.equal(calls.some(c=>c.method!=='GET'&&!c.path.includes('/rpc/ienvia_dashboard_summary_v1')),false);
@@ -97,3 +98,22 @@ test('Ponte HTTP: UUID, escopo misto e conversa não migrada nunca chegam ao wor
 test('Ponte HTTP: consulta nova exige a migração, sem inventar vínculo ou carregar CRM legado',async()=>{
  calls.length=0;const r=await request('/api/channels/44444444-4444-4444-8444-444444444444/legacy-link');assert.equal(r.status,503);assert.equal(r.body.link,undefined);assert.equal(calls.some(c=>/zapia_workspaces|zapia_contacts|instance/.test(c.path)),false);
 });
+
+test('Catálogo HTTP integrado: migração ausente bloqueia estado sem carregar contatos ou executar motor',async()=>{
+ calls.length=0;const r=await request('/api/channels/44444444-4444-4444-8444-444444444444/execution');assert.equal(r.status,503);assert.equal(r.body.code,'CHANNELS_SETUP_REQUIRED');assert.equal(r.body.execution,undefined);assert.equal(calls.some(c=>/zapia_workspaces|zapia_contacts|zapia_commands|instance\//.test(c.path)),false);
+});
+
+test('Reconciliação HTTP integrada: banco não migrado não gera diagnóstico fictício ou efeito de envio',async()=>{
+ const path='/api/channels/44444444-4444-4444-8444-444444444444/dispatches/88888888-8888-4888-8888-888888888888';calls.length=0;for(const [url,options] of [[path,{}],[path+'/review',{method:'POST',body:{expectedState:'uncertain',reviewId:'99999999-9999-4999-8999-999999999999'}}]]){const r=await request(url,options);assert.equal(r.status,503);assert.equal(r.body.code,'CHANNELS_SETUP_REQUIRED');}assert.equal(calls.some(c=>/zapia_workspaces|zapia_contacts|zapia_commands|instance\//.test(c.path)),false);
+});
+
+test('Histórico UUID integrado: migração ausente não retorna histórico vazio nem lê storage legado',async()=>{
+ calls.length=0;for(const path of ['/api/channels/44444444-4444-4444-8444-444444444444/threads','/api/channels/44444444-4444-4444-8444-444444444444/threads/88888888-8888-4888-8888-888888888888/messages']){const r=await request(path);assert.equal(r.status,503);assert.equal(r.body.code,'CHANNELS_SETUP_REQUIRED');assert.equal(r.body.history,undefined);}assert.equal(calls.some(c=>/zapia_workspaces|zapia_contacts|zapia_commands|instance\//.test(c.path)),false);
+});
+
+test('Página de histórico: HTML sem dados privados, cache privado proibido e nenhuma consulta ao servir',async()=>{calls.length=0;const r=await request('/historico/',{id:null,json:false});assert.equal(r.status,200);assert.match(r.headers['cache-control'],/no-store/);assert.match(r.body,/history-app\.js/);assert.equal(calls.length,0);assert.doesNotMatch(r.body,/CORPO_PRIVADO|synthetic-service/);});
+
+
+test('CRM HTTP integrado: contexto mínimo sem workspace, migração ausente explícita e escrita desligada',async()=>{calls.length=0;let r=await request('/api/crm-v2/contacts?limit=2');assert.equal(r.status,503);assert.equal(r.body.code,'CRM_SETUP_REQUIRED');assert.equal(r.body.page,undefined);assert.equal(calls.some(c=>/zapia_workspaces|zapia_contacts|instance|dispatch/.test(c.path)),false);assert.equal(calls.filter(c=>c.path==='/rest/v1/rpc/ienvia_crm_list_contacts').length,1);calls.length=0;r=await request('/api/crm-v2/contacts',{method:'POST',body:{requestId:'88888888-8888-4888-8888-888888888888',contact:{name:'Pessoa',phone:'+558600000088'}}});assert.equal(r.status,503);assert.equal(r.body.code,'CRM_WRITES_DISABLED');assert.equal(calls.some(c=>/rpc|zapia_workspaces|zapia_contacts/.test(c.path)),false);calls.length=0;r=await request('/api/crm-v2/contacts/88888888-8888-4888-8888-888888888888',{id:M,actAs:B,method:'PATCH',body:{expectedRevision:1,patch:{note:'Privado'}}});assert.equal(r.status,403);assert.equal(calls.some(c=>/rpc|zapia_workspaces|zapia_contacts/.test(c.path)),false);assert.equal((await request('/api/crm-v2/contacts',{id:null})).status,401);});
+
+test('CRM HTTP integrado: namespace novo não muda o isolamento do CRM legado',async()=>{calls.length=0;const unknown=await request('/api/crm-v2/88888888-8888-4888-8888-888888888888/send',{method:'POST',body:{text:'Não enviar'},json:false});assert.equal(unknown.status,404);assert.equal(calls.some(c=>/zapia_workspaces|zapia_contacts|instance|dispatch|rpc/.test(c.path)),false);calls.length=0;await request('/api/crm/tags');assert.equal(calls.some(c=>c.path==='/rest/v1/zapia_workspaces'),true);assert.equal(calls.some(c=>c.path.startsWith('/rest/v1/rpc/ienvia_crm_')),false);});

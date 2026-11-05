@@ -22,6 +22,86 @@
   ],
   "rewrites": [
     {
+      "source": "/contas",
+      "destination": "/v2/accounts.html"
+    },
+    {
+      "source": "/contas/",
+      "destination": "/v2/accounts.html"
+    },
+    {
+      "source": "/configuracoes",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/configuracoes/",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/inteligencia-artificial",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/inteligencia-artificial/",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/simulador",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/simulador/",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/catalogo",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/catalogo/",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/audios",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/audios/",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/treinamento",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/treinamento/",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/campanhas",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/campanhas/",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/conversas",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/conversas/",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/historico",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/historico/",
+      "destination": "/api/index.js"
+    },
+    {
       "source": "/instancias",
       "destination": "/api/index.js"
     },

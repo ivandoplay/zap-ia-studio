@@ -61,3 +61,7 @@ Logs e capturas: `/home/user/auditoria/arquitetura-v2/crm-restoration-*` e `crm-
 ## Publicação
 
 A publicação autorizada se restringe à branch `review/reforma-visual` e ao projeto estático separado `ienvia-reforma-visual`. O registro externo de publicação deve conter SHA/deployment e hashes remotos após sua confirmação. Não confundir esta revisão de interface com migração ou ativação do CRM operacional.
+
+## Errata e reauditoria posterior contra o deploy oficial
+
+O relatório acima é histórico da restauração visual. A conferência posterior do HTML realmente publicado em7630b62... confirmou pausas **30min,2h,24h,manual**, já correspondentes ao código; a referência anterior a1h/4h estava errada. Não mudar a UI para corresponder à anotação. O build corrente tem102assets, não50. Reauditoria/matriz/correções e validação atuais em `CONVERSAS-PARIDADE-GRADUAL.md` (108/108seleção,784/786full, duas falhas históricas). A agenda nativa agora explica a integração pendente, em vez de abrir uma tela vazia; isso NÃO integra CRUD nem fecha migração. A demonstração online/pacote de publicação anteriores não foram atualizados nesta rodada.

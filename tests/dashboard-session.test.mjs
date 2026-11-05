@@ -39,3 +39,12 @@ test('canais POST/PATCH não renovam sessão nem repetem gravação automaticame
 test('sessão: consulta do vínculo UUID usa GET autenticado e rejeita sufixos fora da allowlist',async()=>{
  const path='/api/channels/11111111-1111-4111-8111-111111111111/legacy-link';let calls=0;const api=createSessionClient({localStore:local(),sessionStore:storage(),fetcher:async(url,opts)=>{calls++;assert.equal(url,path);assert.equal(opts.method,'GET');assert.equal(opts.headers.Authorization,'Bearer synthetic-old');return response({ok:true});}});assert.equal((await api.request(path)).ok,true);await assert.rejects(api.request(path+'/connect'));assert.equal(calls,1);
 });
+
+test('sessão: revisão auditada nunca faz refresh/replay, mesmo em 401 ou resultado de rede incerto',async()=>{
+ const path='/api/channels/11111111-1111-4111-8111-111111111111/dispatches/88888888-8888-4888-8888-888888888888/review';
+ for(const network of [false,true]){let calls=0;const api=createSessionClient({localStore:local(),sessionStore:storage(),fetcher:async()=>{calls++;if(network)throw Error('offline');return response({ok:false,authRequired:true},401);}});await assert.rejects(api.request(path,{method:'POST',body:{expectedState:'uncertain',reviewId:'99999999-9999-4999-8999-999999999999'}}));assert.equal(calls,1);await assert.rejects(api.request(path+'/resend',{method:'POST'}));assert.equal(calls,1);}
+});
+
+test('sessão: histórico UUID é leitura autenticada e sufixos operacionais não são permitidos',async()=>{
+ const base='/api/channels/44444444-4444-4444-8444-444444444444/threads';let calls=0;const api=createSessionClient({localStore:local(),sessionStore:storage(),fetcher:async(url,opts)=>{calls++;assert.equal(opts.method,'GET');assert.equal(opts.headers.Authorization,'Bearer synthetic-old');return response({ok:true});}});await api.request(base);await api.request(base+'/88888888-8888-4888-8888-888888888888/messages');await assert.rejects(api.request(base+'/88888888-8888-4888-8888-888888888888/send'));await assert.rejects(api.request(base,{method:'POST'}));assert.equal(calls,2);
+});

@@ -37,7 +37,7 @@ test('browser desktop: resumo integrado, escuro padrão, sem bootstrap/poll lega
   assert.equal(await f.page.locator('html').getAttribute('data-theme'),'dark');assert.equal(await f.page.locator('#count-conversations').textContent(),'1.234');assert.equal(await f.page.locator('#count-campaigns').textContent(),'137');
   assert.equal(await f.page.locator('a[href="/painel#contas"]').count(),0);assert.equal(await f.page.locator('#worker-tag').textContent(),'Sem sinal recente');
   await f.page.locator('summary').filter({hasText:'Ver dados do gráfico'}).click();assert.equal(await f.page.locator('#activity-table tr').count(),7);await f.page.locator('summary').filter({hasText:'Ver dados do gráfico'}).click();
-  assert.ok(f.calls.every(c=>['/api/auth/status','/api/dashboard/summary','/api/dashboard/appearance'].includes(c.path)));assert.equal(f.calls.filter(c=>c.path==='/api/dashboard/summary').length,1);
+  assert.ok(f.calls.every(c=>['/api/auth/status','/api/dashboard/summary','/api/dashboard/parity','/api/dashboard/appearance'].includes(c.path)));assert.equal(f.calls.filter(c=>c.path==='/api/dashboard/summary').length,1);
   await capture(f.page,'desktop-escuro');console.log('UI_BUDGET',JSON.stringify({summaryBytes:Buffer.byteLength(JSON.stringify(fixture())),apiPaths:f.calls.map(c=>c.path),externalRequests:f.external.length}));
  }finally{await f.close();}
 });
@@ -74,7 +74,7 @@ test('browser: vazio é zero real; falha do tema tem feedback e retry exclusivo 
 });
 test('browser: nomes vindos da conta são texto, nunca HTML executável',async()=>{
  const data=fixture({role:'master'});data.viewer.displayName='<img src=x onerror=alert(1)>';data.tenant.displayName='<script>invasao()</script>';
- const f=await open({data});try{assert.equal(await f.page.locator('.workspace-label strong').textContent(),data.viewer.displayName);assert.ok((await f.page.locator('#tenant-description').textContent()).includes(data.tenant.displayName));assert.equal(await f.page.locator('.workspace-label img').count(),0);await f.page.keyboard.press('Control+k');await f.page.getByRole('searchbox').fill('contas');assert.equal(await f.page.locator('#search-results a').getAttribute('href'),'/painel#contas');}finally{await f.close();}
+ const f=await open({data});try{assert.equal(await f.page.locator('.workspace-label strong').textContent(),data.viewer.displayName);assert.ok((await f.page.locator('#tenant-description').textContent()).includes(data.tenant.displayName));assert.equal(await f.page.locator('.workspace-label img').count(),0);await f.page.keyboard.press('Control+k');await f.page.getByRole('searchbox').fill('contas');assert.equal(await f.page.locator('#search-results a').getAttribute('href'),'/contas/');}finally{await f.close();}
 });
 
 test('browser: contraste básico claro/escuro, tela estreita e links para abas que realmente existem',async()=>{

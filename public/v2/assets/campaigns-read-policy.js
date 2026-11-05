@@ -1,0 +1,2 @@
+// Allowlist somente GET; nenhum comando operacional de campanhas.
+export const isCampaignReadPath=path=>typeof path==='string'&&(/^\/api\/campaigns(?:\/folders)?$/.test(path)||/^\/api\/campaigns\/[0-9a-f-]{36}$/.test(path)||/^\/api\/campaigns\/[0-9a-f-]{36}\/recipients\?inicio=(?:0|[1-9]\d{0,3})$/.test(path)||/^\/api\/campaigns\/folders\/[0-9a-f-]{36}\/files\?inicio=(?:0|[1-9]\d{0,3})$/.test(path));

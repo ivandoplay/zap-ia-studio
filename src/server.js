@@ -1,7 +1,24 @@
+import {createOverviewParityRouter} from './dashboard/parity.js';
+import {createAccountsRouter} from './accounts/router.js';
+import {createAccountsFileRepository} from './accounts/repository.js';
+import {createSecuritySettingsRouter} from './security-settings/router.js';
+import {createSecuritySettingsFileRepository} from './security-settings/repository.js';
+import {createAiSettingsRouter} from './ai-settings/router.js';
+import {createAiSettingsFileRepository} from './ai-settings/repository.js';
+import {createSimulatorRouter} from './simulator/router.js';
+import {createSimulatorFileRepository} from './simulator/repository.js';
+import {createResourceRouter} from './resources/router.js';
+import {createResourceFileRepository} from './resources/repository.js';
+import {createTrainingRouter} from './training/router.js';
+import {createTrainingFileRepository} from './training/repository.js';
+import {previewTrainingRuntime} from './training/runtimePreview.js';
+import {previewTrainingImport} from './training/importPreview.js';
 import { composeConnectionState } from './dashboard/connections.js';
 import { createDashboardRouter } from './dashboard/router.js';
 import { createConnectionsRouter } from './connections/router.js';
 import {createChannelsRouter} from './channels/router.js';
+import {createCampaignRouter} from './campaigns/router.js';
+import {createCrmRouter} from './crm/router.js';
 import {validateLegacyApiReferences} from './channels/legacyIdentity.js';
 import {validateConnectionControl} from './connections/controls.js';
 import 'dotenv/config';
@@ -192,6 +209,16 @@ app.get(['/visao-geral', '/visao-geral/'], (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(ROOT_DIR, 'public', 'v2', 'index.html'));
 });
+app.get(['/contas','/contas/'],(_q,r)=>{r.setHeader('Cache-Control','no-store, private');r.sendFile(path.join(ROOT_DIR,'public/v2/accounts.html'));});
+app.get(['/configuracoes','/configuracoes/'],(_q,r)=>{r.setHeader('Cache-Control','no-store, private');r.sendFile(path.join(ROOT_DIR,'public/v2/security-settings.html'));});
+app.get(['/inteligencia-artificial','/inteligencia-artificial/'],(_q,r)=>{r.setHeader('Cache-Control','no-store, private');r.sendFile(path.join(ROOT_DIR,'public/v2/ai-settings.html'));});
+app.get(['/simulador','/simulador/'],(_q,r)=>{r.setHeader('Cache-Control','no-store, private');r.sendFile(path.join(ROOT_DIR,'public/v2/simulator.html'));});
+app.get(['/catalogo','/catalogo/'],(_q,r)=>{r.setHeader('Cache-Control','no-store, private');r.sendFile(path.join(ROOT_DIR,'public/v2/catalog.html'));});
+app.get(['/audios','/audios/'],(_q,r)=>{r.setHeader('Cache-Control','no-store, private');r.sendFile(path.join(ROOT_DIR,'public/v2/audios.html'));});
+app.get(['/treinamento','/treinamento/'],(_req,res)=>{res.setHeader('Cache-Control','no-store, private');res.sendFile(path.join(ROOT_DIR,'public','v2','training.html'));});
+app.get(['/campanhas','/campanhas/'],(_req,res)=>{res.setHeader('Cache-Control','no-store, private');res.sendFile(path.join(ROOT_DIR,'public','v2','campaigns.html'));});
+app.get(['/conversas','/conversas/'],(_req,res)=>{res.setHeader('Cache-Control','no-store, private');res.sendFile(path.join(ROOT_DIR,'public','v2','conversations.html'));});
+app.get(['/historico','/historico/'],(_req,res)=>{res.setHeader('Cache-Control','no-store, private');res.sendFile(path.join(ROOT_DIR,'public','v2','history.html'));});
 app.get(['/canais','/canais/','/instancias','/instancias/'],(_req,res)=>{res.setHeader('Cache-Control','no-cache');res.sendFile(path.join(ROOT_DIR,'public','v2','channels.html'));});
 app.get(['/conexoes', '/conexoes/'], (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
@@ -520,7 +547,7 @@ function attachAtomicCloudFlush(res, tenantStore) {
   };
 }
 
-const isDashboardRequest = (req) => /^\/channels(?:\/|$)/.test(req.path)||/^(?:\/dashboard\/(?:summary|appearance)|\/connections\/(?:summary|configuration|pairing))\/?$/.test(req.path);
+const isDashboardRequest = (req) => /^\/(?:channels|crm-v2|campaigns-v2|training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/.test(req.path)||/^(?:\/dashboard\/(?:summary|appearance|parity)|\/connections\/(?:summary|configuration|pairing))\/?$/.test(req.path);
 async function makeDashboardContext(verified, actAsUserId = '') {
   const profile = verified.profile;
   const viewer = { id: verified.authUser.id, displayName: profile.display_name || profile.displayName || profile.username || 'Minha conta', role: profile.role || 'user' };
@@ -693,9 +720,29 @@ const workspaceReadDependencies = {
       permissions: { master: (worker.user?.role || 'master') === 'master' }, data: storage.data, runtime: { ...runtime, slots, maxWaSlots } };
   }
 };
+app.use('/api/dashboard', createOverviewParityRouter(workspaceReadDependencies));
 app.use('/api/dashboard', createDashboardRouter(workspaceReadDependencies));
 app.use('/api/connections', createConnectionsRouter(workspaceReadDependencies));
 app.use('/api/channels',createChannelsRouter(workspaceReadDependencies));
+// Metadata CRM preparada localmente. Escritas continuam desligadas (default do router).
+app.use('/api/crm-v2',createCrmRouter(workspaceReadDependencies));
+// Origem global, identidade delegada e implantação ainda não homologadas: sem consulta cloud nem ativação.
+app.use('/api/accounts-v2',createAccountsRouter({getLocalContext:workspaceReadDependencies.getLocalContext,repository:createAccountsFileRepository({root:path.join(ROOT_DIR,'data','accounts-administration-v2')}),allowWrites:false,allowWorkspaceWrites:false}));
+app.use('/api/security-settings-v2',createSecuritySettingsRouter({...workspaceReadDependencies,repository:createSecuritySettingsFileRepository({root:path.join(ROOT_DIR,'data','security-settings-drafts-v2')}),allowWrites:false,allowPinWrites:false,readApprovedMessages:async ctx=>{if(ctx.mode!=='local_worker'||!ctx.data?.business)return [];const record=await createTrainingFileRepository({root:path.join(ROOT_DIR,'data','training-drafts-v2')}).read(ctx.tenant.id);const business=record?.document.training||ctx.data.business,id=ctx.data.business.trainingPackId;let pack=record?.document.pack||ctx.data.customPacks?.[id]||null;if(!record&&!pack&&id&&ctx.viewer.role==='master'&&ctx.viewer.id===ctx.tenant.id)pack=getTrainingPack(id);const rows=pack?.canonicalCore?.approvedMessages;if(rows?.length)return rows.map(m=>({id:m.id,title:m.title||m.id,text:m.text}));if(id&&!pack&&!record)return [];const first=String(business.assistantName||business.name||'eu').trim().split(/\s+/)[0];return [{id:'ABERTURA',title:'Abertura Consultiva Universal · original',text:business.soloIdentity?`Opa{{nome ? ', ' + nome : ''}}! Tudo bem? Aqui é o *${first}*. Posso te mostrar rapidinho como funciona meu trabalho?`:`Olá{{nome ? ', ' + nome : ''}}! Tudo bem? Aqui é do atendimento da *${business.name||'nossa equipe'}*. Posso te explicar rapidinho como funciona nosso trabalho?`}];}}));
+
+app.use('/api/ai-settings-v2',createAiSettingsRouter({...workspaceReadDependencies,repository:createAiSettingsFileRepository({root:path.join(ROOT_DIR,'data','ai-settings-drafts-v2')}),allowWrites:false,allowSecretWrites:false}));
+app.use('/api/simulator-v2',createSimulatorRouter({...workspaceReadDependencies,repository:createSimulatorFileRepository({root:path.join(ROOT_DIR,'data','simulator-sessions-v2')}),trainingRepository:createTrainingFileRepository({root:path.join(ROOT_DIR,'data','training-drafts-v2')}),resourceRepository:createResourceFileRepository({root:path.join(ROOT_DIR,'data','resources-drafts-v2')}),allowSessions:false,allowTeach:false,readSource:ctx=>{if(ctx.mode!=='local_worker'||!ctx.data?.business)throw Object.assign(new Error('Origem local do Simulador indisponível; integração remota não homologada.'),{status:503});const business=structuredClone(ctx.data.business),id=business.trainingPackId;let pack=ctx.data.customPacks?.[id]||null;if(id&&!pack&&ctx.viewer.role==='master'&&ctx.viewer.id===ctx.tenant.id)pack=getTrainingPack(id);return {business,pack:pack?structuredClone(pack):null,botEnabled:ctx.data.settings?.botEnabled!==false,simulatorHistoryCount:Array.isArray(ctx.data.simulatorHistory)?ctx.data.simulatorHistory.length:0};}}));
+app.use('/api/resources-v2',createResourceRouter({...workspaceReadDependencies,repository:createResourceFileRepository({root:path.join(ROOT_DIR,'data','resources-drafts-v2')}),allowWrites:false,allowTranscription:false,readLinkedMessages:ctx=>{if(ctx.mode!=='local_worker'||!ctx.data?.business)return [];const id=ctx.data.business.trainingPackId;let p=ctx.data.customPacks?.[id]||null;if(!p&&id&&ctx.viewer.role==='master'&&ctx.viewer.id===ctx.tenant.id)p=getTrainingPack(id);return (p?.canonicalCore?.approvedMessages||[]).map(m=>({id:m.id,title:m.title||m.id}));}}));
+// Rascunho local; não existe rota de ativação nem habilitação por parâmetro público.
+app.use('/api/training-v2',createTrainingRouter({getLocalContext:workspaceReadDependencies.getLocalContext,repository:createTrainingFileRepository({root:path.join(ROOT_DIR,'data','training-drafts-v2')}),allowWrites:false,previewPrompt:previewTrainingRuntime,previewImport:previewTrainingImport,readSource:ctx=>{if(ctx.mode!=='local_worker'||!ctx.data?.business)throw Object.assign(new Error('Origem local indisponível; integração remota ainda não homologada.'),{status:503});const business=structuredClone(ctx.data.business),id=business.trainingPackId;let pack=id?ctx.data.customPacks?.[id]||null:null;if(id&&!pack&&ctx.viewer.role==='master'&&ctx.viewer.id===ctx.tenant.id)pack=getTrainingPack(id);return {business,pack:pack?structuredClone(pack):null};}}));
+// UUID separado do legado. Todos os gates de escrita, IA e mídia permanecem false por padrão.
+app.use('/api/campaigns-v2',createCampaignRouter({...workspaceReadDependencies,storageOrigin:SUPABASE_URL,
+ getAIRequester:async(scope,input)=>{let ai;if(IS_VERCEL){const r=await scope.ctx.viewerClient.from('zapia_workspaces').select('settings').eq('user_id',scope.ownerId).maybeSingle();if(r.error)throw Error('Configuração indisponível.');ai=r.data?.settings?.ai;}else ai=scope.ctx.data?.settings?.ai;if(!campanhaTemChave(ai))return null;return async()=>{const result=await gerarVariacoesParaCampanha({settings:{ai},...input});if(result?.ok!==true)throw Error('Geração indisponível.');return JSON.stringify(result.variacoes);};},
+ getMediaService:async scope=>{if(IS_VERCEL){const admin=getAdminClient(),service=criarServicoMediaCampanha({client:scope.ctx.viewerClient,admin,supabaseUrl:SUPABASE_URL});return {...service,iniciar:async x=>{await limparUploadsExpirados({client:scope.ctx.viewerClient,admin,userId:scope.ownerId});return service.iniciar(x);}};}const proxy=criarProxyMediaCampanha({client:scope.ctx.viewerClient,userId:scope.ownerId});return {
+ iniciar:async x=>(await proxy({tipo:'iniciar',pastaId:x.pastaId,body:{tamanho:x.tamanho}})).upload,
+ finalizar:async x=>{const r=await proxy({tipo:'finalizar',pastaId:x.pastaId,body:{arquivoId:x.arquivoId,nome:x.nome}});return {...r.arquivo,owner_id:scope.ownerId};},
+ excluir:async x=>{await proxy({tipo:'excluir',arquivoId:x.arquivoId,body:{confirmo:true}});return true;},ticket:async x=>(await proxy({tipo:'ticket',arquivoId:x.arquivoId})).ticket};}
+}));
 
 app.use('/api/evolution-cloud', evolutionApiCloudRouter);
 

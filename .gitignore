@@ -27,3 +27,11 @@ data/worker_db_owner.json
 
 # Diários locais de conversas são dados privados e nunca podem entrar no Git
 data/history-journal/
+
+# Rascunhos de IA podem conter envelopes privados; nunca publicar
+data/ai-settings-drafts-v2/
+
+# Propostas de segurança e verificadores de PIN são privados
+data/security-settings-drafts-v2/
+
+/data/accounts-administration-v2/

@@ -11,3 +11,25 @@ test('conversas autenticadas: pagina instâncias/conversas/mensagens sem teto de
  const uid=n=>`77777777-7777-4777-8777-${String(n).padStart(12,'0')}`,instances=Array.from({length:24},(_,i)=>({...catalog.items[0],id:uid(i+1),name:`Instância livre ${i+1}`})),allThreads=Array.from({length:23},(_,i)=>({...threads.history.items[0],id:uid(i+101),peerJid:`558600000${String(i+2).padStart(3,'0')}@s.whatsapp.net`})),allMessages=Array.from({length:26},(_,i)=>({...message,id:uid(i+201),threadId:allThreads[0].id,providerMessageId:'PAGINATED_'+i,text:'Mensagem preservada '+i,origins:[{instanceId:instances[23].id,name:'Instância livre 24',crmVisible:true}]}));
  const f=await open((_route,respond,url)=>{const more=url.searchParams.has('after');if(url.pathname.endsWith('/messages'))return respond({...messages,history:{...messages.history,instanceId:instances[23].id,threadId:allThreads[0].id,items:more?allMessages.slice(20):allMessages.slice(0,20),hasMore:!more,nextCursor:more?null:allMessages[19].id}});return respond({...threads,history:{...threads.history,instanceId:instances[23].id,items:more?allThreads.slice(20):allThreads.slice(0,20),hasMore:!more,nextCursor:more?null:allThreads[19].id}});},url=>({...catalog,items:url.searchParams.has('after')?instances.slice(20):instances.slice(0,20),hasMore:!url.searchParams.has('after'),nextCursor:url.searchParams.has('after')?null:instances[19].id}));try{const p=f.p;assert.equal(await p.locator('select[aria-label="Instância para consultar conversas"] option').count(),21);await p.getByRole('button',{name:'Mais opções da caixa de entrada',exact:true}).click();await p.getByRole('button',{name:'Carregar mais instâncias',exact:true}).click();await p.waitForFunction(()=>document.querySelector('select[aria-label="Instância para consultar conversas"]').options.length===25);await p.getByLabel('Instância para consultar conversas',{exact:true}).selectOption(instances[23].id);await p.waitForSelector('.crm-row');assert.equal(await p.locator('.crm-row').count(),20);await p.getByRole('button',{name:'Carregar mais conversas',exact:true}).click();await p.waitForFunction(()=>document.querySelectorAll('.crm-row').length===23);await p.locator('.crm-row').first().click();await p.waitForSelector('.crm-message');assert.equal(await p.locator('.crm-message').count(),20);await p.getByRole('button',{name:'Carregar mais mensagens',exact:true}).click();await p.waitForFunction(()=>document.querySelectorAll('.crm-message').length===26);assert.equal(new Set(await p.locator('.crm-message').evaluateAll(rows=>rows.map(r=>r.dataset.messageId))).size,26);}finally{await f.close();}
 });
+test('paridade CRM autenticado: Contatos não inventa agenda quando resposta da projeção é inválida',async()=>{
+ const f=await open((_route,respond,url)=>respond(url.pathname.endsWith('/messages')?messages:threads));try{
+  const p=f.p;await p.locator('.hub-tabs').getByRole('button',{name:'Contatos',exact:true}).click();
+  await p.getByRole('heading',{name:'Agenda de contatos',exact:true}).waitFor({timeout:1500});
+  await p.locator('.hub-alternate').getByText(/Não foi possível validar/).waitFor();
+  assert.match(await p.locator('.hub-alternate').textContent(),/Não foi possível validar/);
+  assert.equal(await p.locator('.hub-contact-card, .crm-dialog, textarea').count(),0);
+  assert.equal(f.calls.length,3);
+  await p.getByRole('button',{name:'Voltar às conversas',exact:true}).click();
+  assert.equal(await p.locator('.hub-tabs [data-view=inbox]').getAttribute('aria-pressed'),'true');
+ }finally{await f.close();}
+});
+test('paridade CRM autenticado: busca literal não revela corpo omitido/excluído nem faz consultas extras',async()=>{
+ const privateMessages=[message,{...message,id:'66666666-6666-4666-8666-666666666666',providerMessageId:'OMITTED',text:'SEGREDO_OMITIDO_2026',mediaType:'privacy_omitted'},{...message,id:'77777777-7777-4777-8777-777777777777',providerMessageId:'DELETED',text:null,mediaType:null,deleted:true}];
+ const f=await open((_route,respond,url)=>respond(url.pathname.endsWith('/messages')?{...messages,history:{...messages.history,items:privateMessages}}:threads));try{
+  const p=f.p;await p.getByLabel('Instância para consultar conversas',{exact:true}).selectOption(C);await p.locator('.crm-row').click();await p.waitForSelector('.crm-message');const calls=f.calls.length;
+  await p.getByRole('button',{name:'Buscar nesta conversa',exact:true}).click();const input=p.getByLabel('Buscar nas mensagens carregadas',{exact:true});
+  await input.fill('<img src=x');assert.equal(await p.locator('mark.crm-search-hit').count(),1);assert.equal(await p.locator('img[src=x]').count(),0);assert.equal(await p.evaluate(()=>window.__bad),undefined);
+  for(const q of ['SEGREDO_OMITIDO_2026','SEGREDO_EXCLUIDO_2026','.*']){await input.fill(q);assert.equal(await p.locator('mark.crm-search-hit').count(),0);assert.equal(await p.locator('.crm-message').count(),3);}
+  assert.doesNotMatch(await p.locator('.crm-messages').textContent(),/SEGREDO_OMITIDO|SEGREDO_EXCLUIDO/);assert.equal(f.calls.length,calls);assert.equal(await p.locator('form,textarea').count(),0);
+ }finally{await f.close();}
+});

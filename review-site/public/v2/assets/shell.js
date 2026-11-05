@@ -5,7 +5,7 @@ import { mountAppearance } from './appearance.js';
 
 export function mountShell({ pageId, title, group = 'Operação', currentUser, permissions = {}, appearanceApi, aboutText, syncDescription }) {
   const page = document.querySelector('main');
-  const role = permissions.master ? 'master' : 'user';
+  const role = permissions.master ? 'master' : permissions.administration ? 'administrator' : 'user';
   const navigation = getNavigation(role);
   const allPages = navigation.flatMap(section => section.items);
   const shell = document.createElement('div');

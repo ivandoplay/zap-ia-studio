@@ -282,3 +282,41 @@ test('thread do chip 1 não é alcançada pela instância do chip 2', async () =
     assert.equal((await res.json()).code, 'CONVERSATION_NOT_FOUND');
   });
 });
+
+// Regressão do envio real do Chip 1: o WhatsApp moderno identifica o contato por
+// @lid, então a conversa fica gravada em "<números>@lid" e o front pode pedir o
+// número. Antes, o 404 vinha porque nenhuma das formas testadas era o @lid.
+test('thread pedida pelo número acha a conversa gravada no @lid do mesmo chip', async () => {
+  const sent = [];
+  const handler = {sendText: async (userId, chatId) => { sent.push({userId, chatId}); return {key: {id: 'wamid_lid'}}; }};
+  const base = context();
+  base.storage.contacts['263762531643591@lid'] = {
+    name: 'Jefferson Ivan', slotId: 'slot_1', phone: '558681638438', unreadCount: 1,
+    lastMessageAt: '2026-11-06T23:13:10.000Z',
+    messages: [{role: 'user', text: 'oi', timestamp: '2026-11-06T23:13:10.000Z'}]
+  };
+  base.data.contacts = base.storage.contacts;
+  await withServer(handler, async (url) => {
+    const res = await fetch(`${url}/api/conversations-v3/instances/${INSTANCE}/threads/${encodeURIComponent('558681638438@s.whatsapp.net')}/messages`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: 'teste interno'})
+    });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).providerMessageId, 'wamid_lid');
+    // O envio vai para o JID da thread, não para o número pedido.
+    assert.equal(sent[0].chatId, '263762531643591@lid');
+    assert.equal(base.storage.contacts['263762531643591@lid'].messages.at(-1).waMsgId, 'wamid_lid');
+  }, {ctx: base});
+});
+
+test('número de outro chip continua bloqueado na instância do chip 1', async () => {
+  const handler = {sendText: async () => ({key: {id: 'nunca'}})};
+  const base = context();
+  base.storage.contacts['slot_2::999888777@lid'] = {name: 'Outro', slotId: 'slot_2', phone: '5511999888777', messages: []};
+  base.data.contacts = base.storage.contacts;
+  await withServer(handler, async (url) => {
+    const res = await fetch(`${url}/api/conversations-v3/instances/${INSTANCE}/threads/${encodeURIComponent('5511999888777@s.whatsapp.net')}/messages`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: 'nao deveria sair'})
+    });
+    assert.equal(res.status, 404);
+  }, {ctx: base});
+});

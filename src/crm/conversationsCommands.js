@@ -10,6 +10,7 @@
 //  - erro de origem sobe como erro; nada é marcado como enviado sem confirmação.
 import {Router, json} from 'express';
 import {sendEvolutionApiText, markEvolutionApiRead} from '../evolutionApiCloud.js';
+import {phonesMatch} from '../storage.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SLOT = /^slot_[0-9]+$/;
@@ -87,6 +88,28 @@ export function createConversationsCommandsRouter({getLocalContext, allowSend = 
     if (loose) {
       const split = splitChatId(loose[0]);
       return {slotId, storageKey: loose[0], chatId: split.chatId || loose[0], contact: loose[1]};
+    }
+    // O WhatsApp moderno identifica o contato por @lid: a conversa fica gravada em
+    // "slot::<números>@lid" e o front pode pedir o número (@s.whatsapp.net). Comparar o
+    // telefone real dentro do mesmo chip acha a thread existente; sem isso o envio pelo
+    // Chip 1 dá 404 mesmo com a conversa aberta na lista. Nunca cruza de chip.
+    const wantedPhone = key.replace(/^slot_[0-9]+::/, '').split('@')[0].split(':')[0].replace(/\D/g, '');
+    if (wantedPhone.length >= 10) {
+      const candidatesByPhone = Object.entries(contacts).filter(([storedKey, contact]) => {
+        if (!contact || typeof contact !== 'object') return false;
+        const split = splitChatId(storedKey);
+        const owner = SLOT.test(split.slotId || '') ? split.slotId : (SLOT.test(str(contact.slotId, 20)) ? str(contact.slotId, 20) : 'slot_1');
+        if (owner !== slotId) return false;
+        return phonesMatch(contact.phone || split.chatId || storedKey, wantedPhone);
+      });
+      if (candidatesByPhone.length) {
+        // Com mais de uma thread do mesmo número no chip, vale a que tem conversa mais recente.
+        const recency = ([, contact]) => new Date(contact?.lastMessageAt || contact?.messages?.at(-1)?.timestamp || 0).getTime() || 0;
+        const [storageKey, contact] = candidatesByPhone.sort((a, b) => recency(b) - recency(a))[0];
+        const split = splitChatId(storageKey);
+        // O envio vai para o JID da thread achada (o @lid quando é o caso), não para o número pedido.
+        return {slotId, storageKey, chatId: split.chatId || storageKey, contact};
+      }
     }
     throw fail(404, 'CONVERSATION_NOT_FOUND', 'Conversa não encontrada nesta conta e nesta instância.');
   }

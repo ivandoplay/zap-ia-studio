@@ -7,6 +7,9 @@ import {isResourcePath} from './resources-domain.js';
 import {isTrainingPath} from './training-store.js';
 import {isCampaignDraftPath} from './campaigns-write-policy.js';
 import {isCampaignReadPath} from './campaigns-read-policy.js';
+// Conversas reais: somente leitura, no formato instância → conversa → mensagens.
+const conversationV3Route=path=>typeof path==='string'&&/^\/api\/conversations-v3(?:\/instances(?:\/[0-9a-f-]{36}(?:\/threads(?:\/[^/?#]+\/messages)?)?)?)?(?:\?|$)/i.test(path);
+const isConversationsV3Path=(path,method='GET')=>method==='GET'&&conversationV3Route(path);
 export class SessionError extends Error {constructor(message,status=0,detail={}){super(message);this.status=status;this.detail=detail;}}
 export function createSessionClient({fetcher=globalThis.fetch,localStore,sessionStore}={}) {
  const read=(store,key)=>{try{return store?.getItem(key)||'';}catch{return '';}};
@@ -24,7 +27,7 @@ export function createSessionClient({fetcher=globalThis.fetch,localStore,session
   if(path==='/api/dashboard/parity'&&(method!=='GET'||body!==undefined))throw new Error('Complementos permitem somente consulta.');
   if(isCampaignReadPath(path)&&(method!=='GET'||body!==undefined))throw new Error('Campanhas permite somente consulta.');
   if(historyRoute(path)&&method!=='GET')throw new Error('Histórico permite somente consulta.');
-  if(!isCrmMetadataPath(path,method)&&!channelRoute(path)&&!isCampaignReadPath(path)&&!isCampaignDraftPath(path,method)&&!isTrainingPath(path,method)&&!isResourcePath(path,method)&&!isSimulatorPath(path,method)&&!isAiSettingsPath(path,method)&&!isSecuritySettingsPath(path,method)&&!isAccountsPath(path,method)&&!operations.has(path)&&!path.startsWith('/api/connections/pairing?')&&!['/api/connections/configuration','/api/auth/status','/api/auth/refresh','/api/dashboard/summary','/api/dashboard/parity','/api/dashboard/appearance','/api/connections/summary'].includes(path))throw new Error('Rota não permitida');
+  if(!isCrmMetadataPath(path,method)&&!channelRoute(path)&&!isCampaignReadPath(path)&&!isCampaignDraftPath(path,method)&&!isTrainingPath(path,method)&&!isResourcePath(path,method)&&!isSimulatorPath(path,method)&&!isAiSettingsPath(path,method)&&!isSecuritySettingsPath(path,method)&&!isConversationsV3Path(path,method)&&!isAccountsPath(path,method)&&!operations.has(path)&&!path.startsWith('/api/connections/pairing?')&&!['/api/connections/configuration','/api/auth/status','/api/auth/refresh','/api/dashboard/summary','/api/dashboard/parity','/api/dashboard/appearance','/api/connections/summary'].includes(path))throw new Error('Rota não permitida');
   const headers={Accept:'application/json'},stored=auth(),pin=read(sessionStore,'zapia_pin'),target=actingId();
   if(stored.accessToken)headers.Authorization=`Bearer ${stored.accessToken}`;
   if(pin)headers['x-panel-pin']=pin;

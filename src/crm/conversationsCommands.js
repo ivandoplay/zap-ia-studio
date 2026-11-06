@@ -63,7 +63,11 @@ export function createConversationsCommandsRouter({getLocalContext, allowSend = 
     const key = decodeURIComponent(String(threadKey || ''));
     if (!key) throw fail(400, 'INVALID_CONVERSATION', 'Conversa inválida.');
     const contacts = ctx.data.contacts || {};
-    const candidates = [key, `${slotId}::${key}`];
+    // O jid sem prefixo é a forma realmente gravada: o chip 1 nunca leva prefixo no
+    // armazenamento e o front pode mandar a thread já prefixada. Testar as duas formas
+    // evita o 404 em conversa que existe (era o que travava o envio pelo Chip 1).
+    const bare = key.replace(/^slot_[0-9]+::/, '');
+    const candidates = [...new Set([key, `${slotId}::${key}`, bare, `${slotId}::${bare}`])];
     for (const candidate of candidates) {
       const contact = contacts[candidate];
       if (!contact || typeof contact !== 'object') continue;
@@ -78,7 +82,7 @@ export function createConversationsCommandsRouter({getLocalContext, allowSend = 
       const split = splitChatId(storedKey);
       if (split.slotId) return false;
       const owner = SLOT.test(str(contact.slotId, 20)) ? str(contact.slotId, 20) : 'slot_1';
-      return owner === slotId && (storedKey === key || split.chatId === key);
+      return owner === slotId && (storedKey === key || split.chatId === key || storedKey === bare || split.chatId === bare);
     });
     if (loose) {
       const split = splitChatId(loose[0]);

@@ -246,3 +246,39 @@ test('conversa sem prefixo de chip é encontrada pelo slotId do contato', async 
     assert.equal(ctx.storage.contacts['5511988880002@s.whatsapp.net'].messages.at(-1).text, 'oi');
   });
 });
+
+// Regressão do envio pelo Chip 1: o front manda a thread prefixada
+// ("slot_1::<jid>"), mas o chip 1 grava o contato SEM prefixo. Antes, a busca só
+// tentava a forma prefixada e a rota devolvia 404 CONVERSATION_NOT_FOUND —
+// mesmo com a conversa existindo no armazenamento.
+test('thread prefixada do chip 1 acha o contato gravado sem prefixo', async () => {
+  const sent = [];
+  const handler = {sendText: async (userId, chatId) => { sent.push({userId, chatId}); return {key: {id: 'wamid_bare'}}; }};
+  await withServer(handler, async (base, ctx) => {
+    const res = await fetch(`${base}/api/conversations-v3/instances/${INSTANCE}/threads/${encodeURIComponent('slot_1::558681638438@s.whatsapp.net')}/messages`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: 'teste interno'})
+    });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.sent, true);
+    assert.equal(body.providerMessageId, 'wamid_bare');
+    assert.equal(sent[0].chatId, '558681638438@s.whatsapp.net');
+    assert.equal(ctx.storage.contacts['558681638438@s.whatsapp.net'].messages.at(-1).waMsgId, 'wamid_bare');
+  }, {ctx: (() => {
+    const base = context();
+    base.storage.contacts['558681638438@s.whatsapp.net'] = {name: 'Chip 2 - teste interno', slotId: 'slot_1', unreadCount: 0, messages: []};
+    base.data.contacts = base.storage.contacts;
+    return base;
+  })()});
+});
+
+test('thread do chip 1 não é alcançada pela instância do chip 2', async () => {
+  const handler = {sendText: async () => ({key: {id: 'nunca'}})};
+  await withServer(handler, async base => {
+    const res = await fetch(`${base}/api/conversations-v3/instances/00000000-0000-4000-8000-000000000002/threads/${encodeURIComponent('slot_1::558681638438@s.whatsapp.net')}/messages`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: 'nao deveria sair'})
+    });
+    assert.equal(res.status, 404);
+    assert.equal((await res.json()).code, 'CONVERSATION_NOT_FOUND');
+  });
+});

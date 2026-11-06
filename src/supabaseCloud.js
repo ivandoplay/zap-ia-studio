@@ -638,11 +638,17 @@ export async function loadTenantContextFromCloud(client, authUser, profile, { sc
     };
   }
 
+  // A chave canônica do chip 1 não leva prefixo ("<jid>"), as dos demais levam
+  // ("slot_2::<jid>"). Normalizar aqui evita que o mesmo contato exista duas vezes
+  // (uma com prefixo, outra sem) e que a reconciliação de deleção apague a linha
+  // gravada fora do painel — era o que derrubava o envio pelo Chip 1.
   const contactsMap = {};
   for (const row of contactsRes.data || []) {
-    if (row?.chat_id && row?.data) {
-      contactsMap[row.chat_id] = row.data;
-    }
+    if (!row?.chat_id || !row?.data) continue;
+    const parsed = parseContactChannelKey(row.data?.chatId || row.chat_id);
+    const slotId = normalizeSlotId(row.data?.slotId || parsed.slotId);
+    const canonicalKey = buildContactChannelKey(slotId, parsed.rawJid) || row.chat_id;
+    contactsMap[canonicalKey] = {...row.data, slotId, chatId: canonicalKey};
   }
 
   const initialData = {

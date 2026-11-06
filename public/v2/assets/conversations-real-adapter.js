@@ -30,11 +30,59 @@ export function createRealConversationsAdapter({ request, scope = () => '', onSc
     return response;
   };
 
+  // Comandos que alteram a conversa. Cada um devolve o que o servidor confirmou;
+  // nenhum deles inventa estado local quando a origem falha.
+  const write = async (path, method, body, signal) => {
+    same();
+    const value = await request(path, {method, body, signal});
+    same();
+    if (!value || value.ok !== true) fail('O servidor não confirmou a alteração.');
+    return value;
+  };
+  const threadPath = (instanceId, threadId) => {
+    if (!UUID.test(String(instanceId || ''))) fail('Instância inválida.', 400);
+    if (typeof threadId !== 'string' || !threadId) fail('Conversa inválida.', 400);
+    return `/api/conversations-v3/instances/${instanceId}/threads/${encodeURIComponent(threadId)}`;
+  };
+
   return {
     demo: false,
-    // A visão de demonstração tinha gestão local; aqui nada é simulado.
-    writable: false,
-    canSend: false,
+    // Escrita liberada: os comandos usam as rotas reais abaixo.
+    writable: true,
+    canSend: true,
+
+    async send({instanceId, threadId, text, signal} = {}) {
+      const value = await write(`${threadPath(instanceId, threadId)}/messages`, 'POST', {text: String(text || '')}, signal);
+      if (value.sent !== true) fail('O envio não foi confirmado pelo provedor.');
+      return value;
+    },
+
+    async markRead({instanceId, threadId, unread = false, signal} = {}) {
+      return write(`${threadPath(instanceId, threadId)}/read`, 'POST', {unread: unread === true}, signal);
+    },
+
+    async patchThread({instanceId, threadId, patch, signal} = {}) {
+      if (!patch || typeof patch !== 'object') fail('Alteração inválida.', 400);
+      return write(threadPath(instanceId, threadId), 'PATCH', patch, signal);
+    },
+
+    async addNote({instanceId, threadId, text, signal} = {}) {
+      const value = await write(`${threadPath(instanceId, threadId)}/notes`, 'POST', {text: String(text || '')}, signal);
+      return value.note || null;
+    },
+
+    async pause({instanceId, threadId, minutes = 60, reason = '', signal} = {}) {
+      return write(`${threadPath(instanceId, threadId)}/pause`, 'POST', {minutes, reason}, signal);
+    },
+
+    async resume({instanceId, threadId, signal} = {}) {
+      return write(`${threadPath(instanceId, threadId)}/resume`, 'POST', {}, signal);
+    },
+
+    async patchProfile({instanceId, threadId, patch, signal} = {}) {
+      const value = await write(`${threadPath(instanceId, threadId)}/profile`, 'PATCH', patch, signal);
+      return value.profile || null;
+    },
 
     // Instâncias (chips) reais da conta.
     async catalog({ q = '', signal } = {}) {

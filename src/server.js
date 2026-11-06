@@ -18,6 +18,7 @@ import { createDashboardRouter } from './dashboard/router.js';
 import { createConnectionsRouter } from './connections/router.js';
 import {createChannelsRouter} from './channels/router.js';
 import {createConversationsV3Router} from './crm/conversationsV3.js';
+import {createConversationsCommandsRouter} from './crm/conversationsCommands.js';
 import {createCampaignRouter} from './campaigns/router.js';
 import {createCrmRouter} from './crm/router.js';
 import {validateLegacyApiReferences} from './channels/legacyIdentity.js';
@@ -548,7 +549,7 @@ function attachAtomicCloudFlush(res, tenantStore) {
   };
 }
 
-const isDashboardRequest = (req) => /^\/(?:channels|crm-v2|campaigns-v2|training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/.test(req.path)||/^(?:\/dashboard\/(?:summary|appearance|parity)|\/connections\/(?:summary|configuration|pairing))\/?$/.test(req.path);
+const isDashboardRequest = (req) => /^\/(?:channels|conversations-v3|crm-v2|campaigns-v2|training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/.test(req.path)||/^(?:\/dashboard\/(?:summary|appearance|parity)|\/connections\/(?:summary|configuration|pairing))\/?$/.test(req.path);
 async function makeDashboardContext(verified, actAsUserId = '') {
   const profile = verified.profile;
   const viewer = { id: verified.authUser.id, displayName: profile.display_name || profile.displayName || profile.username || 'Minha conta', role: profile.role || 'user' };
@@ -728,6 +729,10 @@ app.use('/api/channels',createChannelsRouter(workspaceReadDependencies));
 // Conversas reais na navegação nova. Lê o CRM legado vivo (zapia_contacts) e expõe
 // instância/thread/mensagem no formato que a caixa de entrada nova consome.
 app.use('/api/conversations-v3',createConversationsV3Router(workspaceReadDependencies));
+// Comandos reais da caixa nova (enviar, lida, fixar, arquivar, nota, pausa, ficha).
+// O armazenamento é o mesmo que a leitura acima consome; o envio usa a ponte Evolution
+// do chip conectado da conta. Suporte continua somente leitura.
+app.use('/api/conversations-v3',createConversationsCommandsRouter({getLocalContext:workspaceReadDependencies.getLocalContext,allowSend:true}));
 // Metadata CRM preparada localmente. Escritas continuam desligadas (default do router).
 app.use('/api/crm-v2',createCrmRouter(workspaceReadDependencies));
 // Origem global, identidade delegada e implantação ainda não homologadas: sem consulta cloud nem ativação.

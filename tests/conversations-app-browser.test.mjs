@@ -21,8 +21,10 @@ test('conversas reais: abre na instância da conta, GET-only, sem metadata inven
  // Nada de contadores inventados quando a origem não manda "não lidas".
  assert.equal(await p.locator('.crm-row .crm-unread').count(),0);
  await p.locator('.crm-row').click();await p.waitForSelector('.crm-message');
- // Sem composer e sem simulação na leitura real.
- assert.equal(await p.locator('form,textarea,.crm-product').count(),0);
+ // A conversa real agora tem composer de envio, mas nenhuma simulação/anexo fictício.
+ assert.equal(await p.locator('.crm-product,.crm-simulation-label').count(),0);
+ assert.equal(await p.locator('textarea#crm-composer').count(),1);
+ assert.equal(await p.getByRole('button',{name:'Enviar mensagem',exact:true}).count(),1);
  assert.match(await p.locator('.crm-messages').textContent(),/<img src=x/);
  assert.equal(await p.locator('img[src=x]').count(),0);
  assert.equal(await p.evaluate(()=>window.__bad),undefined);
@@ -31,7 +33,9 @@ test('conversas reais: abre na instância da conta, GET-only, sem metadata inven
  assert.match(await p.locator('.crm-profile').textContent(),/Autocon/);
  await p.getByRole('button',{name:'Fechar dados do contato',exact:true}).click();
  await p.getByRole('button',{name:'Mais opções da conversa',exact:true}).click();
- assert.equal(await p.getByRole('button',{name:'Fixar conversa',exact:true}).isDisabled(),true);
+ // Escrita liberada na conversa real: o menu oferece os comandos reais.
+ assert.equal(await p.getByRole('button',{name:'Fixar conversa',exact:true}).isDisabled(),false);
+ assert.equal(await p.getByRole('button',{name:'Editar ficha do contato',exact:true}).count(),1);
  await p.keyboard.press('Escape');
  // Nenhuma rota proibida é chamada.
  const proibidas=/\/(contacts|bootstrap|evolution|whatsapp|send|connect)(\/|$|\?)/;
@@ -81,6 +85,6 @@ test('paridade CRM autenticado: busca literal não revela corpo omitido/excluíd
   await p.getByRole('button',{name:'Buscar nesta conversa',exact:true}).click();const input=p.getByLabel('Buscar nas mensagens carregadas',{exact:true});
   await input.fill('<img src=x');assert.equal(await p.locator('mark.crm-search-hit').count(),1);assert.equal(await p.locator('img[src=x]').count(),0);assert.equal(await p.evaluate(()=>window.__bad),undefined);
   for(const q of ['SEGREDO_OMITIDO_2026','.*']){await input.fill(q);assert.equal(await p.locator('mark.crm-search-hit').count(),0);assert.equal(await p.locator('.crm-message').count(),3);}
-  assert.doesNotMatch(await p.locator('.crm-messages').textContent(),/SEGREDO_OMITIDO/);assert.equal(f.calls.length,calls);assert.equal(await p.locator('form,textarea').count(),0);
+  assert.doesNotMatch(await p.locator('.crm-messages').textContent(),/SEGREDO_OMITIDO/);assert.equal(f.calls.length,calls);assert.equal(await p.locator('.crm-product').count(),0);
  }finally{await f.close();}
 });

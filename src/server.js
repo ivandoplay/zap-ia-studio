@@ -11,6 +11,7 @@ import {createResourceRouter} from './resources/router.js';
 import {createResourceFileRepository} from './resources/repository.js';
 import {createTrainingRouter} from './training/router.js';
 import {createTrainingFileRepository} from './training/repository.js';
+import {createWorkspaceDraftCloudRepository} from './workspaceDrafts/cloudRepository.js';
 import {previewTrainingRuntime} from './training/runtimePreview.js';
 import {previewTrainingImport} from './training/importPreview.js';
 import { composeConnectionState } from './dashboard/connections.js';
@@ -748,6 +749,37 @@ const workspaceReadDependencies = {
       permissions: { master: (worker.user?.role || 'master') === 'master' }, data: storage.data, runtime: { ...runtime, slots, maxWaSlots } };
   }
 };
+// Rascunhos das abas novas: arquivo privado no motor local, tabela ienvia_workspace_drafts
+// na nuvem (Vercel não tem disco persistente). O contrato é o mesmo; os routers não sabem
+// onde o dado mora. A criação é preguiçosa: sem a credencial necessária a rota responde
+// 503 em vez de derrubar o processo no boot.
+const draftFileFactories = () => ({
+  training: () => createTrainingFileRepository({root: path.join(ROOT_DIR, 'data', 'training-drafts-v2')}),
+  resources: () => createResourceFileRepository({root: path.join(ROOT_DIR, 'data', 'resources-drafts-v2')}),
+  ai: () => createAiSettingsFileRepository({root: path.join(ROOT_DIR, 'data', 'ai-settings-drafts-v2')}),
+  security: () => createSecuritySettingsFileRepository({root: path.join(ROOT_DIR, 'data', 'security-settings-drafts-v2')}),
+  accounts: () => createAccountsFileRepository({root: path.join(ROOT_DIR, 'data', 'accounts-administration-v2')}),
+  simulator: () => createSimulatorFileRepository({root: path.join(ROOT_DIR, 'data', 'simulator-sessions-v2')})
+});
+const draftRepository = namespace => {
+  let instance = null;
+  const resolve = () => {
+    if (instance) return instance;
+    try {
+      instance = IS_VERCEL
+        ? createWorkspaceDraftCloudRepository({client: getAdminClient(), namespace})
+        : draftFileFactories()[namespace]();
+    } catch {
+      throw Object.assign(new Error('Armazenamento dos rascunhos indisponível neste ambiente.'), {status: 503});
+    }
+    if (!instance) throw Object.assign(new Error('Namespace de rascunho inválido.'), {status: 503});
+    return instance;
+  };
+  return Object.freeze({
+    read: ownerId => resolve().read(ownerId),
+    save: input => resolve().save(input)
+  });
+};
 app.use('/api/dashboard', createOverviewParityRouter(workspaceReadDependencies));
 app.use('/api/dashboard', createDashboardRouter(workspaceReadDependencies));
 app.use('/api/connections', createConnectionsRouter(workspaceReadDependencies));
@@ -768,14 +800,14 @@ app.use('/api/conversations-v3',createConversationsCommandsRouter({getLocalConte
 const crmAccountWrites = req => req.dashboardContext?.viewer?.role === 'master' && req.dashboardContext?.viewer?.id === req.dashboardContext?.tenant?.id;
 app.use('/api/crm-v2',createCrmRouter({...workspaceReadDependencies,allowWrites:true,allowAccountWrites:crmAccountWrites}));
 // Origem global, identidade delegada e implantação ainda não homologadas: sem consulta cloud nem ativação.
-app.use('/api/accounts-v2',createAccountsRouter({getLocalContext:workspaceReadDependencies.getLocalContext,repository:createAccountsFileRepository({root:path.join(ROOT_DIR,'data','accounts-administration-v2')}),allowWrites:false,allowWorkspaceWrites:false}));
-app.use('/api/security-settings-v2',createSecuritySettingsRouter({...workspaceReadDependencies,repository:createSecuritySettingsFileRepository({root:path.join(ROOT_DIR,'data','security-settings-drafts-v2')}),allowWrites:false,allowPinWrites:false,readApprovedMessages:async ctx=>{if(ctx.mode!=='local_worker'||!ctx.data?.business)return [];const record=await createTrainingFileRepository({root:path.join(ROOT_DIR,'data','training-drafts-v2')}).read(ctx.tenant.id);const business=record?.document.training||ctx.data.business,id=ctx.data.business.trainingPackId;let pack=record?.document.pack||ctx.data.customPacks?.[id]||null;if(!record&&!pack&&id&&ctx.viewer.role==='master'&&ctx.viewer.id===ctx.tenant.id)pack=getTrainingPack(id);const rows=pack?.canonicalCore?.approvedMessages;if(rows?.length)return rows.map(m=>({id:m.id,title:m.title||m.id,text:m.text}));if(id&&!pack&&!record)return [];const first=String(business.assistantName||business.name||'eu').trim().split(/\s+/)[0];return [{id:'ABERTURA',title:'Abertura Consultiva Universal · original',text:business.soloIdentity?`Opa{{nome ? ', ' + nome : ''}}! Tudo bem? Aqui é o *${first}*. Posso te mostrar rapidinho como funciona meu trabalho?`:`Olá{{nome ? ', ' + nome : ''}}! Tudo bem? Aqui é do atendimento da *${business.name||'nossa equipe'}*. Posso te explicar rapidinho como funciona nosso trabalho?`}];}}));
+app.use('/api/accounts-v2',createAccountsRouter({getLocalContext:workspaceReadDependencies.getLocalContext,repository:draftRepository('accounts'),allowWrites:true,allowWorkspaceWrites:true}));
+app.use('/api/security-settings-v2',createSecuritySettingsRouter({...workspaceReadDependencies,repository:draftRepository('security'),allowWrites:true,allowPinWrites:false,readApprovedMessages:async ctx=>{if(ctx.mode!=='local_worker'||!ctx.data?.business)return [];const record=await draftRepository('training').read(ctx.tenant.id);const business=record?.document.training||ctx.data.business,id=ctx.data.business.trainingPackId;let pack=record?.document.pack||ctx.data.customPacks?.[id]||null;if(!record&&!pack&&id&&ctx.viewer.role==='master'&&ctx.viewer.id===ctx.tenant.id)pack=getTrainingPack(id);const rows=pack?.canonicalCore?.approvedMessages;if(rows?.length)return rows.map(m=>({id:m.id,title:m.title||m.id,text:m.text}));if(id&&!pack&&!record)return [];const first=String(business.assistantName||business.name||'eu').trim().split(/\s+/)[0];return [{id:'ABERTURA',title:'Abertura Consultiva Universal · original',text:business.soloIdentity?`Opa{{nome ? ', ' + nome : ''}}! Tudo bem? Aqui é o *${first}*. Posso te mostrar rapidinho como funciona meu trabalho?`:`Olá{{nome ? ', ' + nome : ''}}! Tudo bem? Aqui é do atendimento da *${business.name||'nossa equipe'}*. Posso te explicar rapidinho como funciona nosso trabalho?`}];}}));
 
-app.use('/api/ai-settings-v2',createAiSettingsRouter({...workspaceReadDependencies,repository:createAiSettingsFileRepository({root:path.join(ROOT_DIR,'data','ai-settings-drafts-v2')}),allowWrites:false,allowSecretWrites:false}));
-app.use('/api/simulator-v2',createSimulatorRouter({...workspaceReadDependencies,repository:createSimulatorFileRepository({root:path.join(ROOT_DIR,'data','simulator-sessions-v2')}),trainingRepository:createTrainingFileRepository({root:path.join(ROOT_DIR,'data','training-drafts-v2')}),resourceRepository:createResourceFileRepository({root:path.join(ROOT_DIR,'data','resources-drafts-v2')}),allowSessions:false,allowTeach:false,readSource:ctx=>{if(ctx.mode!=='local_worker'||!ctx.data?.business)throw Object.assign(new Error('Origem local do Simulador indisponível; integração remota não homologada.'),{status:503});const business=structuredClone(ctx.data.business),id=business.trainingPackId;let pack=ctx.data.customPacks?.[id]||null;if(id&&!pack&&ctx.viewer.role==='master'&&ctx.viewer.id===ctx.tenant.id)pack=getTrainingPack(id);return {business,pack:pack?structuredClone(pack):null,botEnabled:ctx.data.settings?.botEnabled!==false,simulatorHistoryCount:Array.isArray(ctx.data.simulatorHistory)?ctx.data.simulatorHistory.length:0};}}));
-app.use('/api/resources-v2',createResourceRouter({...workspaceReadDependencies,repository:createResourceFileRepository({root:path.join(ROOT_DIR,'data','resources-drafts-v2')}),allowWrites:false,allowTranscription:false,readLinkedMessages:ctx=>{if(ctx.mode!=='local_worker'||!ctx.data?.business)return [];const id=ctx.data.business.trainingPackId;let p=ctx.data.customPacks?.[id]||null;if(!p&&id&&ctx.viewer.role==='master'&&ctx.viewer.id===ctx.tenant.id)p=getTrainingPack(id);return (p?.canonicalCore?.approvedMessages||[]).map(m=>({id:m.id,title:m.title||m.id}));}}));
+app.use('/api/ai-settings-v2',createAiSettingsRouter({...workspaceReadDependencies,repository:draftRepository('ai'),allowWrites:true,allowSecretWrites:true}));
+app.use('/api/simulator-v2',createSimulatorRouter({...workspaceReadDependencies,repository:draftRepository('simulator'),trainingRepository:draftRepository('training'),resourceRepository:draftRepository('resources'),allowSessions:true,allowTeach:true,readSource:ctx=>{if(ctx.mode!=='local_worker'||!ctx.data?.business)throw Object.assign(new Error('Origem local do Simulador indisponível; integração remota não homologada.'),{status:503});const business=structuredClone(ctx.data.business),id=business.trainingPackId;let pack=ctx.data.customPacks?.[id]||null;if(id&&!pack&&ctx.viewer.role==='master'&&ctx.viewer.id===ctx.tenant.id)pack=getTrainingPack(id);return {business,pack:pack?structuredClone(pack):null,botEnabled:ctx.data.settings?.botEnabled!==false,simulatorHistoryCount:Array.isArray(ctx.data.simulatorHistory)?ctx.data.simulatorHistory.length:0};}}));
+app.use('/api/resources-v2',createResourceRouter({...workspaceReadDependencies,repository:draftRepository('resources'),allowWrites:true,allowTranscription:false,readLinkedMessages:ctx=>{if(ctx.mode!=='local_worker'||!ctx.data?.business)return [];const id=ctx.data.business.trainingPackId;let p=ctx.data.customPacks?.[id]||null;if(!p&&id&&ctx.viewer.role==='master'&&ctx.viewer.id===ctx.tenant.id)p=getTrainingPack(id);return (p?.canonicalCore?.approvedMessages||[]).map(m=>({id:m.id,title:m.title||m.id}));}}));
 // Rascunho local; não existe rota de ativação nem habilitação por parâmetro público.
-app.use('/api/training-v2',createTrainingRouter({getLocalContext:workspaceReadDependencies.getLocalContext,repository:createTrainingFileRepository({root:path.join(ROOT_DIR,'data','training-drafts-v2')}),allowWrites:false,previewPrompt:previewTrainingRuntime,previewImport:previewTrainingImport,readSource:ctx=>{if(ctx.mode!=='local_worker'||!ctx.data?.business)throw Object.assign(new Error('Origem local indisponível; integração remota ainda não homologada.'),{status:503});const business=structuredClone(ctx.data.business),id=business.trainingPackId;let pack=id?ctx.data.customPacks?.[id]||null:null;if(id&&!pack&&ctx.viewer.role==='master'&&ctx.viewer.id===ctx.tenant.id)pack=getTrainingPack(id);return {business,pack:pack?structuredClone(pack):null};}}));
+app.use('/api/training-v2',createTrainingRouter({getLocalContext:workspaceReadDependencies.getLocalContext,repository:draftRepository('training'),allowWrites:true,previewPrompt:previewTrainingRuntime,previewImport:previewTrainingImport,readSource:ctx=>{if(ctx.mode!=='local_worker'||!ctx.data?.business)throw Object.assign(new Error('Origem local indisponível; integração remota ainda não homologada.'),{status:503});const business=structuredClone(ctx.data.business),id=business.trainingPackId;let pack=id?ctx.data.customPacks?.[id]||null:null;if(id&&!pack&&ctx.viewer.role==='master'&&ctx.viewer.id===ctx.tenant.id)pack=getTrainingPack(id);return {business,pack:pack?structuredClone(pack):null};}}));
 // UUID separado do legado. Todos os gates de escrita, IA e mídia permanecem false por padrão.
 // Rascunho de campanha homologado na conta real (dono master). A execução continua fechada:
 // sem canal atribuído, sem worker e sem homologação de ienvia_campaign_execution_accounts.

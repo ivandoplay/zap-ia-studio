@@ -549,6 +549,8 @@ function attachAtomicCloudFlush(res, tenantStore) {
   };
 }
 
+// Rotas do dashboard que também precisam do workspace do tenant (contatos vivos).
+const CONVERSATIONS_WORKSPACE_ROUTE = /^\/conversations-v3(?:\/|$)/;
 const isDashboardRequest = (req) => /^\/(?:channels|conversations-v3|crm-v2|campaigns-v2|training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/.test(req.path)||/^(?:\/dashboard\/(?:summary|appearance|parity)|\/connections\/(?:summary|configuration|pairing))\/?$/.test(req.path);
 async function makeDashboardContext(verified, actAsUserId = '') {
   const profile = verified.profile;
@@ -591,6 +593,30 @@ app.use('/api', async (req, res, next) => {
       if (req.path === '/wa/toggle-bot' && typeof req.body?.enabled !== 'boolean') return res.status(400).json({ ok: false, error: 'enabled deve ser booleano (true ou false).' });
       if (isDashboardRequest(req)) {
         req.dashboardContext = await makeDashboardContext(verified, actAsUserId);
+        // A caixa de Conversas da nuvem lê o CRM vivo (zapia_contacts), e não só a
+        // projeção do dashboard. Carregamos o workspace do tenant para quem consome
+        // contatos, mantendo o mesmo escopo de contato usado no envio.
+        if (CONVERSATIONS_WORKSPACE_ROUTE.test(req.path)) {
+          if (actAsUserId && actAsUserId !== verified.authUser.id) {
+            if (!UUID_RE.test(actAsUserId)) throw Object.assign(new Error('Identificador de cliente inválido.'), { statusCode: 400 });
+            const supportCtx = await loadTenantContextAsMasterSupport(actAsUserId);
+            attachAtomicCloudFlush(res, supportCtx.tenantStore);
+            return tenantStorageContext.run(supportCtx.tenantStore, () => next());
+          }
+          const tenantStore = await loadTenantContextFromCloud(verified.client, verified.authUser, verified.profile, {
+            scopedContactId: scopedSendChatId(req.method, req.path)
+          });
+          req.cloudAuth = {
+            client: verified.client,
+            authUser: verified.authUser,
+            profile: verified.profile,
+            tenantStore,
+            isRemoteImpersonation: false,
+            impersonatedBy: null
+          };
+          attachAtomicCloudFlush(res, tenantStore);
+          return tenantStorageContext.run(tenantStore, () => next());
+        }
         return next();
       }
 

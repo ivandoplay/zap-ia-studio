@@ -17,6 +17,7 @@ import { composeConnectionState } from './dashboard/connections.js';
 import { createDashboardRouter } from './dashboard/router.js';
 import { createConnectionsRouter } from './connections/router.js';
 import {createChannelsRouter} from './channels/router.js';
+import {createConversationsV3Router} from './crm/conversationsV3.js';
 import {createCampaignRouter} from './campaigns/router.js';
 import {createCrmRouter} from './crm/router.js';
 import {validateLegacyApiReferences} from './channels/legacyIdentity.js';
@@ -724,6 +725,9 @@ app.use('/api/dashboard', createOverviewParityRouter(workspaceReadDependencies))
 app.use('/api/dashboard', createDashboardRouter(workspaceReadDependencies));
 app.use('/api/connections', createConnectionsRouter(workspaceReadDependencies));
 app.use('/api/channels',createChannelsRouter(workspaceReadDependencies));
+// Conversas reais na navegação nova. Lê o CRM legado vivo (zapia_contacts) e expõe
+// instância/thread/mensagem no formato que a caixa de entrada nova consome.
+app.use('/api/conversations-v3',createConversationsV3Router(workspaceReadDependencies));
 // Metadata CRM preparada localmente. Escritas continuam desligadas (default do router).
 app.use('/api/crm-v2',createCrmRouter(workspaceReadDependencies));
 // Origem global, identidade delegada e implantação ainda não homologadas: sem consulta cloud nem ativação.

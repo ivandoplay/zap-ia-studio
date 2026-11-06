@@ -33,7 +33,7 @@ function splitChatId(rawChatId) {
 const fail = (status, code, message) => Object.assign(new Error(message), {status, code});
 
 // `transport` permite injetar a ponte de envio nos testes sem tocar no WhatsApp.
-export function createConversationsCommandsRouter({getLocalContext, allowSend = false, transport = null} = {}) {
+export function createConversationsCommandsRouter({getLocalContext, allowSend = false, transport = null, store: cloudAuthStore = null} = {}) {
   const bridge = transport || {sendText: sendEvolutionApiText, markRead: markEvolutionApiRead};
   const router = Router();
   router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store, private'); next(); });
@@ -49,10 +49,11 @@ export function createConversationsCommandsRouter({getLocalContext, allowSend = 
     const ctx = req.dashboardContext || await getLocalContext?.(req);
     if (!ctx) throw fail(401, 'AUTH_REQUIRED', 'Entre na sua conta para usar as conversas.');
     if (write && ctx.viewer?.id !== ctx.tenant?.id) throw fail(403, 'CONVERSATIONS_SUPPORT_READ_ONLY', 'Suporte permanece somente leitura.');
-    const data = ctx.data || ctx.store?.data;
+    const store = typeof cloudAuthStore === 'function' ? cloudAuthStore() : null;
+    const data = ctx.data || ctx.store?.data || store?.data;
     if (!data || typeof data !== 'object') throw fail(503, 'CONVERSATIONS_UNAVAILABLE', 'Este ambiente não expõe conversas.');
     if (typeof data.contacts !== 'object' || Array.isArray(data.contacts)) throw fail(503, 'CONTACTS_INVALID', 'Os contatos desta conta não puderam ser lidos.');
-    return {...ctx, data};
+    return {...ctx, data, store: store || ctx.store || ctx.storage, storage: store || ctx.store || ctx.storage};
   }
 
   // Resolve a conversa dentro do chip informado. Sem fallback silencioso.

@@ -728,11 +728,11 @@ app.use('/api/connections', createConnectionsRouter(workspaceReadDependencies));
 app.use('/api/channels',createChannelsRouter(workspaceReadDependencies));
 // Conversas reais na navegação nova. Lê o CRM legado vivo (zapia_contacts) e expõe
 // instância/thread/mensagem no formato que a caixa de entrada nova consome.
-app.use('/api/conversations-v3',createConversationsV3Router(workspaceReadDependencies));
+app.use('/api/conversations-v3',createConversationsV3Router({...workspaceReadDependencies,store:()=>tenantStorageContext.getStore()}));
 // Comandos reais da caixa nova (enviar, lida, fixar, arquivar, nota, pausa, ficha).
 // O armazenamento é o mesmo que a leitura acima consome; o envio usa a ponte Evolution
 // do chip conectado da conta. Suporte continua somente leitura.
-app.use('/api/conversations-v3',createConversationsCommandsRouter({getLocalContext:workspaceReadDependencies.getLocalContext,allowSend:true}));
+app.use('/api/conversations-v3',createConversationsCommandsRouter({getLocalContext:workspaceReadDependencies.getLocalContext,store:()=>tenantStorageContext.getStore(),allowSend:true}));
 // Metadata CRM preparada localmente. Escritas continuam desligadas (default do router).
 app.use('/api/crm-v2',createCrmRouter(workspaceReadDependencies));
 // Origem global, identidade delegada e implantação ainda não homologadas: sem consulta cloud nem ativação.

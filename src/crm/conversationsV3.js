@@ -92,7 +92,7 @@ function normalized(text) {
   return String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
-export function createConversationsV3Router({ getLocalContext } = {}) {
+export function createConversationsV3Router({ getLocalContext, store: cloudAuthStore = null } = {}) {
   const router = Router();
   router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store, private'); next(); });
 
@@ -102,10 +102,19 @@ export function createConversationsV3Router({ getLocalContext } = {}) {
     error: error.status ? error.message : 'Não foi possível consultar as conversas. Nada foi alterado.'
   });
 
+  // A caixa nova é a única rota de painel que lê o CRM vivo, e o /api apenas prepara o
+  // contexto dela (isDashboardRequest). O workspace do tenant já está carregado na
+  // requisição pelo tenantStorageContext; usamos esse store em vez de recarregá-lo.
+  function tenantStore(req) {
+    const store = typeof cloudAuthStore === 'function' ? cloudAuthStore() : null;
+    return store && typeof store === 'object' && store.data && typeof store.data === 'object' ? store : null;
+  }
+
   async function context(req) {
     const ctx = req.dashboardContext || await getLocalContext?.(req);
     if (!ctx) throw Object.assign(new Error('Entre na sua conta para ver as conversas.'), { status: 401, code: 'AUTH_REQUIRED' });
-    const data = ctx.data || ctx.store?.data;
+    const store = tenantStore(req);
+    const data = ctx.data || ctx.store?.data || store?.data;
     if (!data || typeof data !== 'object') {
       throw Object.assign(new Error('Este ambiente não expõe conversas.'), { status: 503, code: 'CONVERSATIONS_UNAVAILABLE' });
     }
@@ -113,7 +122,7 @@ export function createConversationsV3Router({ getLocalContext } = {}) {
     if (typeof contacts !== 'object' || Array.isArray(contacts)) {
       throw Object.assign(new Error('Os contatos desta conta não puderam ser lidos.'), { status: 503, code: 'CONTACTS_INVALID' });
     }
-    return { ...ctx, data, contacts };
+    return { ...ctx, data, contacts, store: store || ctx.store || ctx.storage, storage: store || ctx.store || ctx.storage };
   }
 
   function entries(ctx) {

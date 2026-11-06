@@ -751,7 +751,9 @@ const workspaceReadDependencies = {
 app.use('/api/dashboard', createOverviewParityRouter(workspaceReadDependencies));
 app.use('/api/dashboard', createDashboardRouter(workspaceReadDependencies));
 app.use('/api/connections', createConnectionsRouter(workspaceReadDependencies));
-app.use('/api/channels',createChannelsRouter(workspaceReadDependencies));
+// Leitura de ficha por thread liberada: usa a projeção salva (ienvia_instance_threads), nunca o
+// contato legado. As instâncias ainda vêm de zapia_wa_slots até a migração operacional.
+app.use('/api/channels',createChannelsRouter({...workspaceReadDependencies,allowCrmProjection:true}));
 // Conversas reais na navegação nova. Lê o CRM legado vivo (zapia_contacts) e expõe
 // instância/thread/mensagem no formato que a caixa de entrada nova consome.
 app.use('/api/conversations-v3',createConversationsV3Router({...workspaceReadDependencies,store:()=>tenantStorageContext.getStore()}));
@@ -760,7 +762,11 @@ app.use('/api/conversations-v3',createConversationsV3Router({...workspaceReadDep
 // do chip conectado da conta. Suporte continua somente leitura.
 app.use('/api/conversations-v3',createConversationsCommandsRouter({getLocalContext:workspaceReadDependencies.getLocalContext,store:()=>tenantStorageContext.getStore(),allowSend:true}));
 // Metadata CRM preparada localmente. Escritas continuam desligadas (default do router).
-app.use('/api/crm-v2',createCrmRouter(workspaceReadDependencies));
+// Escrita de ficha/etiqueta/atalho homologada pelo dono na conta real. O CRM lê o registro
+// salvo (ienvia_crm_contacts), que hoje está vazio; a escrita fica liberada por conta
+// master, sem tocar em contatos legados nem em outro chip.
+const crmAccountWrites = req => req.dashboardContext?.viewer?.role === 'master' && req.dashboardContext?.viewer?.id === req.dashboardContext?.tenant?.id;
+app.use('/api/crm-v2',createCrmRouter({...workspaceReadDependencies,allowWrites:true,allowAccountWrites:crmAccountWrites}));
 // Origem global, identidade delegada e implantação ainda não homologadas: sem consulta cloud nem ativação.
 app.use('/api/accounts-v2',createAccountsRouter({getLocalContext:workspaceReadDependencies.getLocalContext,repository:createAccountsFileRepository({root:path.join(ROOT_DIR,'data','accounts-administration-v2')}),allowWrites:false,allowWorkspaceWrites:false}));
 app.use('/api/security-settings-v2',createSecuritySettingsRouter({...workspaceReadDependencies,repository:createSecuritySettingsFileRepository({root:path.join(ROOT_DIR,'data','security-settings-drafts-v2')}),allowWrites:false,allowPinWrites:false,readApprovedMessages:async ctx=>{if(ctx.mode!=='local_worker'||!ctx.data?.business)return [];const record=await createTrainingFileRepository({root:path.join(ROOT_DIR,'data','training-drafts-v2')}).read(ctx.tenant.id);const business=record?.document.training||ctx.data.business,id=ctx.data.business.trainingPackId;let pack=record?.document.pack||ctx.data.customPacks?.[id]||null;if(!record&&!pack&&id&&ctx.viewer.role==='master'&&ctx.viewer.id===ctx.tenant.id)pack=getTrainingPack(id);const rows=pack?.canonicalCore?.approvedMessages;if(rows?.length)return rows.map(m=>({id:m.id,title:m.title||m.id,text:m.text}));if(id&&!pack&&!record)return [];const first=String(business.assistantName||business.name||'eu').trim().split(/\s+/)[0];return [{id:'ABERTURA',title:'Abertura Consultiva Universal · original',text:business.soloIdentity?`Opa{{nome ? ', ' + nome : ''}}! Tudo bem? Aqui é o *${first}*. Posso te mostrar rapidinho como funciona meu trabalho?`:`Olá{{nome ? ', ' + nome : ''}}! Tudo bem? Aqui é do atendimento da *${business.name||'nossa equipe'}*. Posso te explicar rapidinho como funciona nosso trabalho?`}];}}));

@@ -5703,6 +5703,166 @@ label:has(input[type="checkbox"]) {
 .motor-dispositivo-txt strong { font-size: 12.5px; }
 .motor-dispositivo-txt small { font-size: 10.5px; color: var(--text-muted); }
 
+/* ==========================================================================
+   CONVERSAS — densidade e leitura (aba mais usada no dia a dia)
+   ========================================================================== */
+
+/* --- cabeçalho da conversa: identidade em 2 linhas curtas, ações em faixa própria --- */
+#tab-crm .crm-inbox-chat-head {
+  padding: 9px 13px;
+  gap: 6px 10px;
+  align-items: flex-start;
+}
+#tab-crm .crm-chat-head-left { align-items: center; gap: 9px; min-width: 0; flex: 1 1 auto; }
+#tab-crm .crm-chat-contact { min-width: 0; }
+#tab-crm .crm-chat-identity-line,
+#tab-crm .crm-chat-contact-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px 7px;
+  flex-wrap: wrap;
+  min-width: 0;
+  margin: 0;
+  line-height: 1.25;
+}
+#tab-crm .crm-chat-identity-line { margin-bottom: 1px; }
+#tab-crm .crm-chat-identity-line .crm-chat-name,
+#tab-crm .crm-chat-identity-line strong { font-size: 14px; }
+#tab-crm .crm-chat-contact-meta { font-size: 11px; color: var(--text-muted); }
+#tab-crm .crm-chat-contact-meta .btn { min-height: 22px; padding-inline: 7px; font-size: 10.5px; }
+/* a barra de ações desce inteira quando não couber, em vez de virar escada */
+#tab-crm .crm-chat-head-right {
+  flex: 0 1 auto;
+  gap: 4px;
+  flex-wrap: nowrap;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+#tab-crm .crm-chat-head-right::-webkit-scrollbar { display: none; }
+#tab-crm .crm-chat-head-right > * { flex: 0 0 auto; }
+#tab-crm .crm-chat-head-right .btn,
+#tab-crm .crm-chat-head-right .btn-ico {
+  min-height: 30px;
+  min-width: 30px;
+  padding-inline: 8px;
+  font-size: 11.5px;
+}
+/* no celular o cabeçalho vira coluna: flex-basis vira ALTURA, então nada de "1 1 260px" ali */
+@media (max-width: 760px) {
+  #tab-crm .crm-inbox-chat-head { flex-direction: column; align-items: stretch; gap: 8px; }
+  #tab-crm .crm-chat-head-left,
+  #tab-crm .crm-chat-head-right { flex: 0 0 auto; }
+  #tab-crm .crm-chat-head-right { justify-content: flex-start; }
+}
+
+/* --- lista: prévia em duas linhas, etiquetas discretas em vez de 4 pílulas --- */
+#tab-crm .crm-inbox-item-preview {
+  -webkit-line-clamp: 2;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.35;
+}
+#tab-crm .crm-inbox-item {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+#tab-crm .crm-inbox-item.active { background: var(--accent-soft); }
+#tab-crm .crm-inbox-item.active .crm-inbox-item-name { color: var(--text-main); }
+#tab-crm .crm-inbox-item-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+/* o selo de IA e a etapa já são óbvios pela conversa: deixa só o chip e a tag útil */
+#tab-crm .crm-inbox-item-badges { gap: 4px; margin-top: 5px; }
+#tab-crm .crm-inbox-item-badges .tag,
+#tab-crm .crm-inbox-item-badges .lead-tag {
+  max-width: 108px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- conversa: ritmo de leitura --- */
+#tab-crm .crm-inbox-messages {
+  padding: 16px 18px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#tab-crm .wa-bubble {
+  padding: 8px 11px;
+  font-size: 13.5px;
+  max-width: min(78%, 620px);
+}
+#tab-crm .wa-bubble + .wa-bubble { margin-top: 0; }
+/* separador de dia, quando o JS marca a data */
+#tab-crm .crm-inbox-messages > .wa-bubble { align-self: flex-start; }
+#tab-crm .wa-meta { font-size: 10px; opacity: 0.62; }
+#tab-crm .wa-text { line-height: 1.5; }
+
+/* --- ações da bolha: discretas até o hover/focus, e nunca quebrando a linha do texto --- */
+#tab-crm .wa-msg-actions {
+  gap: 2px;
+  margin-top: 2px;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 140ms var(--ease-out), max-height 140ms var(--ease-out);
+}
+#tab-crm .wa-bubble:hover .wa-msg-actions,
+#tab-crm .wa-bubble:focus-within .wa-msg-actions {
+  max-height: 40px;
+  opacity: 0.9;
+}
+@media (hover: none) {
+  #tab-crm .wa-msg-actions { max-height: 40px; opacity: 0.75; }
+}
+#tab-crm .wa-msg-act-btn { font-size: 11px; padding: 2px 5px; }
+
+/* --- "Carregar histórico do WhatsApp": é ação de exceção, não botão principal --- */
+#tab-crm .btn-fetch-older-history {
+  align-self: center;
+  margin: 2px 0 8px;
+  opacity: 0.75;
+}
+#tab-crm .btn-fetch-older-history:hover { opacity: 1; }
+
+/* --- compositor: barra de atalhos com respiro e o campo dominante --- */
+#tab-crm .crm-inbox-composer { padding: 10px 12px 12px; gap: 8px; }
+#tab-crm .composer-top-bar { padding-bottom: 2px; }
+#tab-crm .composer-top-bar::-webkit-scrollbar { height: 3px; }
+
+/* --- cabeçalho da aba: topo em uma linha só, busca com largura previsível --- */
+#tab-crm .crm-hub-topbar { margin-bottom: 8px; gap: 8px; }
+#tab-crm .crm-search-wrap { min-width: 220px; }
+#tab-crm .crm-filter-toolbar { margin-bottom: 8px; }
+#tab-crm .crm-filter-toolbar .filter-pills {
+  gap: 5px;
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+#tab-crm .crm-filter-toolbar .filter-pills::-webkit-scrollbar { display: none; }
+#tab-crm .crm-filter-toolbar .filter-pill { flex: 0 0 auto; }
+#tab-crm .crm-filter-toolbar .filter-pill .pill-count { font-variant-numeric: tabular-nums; }
+
+/* --- 3 colunas: painel de conversa ganha espaço, ficha não esmaga --- */
+#tab-crm .crm-inbox-layout.pro-3col {
+  grid-template-columns: 300px minmax(0, 1fr) 296px;
+  height: calc(100dvh - 176px);
+}
+@media (max-width: 1400px) {
+  #tab-crm .crm-inbox-layout.pro-3col { grid-template-columns: 280px minmax(0, 1fr) 272px; }
+}
+#tab-crm .crm-inbox-sidebar-head {
+  padding: 10px 12px;
+  font-size: 12px;
+}
+
 /* Conexões: os cartões de uma faixa alinham altura, sem "escadinha" */
 #tab-conexoes .conf-grade { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); align-items: stretch; }
 @media (max-width: 900px) {

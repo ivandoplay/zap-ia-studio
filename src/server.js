@@ -583,6 +583,9 @@ app.use('/api', async (req, res, next) => {
   if (req.path === '/public/motor-update.zip' || req.path === '/public/version') {
     return next();
   }
+  // Disparo do relógio de campanhas: autenticado pelo segredo do cron dentro do próprio
+  // router de campanhas. Sem isso o middleware de sessão barraria o job antes de chegar lá.
+  if (CRON_PATH.test(req.path)) return next();
   const actAsUserId = extractActAsUserId(req);
 
   if (IS_VERCEL) {

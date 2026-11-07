@@ -1370,21 +1370,20 @@ app.get('/api/crm/contact-directory', async (req, res) => {
       if (contact?.chatId) contactsById.set(contact.chatId, contact);
     }
 
-    // A MESMA pessoa aparece como LID (@lid) e como número (@s.whatsapp.net); se o telefone
-    // dela já está na agenda, a linha LID não é um contato novo — é a mesma pessoa. Medido em
-    // produção: 30 linhas repetidas assim no Chip 1 (ex.: 263762531643591@lid + 558681638438).
-    const phonesBySlot = new Map();
-    for (const rawContact of [...saved, ...imported]) {
+    // Telefones que JÁ existem na agenda por chip: usados para não repetir a mesma pessoa.
+    const telefonesPorSlot = new Map();
+    const registrarTelefone = (slot, ...valores) => {
+      for (const valor of valores) {
+        if (!isLikelyRealPhone(valor)) continue;
+        if (!telefonesPorSlot.has(slot)) telefonesPorSlot.set(slot, new Set());
+        telefonesPorSlot.get(slot).add(normalizePhoneDigits(valor));
+      }
+    };
+    for (const rawContact of saved) {
       const contacto = normalizeDirectoryContact(rawContact);
       const slot = contacto.slotId || String(contacto.chatId).match(/^(slot_[1-3])::/i)?.[1] || 'slot_1';
-      if (!isLikelyRealPhone(contacto.phone)) continue;
-      if (!phonesBySlot.has(slot)) phonesBySlot.set(slot, new Set());
-      phonesBySlot.get(slot).add(normalizePhoneDigits(contacto.phone));
+      registrarTelefone(slot, contacto.phone, contacto.chatId);
     }
-    const aliasLidDoTelefone = (contacto, slot) => {
-      if (!/@lid$/i.test(String(contacto.chatId))) return false;
-      return phonesBySlot.get(slot)?.has(normalizePhoneDigits(contacto.phone)) === true;
-    };
 
     const seenBySlot = new Set();
     let hiddenUnnamed = 0;
@@ -1405,7 +1404,13 @@ app.get('/api/crm/contact-directory', async (req, res) => {
         continue;
       }
       const slotId = contact.slotId || String(contact.chatId).match(/^(slot_[1-3])::/i)?.[1] || 'slot_1';
-      if (aliasLidDoTelefone(contact, slotId)) {
+      // A MESMA pessoa chega como LID (@lid) e como número (@s.whatsapp.net). Se o telefone
+      // dela já está na agenda deste chip, a linha LID é repetição, não contato novo.
+      // Medido em produção: 30 linhas assim no Chip 1 (ex.: 263762531643591@lid e
+      // 558681638438@s.whatsapp.net, o próprio número do chip).
+      const ehAliasLid = /@lid$/i.test(String(contact.chatId)) && isLikelyRealPhone(contact.phone)
+        && telefonesPorSlot.get(slotId)?.has(normalizePhoneDigits(contact.phone)) === true;
+      if (ehAliasLid) {
         duplicateIds += 1;
         continue;
       }
@@ -1436,6 +1441,7 @@ app.get('/api/crm/contact-directory', async (req, res) => {
         if (!includeUnnamed) continue;
       }
       contactsById.set(contact.chatId, { ...contact, slotId, directoryImport: true });
+      registrarTelefone(slotId, contact.phone, contact.chatId);
     }
 
     const all = [...contactsById.values()].filter((contact) => {

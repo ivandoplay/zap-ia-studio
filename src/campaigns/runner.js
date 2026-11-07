@@ -120,27 +120,15 @@ export function createCampaignRunner({ client, transport = null, maxPerRun = 5, 
   async function claimRecipient(ownerId, campaignId, recipientRow, step, slotId) {
     const key = recipientRow.destinatario_id || recipientRow.recipientId || recipientRow.id;
     if (!UUID.test(String(key || ''))) throw fail(503, 'CAMPAIGN_RECIPIENT_INVALID', 'Destinatário inválido na lista.');
-    const { error } = await table('ienvia_campanha_destinatarios')
-      .update({ enviado: true, enviado_em: nowIso(), slot_id: slotId, etapa: step })
-      .eq('owner_id', ownerId)
-      .eq('campanha_id', campaignId)
-      .eq('destinatario_id', key)
-      .eq('enviado', false);
-    // Se a tabela antiga não existir, seguimos com a lista somente leitura do rascunho.
-    if (error && !['42P01', 'PGRST205'].includes(error.code)) {
-      throw fail(503, 'CAMPAIGN_CLAIM_UNAVAILABLE', 'Não foi possível reservar o destinatário.');
-    }
-    return { key, claimed: !error };
+    // A reserva DURÁVEL é a fila do agendamento (`ienvia_campanha_fila`), que é a fonte de
+    // verdade de quem já recebeu. A tabela legada de destinatários não tem coluna `enviado`
+    // (o update falhava sempre e derrubava o envio), então ela é só a lista do rascunho.
+    return { key, claimed: true };
   }
 
-  async function markFailure(ownerId, campaignId, key, reason) {
-    await table('ienvia_campanha_destinatarios')
-      .update({ falha_motivo: String(reason).slice(0, 200), enviado: false })
-      .eq('owner_id', ownerId)
-      .eq('campanha_id', campaignId)
-      .eq('destinatario_id', key)
-      .then(() => {}, () => {});
-  }
+  // O motivo da falha fica no resumo da execução (`ultima_execucao.results`), que já é
+  // gravado no rascunho. Não escrevemos na tabela legada: ela não tem essas colunas.
+  async function markFailure() {}
 
   async function saveProgress(ownerId, campaignId, document, revision) {
     const { data, error } = await table('ienvia_campaign_drafts')
@@ -212,7 +200,6 @@ export function createCampaignRunner({ client, transport = null, maxPerRun = 5, 
         executed += 1;
       } catch (error) {
         failed += 1;
-        if (claim.claimed) await markFailure(ownerId, campaignId, claim.key, error?.code || 'send_failed');
         results.push({ phone, status: 'failed', code: error?.code || 'send_failed' });
       }
       if (index < cap - 1 && intervalo > 0) await new Promise(r => setTimeout(r, intervalo));

@@ -105,15 +105,18 @@ export function createChannelsRouter({getLocalContext,allowCrmProjection=false,p
   if(Object.keys(b).some(k=>!['action','pairingPhone','confirmo'].includes(k)))throw Object.assign(Error('Campos inválidos.'),{status:400});
   if(!['connect','disconnect'].includes(b.action))throw Object.assign(Error('Ação de conexão inválida.'),{status:400});
   if(b.confirmo!==true)throw Object.assign(Error('Confirmação explícita obrigatória para mexer na conexão.'),{status:400});
-  if(req.pairing?.enabled!==true||typeof req.pairing.connect!=='function'||typeof req.pairing.disconnect!=='function')throw Object.assign(Error('A conexão de números ainda não está liberada neste servidor. Nada foi alterado.'),{status:503,code:'PAIRING_UNAVAILABLE'});
+  if(pairing?.enabled!==true||typeof pairing.connect!=='function'||typeof pairing.disconnect!=='function')throw Object.assign(Error('A conexão de números ainda não está liberada neste servidor. Nada foi alterado.'),{status:503,code:'PAIRING_UNAVAILABLE'});
   const linked=await ctx.viewerClient.rpc('ienvia_get_channel_legacy_link',{p_owner:ctx.tenant.id,p_channel:channelId}).abortSignal(AbortSignal.timeout(4000));
   if(linked.error)throw dbError(linked.error);
   const link=parseLegacyLinkSnapshot(linked.data,{ownerId:ctx.tenant.id,channelId});
   if(!link.legacySlotId)throw Object.assign(Error('Este cadastro não está vinculado a um chip antigo. Vincule antes de conectar um número.'),{status:409,code:'CHANNEL_UNLINKED'});
-  const out=b.action==='connect'?await req.pairing.connect({ctx,slotId:link.legacySlotId,pairingPhone:b.pairingPhone||null}):await req.pairing.disconnect({ctx,slotId:link.legacySlotId});
+  const out=b.action==='connect'?await pairing.connect({ctx,slotId:link.legacySlotId,pairingPhone:b.pairingPhone||null}):await pairing.disconnect({ctx,slotId:link.legacySlotId});
   const snapshot=await readSlotStatus(ctx);
   const row=snapshot?.slots.get(link.legacySlotId);
-  return res.json({ok:true,slotId:link.legacySlotId,action:b.action,engine:out?.engine||'unknown',connection:connectionFor(channelId,link,snapshot),qrReady:['qr_ready','connecting'].includes(row?.status),requiresQrRefresh:out?.requiresDeviceChoice===true});
+  // O QR vem do provedor (out) quando a ponte é a Evolution; o status do slot é só conferência.
+  const qr=typeof out?.qrDataUrl==='string'&&/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(out.qrDataUrl)?out.qrDataUrl:null;
+  const code=typeof out?.pairingCode==='string'&&out.pairingCode.trim()?out.pairingCode.trim():null;
+  return res.json({ok:true,slotId:link.legacySlotId,action:b.action,engine:out?.engine||'unknown',status:out?.status||row?.status||'unknown',connection:connectionFor(channelId,link,snapshot),qrDataUrl:qr,pairingCode:code,qrReady:!!(qr||code)||['qr_ready','connecting'].includes(row?.status),requiresQrRefresh:out?.requiresDeviceChoice===true});
  }catch(error){return sendError(res,error);}});
  router.post('/:id/executor',async(req,res)=>{try{
   const ctx=await context(req,true);if(!isChannelId(req.params.id))throw Object.assign(Error('Instância UUID inválida.'),{status:400});

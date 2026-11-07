@@ -47,3 +47,22 @@ test('API histórico UUID: DTO sem wire/capability, escopo derivado, paginação
  const thread=R,id=V;threadsReply={ownerId:A,instanceId:C,items:[{id:thread,selfJid:'558600000001@s.whatsapp.net',peerJid:'558600000002@s.whatsapp.net',identityKind:'verified_pn',createdAt:T,wire:'PRIVATE_WIRE'}],hasMore:false,nextCursor:null};messagesReply={ownerId:A,instanceId:C,threadId:thread,items:[{id,threadId:thread,providerMessageId:'SYNTHETIC_PROVIDER',fromMe:true,text:'Histórico sintético',mediaType:'text',deleted:false,conflicted:false,ack:1,delivered:false,messageAt:T,timestampSource:'capture',dispatchState:'accepted',origins:[{instanceId:C,name:'Instância sintética',crmVisible:false,leaseId:'PRIVATE_CAPABILITY'}],originCount:1,originsTruncated:false,wire:'PRIVATE_WIRE'}],hasMore:false,nextCursor:null};calls=[];let r=await request('/'+C+'/threads?visibility=hidden&limit=2&ownerId='+B);assert.equal(r.status,200);assert.equal(calls.at(-1).args.p_owner,A);assert.equal(calls.at(-1).args.p_limit,2);assert.equal(JSON.stringify(r.data).includes('PRIVATE_WIRE'),false);assert.match(r.headers.get('cache-control'),/no-store/);r=await request('/'+C+'/threads/'+thread+'/messages');assert.equal(r.status,200);assert.equal(r.data.history.items[0].delivered,false);assert.equal(r.data.historyView,'canonical_thread');assert.equal(r.data.capabilities.canSend,false);assert.equal(JSON.stringify(r.data).includes('PRIVATE_'),false);
  let n=calls.length;assert.equal((await request('/'+C+'/threads?after=slot_1')).status,400);assert.equal((await request('/'+C+'/threads?limit=51')).status,400);assert.equal(calls.length,n);messagesReply={...messagesReply,ownerId:B};assert.equal((await request('/'+C+'/threads/'+thread+'/messages')).status,503);threadsReply={...threadsReply,ownerId:B};r=await request('/'+C+'/threads','GET',undefined,{'x-test-auth':'1','x-test-support':'1'});assert.equal(r.status,200);assert.equal(calls.at(-1).args.p_owner,B);
 });
+
+test('Pareamento: ponte habilitada devolve o QR do provedor e nunca chama o worker',async()=>{
+ const callsPair=[];const bridge={enabled:true,connect:async(a)=>{callsPair.push(a);return {engine:'evolution_api',slotId:a.slotId,status:'qr_ready',qrDataUrl:'data:image/png;base64,YWJj',pairingCode:'ABCD1234'};},disconnect:async(a)=>({engine:'evolution_api',slotId:a.slotId})};
+ const app2=express();app2.use(express.json());app2.use((req,_r,next)=>{req.dashboardContext={viewer:{id:A,displayName:'Dono'},tenant:{id:A},viewerClient:{rpc:(name)=>{calls.push({name});return {abortSignal:async()=>({error:null,data:{ownerId:A,channel:row,binding:{ownerId:A,channelId:C,legacySlotId:'slot_2',transport:row.transport}}})};}}};next();});
+ app2.use('/api/channels',createChannelsRouter({pairing:bridge,canPair:true}));
+ const server=await new Promise(r=>{const x=app2.listen(0,'127.0.0.1',()=>r(x));});
+ try{const base2='http://127.0.0.1:'+server.address().port;
+  const post=(b)=>fetch(base2+'/api/channels/'+C+'/pairing',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(b)});
+  assert.equal((await post({action:'connect',pairingPhone:'86999990000'})).status,400);
+  const ok=await post({action:'connect',confirmo:true,pairingPhone:'86999990000'});
+  if(ok.status!==200)console.error('STATUS',ok.status,await ok.clone().text());
+  assert.equal(ok.status,200);
+  const out=await ok.json();
+  assert.equal(out.engine,'evolution_api');assert.equal(out.qrReady,true);
+  assert.equal(ok.status,200);assert.equal(callsPair.length,1);assert.equal(callsPair[0].slotId,'slot_2');assert.equal(callsPair[0].pairingPhone,'86999990000');
+  assert.equal(JSON.stringify(out).includes('NUNCA_DEVOLVER'),false);
+  assert.equal((await post({action:'disconnect',confirmo:true})).status,200);
+ }finally{await new Promise(r=>server.close(r));}
+});

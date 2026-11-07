@@ -421,6 +421,9 @@ const HUB_BY_TAB = {
   ia: 'config',
   seguranca: 'config',
   configuracoes: 'config',
+  instancias: 'dashboard',
+  conexoes: 'dashboard',
+  historico: 'crm',
   campanhas: 'config',
   contas: 'contas'
 };
@@ -511,10 +514,23 @@ window.switchMobileHub = function switchMobileHub(hub) {
   return window.switchTab(hub);
 };
 
+// Mapa unico das abas do menu "mais" do celular (usado pela gaveta e pelo rodape,
+// que so tem 4 slots). Definido antes das IIFEs para nao depender da ordem de carga.
+window.MAIS_GRUPOS = [
+  { titulo: 'Operação', abas: [['dashboard', 'Visão geral'], ['crm', 'Conversas'], ['historico', 'Histórico por instância'], ['campanhas', 'Campanhas']] },
+  { titulo: 'Conexão', abas: [['instancias', 'Instâncias'], ['conexoes', 'Conexões / Motor']] },
+  { titulo: 'Atendente', abas: [['treinamento', 'Treinamento'], ['catalogo', 'Catálogo & PIX'], ['audios', 'Áudios'], ['simulador', 'Simulador'], ['ia', 'Motor de IA']] },
+  { titulo: 'Sistema', abas: [['seguranca', 'Segurança'], ['configuracoes', 'Configurações'], ['contas', 'Clientes SaaS']] }
+];
+
 window.switchMobileMore = function switchMobileMore(tabId) {
   document.getElementById('mobileMoreSheet')?.classList.remove('open');
   document.getElementById('accountSheet')?.classList.remove('open');
   switchTab(tabId);
+};
+
+window.openMobileMore = function openMobileMore() {
+  document.getElementById('mobileMoreSheet')?.classList.add('open');
 };
 
 window.openAccountSheet = function openAccountSheet() {
@@ -1099,15 +1115,14 @@ function renderCloudHeaderBar() {
   const masterNav = document.getElementById('navMasterUsersBtn');
   const masterGroupLbl = document.getElementById('navMasterGroupLabel');
   const masterMob = document.getElementById('mobMasterUsersBtn');
-  const clientMob = document.getElementById('mobClientAccountBtn');
   const impBanner = document.getElementById('impersonationBanner');
   const impTarget = document.getElementById('impersonationTargetLabel');
 
   const isMaster = state.currentUser?.role === 'master';
   if (masterNav) masterNav.style.display = isMaster ? '' : 'none';
   if (masterGroupLbl) masterGroupLbl.style.display = isMaster ? '' : 'none';
-  if (masterMob) masterMob.style.display = isMaster ? '' : 'none';
-  if (clientMob) clientMob.style.display = isMaster ? 'none' : '';
+  // o rodape do celular tem 4 hubs + "Mais"; Contas vive na gaveta "Mais" (evita 6 slots)
+  if (masterMob) masterMob.style.display = 'none';
 
   const isImpersonating = Boolean(state.currentUser?.impersonating || state.actAsUser?.userId);
   if (impBanner && impTarget) {
@@ -1338,6 +1353,12 @@ function renderAll() {
   if (typeof window.renderVisaoGeral === 'function') window.renderVisaoGeral();
   if (typeof window.renderSegStatus === 'function') window.renderSegStatus();
   if (typeof window.renderConfiguracoes === 'function') window.renderConfiguracoes();
+  if (typeof window.renderInstancias === 'function') window.renderInstancias();
+  if (typeof window.renderHistorico === 'function' && !window.__histCarregado) {
+    // o bootstrap pode terminar antes do token estar no estado; a própria função tenta de novo
+    window.renderHistorico().then(() => { if (window.__histPronto && window.__histPronto()) window.__histCarregado = true; }).catch(() => {});
+  }
+  if (typeof window.renderConexoes === 'function') window.renderConexoes();
   renderProactiveSelectors();
   renderProactiveQueueStatus();
   renderProfileSelectors();
@@ -1354,6 +1375,340 @@ function renderAll() {
 }
 
 
+
+
+
+// ======================== MENU "MAIS" DO CELULAR (todas as 14 abas) ========================
+// A gaveta existia vazia. Ela passa a listar todas as abas do menu lateral, agrupadas,
+// para nenhuma ficar inalcançável no celular (o rodapé só cabe 4 hubs + este botão).
+(function menuMais() {
+  const GRUPOS = window.MAIS_GRUPOS;
+  function montar() {
+    const gaveta = document.getElementById('mobileMoreSheet');
+    const cartao = gaveta && gaveta.querySelector('.action-sheet-card');
+    if (!cartao || cartao.dataset.pronto === '1') return;
+    cartao.dataset.pronto = '1';
+    // a moldura (backdrop + cartao + topo) vive no HTML; aqui so entra a lista de abas
+    cartao.insertAdjacentHTML('beforeend',
+      GRUPOS.map((g) => '<div class="mob-mais-grupo"><div class="nav-group-label">' + g.titulo + '</div>'
+        + g.abas.map(([tab, rotulo]) =>
+          '<button type="button" class="sheet-item-btn mob-mais-item" data-mais-tab="' + tab + '"><span>' + rotulo + '</span></button>').join('')
+        + '</div>').join(''));
+  }
+  document.addEventListener('DOMContentLoaded', () => setTimeout(montar, 300));
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-mais-tab]');
+    if (!b) return;
+    document.getElementById('mobileMoreSheet')?.classList.remove('open');
+    window.switchMobileMore ? window.switchMobileMore(b.dataset.maisTab) : window.switchTab(b.dataset.maisTab);
+  });
+  // botão do rodapé: fecha a gaveta ao escolher
+  const abrir = document.getElementById('btnMobileMore');
+  if (abrir) abrir.addEventListener('click', () => setTimeout(montar, 0));
+})();
+
+// ======================== INSTÂNCIAS · CONEXÕES/MOTOR · HISTÓRICO ========================
+(function abasDeChip() {
+  const $i = (id) => document.getElementById(id);
+  const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const hora = (d) => {
+    const t = d ? new Date(d) : null;
+    return t && !Number.isNaN(t.getTime()) ? t.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+  };
+
+  // ---------- cards de instância (lê os chips do estado que o painel já tem) ----------
+  function chips() {
+    const wa = state.waState || {};
+    const slots = wa.slots && typeof wa.slots === 'object' ? wa.slots : {};
+    const total = Number(wa.maxWaSlots || 1);
+    const lista = [];
+    for (let n = 1; n <= Math.max(total, Object.keys(slots).length); n += 1) {
+      const id = 'slot_' + n;
+      const s = slots[id] || {};
+      lista.push({
+        id,
+        numero: n,
+        nome: s.label || ('Chip ' + n),
+        status: s.status || 'disconnected',
+        phone: s.phone || '',
+        ia: s.aiEnabled !== false,
+        existe: Boolean(slots[id])
+      });
+    }
+    return { lista, conectados: Number(wa.connectedCount || 0), total };
+  }
+
+  function renderInstancias() {
+    const grade = $i('instCards');
+    if (!grade) return;
+    const { lista, conectados, total } = chips();
+    const resumo = $i('instResumo');
+    if (resumo) {
+      resumo.className = 'ready-pill ' + (conectados ? 'ok' : 'warn');
+      resumo.textContent = conectados + ' de ' + total + ' conectado' + (conectados === 1 ? '' : 's');
+    }
+    const aberto = document.getElementById('waSlotsTabBar')?.dataset?.ativo || state.selectedWaSlotId || 'slot_1';
+    grade.innerHTML = lista.map((c) => {
+      const on = c.status === 'connected';
+      const conectando = c.status === 'connecting' || c.status === 'qr';
+      // slot que ainda nao existe nao e "chip desconectado": e um lugar vago para parear
+      if (!c.existe && !on) {
+        return '<button type="button" class="inst-card inst-card-vago" data-inst="' + c.id + '" aria-pressed="false">'
+          + '<span class="inst-card-topo"><span class="inst-card-nome">Chip ' + c.numero + ' livre</span></span>'
+          + '<span class="inst-card-numero">Nenhum WhatsApp pareado neste espaço</span>'
+          + '<span class="inst-card-pe"><span class="inst-status vago">conectar</span><small>chip ' + c.numero + '</small></span>'
+          + '</button>';
+      }
+      return '<button type="button" class="inst-card ' + (on ? 'online ' : '') + (aberto === c.id ? 'selecionado' : '') + '"'
+        + ' data-inst="' + c.id + '" aria-pressed="' + (aberto === c.id) + '">'
+        + '<span class="inst-card-topo">'
+        + '<span class="inst-card-nome"><span class="inst-dot ' + (on ? 'online' : conectando ? 'connecting' : '') + '"></span><span>' + esc(c.nome) + '</span></span>'
+        + '<span class="inst-ia-selo ' + (c.ia ? 'on' : 'off') + '">' + (c.ia ? 'IA' : 'IA off') + '</span>'
+        + '</span>'
+        + '<span class="inst-card-numero">' + (c.phone ? esc(c.phone) : 'número não informado') + '</span>'
+        + '<span class="inst-card-pe">'
+        + '<span class="inst-status ' + (on ? 'on' : conectando ? 'wait' : 'off') + '">'
+        + (on ? 'conectado' : conectando ? 'aguardando QR' : 'desconectado') + '</span>'
+        + '<small>' + esc(c.id.replace('slot_', 'chip ')) + '</small></span>'
+        + '</button>';
+    }).join('');
+    if (!lista.length) grade.innerHTML = '<div class="inst-vazio">Nenhum chip configurado ainda. Use o bloco de conexão abaixo para gerar o QR Code.</div>';
+  }
+  window.renderInstancias = renderInstancias;
+
+  // clicar num card seleciona o chip no bloco de conexão original
+  document.addEventListener('click', (e) => {
+    const card = e.target.closest('.inst-card');
+    if (!card || !card.dataset.inst) return;
+    const barra = $i('waSlotsTabBar');
+    const alvo = barra?.querySelector('[data-slot="' + card.dataset.inst + '"]') || barra?.querySelector('[data-slotid="' + card.dataset.inst + '"]');
+    if (alvo) alvo.click();
+    else if (typeof window.selectWaSlot === 'function') window.selectWaSlot(card.dataset.inst);
+    setTimeout(renderInstancias, 120);
+  });
+
+  // ---------- Conexões / Motor ----------
+  function renderConexoes() {
+    const wa = state.waState || {};
+    const versaoSite = state.appVersion || '—';
+    const versaoMotor = wa.workerVersion || '';
+    const online = Boolean(wa.workerOnline);
+    const mesma = versaoMotor && versaoMotor === versaoSite;
+
+    const set = (id, txt) => { const el = $i(id); if (el) el.textContent = txt; };
+    set('motorVersaoSite', 'v' + versaoSite);
+    set('motorVersaoMotor', versaoMotor ? 'v' + versaoMotor : 'não informada');
+    set('motorVersaoMotorSub', online ? 'Rodando em ' + (wa.workerPlatform || 'seu dispositivo') : 'Motor não conectado agora');
+    const selo = $i('motorSituacaoSelo');
+    if (selo) {
+      selo.className = 'ready-pill ' + (online && mesma ? 'ok' : 'warn');
+      selo.textContent = !online ? 'offline' : mesma ? 'atualizado' : 'atualizar';
+    }
+    set('motorSituacaoSub', !online ? 'Nenhum motor conectado a esta conta'
+      : mesma ? 'Motor e site na mesma versão' : 'O site tem uma versão mais nova que o motor');
+
+    const barra = $i('motorStatusBar');
+    if (barra) {
+      const item = (est, txt) => '<span class="seg-status-item ' + est + '"><span class="seg-status-dot"></span>' + txt + '</span>';
+      barra.innerHTML = [
+        item(online ? 'ligado' : 'alerta', online ? 'Motor online' : 'Motor offline'),
+        item(mesma ? 'ligado' : 'desligado', mesma ? 'Versão em dia' : 'Versão diferente'),
+        item('', (wa.connectedCount || 0) + ' chip(s) no ar')
+      ].join('');
+    }
+
+    const box = $i('motorDispositivos');
+    if (box) {
+      const aparelhos = Array.isArray(wa.devices) ? wa.devices : [];
+      if (!aparelhos.length) {
+        box.innerHTML = '<div class="hist-vazio">Nenhum dispositivo reportando agora. O motor aparece aqui quando abre conexão.</div>';
+      } else {
+        box.innerHTML = aparelhos.map((d) => '<div class="motor-dispositivo">'
+          + '<span class="motor-dispositivo-txt"><strong>' + esc(d.deviceName || d.name || 'Aparelho') + '</strong>'
+          + '<small>' + esc(d.platform || d.appVersion ? (d.platform || '') + (d.appVersion ? ' · v' + d.appVersion : '') : 'sem detalhes') + '</small></span>'
+          + '<span class="ready-pill ' + (d.online ? 'ok' : 'warn') + '">' + (d.online ? 'online' : 'offline') + '</span>'
+          + '</div>').join('');
+      }
+    }
+  }
+  window.renderConexoes = renderConexoes;
+
+  // ---------- Histórico por instância ----------
+  const hist = { chip: '', busca: '', dias: 30, thread: null, threads: [] };
+
+  async function histCarregarChips() {
+    const sel = $i('histChip');
+    if (!sel) return;
+    const { lista } = chips();
+    const atual = sel.value;
+    sel.innerHTML = '<option value="">Todos os chips</option>' + lista.map((c) =>
+      '<option value="' + c.id + '">' + esc(c.nome) + (c.status === 'connected' ? ' · online' : '') + '</option>').join('');
+    sel.value = atual;
+  }
+
+  function dentroDoPeriodo(iso) {
+    if (!hist.dias) return true;
+    const t = new Date(iso).getTime();
+    return Number.isFinite(t) && Date.now() - t <= hist.dias * 86400000;
+  }
+
+  // Conversa manualmente escolhida nunca é trocada por um refresh em segundo plano.
+  // Só a primeira abertura (automática) cai na conversa mais recente.
+  let histFixo = null;
+
+  async function histCarregarConversas() {
+    const lista = $i('histThreads');
+    const contagem = $i('histContagem');
+    if (!lista) return;
+    lista.innerHTML = '<div class="hist-vazio">Carregando conversas...</div>';
+    const { lista: chipsLista } = chips();
+    const alvos = hist.chip ? chipsLista.filter((c) => c.id === hist.chip) : chipsLista.filter((c) => c.existe);
+    const achados = [];
+    let falhas = 0;
+    for (const c of alvos) {
+      try {
+        const r = await api('/api/conversations-v3/instances/' + encodeURIComponent(c.id) + '/threads?limit=50&visibility=all');
+        for (const t of (r.items || [])) {
+          achados.push({ ...t, _chip: c.nome, _chipId: c.id });
+        }
+      } catch (_) { falhas += 1; /* chip sem histórico ou sessão ainda não pronta */ }
+    }
+    const busca = hist.busca.trim().toLowerCase();
+    const filtrados = achados.filter((t) => {
+      const quando = t.lastMessageAt || t.updatedAt || t.createdAt;
+      if (quando && !dentroDoPeriodo(quando)) return false;
+      if (!busca) return true;
+      return [t.name, t.title, t.phone, t.contactName, t.lastMessage, t.preview]
+        .filter(Boolean).some((v) => String(v).toLowerCase().includes(busca));
+    }).sort((a, b) => String(b.lastMessageAt || '').localeCompare(String(a.lastMessageAt || '')));
+
+    // Se TODAS as leituras falharam, não é "vazio": é sessão ainda não pronta ou rede.
+    // Guarda o aviso e tenta de novo — nunca deixar o usuário achando que perdeu o histórico.
+    if (alvos.length && falhas === alvos.length) {
+      lista.innerHTML = '<div class="hist-vazio">Ainda não consegui ler o histórico agora. Tentando de novo...</div>';
+      if (!hist.tentativas) hist.tentativas = 0;
+      if (hist.tentativas < 3) {
+        hist.tentativas += 1;
+        setTimeout(() => histCarregarConversas(), 1200 * hist.tentativas);
+      } else {
+        lista.innerHTML = '<div class="hist-vazio">Não foi possível ler o histórico agora. '
+          + '<button type="button" class="btn btn-secondary btn-sm" onclick="window.renderHistorico()">Tentar de novo</button></div>';
+      }
+      return;
+    }
+    hist.tentativas = 0;
+    hist.threads = filtrados;
+    if (contagem) contagem.textContent = filtrados.length;
+    const resumo = $i('histResumo');
+    if (resumo) {
+      resumo.className = 'ready-pill';
+      resumo.textContent = filtrados.length + ' conversa' + (filtrados.length === 1 ? '' : 's') + ' · ' + (hist.dias ? hist.dias + ' dias' : 'tudo');
+    }
+    // Sem chips conhecidos ainda = o estado do painel não chegou. Tenta de novo em vez de
+    // dizer ao usuário que o histórico está vazio.
+    if (!alvos.length && !hist.tentativasChips) hist.tentativasChips = 0;
+    if (!alvos.length && hist.tentativasChips < 5) {
+      hist.tentativasChips += 1;
+      lista.innerHTML = '<div class="hist-vazio">Lendo os chips da conta...</div>';
+      setTimeout(() => histCarregarConversas(), 900);
+      return;
+    }
+    hist.tentativasChips = 0;
+    if (!filtrados.length) {
+      lista.innerHTML = '<div class="hist-vazio">Nenhuma conversa neste filtro. '
+        + (alvos.length ? 'Tente aumentar o período ou limpar a busca.' : 'Conecte um chip para começar a registrar.') + '</div>';
+      return;
+    }
+    lista.innerHTML = filtrados.map((t, i) => {
+      const nome = t.name || t.title || t.contactName || t.phone || 'Contato';
+      const previa = t.lastMessage || t.preview || '';
+      const quando = hora(t.lastMessageAt || t.updatedAt || t.createdAt);
+      return '<button type="button" class="hist-thread' + (i === 0 ? ' ativo' : '') + '" data-thread="' + i + '">'
+        + '<span class="hist-thread-linha"><strong>' + esc(nome) + '</strong><small>' + esc(quando) + '</small></span>'
+        + '<small>' + esc(t._chip) + (previa ? ' · ' + esc(String(previa).slice(0, 80)) : '') + '</small>'
+        + '</button>';
+    }).join('');
+    // os objetos são recriados a cada leitura: a escolha é lembrada por chave (chip + conversa)
+    const chave = (t) => String(t._chipId || '') + '|' + String(t.id || t.threadId || '');
+    const posicao = histFixo ? filtrados.findIndex((t) => chave(t) === histFixo) : 0;
+    histAbrirConversa(posicao >= 0 ? posicao : 0);
+  }
+
+  async function histAbrirConversa(indice) {
+    const t = hist.threads[indice];
+    const box = $i('histMensagens');
+    const titulo = $i('histTituloConversa');
+    const sub = $i('histSubConversa');
+    if (!box) return;
+    document.querySelectorAll('.hist-thread').forEach((b) => b.classList.toggle('ativo', Number(b.dataset.thread) === indice));
+    if (!t) { box.innerHTML = '<div class="hist-vazio">Escolha uma conversa à esquerda.</div>'; return; }
+    const nome = t.name || t.title || t.contactName || t.phone || 'Contato';
+    if (titulo) titulo.textContent = nome;
+    if (sub) sub.textContent = (t._chip || '') + (t.phone ? ' · ' + t.phone : '');
+    box.innerHTML = '<div class="hist-vazio">Carregando mensagens...</div>';
+    try {
+      const r = await api('/api/conversations-v3/instances/' + encodeURIComponent(t._chipId || hist.chip || 'slot_1')
+        + '/threads/' + encodeURIComponent(t.id || t.threadId) + '/messages?limit=100');
+      const msgs = r.items || r.messages || [];
+      if (!msgs.length) { box.innerHTML = '<div class="hist-vazio">Nenhuma mensagem registrada nesta conversa.</div>'; return; }
+      box.innerHTML = msgs.map((m) => {
+        const meu = m.fromMe === true || m.direction === 'out' || m.sender === 'agent';
+        const txt = m.text || m.body || m.content || (m.type && m.type !== 'text' ? '[' + m.type + ']' : '');
+        return '<div class="hist-msg ' + (meu ? 'eu' : '') + '">'
+          + '<span class="hist-msg-txt">' + esc(txt) + '</span>'
+          + '<span class="hist-msg-hora">' + (meu ? 'enviado' : 'recebido') + (hora(m.timestamp || m.createdAt) ? ' · ' + esc(hora(m.timestamp || m.createdAt)) : '') + '</span>'
+          + '</div>';
+      }).join('');
+    } catch (err) {
+      box.innerHTML = '<div class="hist-vazio">Não foi possível ler esta conversa agora.</div>';
+    }
+  }
+
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('.hist-thread');
+    if (b && b.dataset.thread !== undefined) {
+      const i = Number(b.dataset.thread);
+      const escolhida = hist.threads[i];
+      histFixo = escolhida ? String(escolhida._chipId || '') + '|' + String(escolhida.id || escolhida.threadId || '') : null;
+      histAbrirConversa(i);
+    }
+  });
+  document.addEventListener('change', (e) => {
+    if (e.target.id === 'histChip') { hist.chip = e.target.value; histCarregarConversas(); }
+    if (e.target.id === 'histQuando') { hist.dias = Number(e.target.value) || 0; histCarregarConversas(); }
+  });
+  document.addEventListener('input', (e) => { if (e.target.id === 'histBusca') hist.busca = e.target.value; });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.target.id === 'histBusca') { e.preventDefault(); histCarregarConversas(); }
+  });
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#btnHistBuscar')) histCarregarConversas();
+  });
+
+  function histPronto() { return Array.isArray(hist.threads) && hist.threads.length > 0; }
+  window.__histPronto = histPronto;
+
+  async function renderHistorico() {
+    await histCarregarChips();
+    await histCarregarConversas();
+  }
+  window.renderHistorico = renderHistorico;
+
+  // ---------- ciclo de render ----------
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => { try { renderInstancias(); renderConexoes(); } catch (_) {} }, 500);
+  });
+  const switchAntes = window.switchTab;
+  if (typeof switchAntes === 'function') {
+    window.switchTab = function switchTabComChips(id) {
+      const r = switchAntes.apply(this, arguments);
+      if (id === 'instancias') setTimeout(renderInstancias, 80);
+      if (id === 'conexoes') setTimeout(renderConexoes, 80);
+      if (id === 'historico') setTimeout(() => { window.renderHistorico(); }, 80);
+      return r;
+    };
+  }
+})();
 
 // ======================== SEGURANÇA (sub-abas) + CONFIGURAÇÕES ========================
 (function segurancaEConfiguracoes() {
@@ -2106,7 +2461,9 @@ function renderWaState() {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
           ${escapeHtml(activeSlot.label)} conectado
         </div>
-        <div class="stage-phone">Número: <strong>${escapeHtml(activeSlot.connectedUser?.name || 'WhatsApp')}</strong> (+${escapeHtml(phone)})</div>
+        ${phone
+          ? `<div class="stage-phone">Número: <strong>${escapeHtml(activeSlot.connectedUser?.name || 'WhatsApp')}</strong> (+${escapeHtml(phone)})</div>`
+          : '<div class="stage-phone">Conectado — o número ainda não foi informado pelo motor.</div>'}
         ${activeSlot.deviceName ? `<div class="stage-device">Rodando em: <strong>${escapeHtml(activeSlot.deviceName)}</strong></div>` : ''}
         <div class="stage-note">
           ${activeSlot.slotId === 'slot_1'
@@ -2736,7 +3093,8 @@ function renderProfileSelectors() {
   const active = getActiveProfile();
   const sidebarEl = document.getElementById('sidebarActiveProfileName');
   if (sidebarEl) {
-    sidebarEl.textContent = active ? `${active.name}` : 'Treinamento Ativo';
+    // sem treinamento aplicado o rótulo é o genérico — nunca deixar "Carregando..." na tela
+    sidebarEl.textContent = active ? `${active.name}` : 'Treinamento padrão';
   }
 
   const tplGrid = document.getElementById('templatesGrid');
@@ -9788,7 +10146,7 @@ initSaasCommercialGrowthHub();
 // (definido no HTML da página); o hash (#crm, #treinamento...) tem prioridade quando existe,
 // para não quebrar links antigos. Nenhuma aba é aberta "por acidente": sem página e sem
 // hash, fica a que já está marcada como ativa no HTML.
-const TABS_VALIDAS = ['dashboard', 'simulador', 'treinamento', 'audios', 'catalogo', 'ia', 'seguranca', 'crm', 'contas', 'campanhas', 'configuracoes'];
+const TABS_VALIDAS = ['dashboard', 'simulador', 'treinamento', 'audios', 'catalogo', 'ia', 'seguranca', 'crm', 'contas', 'campanhas', 'configuracoes', 'instancias', 'conexoes', 'historico'];
 const initialHash = (window.location.hash || '').replace('#', '');
 const paginaInicial = typeof window.IENVIA_PAGINA === 'string' ? window.IENVIA_PAGINA : '';
 if (TABS_VALIDAS.includes(initialHash)) {

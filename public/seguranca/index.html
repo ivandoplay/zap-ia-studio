@@ -99,16 +99,13 @@
     </div>
 
     <nav class="nav-menu">
-      <a href="/visao-geral/" class="nav-btn" aria-label="Abrir a visão geral do painel"><span class="nav-btn-left"><span>Visão geral ↗</span></span></a>
       <div class="nav-group-label">Operação</div>
-
       <button type="button" class="nav-btn active" data-tab="dashboard" data-rota="visao-geral" onclick="location.href='/visao-geral/'" title="Visão geral, status da conexão WhatsApp e disparar abordagens" aria-label="Dashboard, painel principal">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>
-          <span>Início &amp; Conexão</span>
+          <span>Visão geral</span>
         </span>
       </button>
-
       <button type="button" class="nav-btn" data-tab="crm" data-rota="conversas" onclick="location.href='/conversas/'" title="Conversas do WhatsApp, CRM e caixa de entrada 360º" aria-label="Conversas, CRM">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
@@ -119,20 +116,34 @@
           <span id="navCrmBadge" class="badge-count u-none" >0</span>
         </span>
       </button>
-
+      <button type="button" class="nav-btn" data-tab="historico" data-rota="historico" onclick="location.href='/historico/'" aria-label="Histórico por instância">
+        <span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg><span>Histórico por instância</span></span>
+      </button>
       <button type="button" class="nav-btn" data-tab="campanhas" data-rota="campanhas" onclick="location.href='/campanhas/'" title="Disparar campanhas de mensagens em lote para múltiplos contatos" aria-label="Campanhas">
         <span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l18-7-4 16-5-6-5 3 1-5z"></path></svg><span>Campanhas</span></span>
       </button>
 
-      <div class="nav-group-label">Atendente</div>
+      <div class="nav-group-label">Conexão</div>
+      <button type="button" class="nav-btn" data-tab="instancias" data-rota="instancias" onclick="location.href='/instancias/'" aria-label="Instâncias de WhatsApp">
+        <span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path></svg><span>Instâncias</span></span>
+      </button>
+      <button type="button" class="nav-btn" data-tab="conexoes" data-rota="conexoes" onclick="location.href='/conexoes/'" aria-label="Conexões e motor">
+        <span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg><span>Conexões / Motor</span></span>
+      </button>
 
+      <div class="nav-group-label">Atendente</div>
       <button type="button" class="nav-btn" data-tab="treinamento" data-rota="treinamento" onclick="location.href='/treinamento/'" title="Treinar o atendente: resumo do negócio, regras, FAQ e mensagens aprovadas" aria-label="Treinamento">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
           <span>Treinamento</span>
         </span>
       </button>
-
+      <button type="button" class="nav-btn" data-tab="catalogo" data-rota="catalogo" onclick="location.href='/catalogo/'" title="Catálogo de produtos, mídias e chave PIX" aria-label="Catálogo">
+        <span class="nav-btn-left">
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+          <span>Catálogo &amp; PIX</span>
+        </span>
+      </button>
       <button type="button" class="nav-btn" data-tab="audios" data-rota="audios" onclick="location.href='/audios/'" title="Gravar e organizar notas de voz humanas (áudios OGG/Opus)" aria-label="Áudios">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
@@ -140,23 +151,12 @@
         </span>
         <span id="navVoiceBadge" class="badge-count u-badge-suave" >0</span>
       </button>
-
-      <button type="button" class="nav-btn" data-tab="catalogo" data-rota="catalogo" onclick="location.href='/catalogo/'" title="Catálogo de produtos, mídias e chave PIX" aria-label="Catálogo">
-        <span class="nav-btn-left">
-          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
-          <span>Catálogo &amp; PIX</span>
-        </span>
-      </button>
-
       <button type="button" class="nav-btn" data-tab="simulador" data-rota="simulador" onclick="location.href='/simulador/'" title="Testar respostas da IA antes de ir ao vivo" aria-label="Simulador">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2v5Z"></path><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"></path></svg>
           <span>Simulador</span>
         </span>
       </button>
-
-      <div class="nav-group-label">Ajustes</div>
-
       <button type="button" class="nav-btn" data-tab="ia" data-rota="inteligencia-artificial" onclick="location.href='/inteligencia-artificial/'" title="Configurar o motor de IA: chaves do Gemini e OpenRouter, modelos e fallback" aria-label="Motor de IA">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2v4"></path><path d="m16.2 7.8 2.9-2.9"></path><path d="M18 12h4"></path><path d="m16.2 16.2 2.9 2.9"></path><path d="M12 18v4"></path><path d="m4.9 19.1 2.9-2.9"></path><path d="M2 12h4"></path><path d="m4.9 4.9 2.9 2.9"></path><circle cx="12" cy="12" r="4"></circle></svg>
@@ -164,13 +164,16 @@
         </span>
       </button>
 
+      <div class="nav-group-label">Sistema</div>
       <button type="button" class="nav-btn" data-tab="seguranca" data-rota="seguranca" onclick="location.href='/seguranca/'" aria-current="page" title="Anti-ban, fila segura de abordagem, PIN e proteções" aria-label="Segurança">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-          <span>Segurança &amp; Anti-Ban</span>
+          <span>Segurança</span>
         </span>
       </button>
-
+      <button type="button" class="nav-btn" data-tab="configuracoes" data-rota="configuracoes" onclick="location.href='/configuracoes/'" aria-label="Configurações">
+        <span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"></path></svg><span>Configurações</span></span>
+      </button>
       <div id="navMasterGroupLabel" class="nav-group-label u-none" >Plataforma</div>
 
       <button type="button" id="navMasterUsersBtn" class="nav-btn u-none" data-tab="contas" data-rota="contas" onclick="location.href='/contas/'" >
@@ -184,7 +187,7 @@
     <div class="sidebar-footer">
       <div class="active-profile-box">
         <div class="active-profile-label">Workspace Ativo</div>
-        <div id="sidebarActiveProfileName" class="active-profile-name">Carregando...</div>
+        <div id="sidebarActiveProfileName" class="active-profile-name">Treinamento padrão</div>
       </div>
     </div>
   </aside>
@@ -466,23 +469,7 @@
                       </button>
                     </div>
                   </div>
-      <div class="panel" id="motorDownloadPanel">
-                    <div class="panel-header">
-                      <div>
-                        <h2 class="panel-title">Motor WhatsApp Oficial</h2>
-                        <p class="panel-desc u-mb-0 u-mt-2">Windows, Linux &amp; Termux — versão instalada e atualização.</p>
-                      </div>
-                      <span id="dashMotorVersionBadge" class="tag">—</span>
-                    </div>
-                    <div id="dashMotorVersionStatus" class="motor-status-banner">Verificando versão do motor...</div>
-                    <div class="u-acoes u-gap-8">
-                      <button type="button" id="btnDashDownloadMotor" class="btn btn-primary u-flex-1" onclick="downloadLatestMotorZip()">
-                        <svg class="icon-svg u-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                        <span id="btnDashDownloadMotorLabel">Baixar Motor (.ZIP)</span>
-                      </button>
-                      <button type="button" class="btn btn-secondary" onclick="switchTab('simulador')">Testar</button>
-                    </div>
-                  </div>
+      
           </div>
           <div class="visao-col visao-col--direita">
       <div class="panel visao-controle">
@@ -552,71 +539,13 @@
                   </div>
                 </div>
       <div class="panel visao-atividade">
-                    <div class="panel-header">
-                      <h2 class="panel-title">Ao vivo</h2>
-                      <span class="tag" id="activeEngineBadge">Gemini</span>
-                    </div>
+                    
                     <p class="panel-desc u-mb-0 u-mt-2">Tudo o que o atendente faz, na hora.</p>
                     <div id="logsContainer" class="log-list u-logs visao-log"></div>
                   </div>
                 </div>
         </div>
-        <div class="panel conn-panel visao-conexao">
-                    <div class="panel-header">
-                      <div>
-                        <h2 class="panel-title">Conexão</h2>
-                        <p class="panel-desc u-mb-0 u-mt-2">Chips, QR e código de pareamento.</p>
-                      </div>
-                      <div class="conn-actions">
-                        <button type="button" id="btnConnectQr" class="btn btn-primary btn-sm">
-                          <svg class="icon-svg u-icon-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3"/><path d="M21 14v.01"/><path d="M14 21h.01"/><path d="M17 17h4v4"/></svg>
-                          <span>QR Code</span>
-                        </button>
-                        <button type="button" id="btnDisconnectWa" class="btn btn-danger btn-sm u-none">Desconectar</button>
-                      </div>
-                    </div>
-
-                    <div id="waSlotsTabBar" class="slot-selector" role="tablist" aria-label="Chips de WhatsApp da conta"></div>
-
-                    <div id="waSlotConfigStrip" class="config-bar">
-                      <div class="config-row">
-                        <div class="nick-wrap">
-                          <input type="text" id="waSlotLabelInput" maxlength="42" placeholder="Apelido do Chip (ex: Comercial)" aria-label="Apelido identificador deste Chip" />
-                          <button type="button" id="btnSaveWaSlotLabel" class="btn btn-secondary btn-sm" onclick="saveCurrentWaSlotConfig()">Salvar</button>
-                        </div>
-                        <div class="mode-control">
-                          <button type="button" id="btnModeCloud" class="mode-btn" onclick="setWizMode('cloud')" aria-label="Mode nuvem">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17.5 19a4.5 4.5 0 1 0 0-9 6 6 0 0 0-11.6-1.5A4 4 0 0 0 6 19z"/></svg>
-                            <span>Nuvem</span>
-                          </button>
-                          <button type="button" id="btnModeLocal" class="mode-btn" onclick="setWizMode('local')" aria-label="Mode local">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 22h8"/></svg>
-                            <span>Local</span>
-                          </button>
-                        </div>
-                      </div>
-                      <label class="ai-toggle" title="Ativar ou pausar respostas automáticas da IA apenas neste Chip (mantendo o Cérebro Único)">
-                        <input type="checkbox" id="waSlotAiEnabledCheck" checked onchange="saveCurrentWaSlotConfig(true)" />
-                        <span class="toggle-track"><span class="toggle-thumb"></span></span>
-                        <span id="waSlotAiEnabledText">IA Ativa neste Chip</span>
-                      </label>
-                    </div>
-
-                    <div id="qrStage" class="status-stage">
-                      <div class="stage-default">
-                        <p>Clique em <strong>Gerar QR Code</strong> acima ou conecte por código numérico abaixo.</p>
-                      </div>
-                    </div>
-                    <div class="pairing-section">
-                      <label class="form-label" for="pairingPhoneInput">Conectar sem câmera (Código de 8 dígitos)</label>
-                      <div class="pairing-input-row">
-                        <input type="text" id="pairingPhoneInput" placeholder="Ex: 5586999998888 (com 55 + DDD)" inputmode="tel" autocomplete="tel" />
-                        <button type="button" id="btnConnectCode" class="btn btn-secondary">Gerar Código</button>
-                      </div>
-                      <div class="form-hint">Digite apenas números com código do país (55) e DDD.</div>
-                    </div>
-                    <div id="waOnlineDevicesBox" class="devices-box u-none"></div>
-                  </div>
+        
       </section>
 <section id="tab-simulador" class="tab-pane" hidden>
         <div class="page-header">
@@ -1372,6 +1301,212 @@
 
                       <div id="ignoredContactsList" class="log-list u-max-alto-200"></div>
                     </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== INSTÂNCIAS (chips de WhatsApp) ==================== -->
+      <section id="tab-instancias" class="tab-pane" hidden>
+        <div class="page-head">
+          <div>
+            <h1 class="page-title">Instâncias</h1>
+            <p class="page-subtitle">Conecte, apelide e ligue/desligue a IA de cada chip — um por vez, sem mexer no outro.</p>
+          </div>
+          <div class="u-acoes-8">
+            <span id="instResumo" class="ready-pill">—</span>
+            <button type="button" class="btn btn-secondary" onclick="switchTab('conexoes')">Motor &amp; atualização</button>
+          </div>
+        </div>
+
+        <div id="instCards" class="inst-grade"></div>
+
+        <div class="panel conn-panel visao-conexao">
+                            <div class="panel-header">
+                              <div>
+                                <h2 class="panel-title">Conexão</h2>
+                                <p class="panel-desc u-mb-0 u-mt-2">Chips, QR e código de pareamento.</p>
+                              </div>
+                              <div class="conn-actions">
+                                <button type="button" id="btnConnectQr" class="btn btn-primary btn-sm">
+                                  <svg class="icon-svg u-icon-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3"/><path d="M21 14v.01"/><path d="M14 21h.01"/><path d="M17 17h4v4"/></svg>
+                                  <span>QR Code</span>
+                                </button>
+                                <button type="button" id="btnDisconnectWa" class="btn btn-danger btn-sm u-none">Desconectar</button>
+                              </div>
+                            </div>
+
+                            <div id="waSlotsTabBar" class="slot-selector" role="tablist" aria-label="Chips de WhatsApp da conta"></div>
+
+                            <div id="waSlotConfigStrip" class="config-bar">
+                              <div class="config-row">
+                                <div class="nick-wrap">
+                                  <input type="text" id="waSlotLabelInput" maxlength="42" placeholder="Apelido do Chip (ex: Comercial)" aria-label="Apelido identificador deste Chip" />
+                                  <button type="button" id="btnSaveWaSlotLabel" class="btn btn-secondary btn-sm" onclick="saveCurrentWaSlotConfig()">Salvar</button>
+                                </div>
+                                <div class="mode-control">
+                                  <button type="button" id="btnModeCloud" class="mode-btn" onclick="setWizMode('cloud')" aria-label="Mode nuvem">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17.5 19a4.5 4.5 0 1 0 0-9 6 6 0 0 0-11.6-1.5A4 4 0 0 0 6 19z"/></svg>
+                                    <span>Nuvem</span>
+                                  </button>
+                                  <button type="button" id="btnModeLocal" class="mode-btn" onclick="setWizMode('local')" aria-label="Mode local">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 22h8"/></svg>
+                                    <span>Local</span>
+                                  </button>
+                                </div>
+                              </div>
+                              <label class="ai-toggle" title="Ativar ou pausar respostas automáticas da IA apenas neste Chip (mantendo o Cérebro Único)">
+                                <input type="checkbox" id="waSlotAiEnabledCheck" checked onchange="saveCurrentWaSlotConfig(true)" />
+                                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+                                <span id="waSlotAiEnabledText">IA Ativa neste Chip</span>
+                              </label>
+                            </div>
+
+                            <div id="qrStage" class="status-stage">
+                              <div class="stage-default">
+                                <p>Clique em <strong>Gerar QR Code</strong> acima ou conecte por código numérico abaixo.</p>
+                              </div>
+                            </div>
+                            <div class="pairing-section">
+                              <label class="form-label" for="pairingPhoneInput">Conectar sem câmera (Código de 8 dígitos)</label>
+                              <div class="pairing-input-row">
+                                <input type="text" id="pairingPhoneInput" placeholder="Ex: 5586999998888 (com 55 + DDD)" inputmode="tel" autocomplete="tel" />
+                                <button type="button" id="btnConnectCode" class="btn btn-secondary">Gerar Código</button>
+                              </div>
+                              <div class="form-hint">Digite apenas números com código do país (55) e DDD.</div>
+                            </div>
+                            <div id="waOnlineDevicesBox" class="devices-box u-none"></div>
+                          </div>
+      </section>
+
+      <!-- ==================== CONEXÕES / MOTOR ==================== -->
+      <section id="tab-conexoes" class="tab-pane" hidden>
+        <div class="page-head">
+          <div>
+            <h1 class="page-title">Conexões / Motor</h1>
+            <p class="page-subtitle">O motor que mantém os chips no ar, a versão instalada e o pacote de atualização.</p>
+          </div>
+          <button type="button" class="btn btn-secondary" onclick="switchTab('instancias')">Ver instâncias</button>
+        </div>
+
+        <div id="motorStatusBar" class="seg-status"></div>
+
+        <div class="conf-grade">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Versão &amp; Atualização</h2>
+                <p class="panel-desc u-mb-0 u-mt-2">Compara o que está rodando com o que está publicado.</p>
+              </div>
+            </div>
+            <div class="conf-linhas">
+              <div class="conf-linha">
+                <div class="conf-linha-txt">
+                  <strong>Versão publicada</strong>
+                  <small>Pacote disponível para download</small>
+                </div>
+                <span id="motorVersaoSite" class="tag">—</span>
+              </div>
+              <div class="conf-linha">
+                <div class="conf-linha-txt">
+                  <strong>Versão rodando</strong>
+                  <small id="motorVersaoMotorSub">Motor instalado no seu dispositivo</small>
+                </div>
+                <span id="motorVersaoMotor" class="tag">—</span>
+              </div>
+              <div class="conf-linha">
+                <div class="conf-linha-txt">
+                  <strong>Situação</strong>
+                  <small id="motorSituacaoSub">Conferindo...</small>
+                </div>
+                <span id="motorSituacaoSelo" class="ready-pill warn">—</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Dispositivos conectados</h2>
+                <p class="panel-desc u-mb-0 u-mt-2">Aparelhos rodando o motor nesta conta.</p>
+              </div>
+            </div>
+            <div id="motorDispositivos" class="motor-dispositivos"></div>
+          </div>
+
+          <div class="panel" id="motorDownloadPanel">
+                            <div class="panel-header">
+                              <div>
+                                <h2 class="panel-title">Motor WhatsApp Oficial</h2>
+                                <p class="panel-desc u-mb-0 u-mt-2">Windows, Linux ou Android Termux — o comando de abertura está no fim do cartão.</p>
+                              </div>
+                              <span class="tag u-tabular" id="dashMotorVersionBadge">v5.8.28</span>
+                            </div>
+                            <div id="dashMotorVersionStatus" class="motor-status-banner">Pacote portátil: já vem com o Node embutido, não precisa instalar nada.</div>
+                            <div class="u-acoes u-gap-8">
+                              <button type="button" id="btnDashDownloadMotor" class="btn btn-primary u-flex-1" onclick="downloadLatestMotorZip()">
+                                <svg class="icon-svg u-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                <span id="btnDashDownloadMotorLabel">Baixar Pacote Oficial (.ZIP)</span>
+                              </button>
+                            </div>
+                            <details class="u-detalhes">
+                              <summary>Como abrir em cada sistema (Windows / Linux / Android Termux)</summary>
+                              <div class="u-detalhes-corpo">
+                                <div><strong>Windows 10/11 (Portátil):</strong> extraia o <code>.ZIP</code> e dê 2 cliques em <code>INICIAR_NO_WINDOWS.bat</code> (prepara o Node v22 portátil sozinho na 1ª vez).</div>
+                                <div><strong>Linux (Desktop ou VPS SSH):</strong><br/><code class="u-comando">unzip -o Ienvia-v*.zip -d ~ &amp;&amp; cd ~/Ienvia &amp;&amp; bash INICIAR_NO_LINUX.sh</code></div>
+                                <div><strong>Android Termux (24h):</strong><br/><code class="u-comando">unzip -o ~/storage/downloads/Ienvia-v*.zip -d ~ &amp;&amp; cd ~/Ienvia &amp;&amp; bash INICIAR_NO_TERMUX.sh</code></div>
+                              </div>
+                            </details>
+                          </div>
+        </div>
+      </section>
+
+      <!-- ==================== HISTÓRICO POR INSTÂNCIA ==================== -->
+      <section id="tab-historico" class="tab-pane" hidden>
+        <div class="page-head">
+          <div>
+            <h1 class="page-title">Histórico por instância</h1>
+            <p class="page-subtitle">O arquivo de tudo o que passou por cada chip. Somente leitura.</p>
+          </div>
+          <span id="histResumo" class="ready-pill">—</span>
+        </div>
+
+        <div class="hist-filtros">
+          <div class="form-group u-mb-0">
+            <label class="form-label" for="histChip">Chip</label>
+            <select id="histChip"><option value="">Todos os chips</option></select>
+          </div>
+          <div class="form-group u-mb-0">
+            <label class="form-label" for="histBusca">Buscar contato ou mensagem</label>
+            <input type="text" id="histBusca" placeholder="Nome, telefone ou texto..." />
+          </div>
+          <div class="form-group u-mb-0">
+            <label class="form-label" for="histQuando">Período</label>
+            <select id="histQuando">
+              <option value="7">Últimos 7 dias</option>
+              <option value="30" selected>Últimos 30 dias</option>
+              <option value="90">Últimos 90 dias</option>
+              <option value="0">Tudo</option>
+            </select>
+          </div>
+          <button type="button" id="btnHistBuscar" class="btn btn-primary">Buscar</button>
+        </div>
+
+        <div class="hist-grade">
+          <div class="panel">
+            <div class="panel-header">
+              <h2 class="panel-title">Conversas</h2>
+              <span id="histContagem" class="tag">0</span>
+            </div>
+            <div id="histThreads" class="log-list hist-lista"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title" id="histTituloConversa">Mensagens</h2>
+                <p class="panel-desc u-mb-0 u-mt-2" id="histSubConversa">Escolha uma conversa à esquerda.</p>
+              </div>
+            </div>
+            <div id="histMensagens" class="log-list hist-mensagens"></div>
           </div>
         </div>
       </section>
@@ -2296,9 +2431,9 @@
       <span>Clientes</span>
     </button>
 
-    <button type="button" id="mobClientAccountBtn" class="mob-nav-btn" onclick="openAccountSheet()" aria-label="Abrir conta, perfil e configurações">
-      <svg class="icon-svg" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-      <span>Conta</span>
+    <button type="button" id="btnMobileMore" class="mob-nav-btn" onclick="openMobileMore()" aria-label="Todas as abas do painel">
+      <svg class="icon-svg" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"></circle><circle cx="12" cy="12" r="1.8"></circle><circle cx="19" cy="12" r="1.8"></circle></svg>
+      <span>Mais</span>
     </button>
   </nav>
 
@@ -2476,7 +2611,14 @@
   </div>
 
   <!-- GAVETA LEGADA (COMPATIBILIDADE) -->
-  <div id="mobileMoreSheet" class="mobile-more-sheet" aria-hidden="true"></div>
+  <div id="mobileMoreSheet" class="action-sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="mobileMoreTitle" aria-hidden="true">
+    <div class="action-sheet-card">
+      <div class="mob-mais-topo">
+        <strong id="mobileMoreTitle">Todas as abas</strong>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('mobileMoreSheet')">Fechar</button>
+      </div>
+    </div>
+  </div>
 
   <!-- MODAL: PERSONALIZAR MARCA / NOME DO SISTEMA (WHITE-LABEL) -->
   <div id="brandModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="brandModalTitle">

@@ -20,6 +20,9 @@ const MESTRE = path.join(RAIZ, 'public', 'painel.html');
 export const PAGINAS = [
   { tab: 'dashboard', rota: 'visao-geral', titulo: 'Visão geral' },
   { tab: 'crm', rota: 'conversas', titulo: 'Atendimento e CRM' },
+  { tab: 'historico', rota: 'historico', titulo: 'Histórico por instância' },
+  { tab: 'instancias', rota: 'instancias', titulo: 'Instâncias' },
+  { tab: 'conexoes', rota: 'conexoes', titulo: 'Conexões e motor' },
   { tab: 'campanhas', rota: 'campanhas', titulo: 'Campanhas' },
   { tab: 'treinamento', rota: 'treinamento', titulo: 'Treinamento' },
   { tab: 'catalogo', rota: 'catalogo', titulo: 'Catálogo' },

@@ -1463,7 +1463,33 @@ app.get('/api/crm/contact-directory', async (req, res) => {
       registrarTelefone(slotId, contact.phone, contact.chatId);
     }
 
-    const all = [...contactsById.values()].filter((contact) => {
+    // Passada final: a MESMA pessoa pode ter entrado por dois ids (o LID e o número).
+    // Fica a linha do número — é o JID para onde a mensagem realmente vai; a LID é alias.
+    // Sem isso a agenda mostrava a mesma pessoa duas vezes (30 casos medidos no Chip 1).
+    const porTelefone = new Map();
+    for (const contact of contactsById.values()) {
+      const slot = contact.slotId || 'slot_1';
+      const fone = isLikelyRealPhone(contact.phone) ? normalizePhoneDigits(contact.phone) : '';
+      if (!fone) continue;
+      const chave = `${slot}|${fone}`;
+      const atual = porTelefone.get(chave);
+      if (!atual) { porTelefone.set(chave, contact); continue; }
+      const atualEhLid = /@lid$/i.test(String(atual.chatId));
+      const novoEhLid = /@lid$/i.test(String(contact.chatId));
+      if (atualEhLid && !novoEhLid) {
+        duplicateIds += 1;
+        porTelefone.set(chave, { ...contact, name: contact.name || atual.name, avatarUrl: contact.avatarUrl || atual.avatarUrl });
+      } else {
+        duplicateIds += 1;
+      }
+    }
+    const escolhidos = new Set(porTelefone.values());
+    for (const contact of contactsById.values()) {
+      const fone = isLikelyRealPhone(contact.phone) ? normalizePhoneDigits(contact.phone) : '';
+      if (!fone) escolhidos.add(contact);
+    }
+
+    const all = [...escolhidos].filter((contact) => {
       if (!query) return true;
       const haystack = [contact.name, contact.phone, contact.company, contact.city, contact.email, contact.notes, contact.chatId]
         .filter(Boolean).join(' ').toLocaleLowerCase('pt-BR');

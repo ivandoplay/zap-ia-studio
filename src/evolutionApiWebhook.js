@@ -6,6 +6,7 @@ import { getAdminClient } from './supabaseCloud.js';
 import { buildContactChannelKey } from './storage.js';
 import { trueNowIso } from './trueClock.js';
 import { requireEvolutionMessageId } from './evolutionApiResponse.js';
+import { createDraftSecrets } from './draftSecrets.js';
 import { evolutionInstanceIdentity, evolutionBoolean, evolutionTimestamp, evolutionAck, unwrapEvolutionMessage } from './evolutionIdentity.js';
 import { pedidoExplicitoParada } from './campanhaResposta.js';
 
@@ -32,6 +33,51 @@ export function createEvolutionWebhookRouter({ env = process.env, adminClient = 
 
 // Versão ATIVA das regras de Segurança (a que o dono ativou no painel novo).
 // Lida do workspace da conta; documento de rascunho sem `active` é ignorado.
+// Chaves de IA do painel novo. O dono salva a chave na aba IA (cofre cifrado); o atendimento
+// precisa LER essa mesma chave, senão a aba não governa nada. Sem cofre, cai nas chaves vivas.
+let secretsVault = null;
+function vault() {
+  if (secretsVault) return secretsVault;
+  try { secretsVault = createDraftSecrets(); } catch { secretsVault = null; }
+  return secretsVault;
+}
+async function aiSettingsDraft(userId) {
+  try {
+    const { data, error } = await adminClient().from('ienvia_workspace_drafts')
+      .select('document').eq('owner_id', userId).eq('namespace', 'ai').maybeSingle();
+    const doc = data?.document;
+    if (error || !doc || doc.active !== true) return null;
+    return doc;
+  } catch { return null; }
+}
+// Aplica a IA ativa SOBRE as settings vivas. A chave aberta nunca é registrada em log.
+function applyActiveAi(live, doc, userId) {
+  const out = { ...live };
+  const settingsAi = doc.settings?.ai;
+  if (settingsAi && typeof settingsAi === 'object') {
+    const merged = { ...(live.ai || {}), ...settingsAi };
+    // Chaves vivas continuam valendo para campos que o rascunho não trata.
+    const creds = doc.credentials || {};
+    for (const field of ['gemini', 'openrouter']) {
+      const entry = creds[field];
+      if (!entry || entry.action === 'inherit') continue;
+      const keyField = field === 'gemini' ? 'geminiApiKey' : `${field}ApiKey`;
+      if (entry.action === 'clear') { merged[keyField] = ''; continue; }
+      const v = vault();
+      if (!v || entry.action !== 'replace') continue;
+      try {
+        const opened = v.vault.open(field, entry.envelope, userId);
+        // `pool` aceita várias chaves (uma por linha); as demais são uma só.
+        const value = typeof opened === 'string' ? opened : String(opened?.value || '');
+        if (field === 'gemini' && entry.count > 1) merged.geminiKeyPool = value;
+        merged[keyField] = value.split('\n')[0];
+      } catch { /* cofre indisponível: mantém a chave viva, nunca quebra o atendimento */ }
+    }
+    out.ai = merged;
+  }
+  if (typeof doc.settings?.botEnabled === 'boolean') out.botEnabled = doc.settings.botEnabled;
+  return out;
+}
 async function activeSecuritySettings(userId) {
   try {
     const { data, error } = await adminClient().from('ienvia_workspace_drafts')
@@ -67,7 +113,9 @@ function applyActiveSecurity(live, active) {
     // Aqui a versão ativa é aplicada SOBRE as settings vivas; sem ativação, nada muda.
     const live = w.data.settings || {};
     const security = await activeSecuritySettings(identity.userId);
-    const merged = security ? applyActiveSecurity(live, security) : live;
+    const aiDoc = await aiSettingsDraft(identity.userId);
+    let merged = security ? applyActiveSecurity(live, security) : live;
+    if (aiDoc) merged = applyActiveAi(merged, aiDoc, identity.userId);
     return { settings: merged, profile: w.data.business || {}, slotEnabled: slot.data?.ai_enabled !== false && merged?.waSlots?.[identity.slotId]?.aiEnabled !== false };
   }
   async function merge(identity, chatId, messages = [], { name = '', event = '', ackId = '', ack = 0, patch = {} } = {}) {

@@ -216,21 +216,38 @@ app.get(['/visao-geral', '/visao-geral/'], (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(ROOT_DIR, 'public', 'v2', 'index.html'));
 });
-app.get(['/contas','/contas/'],(_q,r)=>{r.setHeader('Cache-Control','no-store, private');r.sendFile(path.join(ROOT_DIR,'public/v2/accounts.html'));});
-app.get(['/configuracoes','/configuracoes/'],(_q,r)=>{r.setHeader('Cache-Control','no-store, private');r.sendFile(path.join(ROOT_DIR,'public/v2/security-settings.html'));});
-app.get(['/inteligencia-artificial','/inteligencia-artificial/'],(_q,r)=>{r.setHeader('Cache-Control','no-store, private');r.sendFile(path.join(ROOT_DIR,'public/v2/ai-settings.html'));});
-app.get(['/simulador','/simulador/'],(_q,r)=>{r.setHeader('Cache-Control','no-store, private');r.sendFile(path.join(ROOT_DIR,'public/v2/simulator.html'));});
-app.get(['/catalogo','/catalogo/'],(_q,r)=>{r.setHeader('Cache-Control','no-store, private');r.sendFile(path.join(ROOT_DIR,'public/v2/catalog.html'));});
-app.get(['/audios','/audios/'],(_q,r)=>{r.setHeader('Cache-Control','no-store, private');r.sendFile(path.join(ROOT_DIR,'public/v2/audios.html'));});
-app.get(['/treinamento','/treinamento/'],(_req,res)=>{res.setHeader('Cache-Control','no-store, private');res.sendFile(path.join(ROOT_DIR,'public','v2','training.html'));});
-app.get(['/campanhas','/campanhas/'],(_req,res)=>{res.setHeader('Cache-Control','no-store, private');res.sendFile(path.join(ROOT_DIR,'public','v2','campaigns.html'));});
-app.get(['/conversas','/conversas/'],(_req,res)=>{res.setHeader('Cache-Control','no-store, private');res.sendFile(path.join(ROOT_DIR,'public','v2','conversations.html'));});
-app.get(['/historico','/historico/'],(_req,res)=>{res.setHeader('Cache-Control','no-store, private');res.sendFile(path.join(ROOT_DIR,'public','v2','history.html'));});
-app.get(['/canais','/canais/','/instancias','/instancias/'],(_req,res)=>{res.setHeader('Cache-Control','no-cache');res.sendFile(path.join(ROOT_DIR,'public','v2','channels.html'));});
-app.get(['/conexoes', '/conexoes/'], (_req, res) => {
-  res.setHeader('Cache-Control', 'no-cache');
-  res.sendFile(path.join(ROOT_DIR, 'public', 'v2', 'connections.html'));
-});
+// ── PAINEL NOVO (v2): CONGELADO ───────────────────────────────────────────────
+// Decisão do titular (07/11/2026): seguir com o painel antigo (`/painel.html`) e remover o v2
+// depois, de uma vez, incluindo o que foi criado no banco. As telas do v2 deixam de ser
+// servidas e mandam para o painel antigo; o código continua no repositório, inerte.
+// Páginas separadas do painel antigo (geradas por scripts/gerar-paginas-painel.mjs a partir de
+// painel.html). Cada aba tem URL própria e o app abre a página certa por window.IENVIA_PAGINA.
+// Ordem de atendimento das páginas do painel antigo. Cada aba tem URL própria e o app
+// abre a página certa por window.IENVIA_PAGINA (definido no HTML gerado).
+const PAGINAS_PAINEL = {
+  '/visao-geral': 'visao-geral',
+  '/configuracoes': 'seguranca',
+  '/seguranca': 'seguranca',
+  '/contas': 'contas',
+  '/inteligencia-artificial': 'inteligencia-artificial',
+  '/simulador': 'simulador',
+  '/catalogo': 'catalogo',
+  '/audios': 'audios',
+  '/treinamento': 'treinamento',
+  '/campanhas': 'campanhas',
+  '/conversas': 'conversas',
+  '/historico': 'conversas',
+  '/canais': 'visao-geral',
+  '/instancias': 'visao-geral',
+  '/conexoes': 'visao-geral'
+};
+const v2ParaPainelAntigo = (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, private');
+  const rota = (req.path || '/').replace(/\/+$/, '') || '/';
+  const destino = PAGINAS_PAINEL[rota];
+  res.redirect(302, destino ? `/${destino}/` : '/painel.html');
+};
+
 app.get('/vitrine', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(ROOT_DIR, 'public', 'index.html'));
@@ -251,9 +268,10 @@ app.use(
     }
   })
 );
+// Raiz = painel antigo em qualquer ambiente. A vitrine continua em /vitrine.
 app.get('/', (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
-  res.sendFile(path.join(ROOT_DIR, 'public', IS_VERCEL ? 'index.html' : 'painel.html'));
+  res.sendFile(path.join(ROOT_DIR, 'public', 'painel.html'));
 });
 
 // Upload em disco para Catálogo (até 5 Fotos/PDFs por item — whitelist estrita anti-XSS)

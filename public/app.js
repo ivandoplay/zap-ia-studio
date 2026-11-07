@@ -9335,10 +9335,17 @@ bindEvents();
 bindCloudAuthAndAdminEvents();
 initSaasCommercialGrowthHub();
 
-// Deep-link de aba via URL hash (#crm, #treinamento, #audios, #contas...)
+// Deep-link de aba. Cada página do painel carrega o app com `window.IENVIA_PAGINA`
+// (definido no HTML da página); o hash (#crm, #treinamento...) tem prioridade quando existe,
+// para não quebrar links antigos. Nenhuma aba é aberta "por acidente": sem página e sem
+// hash, fica a que já está marcada como ativa no HTML.
+const TABS_VALIDAS = ['dashboard', 'simulador', 'treinamento', 'audios', 'catalogo', 'ia', 'seguranca', 'crm', 'contas', 'campanhas'];
 const initialHash = (window.location.hash || '').replace('#', '');
-if (['dashboard', 'simulador', 'treinamento', 'audios', 'catalogo', 'ia', 'seguranca', 'crm', 'contas'].includes(initialHash)) {
+const paginaInicial = typeof window.IENVIA_PAGINA === 'string' ? window.IENVIA_PAGINA : '';
+if (TABS_VALIDAS.includes(initialHash)) {
   switchTab(initialHash);
+} else if (TABS_VALIDAS.includes(paginaInicial)) {
+  switchTab(paginaInicial);
 }
 
 loadBootstrap();

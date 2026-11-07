@@ -559,7 +559,8 @@ const CONVERSATIONS_WORKSPACE_ROUTE = /^\/conversations-v3(?:\/|$)/;
 const WORKSPACE_ONLY_ROUTE = /^\/(?:training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/;
 // O disparo do relógio de campanhas é autenticado por segredo próprio do cron, não por
 // sessão de navegador: ele não pode entrar no fluxo de contexto por usuário.
-const CRON_PATH = /^\/api\/campaigns-v2\/schedule\/tick$/;
+// Dentro de `app.use('/api')` o Express entrega `req.path` já sem o prefixo "/api".
+const CRON_PATH = /^\/campaigns-v2\/schedule\/tick$/;
 const isDashboardRequest = (req) => /^\/(?:channels|conversations-v3|crm-v2|campaigns-v2|training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/.test(req.path)&&!CRON_PATH.test(req.path)||/^(?:\/dashboard\/(?:summary|appearance|parity)|\/connections\/(?:summary|configuration|pairing))\/?$/.test(req.path);
 async function makeDashboardContext(verified, actAsUserId = '') {
   const profile = verified.profile;

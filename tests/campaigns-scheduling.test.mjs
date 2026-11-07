@@ -211,3 +211,21 @@ test('cron: fail-closed sem segredo e recusa segredo errado', async () => {
     await f.close();
   }
 });
+
+test('roteamento: dentro de app.use("/api") o caminho chega sem o prefixo', async () => {
+  // Regressão real: o regex do cron era /^\/api\/.../ e nunca casava, porque o Express
+  // entrega `req.path` sem o prefixo do `app.use`. O middleware de sessão barrava o job.
+  const vistos = [];
+  const app = express();
+  app.use('/api', (req, _res, next) => { vistos.push(req.path); next(); });
+  app.post('/api/campaigns-v2/schedule/tick', (_req, res) => res.json({ ok: true }));
+  const server = await new Promise(r => { const s = app.listen(0, '127.0.0.1', () => r(s)); });
+  try {
+    const r = await fetch(`http://127.0.0.1:${server.address().port}/api/campaigns-v2/schedule/tick`, { method: 'POST' });
+    assert.equal(r.status, 200);
+    assert.equal(vistos[0], '/campaigns-v2/schedule/tick');
+    assert.match(vistos[0], /^\/campaigns-v2\/schedule\/tick$/);
+  } finally {
+    await new Promise(r => server.close(r));
+  }
+});

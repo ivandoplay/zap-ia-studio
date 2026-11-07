@@ -14,7 +14,7 @@ const SLOT = /^slot_[1-9]$/;
 const fail = (status, code, message) => Object.assign(new Error(message), { status, code });
 
 // Uma chamada de RPC autenticada, com validação de dono na resposta.
-export function createCampaignScheduler({ client, runner, runnerFor = null, maxCampanhas = 5 } = {}) {
+export function createCampaignScheduler({ client, runner, runnerFor = null, maxCampanhas = 5, servico = false } = {}) {
   if (!client || typeof client.rpc !== 'function') throw new TypeError('Cliente autenticado obrigatório.');
   const call = async (ownerId, name, args) => {
     const { data, error } = await client.rpc(name, args).abortSignal(AbortSignal.timeout(8000));
@@ -29,6 +29,11 @@ export function createCampaignScheduler({ client, runner, runnerFor = null, maxC
     return data;
   };
   const runFor = campaignId => (typeof runnerFor === 'function' ? runnerFor(campaignId) : runner);
+  // Lista de pendentes pelo caminho de serviço (usada só quando o relógio roda sem sessão).
+  const pendentesDe = async ({ ownerId, campaignId, limite }) => {
+    const d = await call(ownerId, 'ienvia_campanha_fila_pendentes', { p_owner: ownerId, p_id: campaignId, p_limite: limite });
+    return Array.isArray(d.destinatarios) ? d.destinatarios : [];
+  };
   const n = v => Math.max(0, Math.min(25, Number(v) || 0));
 
   // O relógio roda com a chave de serviço (sem sessão): a fila usa RPCs de serviço e o
@@ -134,5 +139,5 @@ export function createCampaignScheduler({ client, runner, runnerFor = null, maxC
     return { ok: true, tickId: randomUUID(), processadas, at: new Date().toISOString() };
   }
 
-  return Object.freeze({ estado, ativar, tick });
+  return Object.freeze({ estado, ativar, tick, pendentesDe, servico: servico === true });
 }

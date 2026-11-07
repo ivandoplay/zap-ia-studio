@@ -73,7 +73,7 @@ const progressOf = draft => {
 
 // `ownerOverride` só existe para o relógio automático, que roda com a chave de serviço e
 // sem sessão: a conta vem do ambiente, nunca do corpo de uma requisição de navegador.
-export function createCampaignRunner({ client, transport = null, maxPerRun = 5, now = () => new Date(), random = Math.random, ownerOverride = null } = {}) {
+export function createCampaignRunner({ client, transport = null, maxPerRun = 5, now = () => new Date(), random = Math.random, ownerOverride = null, recipientsProvider = null } = {}) {
   if (!client || typeof client.from !== 'function') throw new TypeError('Cliente autenticado obrigatório.');
   const bridge = transport || {
     sendText: sendEvolutionApiText,
@@ -96,6 +96,13 @@ export function createCampaignRunner({ client, transport = null, maxPerRun = 5, 
   }
 
   async function loadRecipients(ownerId, campaignId) {
+    // O relógio automático não tem sessão: a lista vem do caminho de serviço explícito,
+    // nunca de uma RPC que dependa de auth.uid().
+    if (typeof recipientsProvider === 'function') {
+      const out = await recipientsProvider({ ownerId, campaignId });
+      if (!Array.isArray(out)) throw fail(503, 'CAMPAIGN_RECIPIENTS_UNAVAILABLE', 'A lista de destinatários não pôde ser lida.');
+      return out;
+    }
     const rows = [];
     let offset = 0;
     for (;;) {

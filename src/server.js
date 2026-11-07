@@ -902,9 +902,14 @@ const campaignSchedulerFor = req => {
   }
   if (!client || typeof client.from !== 'function') return null;
   const runner = servico
-    ? createCampaignRunner({client, ownerOverride: CAMPAIGN_CRON_OWNER_ID})
+    ? createCampaignRunner({
+        client,
+        ownerOverride: CAMPAIGN_CRON_OWNER_ID,
+        // Sem sessão, a lista de destinatários vem do caminho de serviço explícito.
+        recipientsProvider: ({ ownerId, campaignId }) => createCampaignScheduler({ client }).pendentesDe({ ownerId, campaignId, limite: 25 })
+      })
     : null;
-  return createCampaignScheduler({client, runner, runnerFor: () => runner || campaignRunnerFor(req)});
+  return createCampaignScheduler({client, runner, servico, runnerFor: () => runner || campaignRunnerFor(req)});
 };
 const CAMPAIGN_CRON_SECRET = String(process.env.CAMPAIGN_CRON_SECRET || '').trim();
 const CAMPAIGN_CRON_OWNER_ID = String(process.env.CAMPAIGN_CRON_OWNER_ID || '').trim();

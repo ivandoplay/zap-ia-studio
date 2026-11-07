@@ -95,6 +95,30 @@ END $$;
 REVOKE ALL ON FUNCTION public.ienvia_campanha_agenda_ativar(uuid,uuid,boolean,text,timestamptz) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.ienvia_campanha_agenda_ativar(uuid,uuid,boolean,text,timestamptz) TO authenticated;
 
+-- Lista os destinatários pendentes para o relógio (chave de serviço, sem sessão).
+-- O nome vem do rascunho, casado pelo telefone: é o que permite expandir {{nome}}.
+CREATE OR REPLACE FUNCTION public.ienvia_campanha_fila_pendentes(p_owner uuid,p_id uuid,p_limite integer DEFAULT 25)
+ RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE c public.ienvia_campaign_drafts;itens jsonb;
+BEGIN
+ PERFORM public.ienvia_campanha_acesso_servico(p_owner);
+ IF p_limite IS NULL OR p_limite<1 OR p_limite>25 THEN RAISE EXCEPTION 'Lote inválido' USING ERRCODE='22023';END IF;
+ SELECT * INTO c FROM public.ienvia_campaign_drafts WHERE owner_id=p_owner AND id=p_id;
+ IF NOT FOUND THEN RAISE EXCEPTION 'Rascunho ausente' USING ERRCODE='P0002';END IF;
+ SELECT coalesce(jsonb_agg(jsonb_build_object(
+   'destinatario_id',f.destinatario_id,'telefone',f.telefone,'nome',
+   coalesce((SELECT d->>'nome' FROM jsonb_array_elements(c.document->'destinatarios') d WHERE d->>'telefone'=f.telefone LIMIT 1),''),
+   'campos',
+   coalesce((SELECT d->'campos' FROM jsonb_array_elements(c.document->'destinatarios') d WHERE d->>'telefone'=f.telefone LIMIT 1),'{}'::jsonb),
+   'ordem',f.ordem) ORDER BY f.ordem),'[]'::jsonb) INTO itens
+ FROM (SELECT * FROM public.ienvia_campanha_fila
+        WHERE owner_id=p_owner AND campanha_id=p_id AND estado='pendente'
+        ORDER BY ordem LIMIT p_limite) f;
+ RETURN jsonb_build_object('ownerId',p_owner,'campanha_id',p_id,'destinatarios',itens);
+END $$;
+REVOKE ALL ON FUNCTION public.ienvia_campanha_fila_pendentes(uuid,uuid,integer) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.ienvia_campanha_fila_pendentes(uuid,uuid,integer) TO service_role;
+
 -- Libera a reserva de um lote inteiro (usado quando o envio recusou ANTES de qualquer
 -- mensagem sair: chip sem permissão de campanha, janela fechada, plano inválido).
 CREATE OR REPLACE FUNCTION public.ienvia_campanha_fila_liberar(p_owner uuid,p_id uuid,p_motivo text)

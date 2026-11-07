@@ -148,19 +148,9 @@ export function createConversationsCommandsRouter({getLocalContext, allowSend = 
   }
 
   // ── Envio de mensagem de WhatsApp ───────────────────────────────────────────
-  // Linha de diagnóstico: com CONVERSATIONS_DEBUG=1 o 404 informa quantas chaves o
-  // workspace carregou e se a chave pedida está entre elas. Nunca expõe conteúdo.
-  function notFound(res, ctx, slotId, key) {
-    if (String(process.env.CONVERSATIONS_DEBUG || '') !== '1') {
-      throw fail(404, 'CONVERSATION_NOT_FOUND', 'Conversa não encontrada nesta conta e nesta instância.');
-    }
-    const keys = Object.keys(ctx.data.contacts || {});
-    return res.status(404).json({
-      ok: false,
-      code: 'CONVERSATION_NOT_FOUND',
-      error: 'Conversa não encontrada nesta conta e nesta instância.',
-      debug: {slotId, keys: keys.length, hasKey: keys.includes(key), hasBare: keys.includes(key.replace(/^slot_[0-9]+::/, '')), sample: keys.slice(0, 3)}
-    });
+  // O 404 não revela nada do workspace (nem contagem de chaves, que é dado da conta).
+  function notFound() {
+    throw fail(404, 'CONVERSATION_NOT_FOUND', 'Conversa não encontrada nesta conta e nesta instância.');
   }
 
   router.post('/instances/:instanceId/threads/:threadKey/messages', async (req, res) => {
@@ -171,7 +161,7 @@ export function createConversationsCommandsRouter({getLocalContext, allowSend = 
       try { target = resolve(ctx, req.params.instanceId, req.params.threadKey); }
       catch (error) {
         if (error?.code !== 'CONVERSATION_NOT_FOUND') throw error;
-        return notFound(res, ctx, slotFromInstance(req.params.instanceId), decodeURIComponent(String(req.params.threadKey || '')));
+        return notFound();
       }
       const text = str(req.body?.text, MAX_TEXT);
       if (!text) throw fail(400, 'MESSAGE_EMPTY', 'Escreva a mensagem antes de enviar.');

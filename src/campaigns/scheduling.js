@@ -134,7 +134,7 @@ export function createCampaignScheduler({ client, runner, runnerFor = null, maxC
         p_espera_ms: intervalo,
         p_resultado: { at: new Date().toISOString(), executados: enviados, falhas }
       });
-      processadas.push({ campaignId, status: 'executado', enviados, falhas, proximaEm: out.proxima_em, ativa: out.ativa, restantes: out.restantes });
+      processadas.push({ campaignId, status: 'executado', enviados, falhas, motivo, proximaEm: out.proxima_em, ativa: out.ativa, restantes: out.restantes });
     }
     return { ok: true, tickId: randomUUID(), processadas, at: new Date().toISOString() };
   }

@@ -40,7 +40,7 @@
 /* ---------------------------------------------------------------- espaços */
 .u-gap-4 { gap: 4px; }
 .u-gap-6 { gap: 6px; }
-.u-gap-8 { gap: 8px; }
+ { gap: 8px; }
 .u-gap-9 { gap: 9px; }
 .u-gap-10 { gap: 10px; }
 .u-gap-12 { gap: 12px; }
@@ -61,6 +61,8 @@
 
 /* ---------------------------------------------------------- dimensões úteis */
 .u-w-full { width: 100%; }
+.u-dir-col { display: flex; flex-direction: column; }
+.u-dir-col.u-none { display: none; }
 .u-h-full { height: 100%; }
 .u-max-480 { max-width: 480px; }
 .u-max-560 { max-width: 560px; }
@@ -72,11 +74,14 @@
 .u-text-accent { color: var(--accent-bright); }
 .u-text-danger { color: var(--danger); }
 .u-text-warning { color: var(--warning-bright); }
-.u-text-xs { font-size: 11px; }
+.u-text-xs { font-size: 11.5px; }
+.u-text-2xs { font-size: 11px; }
 .u-text-sm { font-size: 12px; }
 .u-text-md { font-size: 13px; }
+.u-text-breve { font-size: 12.5px; }
 .u-text-lg { font-size: 15px; }
 .u-bold { font-weight: 700; }
+.u-icone-forte { font-size: 16px; font-weight: 700; line-height: 1; }
 .u-semi { font-weight: 600; }
 .u-center { text-align: center; }
 .u-right { text-align: right; }
@@ -88,6 +93,8 @@
 /* O SVG do painel sempre foi dimensionado à mão (width/height no style).
    Aqui o tamanho vem do contexto, com o mesmo resultado visual. */
 .u-icon { width: 15px; height: 15px; flex-shrink: 0; }
+.u-icon-16 { width: 16px; height: 16px; flex-shrink: 0; }
+.u-icon-17 { width: 17px; height: 17px; flex-shrink: 0; }
 .u-icon-sm { width: 14px; height: 14px; flex-shrink: 0; }
 .u-icon-xs { width: 12px; height: 12px; flex-shrink: 0; }
 .u-icon-lg { width: 24px; height: 24px; flex-shrink: 0; }
@@ -145,3 +152,207 @@
 .u-detalhes > summary { cursor: pointer; font-weight: 600; color: var(--text-main); }
 .u-detalhes-corpo { margin-top: 8px; display: flex; flex-direction: column; gap: 7px; line-height: 1.5; }
 .u-espaco-topo { margin-top: 12px; }
+
+/* ============================================================================
+   CRM / CONVERSAS — padrões que apareciam soltos no HTML da aba
+   Cada classe abaixo substitui um `style="..."` repetido. Nomes descrevem o
+   papel do bloco, não o pixel: quem lê o HTML entende o que é sem abrir o CSS.
+   ========================================================================== */
+
+/* --- contadores e selos pequenos (badge de não lidas, contagem de filtro) --- */
+.u-contador {
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card-subtle);
+  color: var(--text-secondary);
+  min-width: 0;
+}
+.u-contador-mini,
+.btn.u-contador-mini {
+  padding: 2px 8px;
+  min-height: 26px;
+  background: var(--bg-card-subtle);
+  color: var(--text-main);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+}
+.u-contador-mini-sm,
+.btn.u-contador-mini-sm {
+  padding: 2px 7px;
+  min-height: 24px;
+  background: var(--bg-card-subtle);
+  color: var(--text-main);
+  border-radius: var(--radius-md);
+}
+.u-pilula-xs { font-size: 11px; }
+.u-pilula-mini { padding: 1px 6px; font-size: 10.5px; border-radius: 999px; }
+
+/* --- barra de filtros / cabeçalho de coluna --- */
+.u-cabecalho-secao {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.u-cabecalho-secao--gap { gap: 8px; }
+.u-titulo-mini {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin: 0;
+}
+.u-titulo-mini-destaque { font-size: 11px; font-weight: 700; color: var(--text-muted); padding: 4px 8px; }
+
+/* --- linhas e grupos de ações --- */
+.u-linha { display: flex; align-items: center; gap: 8px; }
+.u-linha-wrap { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.u-linha-apertada { display: flex; gap: 5px; }
+.u-linha-topo { display: flex; gap: 6px; align-items: center; margin-bottom: 7px; }
+.u-pilhas { display: flex; flex-wrap: wrap; gap: 5px; }
+.u-coluna-5 { display: flex; flex-direction: column; gap: 5px; }
+.u-coluna-6 { display: flex; flex-direction: column; gap: 6px; }
+.u-coluna-8 {
+  /* nao define display: componentes que precisam ficar ocultos controlam isso */
+  flex-direction: column;  flex-direction: column; gap: 8px; }
+.u-coluna-13 { display: none; flex-direction: column; gap: 13px; }
+.u-grade-2-6 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.u-espaco-topo-6 { margin-top: 6px; }
+.u-espaco-topo-8 { margin-top: 8px; }
+.u-espaco-topo-14 { margin-top: 14px; }
+
+/* --- botões que já são texto (ex.: "ver mais", "limpar filtro") --- */
+.u-link-botao {
+  background: none;
+  border: none;
+  color: var(--accent-bright);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.u-link-botao--inj {
+  background: none;
+  border: none;
+  color: var(--accent-bright);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.u-divisor-fino { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+
+/* --- estado "ocupado"/desbotado sem tirar do lugar --- */
+.u-opaco-75 { opacity: 0.75; }
+.u-opaco-85 { opacity: 0.85; }
+
+.u-gap-8 { gap: 8px; }
+
+/* --- avatar e miniatura --- */
+.u-avatar-34 {
+  width: 34px; height: 34px;
+  font-size: 12px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.u-miniatura-42 {
+  width: 42px; height: 42px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+/* --- menu suspenso ancorado --- */
+.u-menu-ancorado { position: relative; display: inline-flex; align-items: center; gap: 2px; }
+.u-menu-flutuante {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 38px;
+  min-width: 238px;
+  z-index: 95;
+}
+.u-menu-flutuante--curto { min-width: 0; }
+.u-z-60 { z-index: 60; }
+
+/* --- caixas de estado vazio e mensagens --- */
+.u-vazio-central { margin: auto; max-width: 390px; }
+.u-vazio-suave { margin: auto; padding: 18px 10px; font-size: 12.5px; }
+
+/* --- campos compactos dentro do fio da conversa --- */
+.u-campo-compacto { flex: 1; min-width: 140px; font-size: 12px; padding: 5px 9px; }
+.u-campo-compacto-sm,
+input.u-campo-compacto-sm { flex: 1; font-size: 12px; padding: 5px 8px; }
+.u-campo-compacto-md,
+input.u-campo-compacto-md { flex: 1; font-size: 12.5px; padding: 6px 8px; }
+.u-botao-fino-10 { padding: 0 10px; }
+.u-botao-compacto { width: auto; min-height: 32px; padding: 4px 8px; font-size: 12px; }
+.u-botao-icone { padding: 0 11px; min-width: 40px; min-height: 40px; flex-shrink: 0; }
+
+/* --- complementos do CRM (segunda passada) --- */
+.u-selo-mini,
+input.u-selo-mini,
+textarea.u-selo-mini { font-size: 12px; padding: 6px 8px; }
+.u-selo-tag { padding: 2px 8px; }
+.u-selo-info {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  background: var(--bg-card-subtle);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+}
+.u-texto-cortado {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.u-texto-cortado-lg {
+  display: block;
+  font-size: 14.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.u-acoes-wrap { display: flex; gap: 8px; flex-wrap: wrap; }
+.u-acoes-wrap-topo { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+.u-acoes-centro { display: flex; justify-content: center; align-items: center; gap: 10px; margin: 14px 0; }
+.u-faixa-oculta { display: none; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); }
+.u-resumo-clicavel {
+  cursor: pointer;
+  user-select: none;
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.u-campo-largo-oculto,
+input.u-campo-largo-oculto { display: none; width: 100%; font-size: 12px; padding: 6px 8px; margin-top: 6px; }
+.u-campo-largo-baixo,
+input.u-campo-largo-baixo { width: 100%; font-size: 12.5px; padding: 6px 8px; margin-bottom: 6px; }
+.u-botao-largo-topo { width: 100%; justify-content: center; margin-top: 6px; }
+.u-campo-min-190 { width: auto; min-width: 190px; }
+.u-campo-min-210 { flex: 1; min-width: 210px; }
+.u-text-warning { color: var(--warning-bright); }
+.u-mb-6 { margin-bottom: 6px; }
+.u-mb-14 { margin-bottom: 14px; }
+.u-mt-3 { margin-top: 3px; }
+.u-min-150 { min-width: 150px; }
+.u-ancora { position: relative; }
+.u-coluna-gap10-wrap { flex-wrap: wrap; gap: 10px; }
+.u-selo-info--borda { border: 1px solid var(--border); border-radius: 8px; }
+
+
+/* ---------------------------------------------------------- ordem garantida */
+/* Ficam por ultimo de proposito: precisam vencer utilitarios de componente
+   (mesma especificidade) e regras de componente com 2 seletores, como
+   `.empty-state p`. */
+.u-mb-0 { margin-bottom: 0; }
+.empty-state p.u-text-md,
+p.u-text-md { font-size: 13px; line-height: 1.5; }
+.empty-state p.u-espaco-topo-6,
+p.u-espaco-topo-6 { margin-top: 6px; }
+.empty-state p.u-espaco-topo-6 { margin-bottom: 0; }

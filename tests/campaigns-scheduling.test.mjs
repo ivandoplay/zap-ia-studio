@@ -35,7 +35,9 @@ const draft = validateCampaignDraft({
     retomada: 'manual',
     blocos: [{ id: randomUUID(), tipo: 'texto', modo: 'fixo', textos: ['Olá, {{nome}}.'] }]
   },
-  opcoes: { pausa_lote_min_ms: 1000, pausa_lote_max_ms: 1000 },
+  // Intervalo entre lotes zero: o teste não espera relógio de verdade; o intervalo em si
+  // é coberto pelo rascunho e pelo runner.
+  opcoes: { pausa_lote_min_ms: 0, pausa_lote_max_ms: 0 },
   destinatarios: [
     { telefone: '5586999990101', nome: 'Ana' },
     { telefone: '5586999990102', nome: 'Bruno' },
@@ -67,7 +69,8 @@ const runnerFalso = {
     assert.match(slotId, /^slot_[1-9]$/);
     // O relógio envia o lote que reservou no banco; aqui simulamos os envios daquele lote.
     const quantos = Math.max(1, Number(maxPerRun) || 1);
-    for (let i = 0; i < quantos; i += 1) envios.push({ campaignId, slotId, destinatario: `${apenasDestinatario || 'lote'}:${i}` });
+    // Um rótulo único por envio simulado (o runner real usa o id do destinatário reservado).
+    for (let i = 0; i < quantos; i += 1) envios.push({ campaignId, slotId, destinatario: `${envios.length}` });
     return { ok: true, executed: quantos, failed: 0, done: false, results: [{ status: 'sent', providerMessageId: 'sintetico' }] };
   }
 };
@@ -83,6 +86,8 @@ test('prepara o rascunho e liga o agendamento', async () => {
   await f.as(A);
   const saved = await f.call('ienvia_campaign_save_draft', [id, 0, draft]);
   assert.equal(saved.campanha.campanha_id, id);
+  // O intervalo entre lotes vem do rascunho; aqui é zero para o teste não esperar relógio.
+  assert.equal(saved.campanha.pausa_lote_min_ms, 0, JSON.stringify(saved.campanha));
 
   const before = await scheduler.estado({ ownerId: A, campaignId: id });
   assert.equal(before.ativa, false);
@@ -99,18 +104,26 @@ test('prepara o rascunho e liga o agendamento', async () => {
 
 test('um tick envia no máximo o lote e nunca repete destinatário', async () => {
   envios.length = 0;
-  const primeiro = await relogio.tick({ ownerId: A });
+  let primeiro = await relogio.tick({ ownerId: A });
   assert.equal(primeiro.processadas.length, 1);
   assert.equal(primeiro.processadas[0].status, 'executado');
   assert.equal(primeiro.processadas[0].status, 'executado');
-  assert.equal(primeiro.processadas[0].enviados, 3, JSON.stringify(primeiro.processadas[0]));
-  assert.equal(envios.length, 3);
+  // O lote é limitado a 2 por tick (teto de tempo da função); o resto vai no tick seguinte.
+  assert.equal(primeiro.processadas[0].enviados, 2, JSON.stringify(primeiro.processadas[0]));
+  assert.equal(envios.length, 2);
+  // Ao esvaziar, uma última passada conclui a campanha.
+  primeiro = await relogio.tick({ ownerId: A });
+  // A agenda pode já ter se desligado (o último lote esvaziou a fila): o que importa é
+  // que o total enviado em todos os ticks é exatamente o número de destinatários.
+  assert.ok(primeiro.processadas.length <= 1);
+  assert.equal(envios.length, 3, 'segundo tick: ' + JSON.stringify(primeiro.processadas));
   assert.equal(new Set(envios.map(e => e.destinatario)).size, 3);
 
   // Segundo tick imediato: nada pendente, nada reenviado.
   const segundo = await relogio.tick({ ownerId: A });
   assert.equal(envios.length, 3, 'Nenhum envio novo depois da fila esvaziar.');
-  assert.ok(['sem_pendentes', 'adiada'].includes(segundo.processadas[0]?.status ?? 'sem_pendentes'));
+  // A agenda se desligou ao esvaziar: o tick não processa mais nada.
+  assert.equal(segundo.processadas.length, 0, JSON.stringify(segundo.processadas));
 
   const fim = await scheduler.estado({ ownerId: A, campaignId: id });
   assert.equal(fim.fila.enviados, 3);

@@ -77,7 +77,13 @@ export function createCampaignScheduler({ client, runner, runnerFor = null, maxC
         processadas.push({ campaignId, status: 'sem_executor' });
         continue;
       }
-      const reserva = await call(ownerId, 'ienvia_campanha_fila_reservar', { p_owner: ownerId, p_id: campaignId, p_limite: Math.max(1, Math.min(25, Number(ag.lote) || 5)) });
+      // Um lote por vez, respeitando o teto da agenda. O relógio roda a cada minuto e a
+      // função da Vercel tem 60s: reservar pouco é o que garante que nada fica pela metade.
+      const reserva = await call(ownerId, 'ienvia_campanha_fila_reservar', {
+        p_owner: ownerId,
+        p_id: campaignId,
+        p_limite: Math.max(1, Math.min(2, Number(ag.lote) || 5))
+      });
       const itens = Array.isArray(reserva.itens) ? reserva.itens : [];
       if (!itens.length) {
         // Nada pendente: conclui a agenda para o cron parar de chamar.
@@ -109,7 +115,12 @@ export function createCampaignScheduler({ client, runner, runnerFor = null, maxC
         motivo = error?.code || 'send_failed';
       }
       // O intervalo entre lotes vem do próprio rascunho; sem ele, espera o padrão do produto.
-      const intervalo = Math.max(0, Math.min(604800000, Number(ag.intervalo_lote_ms) || 20000));
+      // Intervalo do rascunho, sem tropeçar no zero: só usamos o padrão quando o valor
+      // não é um número válido.
+      const bruto = Number(ag.intervalo_lote_ms);
+      const intervalo = Number.isFinite(bruto) && bruto >= 0
+        ? Math.min(604800000, Math.round(bruto))
+        : 20000;
       const out = await call(ownerId, 'ienvia_campanha_agenda_reagendar', {
         p_owner: ownerId,
         p_id: campaignId,

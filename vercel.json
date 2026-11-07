@@ -8,12 +8,6 @@
       "includeFiles": "{src/**,public/**,scripts/**,dist_kit/**,release/**,data/training_packs/**,package.json,package-lock.json,vercel.json,.npmrc,.env.example,LEIA-ME_COMO_USAR.md,*.bat,*.sh}"
     }
   },
-  "crons": [
-    {
-      "path": "/api/campaigns-v2/schedule/tick",
-      "schedule": "* * * * *"
-    }
-  ],
   "redirects": [
     {
       "source": "/venda",

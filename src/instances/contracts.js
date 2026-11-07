@@ -1,4 +1,4 @@
-import {isChannelId,parseChannelInput} from '../../public/v2/assets/channel-policy.js';
+import {isChannelId,parseChannelInput} from '../shared/contracts/channel-policy.js';
 export const dispatchError=(code,message,status=409)=>Object.assign(new Error(message),{code,status,statusCode:status});
 export function requireUuid(value){
  if(!isChannelId(value))throw dispatchError('INVALID_INSTANCE_ID','Identidade UUID obrigatória; nenhum chip padrão será escolhido.',400);

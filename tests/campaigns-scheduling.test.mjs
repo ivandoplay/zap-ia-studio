@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { createCampaignRouter } from '../src/campaigns/router.js';
 import { createCampaignScheduler } from '../src/campaigns/scheduling.js';
 import { createInstanceSqlFixture, A, B, M } from './helpers/instance-sql-fixture.mjs';
-import { validateCampaignDraft } from '../public/v2/assets/campaigns-contract.js';
+import { validateCampaignDraft } from '../src/shared/contracts/campaigns-contract.js';
 
 assert.equal(process.env.ZAPIA_ISOLATED_TEST, '1');
 const f = await createInstanceSqlFixture();

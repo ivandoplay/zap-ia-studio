@@ -1,4 +1,4 @@
-import {Router,json} from 'express';import {isCampaignId,validateCampaignPlan,validateCampaignOptions} from '../../public/v2/assets/campaigns-contract.js';
+import {Router,json} from 'express';import {isCampaignId,validateCampaignPlan,validateCampaignOptions} from '../shared/contracts/campaigns-contract.js';
 const fail=(status,code,message)=>Object.assign(Error(message),{status,code});
 const invalid=()=>fail(400,'CAMPAIGN_EXECUTION_INPUT','Confira a operação e seus identificadores.');
 export function createCampaignExecutionRouter({getLocalContext,allowExecution=false}={}){

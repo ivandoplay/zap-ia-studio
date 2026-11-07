@@ -1,5 +1,5 @@
 // Ponte de identidade/preparação: sem I/O, comandos, sessão ou conexão de WhatsApp.
-import {isChannelId,parseChannelInput} from '../../public/v2/assets/channel-policy.js';
+import {isChannelId,parseChannelInput} from '../shared/contracts/channel-policy.js';
 import {LEGACY_SLOT_IDS,parseLegacyContactKey} from './legacyIdentity.js';
 const verified=new WeakSet();
 const fail=(code,message,status=503)=>{throw Object.assign(new Error(message),{code,status,statusCode:status});};

@@ -1,4 +1,4 @@
-import {createCipheriv,createDecipheriv,randomBytes,createHmac} from 'node:crypto';import {trainingUuid} from '../../public/v2/assets/training-domain.js';import {AI_SECRET_FIELDS} from '../../public/v2/assets/ai-settings-domain.js';
+import {createCipheriv,createDecipheriv,randomBytes,createHmac} from 'node:crypto';import {trainingUuid} from '../shared/contracts/training-domain.js';import {AI_SECRET_FIELDS} from '../shared/contracts/ai-settings-domain.js';
 const fail=()=>{throw Object.assign(Error('Cofre de rascunhos indisponível ou conteúdo inválido.'),{status:503});};
 export function validateEnvelope(e){if(!e||typeof e!=='object'||Array.isArray(e)||Object.keys(e).some(k=>!['v','iv','tag','data','count'].includes(k))||e.v!==1||!Number.isInteger(e.count)||e.count<1||e.count>30)fail();for(const [k,n]of [['iv',12],['tag',16],['data',null]]){if(typeof e[k]!=='string'||!e[k]||!/^[A-Za-z0-9+/]+={0,2}$/.test(e[k])||Buffer.from(e[k],'base64').toString('base64')!==e[k]||e[k].length>40000||n&&Buffer.from(e[k],'base64').length!==n)fail();}return structuredClone(e);}
 // Chave injetada por composição explícita. Não lê .env, não gera/grava chave e não chama provedores.

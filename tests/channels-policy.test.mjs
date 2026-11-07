@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';
-import {parseChannelInput,isChannelId,filterCrmContacts,channelAllowsAI,channelAllowsCampaign} from '../public/v2/assets/channel-policy.js';
+import {parseChannelInput,isChannelId,filterCrmContacts,channelAllowsAI,channelAllowsCampaign} from '../src/shared/contracts/channel-policy.js';
 const A='11111111-1111-4111-8111-111111111111';
 test('canal: UUID independente de posição, defaults conservadores e booleanos estritos',()=>{
  assert.equal(isChannelId(A),true);for(const id of ['slot_1','slot_4','',{},null])assert.equal(isChannelId(id),false);

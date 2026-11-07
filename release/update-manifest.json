@@ -1,1 +1,966 @@
-{"format":1,"version":"5.8.28","files":[{"path":"ZAP-IA-Studio/Ferramentas_Extras/Linux_Criar_Atalho_Desktop.sh","size":169,"sha256":"9616f95163b1b3c9ff9d74e570412d19ff185a3a3fef307ff30154be19e0e353"},{"path":"ZAP-IA-Studio/Ferramentas_Extras/Linux_Reparar_Sistema.sh","size":167,"sha256":"7f39723fd81b52e5d2fdec6a8dca7a33ef84f7b384271fe5df99fbf27389c5eb"},{"path":"ZAP-IA-Studio/Ferramentas_Extras/Termux_Instalar_ou_Reparar.sh","size":506,"sha256":"a9c359025115b81e8de8c510f27aa483207ffb8d3a92d69ed0c5e8daf67a57e1"},{"path":"ZAP-IA-Studio/Ferramentas_Extras/Windows_Criar_Atalho_Desktop.bat","size":399,"sha256":"793b1a0858414aa7af20882a209b173e1dc8c6078f4d93dc71b9ba92cc21a2bb"},{"path":"ZAP-IA-Studio/Ferramentas_Extras/Windows_Reparar_Sistema.bat","size":600,"sha256":"89ebffae0c116d82aed7c995c043e45426cbd2abbf0758db94f9b0a4fe2de485"},{"path":"ZAP-IA-Studio/GUIA_VIBE_CODER_TREINAMENTO.md","size":15809,"sha256":"3f87e3fb833bdbb3d7595bea54dc52b30cb9c31e7ef9cf3bd4879348ffddec24"},{"path":"ZAP-IA-Studio/INICIAR_NO_LINUX.sh","size":319,"sha256":"94c220b346ff6b67fc752ad169d20c79928bb0130cd2c54704b9151a9733efc5"},{"path":"ZAP-IA-Studio/INICIAR_NO_TERMUX.sh","size":8273,"sha256":"cf6dde7bc8140b638ce34afe646ac81eb0a2dbd869b189770ddb02ce2597e9c1"},{"path":"ZAP-IA-Studio/INICIAR_NO_WINDOWS.bat","size":844,"sha256":"2c003ae3d0a8871e184b1ab2c6675439fc2605e0f2065e59ddbc4edf370fed7b"},{"path":"ZAP-IA-Studio/LEIA-ME.txt","size":3077,"sha256":"ee37311a13cb8e0095115e6076b5ccaaddadae31ae0dbfdb4871b6b9c9629102"},{"path":"ZAP-IA-Studio/MANUAL_OFICIAL.html","size":15096,"sha256":"e33aee92d6900298dc11bea8a79ab6e9547e6b730064b78fc94b5e83072862b0"},{"path":"ZAP-IA-Studio/sistema/.env.example","size":2333,"sha256":"c27fecfeff8e75e2936ee70334607075cdb01566946143d970b16e3f8443eec3"},{"path":"ZAP-IA-Studio/sistema/.npmrc","size":174,"sha256":"467564df09bffbac3a532ca5efd7fa56abe6db68111d8ea29fdcf5d8c39c4b65"},{"path":"ZAP-IA-Studio/sistema/1_Instalar_No_Windows.bat","size":1249,"sha256":"f43426d524a1834843bc325ea8c29f70a78f189d772e66f04b03c3bc5726f562"},{"path":"ZAP-IA-Studio/sistema/2_Iniciar_Atendente_IA.bat","size":742,"sha256":"c425bcf755659c037ce89d798457773c900cae1265ad713cc91ae8b84b0139f9"},{"path":"ZAP-IA-Studio/sistema/3_Criar_Atalho_Area_de_Trabalho.bat","size":481,"sha256":"20e9ae0beedc7076d2b84bd6a2d31c82461924e4f70635aa56deb5177dff3673"},{"path":"ZAP-IA-Studio/sistema/4_Instalar_No_Termux.sh","size":1814,"sha256":"b72245ab52a2387f369319760065edd7687549d3dec5daf437369e56f747ba31"},{"path":"ZAP-IA-Studio/sistema/5_Iniciar_No_Termux.sh","size":3087,"sha256":"2976ea2d422c5551949efef7456a4fdd2e80ac893298e11e0d4bb2d232010b96"},{"path":"ZAP-IA-Studio/sistema/LEIA-ME_COMO_USAR.md","size":8177,"sha256":"902cc333c259d7a109ddf925e4f3a9bc819b84796e7dbaafb092080f797019a5"},{"path":"ZAP-IA-Studio/sistema/api/index.js","size":57,"sha256":"9e31ab60ddb3cfee03ad14560de4373e6de9fd829d18b9cbaaa0662927545341"},{"path":"ZAP-IA-Studio/sistema/dist_kit/Ferramentas_Extras/Linux_Criar_Atalho_Desktop.sh","size":169,"sha256":"9616f95163b1b3c9ff9d74e570412d19ff185a3a3fef307ff30154be19e0e353"},{"path":"ZAP-IA-Studio/sistema/dist_kit/Ferramentas_Extras/Linux_Reparar_Sistema.sh","size":167,"sha256":"7f39723fd81b52e5d2fdec6a8dca7a33ef84f7b384271fe5df99fbf27389c5eb"},{"path":"ZAP-IA-Studio/sistema/dist_kit/Ferramentas_Extras/Termux_Instalar_ou_Reparar.sh","size":506,"sha256":"a9c359025115b81e8de8c510f27aa483207ffb8d3a92d69ed0c5e8daf67a57e1"},{"path":"ZAP-IA-Studio/sistema/dist_kit/Ferramentas_Extras/Windows_Criar_Atalho_Desktop.bat","size":399,"sha256":"793b1a0858414aa7af20882a209b173e1dc8c6078f4d93dc71b9ba92cc21a2bb"},{"path":"ZAP-IA-Studio/sistema/dist_kit/Ferramentas_Extras/Windows_Reparar_Sistema.bat","size":600,"sha256":"89ebffae0c116d82aed7c995c043e45426cbd2abbf0758db94f9b0a4fe2de485"},{"path":"ZAP-IA-Studio/sistema/dist_kit/GUIA_VIBE_CODER_TREINAMENTO.md","size":15809,"sha256":"3f87e3fb833bdbb3d7595bea54dc52b30cb9c31e7ef9cf3bd4879348ffddec24"},{"path":"ZAP-IA-Studio/sistema/dist_kit/INICIAR_NO_LINUX.sh","size":319,"sha256":"94c220b346ff6b67fc752ad169d20c79928bb0130cd2c54704b9151a9733efc5"},{"path":"ZAP-IA-Studio/sistema/dist_kit/INICIAR_NO_TERMUX.sh","size":8273,"sha256":"cf6dde7bc8140b638ce34afe646ac81eb0a2dbd869b189770ddb02ce2597e9c1"},{"path":"ZAP-IA-Studio/sistema/dist_kit/INICIAR_NO_WINDOWS.bat","size":844,"sha256":"2c003ae3d0a8871e184b1ab2c6675439fc2605e0f2065e59ddbc4edf370fed7b"},{"path":"ZAP-IA-Studio/sistema/dist_kit/LEIA-ME.txt","size":3077,"sha256":"ee37311a13cb8e0095115e6076b5ccaaddadae31ae0dbfdb4871b6b9c9629102"},{"path":"ZAP-IA-Studio/sistema/dist_kit/MANUAL_OFICIAL.html","size":15096,"sha256":"e33aee92d6900298dc11bea8a79ab6e9547e6b730064b78fc94b5e83072862b0"},{"path":"ZAP-IA-Studio/sistema/package-lock.json","size":99941,"sha256":"f18404b6147a92e45801bf0656d7c3670887b05d1b57a796f9ab53236372dfce"},{"path":"ZAP-IA-Studio/sistema/package.json","size":1074,"sha256":"1dfcdf6c984a734a29b03b1767d80b4c6b72daf4ca88fd771e30bd4485590e73"},{"path":"ZAP-IA-Studio/sistema/public/GUIA_VIBE_CODER_TREINAMENTO.md","size":15800,"sha256":"173fc7c4d554ef6fb4d55b7108d372ebf1567e5a054894dafaf064e5c404ad14"},{"path":"ZAP-IA-Studio/sistema/public/app.js","size":418578,"sha256":"7569ea074fb99bcd426b427d76ff6c7068f10c95d127de7e4f3521eab13dbdb4"},{"path":"ZAP-IA-Studio/sistema/public/atualizar.sh","size":7292,"sha256":"d7587f428569d4ead5cd9b3047ac6aa8c6fa30cfc7e14c5f509cb5010196c74b"},{"path":"ZAP-IA-Studio/sistema/public/campanhas.css","size":4562,"sha256":"a22d94325216b2a778b487bd7ccc63e9b21a7eb0e3b0729893009da7ec6fbbb6"},{"path":"ZAP-IA-Studio/sistema/public/campanhas.js","size":24608,"sha256":"9cc329a88f700645ac283abd0b26fe3bead76a03e64eaa1cf1e17b6a5fed877b"},{"path":"ZAP-IA-Studio/sistema/public/fonts/OFL-Manrope.txt","size":4480,"sha256":"4b8929f05a122b7abb9059501dc7dc4df86f8c97d5a1769d60d82cf2d2795dde"},{"path":"ZAP-IA-Studio/sistema/public/fonts/manrope-latin-ext.woff2","size":15160,"sha256":"2f7335119075b2079f1d882530bbc18728461612bf90743203d73a74a48f4d9b"},{"path":"ZAP-IA-Studio/sistema/public/fonts/manrope-latin.woff2","size":24532,"sha256":"8c2def024c1bf31aacf3624ae3c4d701269b4ec3dc765c04830839f0d36b2d9e"},{"path":"ZAP-IA-Studio/sistema/public/hero-conversa.webp","size":76312,"sha256":"cc7d285c649a83b3bdbcfeb9e18961493a2fab186244171aa6fa253ef4ca6626"},{"path":"ZAP-IA-Studio/sistema/public/icon-v2.svg","size":47164,"sha256":"66468ae850c90e4de7d6872889c2df6b85c03a4a1b434116aa2acf19352cae9f"},{"path":"ZAP-IA-Studio/sistema/public/icon.svg","size":47164,"sha256":"66468ae850c90e4de7d6872889c2df6b85c03a4a1b434116aa2acf19352cae9f"},{"path":"ZAP-IA-Studio/sistema/public/ienvia-icon-v2.png","size":35238,"sha256":"e8dbec07c63e342dd301462527b02c9ea8ef666b29c17a865d33beeb27906897"},{"path":"ZAP-IA-Studio/sistema/public/ienvia-icon.png","size":35238,"sha256":"e8dbec07c63e342dd301462527b02c9ea8ef666b29c17a865d33beeb27906897"},{"path":"ZAP-IA-Studio/sistema/public/ienvia-logo-v2.png","size":97418,"sha256":"b3a14341bf7b054e5a48a9fcb4ece87b19547fc63413769666ce94129cc51feb"},{"path":"ZAP-IA-Studio/sistema/public/ienvia-logo.png","size":97418,"sha256":"b3a14341bf7b054e5a48a9fcb4ece87b19547fc63413769666ce94129cc51feb"},{"path":"ZAP-IA-Studio/sistema/public/inbox-realtime.js","size":211851,"sha256":"a67ea70df4a77910db66293ebe1fd4a4ff0577656e742f200108ee3ee46e3c7c"},{"path":"ZAP-IA-Studio/sistema/public/index.html","size":28663,"sha256":"b53f7b40f4e35494d19dd1413f39b2c492b4a171221b297f1de98ff2b44229ac"},{"path":"ZAP-IA-Studio/sistema/public/manifest.json","size":809,"sha256":"723b7ff42f93e7ad4de7c87a8df714da3f9a1734d70dee0e9b588b513e059f21"},{"path":"ZAP-IA-Studio/sistema/public/offline.html","size":1228,"sha256":"dcc77efa6696f13432c876e3d606217a6bdeaa91f9cd6f6e9f50a28fbd91be76"},{"path":"ZAP-IA-Studio/sistema/public/painel.html","size":214261,"sha256":"f563d00ef589061ea23e79ed1f167826014f560ce129944aa6fa082659073fe6"},{"path":"ZAP-IA-Studio/sistema/public/pwa-icons/192.png","size":17544,"sha256":"b5bcbec95ae41802c1c934fcdeb96a1053dec7ab18d1f85a3d886df568c6bbdb"},{"path":"ZAP-IA-Studio/sistema/public/pwa-icons/512.png","size":34777,"sha256":"b8686a1c13be9ff75fb3ad7dd2b9c92a7d1b715ceef39d04c9226c70867c99ef"},{"path":"ZAP-IA-Studio/sistema/public/spatial.css","size":21385,"sha256":"6a9fe7fb37c9df1f344e4d24ae6698f4849bc7fbb515355a2854db8d5513718b"},{"path":"ZAP-IA-Studio/sistema/public/spatial.js","size":3955,"sha256":"28338417470f150edbafbc8d8c0db8ecbfa0356c0ebc34940e798e515f1d2190"},{"path":"ZAP-IA-Studio/sistema/public/styles.css","size":113347,"sha256":"baa9a207ad691e65b9a1e2c7213f97a712293e960b4143018f169c12f77b8a2a"},{"path":"ZAP-IA-Studio/sistema/public/sw.js","size":2028,"sha256":"670ca1a0a2a205be59f81940cbf6fbe8a0838071a6f81717639fc60127c7f30b"},{"path":"ZAP-IA-Studio/sistema/public/v2/accounts.html","size":736,"sha256":"f622f3f9942653118b6db69f6e4993e918a2f0230a16f526d86776c7e611fa2d"},{"path":"ZAP-IA-Studio/sistema/public/v2/ai-settings.html","size":742,"sha256":"1b00a7489bfb2f53a3f495c680a17c2e1a183f7fc6de3a1655c2a5ada0dfdafa"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/CAMPAIGNS-XLSX-LICENSE.txt","size":3521,"sha256":"7096ce79f53b5a5fbb1d051122978463d24742b834675d46cb8403b766172738"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/FONT-LICENSE.txt","size":4480,"sha256":"4b8929f05a122b7abb9059501dc7dc4df86f8c97d5a1769d60d82cf2d2795dde"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/FONT-SOURCE.json","size":321,"sha256":"61773c23aade60a90d5081c89a0ae50792f627be80a80af084fa378aa900742f"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/RESOURCES-QR-LICENSE.txt","size":1100,"sha256":"f111705de8ae0686e179b5b92f38e5ce52e1bc554fb9d34e088024e2988db200"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/accounts-app.js","size":2947,"sha256":"e9a58f1484d01c48f649b7f11fc389e83b904c34642dd481f4172cf5b7d40358"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/accounts-domain.js","size":7893,"sha256":"5d27a7cd1c9447c5a5458b7026cbf4d036b2c0d5e4875e8261805470775f4bd0"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/accounts-sales.js","size":3086,"sha256":"e93bb59da6f75f376a089960a701da0be0164355a31539f2c8e12d1d65a7c0e1"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/accounts-store.js","size":7591,"sha256":"96612bbd83445a1abe08076dcdb445c758f35c9696e7d409a869f3f2b34d5d91"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/accounts-view.js","size":35901,"sha256":"0326e39643d6d177fde02e26e0f58b7bf27b0556cd7559a6cacbce47789dbbd1"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/accounts.css","size":5639,"sha256":"4dd09fd7fa6a864605c1f38e3d1f5655fadc7ca648d734c6356a42654f7903ad"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/ai-settings-app.js","size":2893,"sha256":"0bacb34c50eb16e201dcfd6353b3455f8d8e9b8bb1c091e6243f26757d821aa3"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/ai-settings-domain.js","size":4656,"sha256":"6dcc9429d60e531f1592acb5897aa17ef4e14f0aa61ff48c27b1c0441ce99daa"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/ai-settings-store.js","size":6316,"sha256":"43a076f6354db17d501c38ceb6e1d05b087870c9bb11483c09da21a3d2765a67"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/ai-settings-view.js","size":18415,"sha256":"d049e08f2d9a56b3300a03d1fe07141dd9234f9d4073ee02f2de54c0c19dba10"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/ai-settings.css","size":3771,"sha256":"e387ebcea19c13bf96f56cb3721cffd626643a593c14777365ba6a65e8235429"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/app.js","size":4940,"sha256":"1a23726fe6eb85687fd20b02c2f3ba00e3d2e15860e363f8c435bd0659a09114"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/appearance-preferences.js","size":1248,"sha256":"cbb241fe8223c3881c551299636899e6d68a1d4c79c4169ae652c94b5b9e2323"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/appearance.css","size":3574,"sha256":"de9a9e4d16cbee320fdec98b92f9e9241ec639add7508fda417f670dd5bc812e"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/appearance.js","size":3222,"sha256":"79515da0b7eb098bbe37f864a3b91afa898c7b5985fa1cc8f84d6e03d436557a"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/campaigns-app.js","size":4095,"sha256":"05bc8e75614bda5d46e8554b29431617dbb198675b180fd27838fe391fb674e8"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/campaigns-contract.js","size":5878,"sha256":"46673b737ed0a83ca3dc80bb6a7de20d10440ec4f3c7c29346d59b7de3ac9e52"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/campaigns-demo.js","size":10893,"sha256":"8d68756ac5538e251acbaa2e61fed90d3d7be22a185a94ae584f6815864d6011"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/campaigns-execution-client.js","size":7252,"sha256":"e637a70ca5a9082ee2401cbff662ad14e3a38f37ff98f4d974d06434375e92a8"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/campaigns-import.js","size":6347,"sha256":"ac10a652248ba5e55610b794d2027efe53f7dfa5ddca5b589531ac5915fec684"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/campaigns-markup.js","size":8742,"sha256":"b42ae167fc7b529a512eadcc4dc69f38326dd02334196fafccadebeae5eaea68"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/campaigns-read-policy.js","size":404,"sha256":"e778f18f82250d4282ddfcc710cd8448cc39485f70cb1df416cad9094ffa5f60"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/campaigns-reader.js","size":3735,"sha256":"7e503473a7827955430fc5d6b0c5b9c796fb95a1951f0303ef4dd200e4bce918"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/campaigns-variations.js","size":3840,"sha256":"47581b6c25f94744cf043b23e77456ecbf3291ee58220a7640c9309d7ab137d1"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/campaigns-view.js","size":33383,"sha256":"85d4b687067d0ac9ee1485efb87f14afff03df99d5536e5775abcc7f0db234a1"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/campaigns-write-policy.js","size":2690,"sha256":"2bd749ff066096a90985b4c81a04210dfa74ba824f87feb95edf49dca7cc0b9a"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/campaigns-writer.js","size":8165,"sha256":"97eca2efe565ab2579cb71c4a236bcfabb9d923896af2d7c3956f57f9ba6f0c6"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/campaigns-xlsx-reader.min.js","size":48040,"sha256":"d7607a3db460d5111ff37b32227ec2afa62872b0f0c1ef588b482ef9ea1fb595"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/campaigns-xlsx.js","size":7973,"sha256":"e7da9f009a61bd42509b215eff55d53071b2b3cfc117e11b975de57f67547143"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/campaigns.css","size":9936,"sha256":"2344fec2ec0c1caf0c748945d213a791711f2ed9eb3ac78548f1626a5ca4500b"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/channel-policy.js","size":2528,"sha256":"792217b11ad84c54b1a544e164bc3fb9948858c42c5b408d5f5a94a480e701ca"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/channels-app.js","size":2853,"sha256":"5c9fd0489793c98814b604e4064fc683c0c2893fd2c0a25a304e58d19e6bda63"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/channels-demo.js","size":3581,"sha256":"4d09e060ef7b3f14dac004dc176fc3b5650e18b73bf03eed48df8da5b9b222b8"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/channels-view.js","size":16298,"sha256":"355f204234cde80bf24a732193728decc446771a70588ff568a1cc061e7d1f91"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/channels.css","size":9715,"sha256":"6a367810389ee85fc55e0fb9e8234f04dc6ce98a40df82055f07ffd7901b252d"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/connections-app.js","size":4773,"sha256":"3ff527a74ee7c1d5b87880d2fa3bf0a2c9cf3fa194c1e016a8740bed4be3553c"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/connections-controls.js","size":15255,"sha256":"7f247bc2524a27ca3de3d8ec2730c49a26f50641b69af176441ab1154c261a62"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/connections-view.js","size":10643,"sha256":"6364c98e5c54008618bc9eac3301218267e8e42bcac41cd3cceefc9edb7d3cf2"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/connections.css","size":7620,"sha256":"bf698895367519939b3c6b32eb0845b991a1d5de962133ac964eef70b28fd655"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/conversations-app.js","size":3736,"sha256":"daed85cc0bbd15c0ea0256f3c4f54e340e13c5ad75614d321e7e1f56aacb6b32"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/conversations-crm-contract.js","size":2643,"sha256":"90e04449ac62d247cc2311c8434ac251bbd1217bf846bd9f0110cd165f33b28a"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/conversations-demo.js","size":12396,"sha256":"b14d9929c7f81b9ff18c37fca857dc161e69cfbf04cb93bfe811a95f93df8e18"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/conversations-hub.js","size":52911,"sha256":"be29dd986534203371b03ce3c24c3993a92fb1ca94e7a49961dced7796a9bc6a"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/conversations-icons.js","size":2635,"sha256":"41726d87908679855795fc907ae51baaa25f05564d9830189cdce144746c1c13"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/conversations-model.js","size":3431,"sha256":"9a07600c0acb1ff9b6161f2e54b6a3768d87f594c98ab336f8efb0da97a6e93c"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/conversations-quick-replies.js","size":5545,"sha256":"04df2f3b3bb9caf26bd52690abc8f66f9c18087ea4d334aacf61ed0ba7591ef6"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/conversations-restored.css","size":26294,"sha256":"76394c8bc0f2d563de281307437ed6dce211e1869f9806e84eb761fa3bcd7c98"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/conversations-view.js","size":52847,"sha256":"8f5634be28a391e409baf8388c890ac1656dcb1e263d8257934437555400f0fc"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/conversations.css","size":25623,"sha256":"7102a5141724385c7660fb8a06cb18d3b0984b4ca3fca4b3fa16398d9fcd11bd"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/crm-demo-ceramica.jpg","size":123197,"sha256":"e62fd37a0a961b92060f9babf4fff55bb8651579aef7686ce641e07a3e829c06"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/crm-metadata-client.js","size":3987,"sha256":"ea3da54a118478f388e8b2283f51a53456a218cb75f4db84af365f9ed0408cc4"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/crm-metadata-contract.js","size":9185,"sha256":"1d82bf265fd458355bd12e7d8a7ca680556116649a356bdfa8eca661aea77b57"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/crm-metadata-policy.js","size":971,"sha256":"623cd3061fa3449618bf61661e18ddffd5a304d508b3d35ed52fb7ad2e9638af"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/crm-metadata-view.js","size":15338,"sha256":"a4bd1d81d069b249dbf09b783caf8103e098599dff61a1ce597e017b1a6479da"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/crm-quick-library-client.js","size":1863,"sha256":"eb9c30e6ea5a76ccc752e5d7fd5c4740b30a52d791d0ad0130209f099c6d4901"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/crm-quick-library-contract.js","size":2156,"sha256":"b32c4b849ff0e802999f00211943a6a72554aab523866cc17057b74fb927adcc"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/crm-quick-library-view.js","size":5563,"sha256":"21ed9f51afe02bd656bd960b8d5f0d32dfd3f7e505ca9b5411d5f93a49079331"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/crm-tag-library-client.js","size":2032,"sha256":"ee500d52c6c27c12b32402bafc6760d53f80692daccf51b230a0041f70810e8f"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/crm-tag-library-contract.js","size":2583,"sha256":"3b1ca44fc7692b0dd5e0b8fce49abe4522692e792ee736a2331f8714a3188f02"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/crm-tag-library-view.js","size":6595,"sha256":"664b58dc6967db64e4f9598a80e3b4ca5464dcc8af4e7618494fca76874f9337"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/dashboard-live.css","size":5337,"sha256":"3d0fb1130b13f46f169bb5344ae0a58d3938be508ded5680a55bd26cdba87f17"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/dashboard.css","size":7277,"sha256":"c169dde0c66da8b71018805dc0668bdb7fcffdb23fafeb0d34f656f293d8e75b"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/history-app.js","size":2674,"sha256":"bda173ccb82fc62ed95a1a0c9e81293e514450491c7b7d01d0c7c452f2db3f62"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/history-contract.js","size":5041,"sha256":"e96562aecbc6d7aeea55c6c2b6e4963b28909f587defcc4c11a012a140ff5fff"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/history-demo.js","size":3643,"sha256":"729782c8fae97192fcafcd461195f727d4c097b8e9e7857cc53ee3c961054ce6"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/history-reader.js","size":4050,"sha256":"58423711ba0fdd9abdb1c00b6011f88d5fbfa1dc5723390010777084ffd3c3b2"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/history-view.js","size":14038,"sha256":"d90eb816250ebe440db731449b7ed1417a7b777b3de9e40f8845eb605c1b4582"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/history.css","size":5409,"sha256":"235918fc8a4dcdd7628eaf2d0cf087ee2574d3b8d9ffe030d80b079dc8b7f2c1"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/icons.js","size":3297,"sha256":"c8563d2265242ac0b16860c5de85c45afa6813d218c550e6d95d21c6f232b60d"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/ienvia-icon.png","size":35238,"sha256":"e8dbec07c63e342dd301462527b02c9ea8ef666b29c17a865d33beeb27906897"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/manrope-latin.woff2","size":24836,"sha256":"a30ddcd349703aff7464c34bef3fffdff405ee50c113440d7c8693c02d210972"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/navigation.js","size":1473,"sha256":"e1e5cf902fa8070db0daa36453b88dd14fd16447bdf7fc9814a70cc8cc23edcb"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/overview-parity.css","size":2645,"sha256":"b3f11d73f0822bb05d6c75e05a2b1333fd1db854592b3f5639d8e50eb2e684b7"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/overview-parity.js","size":10800,"sha256":"a25729d957aafe64adc2cfe0bb522fb4322d7f51899fb49adfa834e9ba539088"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/poller.js","size":1589,"sha256":"75da68cad7593ec516de5c85726335ad16215f23c912a55052ca42a8f541de59"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/pwa-client.js","size":7331,"sha256":"507a131411ef93771066a13c83213bd1087a4ffb9faac7e14f09021d7ae57c64"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/pwa.css","size":980,"sha256":"6b83c3ab1e8ae25d8e32081681cfa51262f4e0655c8521bdd2900bf43cc3cdc3"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/resources-app.js","size":3006,"sha256":"f7edab5ba6bec4b0e652d05973f88d2d215e60193295f54370b811a06c57f969"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/resources-domain.js","size":8080,"sha256":"62c9406802baf898fa5eedc3299c33a3be45963ad4e46a6b800dcc7cd1ebd890"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/resources-pix.js","size":5540,"sha256":"971e74d99b69e59611c30842d83c98e41377015d6567d4948e3184b51b409e37"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/resources-qrcode.js","size":78297,"sha256":"d5b84dd86d3d9f4f59f255e730e3dc9aad33c2373540d397c618e33304d592eb"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/resources-store.js","size":4578,"sha256":"638debbe1159336f8cad4daa5557cab41de01333855a1e08b1573f48164a17b1"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/resources-view.js","size":24540,"sha256":"15d98235d4ce1c8ea81972c22921a982b17945ac8b785ac719e46ebd63137648"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/resources.css","size":2744,"sha256":"6b3156da8636c33853d2aa233f696700649eab60a1bc9f913b72efc466626e17"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/security-settings-app.js","size":2914,"sha256":"98c21bd8ecdbd0810fda1c3216e0e6712044dde6fad179839136cab0fa3fafd2"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/security-settings-domain.js","size":8559,"sha256":"3ae7a7629c201aa107bcefb505d5c60c88e748089e4d4876c2a121647e871e4d"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/security-settings-store.js","size":5553,"sha256":"f764ca2011f99b8ccbc05d357b026b807adbf8a2497e95899de4daed8834941a"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/security-settings-view.js","size":22641,"sha256":"9d2e70fc463c9efc83412a63bbec81204911319ea25c2eb57b27912fc4999dc5"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/security-settings.css","size":3491,"sha256":"8d3537b4404701123639c3c916cab8c4adc0e3c9b37740e1cbc478546f2ad4b8"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/session-client.js","size":7228,"sha256":"ec7199285e844386fe844b27244f1131e3739f3c0eb57d915dc8d1a24c339742"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/shared.css","size":12958,"sha256":"f5e5ff88f78240f7d966d50838aea0f4b00f4615b4a36dc49a4ba23117bd0108"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/shell.js","size":11690,"sha256":"760d59e2e320f3cd5671549f7cbcfca62fa29939d1e2a1c4817eeb4d265f3986"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/simulator-app.js","size":2837,"sha256":"6ba6528a588fb40fe3f9490c210b7be3858975a1bc5e23141b8e328589be489d"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/simulator-domain.js","size":6513,"sha256":"cdfca8348031c9edf7bd48350fb407d030a1529c505f77568f1cd0d7ccf8d23e"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/simulator-fixtures.js","size":18701,"sha256":"d9661a0abbccd0a18bcdb3f2da5630fc4b6962b996a38e40197afe4c02cd8c40"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/simulator-store.js","size":7775,"sha256":"8ca9b951f3016edfad3ba5952900c12a56d0cb182cccd6edf7379d56b7b1f260"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/simulator-view.js","size":22283,"sha256":"2448ac23b4d850137152f8f6df99fbcf0cf33b7f0531b6df645f8f06437e31d9"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/simulator.css","size":5787,"sha256":"f958948efbf360291d60282244e85a25b9cb45a839b27ff95848e2c8795b94f4"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/training-app.js","size":2812,"sha256":"ca8a455897d092236bcdcecd7bc79e62dfc07445dba11ccf646689148eb51c38"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/training-archive.js","size":8524,"sha256":"0151a3dbd62a7b908a184696c4dda906b41500781fc26b0d3e0e231b155c051e"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/training-domain.js","size":9488,"sha256":"3c0e3eaa1c7537ffb670b69823bb94de3e04aa9ebd1210d378d8700fa45cc226"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/training-store.js","size":5986,"sha256":"8de4977242291cc8cfb13de4bcae7ac40257cd33aec13f9d00d51c91b3833eb4"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/training-templates.js","size":19815,"sha256":"b99f9b01b7376fb6eb73511a585981128511c1afb6569e44531265e2c3af17b2"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/training-view.js","size":25562,"sha256":"b095c90e38e777c1bffedd6a9650a00ca4068e812706d7d500eb1aa526b407cd"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/training.css","size":8249,"sha256":"6b8138ecf2667f0b902220c6bcef273ca0b095c9f4021c0bf824bb9a1c93449c"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/view.js","size":14626,"sha256":"76f19d478480c9f43445b3f7ff181ba5f2046e2e3362c10bee387089c4034f1b"},{"path":"ZAP-IA-Studio/sistema/public/v2/assets/workspace-theme.css","size":11459,"sha256":"1815904f9ba1cef156c5a5a26ea541361772a6dc2d7e212b2efe1852cb5ea26b"},{"path":"ZAP-IA-Studio/sistema/public/v2/audios.html","size":732,"sha256":"bef200fd0066ded181d88887af8f4089c75352fd2f80ffa2ae8d882f2b908c73"},{"path":"ZAP-IA-Studio/sistema/public/v2/campaigns.html","size":1235,"sha256":"7ed9b8bc7bb3fa70438ccd1b395f316ec5801434c41b6cf0366299f335dd40c5"},{"path":"ZAP-IA-Studio/sistema/public/v2/catalog.html","size":720,"sha256":"c6c190a81422d50fc2e9e6308ded813d9059e76ab0e608d3eef1c5b5e71e2831"},{"path":"ZAP-IA-Studio/sistema/public/v2/channels.html","size":1167,"sha256":"7ae77f8c80039ccd41fee8714f2315653d70cef2fc7c5832e01cbc37808fc158"},{"path":"ZAP-IA-Studio/sistema/public/v2/connections.html","size":1320,"sha256":"a37b6ff4ff782ccecd0b9590eaf5b4b120d118f4f7206999834768b72bde9d7b"},{"path":"ZAP-IA-Studio/sistema/public/v2/conversations.html","size":994,"sha256":"222937726785eb71884b9f41465a2e1dfa56a0669b374dff2d7f1d8f32a67b52"},{"path":"ZAP-IA-Studio/sistema/public/v2/history.html","size":1180,"sha256":"bd5bc6f8ff577bfc71505f5fb63df5409b8cd4cdb5dc3cfb68eccfea00ef1652"},{"path":"ZAP-IA-Studio/sistema/public/v2/index.html","size":1375,"sha256":"14fd1085a123dfaa9d075ff3cfd3d7339c5d8178e9ca99772c0322522898603c"},{"path":"ZAP-IA-Studio/sistema/public/v2/security-settings.html","size":762,"sha256":"38b217a83e8af194549cccf24b2ccc93957d3376f89d7651c629efeff44cdbd7"},{"path":"ZAP-IA-Studio/sistema/public/v2/simulator.html","size":738,"sha256":"dd965ca5cb4995e0eeb7e74e9361322268c1ce433e740001e1d6ac8c00737718"},{"path":"ZAP-IA-Studio/sistema/public/v2/training.html","size":668,"sha256":"2c05ae1cda14aede26e2b31a7821ccba0913e91d02a3cc3f4f16173c87121fc9"},{"path":"ZAP-IA-Studio/sistema/public/vendor/three/LICENSE","size":1081,"sha256":"8b378ebe60e2fe500158cb0ac71cb5e8b7d92953c2abcc63a0eb90499653b5bc"},{"path":"ZAP-IA-Studio/sistema/public/vendor/three/three.core.js","size":415816,"sha256":"f3556fb8c9aff8fc6f8e090b918ae5d4e6b45152afb93815002d3319d875cdec"},{"path":"ZAP-IA-Studio/sistema/public/vendor/three/three.module.js","size":392831,"sha256":"6a238d5d0c711f1f008488aff06a2ab9ab478959842044d243e89c316f6a5fc2"},{"path":"ZAP-IA-Studio/sistema/scripts/assinar-versao.mjs","size":2091,"sha256":"6b19f429719482416835a6fba90979a6f614ca6709c93e51f6f21f88440039b8"},{"path":"ZAP-IA-Studio/sistema/scripts/audit-crm-official-parity.py","size":4636,"sha256":"d0caa9795c39df330befd5fb57e54dcce09c448d368f279d9b3a1fa6c4e7513b"},{"path":"ZAP-IA-Studio/sistema/scripts/auto_update_boot.mjs","size":6783,"sha256":"b12e046399a747d8d6bf98a10b421c91a805fc2fc35264553c2f44174347f6d2"},{"path":"ZAP-IA-Studio/sistema/scripts/build-resources-pix.mjs","size":2015,"sha256":"b0128a94e6d6646720f3b77542919d676338e7fb484413af31ba795f1851f028"},{"path":"ZAP-IA-Studio/sistema/scripts/build-simulator-fixtures.mjs","size":5074,"sha256":"4c2e22ed1247d9eeb4720200d687200f3988be9692c618313979f7b229fcf0d9"},{"path":"ZAP-IA-Studio/sistema/scripts/build-visual-review.mjs","size":7669,"sha256":"a6b6d876b4121826c36f096a57ab91cfde268dde74952166774ceae8e573bb46"},{"path":"ZAP-IA-Studio/sistema/scripts/capture-accounts-review.mjs","size":752,"sha256":"ce3dbc9ec07ba2230510effe65b12a24f8c20e191be83bd92bfde3c608b97702"},{"path":"ZAP-IA-Studio/sistema/scripts/capture-ai-settings-review.mjs","size":817,"sha256":"47065944cf26be4cc29413ccd12220759fc73daaa3cc36c59506930bd7198b0a"},{"path":"ZAP-IA-Studio/sistema/scripts/capture-crm-parity-review.mjs","size":1303,"sha256":"af7ffdd383e1e196a2c98a02a53aacdc9ec86f3b1c554f384b270f1f006f8b8b"},{"path":"ZAP-IA-Studio/sistema/scripts/capture-overview-parity-review.mjs","size":701,"sha256":"93c21a115841b60e82614f58e73e13402f0a81ad76d6a7149fc223cb50748871"},{"path":"ZAP-IA-Studio/sistema/scripts/capture-security-settings-review.mjs","size":795,"sha256":"13237c57e933ee06da6dc827cefbd11bcaef88510d3ef343b8002cbdc73856a8"},{"path":"ZAP-IA-Studio/sistema/scripts/capture-simulator-review.mjs","size":697,"sha256":"e4884fe5a6af655fdb5f6b897152d95b145db5ac65021bd93a74c50b9406451d"},{"path":"ZAP-IA-Studio/sistema/scripts/evolution-setup.sh","size":3025,"sha256":"b521ac0c6fef5080b602877b1d43129b33e71ab23b730494ab38b9e96ed1bc1a"},{"path":"ZAP-IA-Studio/sistema/scripts/gratisvps-provision.sh","size":6329,"sha256":"e650cc0578f9c2f3e5f6df6f3fd509d974efb2ac978f141e54b6f4469f74fa3c"},{"path":"ZAP-IA-Studio/sistema/scripts/migrate-crm-tags-legacy.mjs","size":3729,"sha256":"c865bb256c45fcd7feb944f9a4985fdddb9d6c9456cbc04c1f7f13fe81213018"},{"path":"ZAP-IA-Studio/sistema/scripts/oracle-provision.sh","size":6090,"sha256":"3d586fb0e5b6cd1d48ee4d67e8f8a6733e48a34dc8e9cf55e6859980deff4c91"},{"path":"ZAP-IA-Studio/sistema/scripts/plan-legacy-channel-import.mjs","size":843,"sha256":"a01f74d171bbda1ccecb936545525fe65ad1f32f691e1c1d47e692c80cd42b91"},{"path":"ZAP-IA-Studio/sistema/scripts/preview-visual-review.mjs","size":1357,"sha256":"3ac75847896d3bc433ef8b6bb83c2471275049534c3c28b705c7f362410a0886"},{"path":"ZAP-IA-Studio/sistema/scripts/serve-static-release.mjs","size":1226,"sha256":"cb1d67da3290448a59d1db0876c710bda7dfbb6f63fa380dce9e1b90eb6a19c2"},{"path":"ZAP-IA-Studio/sistema/scripts/setup_linux_portable.sh","size":12551,"sha256":"8e5b87e61b05710faa49075c6e25d87814c77e9bc9a2c0df5a9b8b4d1c89d44d"},{"path":"ZAP-IA-Studio/sistema/scripts/setup_windows_portable.ps1","size":16840,"sha256":"4f17f809465ab10f5906e5ebbf67ce7b8b6f808d46f3e9744ee124ea48755688"},{"path":"ZAP-IA-Studio/sistema/scripts/test-isolated.mjs","size":2230,"sha256":"32091f1fffc90f0a2854d0cb75e7e45046168f757bd2600f8d4f8e9647a71ef9"},{"path":"ZAP-IA-Studio/sistema/src/accounts/record.js","size":2486,"sha256":"c301812aa0d14d676c108339bf0733f5a92858a54940438d00b1e2a75a2cba41"},{"path":"ZAP-IA-Studio/sistema/src/accounts/repository.js","size":3615,"sha256":"4d7f1c3e42fbae4377b870f209e82b300136c596e1cabce5db6201ba4642f5c4"},{"path":"ZAP-IA-Studio/sistema/src/accounts/router.js","size":15506,"sha256":"75330501428a23250a2be26c0f965f1ea1a0ccae894a0ac52e7c3dadf32fe098"},{"path":"ZAP-IA-Studio/sistema/src/accounts/workspace-port.js","size":2852,"sha256":"623da6f102e172473be5141eca7758986c29103273f64b45ee16e5678c303a53"},{"path":"ZAP-IA-Studio/sistema/src/ai-settings/record.js","size":1115,"sha256":"52a883dc8f107562bc3b3ae88da5be534d38092a1364217278f9c47746ccd653"},{"path":"ZAP-IA-Studio/sistema/src/ai-settings/repository.js","size":3462,"sha256":"b684b3d732db3ac1129a941f4aa0e1a86a42483f14785af7c5477b65c9b9fb3c"},{"path":"ZAP-IA-Studio/sistema/src/ai-settings/router.js","size":8608,"sha256":"02310e07c139b6f8cbe684fcbf5027f474e536ce42cd81bec30808a37239bfaf"},{"path":"ZAP-IA-Studio/sistema/src/ai-settings/vault.js","size":2220,"sha256":"82bc5ab62ad0f27e96f71a0c88fe6ccd0db299f26879a667347578fb7cbb6bf8"},{"path":"ZAP-IA-Studio/sistema/src/aiEngine.js","size":66016,"sha256":"b65f9643ba1fe409187c0d0a613f626b61d7cf959f20872404cf5b9f4a01d549"},{"path":"ZAP-IA-Studio/sistema/src/audioProcessor.js","size":12772,"sha256":"e2562875a7bc45c4f57bfab267d630c8dc15a3e600d1f844fd1d924f529e8f9e"},{"path":"ZAP-IA-Studio/sistema/src/browserOrigin.js","size":1728,"sha256":"d4ca659c38ed85376839cd8d9802a1ab9eed99cf026dacc1bc2919ae7000bcb9"},{"path":"ZAP-IA-Studio/sistema/src/campaigns/coordination.js","size":3912,"sha256":"cf8e8fb5f5cc6116af8e3692ca0f3dff63186e510fcb1cc196e48bd0d958d666"},{"path":"ZAP-IA-Studio/sistema/src/campaigns/drivers.js","size":7905,"sha256":"82c3b5a4f13e3c893ce431ce11d142d2c67db1cc8b52b6059961dfcc0b28669b"},{"path":"ZAP-IA-Studio/sistema/src/campaigns/executionRouter.js","size":8860,"sha256":"3d93278b70f7b09bf48f4d0af5c904b76190178a0fda7400d4a7a9a8869529f7"},{"path":"ZAP-IA-Studio/sistema/src/campaigns/executor.js","size":13937,"sha256":"010e1646a439fbb124a431019bdad2746c6d9b6924d46c458b550ef5ec1839fb"},{"path":"ZAP-IA-Studio/sistema/src/campaigns/media.js","size":2911,"sha256":"f1e94b88242d8f4a0e948e0f75612a867406f20f4543e6390c049b1a7cb7872c"},{"path":"ZAP-IA-Studio/sistema/src/campaigns/router.js","size":16530,"sha256":"d77cf2324f93d3a443749ae6f4c9bad21d0ba11d86189cdcb0bbe756cd0eb6a7"},{"path":"ZAP-IA-Studio/sistema/src/campaigns/scheduler.js","size":2756,"sha256":"906ff85a4fc020c7d8200982db120f8afc73360d19a558478b08dbefc5de4244"},{"path":"ZAP-IA-Studio/sistema/src/campaigns/worker.js","size":4271,"sha256":"122ea3e2ecdb4fc062998abefbe75829efe2bde88d5903927c9da244df4aa8fd"},{"path":"ZAP-IA-Studio/sistema/src/campanhaApi.js","size":11989,"sha256":"7c658dd4597cdda1f09896d08da33b6c499268e283db00324147aaf3bd5ec69f"},{"path":"ZAP-IA-Studio/sistema/src/campanhaDownload.js","size":3132,"sha256":"5a2437f0ca839b5ee8161259a839bf4de7c9370eeb172116108355d79437f20d"},{"path":"ZAP-IA-Studio/sistema/src/campanhaEmissor.js","size":3673,"sha256":"8813edf9e0fd01fb5baee18c01dd24a2f0df22769a91dbce2b1e90e95b9522b5"},{"path":"ZAP-IA-Studio/sistema/src/campanhaEstado.js","size":4344,"sha256":"36a9904db1e5bf7a55b9acd37c9c4edc6463bf79c5c6e6411b6ec14131d75bf6"},{"path":"ZAP-IA-Studio/sistema/src/campanhaEtapas.js","size":3255,"sha256":"b1c529e7f909af78be74f23825408dff3460e91497364e6eb23bb10bdb9346a9"},{"path":"ZAP-IA-Studio/sistema/src/campanhaEvolutionProxy.js","size":2869,"sha256":"21c087d202cc9729d6e2de5952e6c9c5a291427d8153037e1c13ea77c2973e5d"},{"path":"ZAP-IA-Studio/sistema/src/campanhaExecutor.js","size":2839,"sha256":"b3b8225a54e01b50e70cacfdc1700b5a6a905e759af1617825d65e61e65dfe6d"},{"path":"ZAP-IA-Studio/sistema/src/campanhaHorarios.js","size":2256,"sha256":"fdfb7e2bd5b0a25d548c257fc0d265389b2239d8e99e93b101fb91554b66dc4e"},{"path":"ZAP-IA-Studio/sistema/src/campanhaIA.js","size":2171,"sha256":"7233569511d8005ebe6bcd1052919f6ebdfc5f309f22fb7add04e6b4a7f8e646"},{"path":"ZAP-IA-Studio/sistema/src/campanhaImportacao.js","size":6347,"sha256":"ac10a652248ba5e55610b794d2027efe53f7dfa5ddca5b589531ac5915fec684"},{"path":"ZAP-IA-Studio/sistema/src/campanhaIntegracaoMotor.js","size":3939,"sha256":"25d602ba88e607dd4cb421066b7a17c7f6733a2c59312784084d4de1483675ab"},{"path":"ZAP-IA-Studio/sistema/src/campanhaMediaPrivada.js","size":8693,"sha256":"2db108314592184af67b5bee79e3cc7d808bc07026a621ac88783e8fa85a5eb7"},{"path":"ZAP-IA-Studio/sistema/src/campanhaMotor.js","size":3673,"sha256":"fe19435aca9f81d94b381cd367fef302eb29ea20a3453486c7377e794eb7b823"},{"path":"ZAP-IA-Studio/sistema/src/campanhaPlano.js","size":4564,"sha256":"df1a5b89f27a202d56d2200bcb1489d55511e42b52e799e9e8660e1fc9fd4bb0"},{"path":"ZAP-IA-Studio/sistema/src/campanhaProxyRemoto.js","size":1902,"sha256":"0532a027f3fcb4916c9ecb8d16c872e121262cc224395e619fe00c2fcd70f5f7"},{"path":"ZAP-IA-Studio/sistema/src/campanhaRepositorio.js","size":4349,"sha256":"447ee6074848a20ad6fa7d88a51b393dffd02d06d0242f802a875dc69f79a496"},{"path":"ZAP-IA-Studio/sistema/src/campanhaResposta.js","size":1424,"sha256":"97eabfb3cfa347e0b60d2c1fddc7e0a3f47bec00c4054e02eaee2527c6823c61"},{"path":"ZAP-IA-Studio/sistema/src/campanhaSelecao.js","size":5441,"sha256":"7dda38d41e8940edbb690cc941a685c97df98019fe49d1e7e894fbc31b962ceb"},{"path":"ZAP-IA-Studio/sistema/src/campanhaVariacoes.js","size":3840,"sha256":"47581b6c25f94744cf043b23e77456ecbf3291ee58220a7640c9309d7ab137d1"},{"path":"ZAP-IA-Studio/sistema/src/campanhaXlsx.js","size":4779,"sha256":"e8c9e6c0620c00fb5c0594ec9a917c6aafc45695201be3495137dc67fa3f886c"},{"path":"ZAP-IA-Studio/sistema/src/channels/legacyBridge.js","size":5712,"sha256":"9e99d66acb5899e08c18aa59855d719d08e03c935ea7fe3d293705058765710f"},{"path":"ZAP-IA-Studio/sistema/src/channels/legacyIdentity.js","size":2694,"sha256":"48ec60404d69317bb3a733450e6dfff4baef69def0083291d3a96a7ae1a13318"},{"path":"ZAP-IA-Studio/sistema/src/channels/router.js","size":11584,"sha256":"008a01c1e7747663e322aa3e9b1848be63dd5cc2ad2403cf2acd812d6f8a019c"},{"path":"ZAP-IA-Studio/sistema/src/cloudConfig.js","size":1762,"sha256":"215aa80ef03061b27ecc011faf888a23a77d0085ad9a23e63626b294f340697c"},{"path":"ZAP-IA-Studio/sistema/src/cloudSendScope.js","size":914,"sha256":"7d6e2972a52c17de8e6ac2820f452fb174daa69008ee0dff0bb6a125bf74342f"},{"path":"ZAP-IA-Studio/sistema/src/commandStatus.js","size":953,"sha256":"d62026c7ef39de911e3aa585a9b17d673fc5b21fdca8ffbc8641a3677f61e3cc"},{"path":"ZAP-IA-Studio/sistema/src/connections/controls.js","size":2840,"sha256":"4e65d8dc9762e5821835be735f04acdb7f08f5347c2d8bda6588816838a76f30"},{"path":"ZAP-IA-Studio/sistema/src/connections/model.js","size":1520,"sha256":"0a7e52375a7d166a30bd21775d648e3cb4d85f8ee12214585fcecfc2b67d6756"},{"path":"ZAP-IA-Studio/sistema/src/connections/router.js","size":5930,"sha256":"94b879cddd79bc77e0ff9e9615070c5591a25a4cac8d3b66a71bca02a8e54dc5"},{"path":"ZAP-IA-Studio/sistema/src/crm/contracts.js","size":144,"sha256":"e3f191bb187f611d0adb23a1a90fd134b980f6536d1688762996f65d6059de51"},{"path":"ZAP-IA-Studio/sistema/src/crm/router.js","size":9630,"sha256":"2b19c811831953b27ff825a0fe56fcce3230f613d102801b4516d7f7c038fc6f"},{"path":"ZAP-IA-Studio/sistema/src/crmV2/eventIngress.js","size":1751,"sha256":"32e2680ec9fa10e473a5e45aee7e69bb4607f4759d76b2909e0ee6d77adc07e5"},{"path":"ZAP-IA-Studio/sistema/src/crmV2/evolutionEvent.js","size":6685,"sha256":"5ce2fc6b9f13f77c8994d35f2f11bbf620b6b2f29b3a532e75c003217a17b457"},{"path":"ZAP-IA-Studio/sistema/src/crmV2/readOnlyEvolutionDiagnostics.js","size":10317,"sha256":"0ec31a57883784df562d642a29ca0b3f4f6387d875fced3436f97540287b239f"},{"path":"ZAP-IA-Studio/sistema/src/dashboard/connections.js","size":3668,"sha256":"1673758b72fd47703339b2d72bcb6ceffdc13d23082bd6bc6750e799dd3dfd3b"},{"path":"ZAP-IA-Studio/sistema/src/dashboard/model.js","size":2224,"sha256":"3e9f0a44e81a2bb26b373724a12b5841cec07b3009d8adb72946e9c91ce7ed9e"},{"path":"ZAP-IA-Studio/sistema/src/dashboard/parity.js","size":6975,"sha256":"832d4acba959d4c8d3fcb0ba806a6641bcbf89c7c3a7451b414972ed8f27456f"},{"path":"ZAP-IA-Studio/sistema/src/dashboard/router.js","size":4916,"sha256":"4fbd26e1d56b26762b90e790f477261234fcc31309439f52060d8c8de3195100"},{"path":"ZAP-IA-Studio/sistema/src/evolutionApiCloud.js","size":44006,"sha256":"d83c9a4058a9026240f0bac2b3ea3e0661d69164cc1ad589e596a655e6f98498"},{"path":"ZAP-IA-Studio/sistema/src/evolutionApiHistory.js","size":1836,"sha256":"d949512a8e0dd08ba621e677bce480d3d6a716d6f5027405acd3e29b5321e059"},{"path":"ZAP-IA-Studio/sistema/src/evolutionApiResponse.js","size":1944,"sha256":"01b4a2009b93c683f37e6d9d62ac1fb29a589461614444bdf1408daef861c123"},{"path":"ZAP-IA-Studio/sistema/src/evolutionApiWebhook.js","size":14037,"sha256":"7d2a1a4ffcb82cda54fd25c32ea9ff6a617e58825afd39c4056d5a2a48cf40eb"},{"path":"ZAP-IA-Studio/sistema/src/evolutionIdentity.js","size":2414,"sha256":"4de3a1bdc751f4f3e3b54f3fd2bb5754d9141976d429935b336072e01bca4c04"},{"path":"ZAP-IA-Studio/sistema/src/geminiPrazo.js","size":1707,"sha256":"1333ad96677042492f02b0c310a4ad057e9f15d90c811da9e2afcaeb50e31e81"},{"path":"ZAP-IA-Studio/sistema/src/historyJournal.js","size":2279,"sha256":"d81086b819fda54c509abb7d1410b649df2c23db07f975f213998ed6319e2a01"},{"path":"ZAP-IA-Studio/sistema/src/inboxRealtime.js","size":1905,"sha256":"795bd0e9164b2f10bd5e1a7e0a880ca6a6e600f3690df0f84efd81a56ceeacfa"},{"path":"ZAP-IA-Studio/sistema/src/inboxRealtimeBrowser.js","size":248,"sha256":"20a8f60c667f1536e36e21e47e7e336074757eb1d06544643b54144d801dbc80"},{"path":"ZAP-IA-Studio/sistema/src/instances/baileysEvents.js","size":3834,"sha256":"e5893147ae23ccae79f28bb35463d6290835da3ceda4fc7018753bd5fb258b46"},{"path":"ZAP-IA-Studio/sistema/src/instances/baileysSession.js","size":10990,"sha256":"9f768e8dad505fe9e3fc8c5a65d19f0667d7e128b93d0e89a0a2d6bf24e7b467"},{"path":"ZAP-IA-Studio/sistema/src/instances/contracts.js","size":3842,"sha256":"770a7da5aa14b0328c4371c47c223d6a76f71d399eaa2ece4fcaa6238d25373a"},{"path":"ZAP-IA-Studio/sistema/src/instances/evolutionDriver.js","size":6387,"sha256":"7c05428dda1d2a83797c7df86e0036371bb6c6c2cad642aea359b87afa47bede"},{"path":"ZAP-IA-Studio/sistema/src/instances/executor.js","size":3309,"sha256":"89d82d4615437ca82d3748cb0513f975cfcbd65652e2ea39dacbc12709764bc5"},{"path":"ZAP-IA-Studio/sistema/src/instances/history.js","size":191,"sha256":"d20c7d4238ae7aec82c3caba3d832491fad929e614a08864bd18c93156b15027"},{"path":"ZAP-IA-Studio/sistema/src/instances/ingressJournal.js","size":6119,"sha256":"2a8bf091b90ffd4dfb1e37aac8a2be2c3da8e9e62f19b427d0c22c0ad86240b5"},{"path":"ZAP-IA-Studio/sistema/src/instances/legacyLocalDriver.js","size":2185,"sha256":"008bbbef34aa81c3cdfa4e96c9c65e045f773d433f7abdb39a1992d28092b0ce"},{"path":"ZAP-IA-Studio/sistema/src/instances/localSessionDriver.js","size":1958,"sha256":"83de63e267c1eb30bf01a75f12a2c5a72a7fe09a9fe0d329f8f819aea2225bbe"},{"path":"ZAP-IA-Studio/sistema/src/instances/reconciliation.js","size":3432,"sha256":"edd584a552311b1f4b9c86b2ce18e0286294195653fab420f021a774f3a61fe5"},{"path":"ZAP-IA-Studio/sistema/src/instances/repository.js","size":4189,"sha256":"4bc937355432a68cb8a202443f4eec2b3b57a7b00dbbee8f359549407ed9466d"},{"path":"ZAP-IA-Studio/sistema/src/instances/runtime.js","size":8365,"sha256":"b069d35465727595112fca85f995634a9f128be47f4ba5f3a232c7386bdc3009"},{"path":"ZAP-IA-Studio/sistema/src/instances/workerSupervisor.js","size":5673,"sha256":"eb6bbdf569899e4e24aba13242ca39ce4619d03319f6b81e47de624ad1d258ab"},{"path":"ZAP-IA-Studio/sistema/src/pairingSafety.js","size":2185,"sha256":"4e5db542c4915ce08d969b725d33f7f5f0d1bb0064b05189d787b16ac4f34d6a"},{"path":"ZAP-IA-Studio/sistema/src/pix.js","size":5410,"sha256":"1b7525071a329c294487d18ff7b8fb876cf46c7e91c82de07c7ceca3c8769711"},{"path":"ZAP-IA-Studio/sistema/src/resources/repository.js","size":3339,"sha256":"c25e5a6ea2515b33ae084c08b7da9d692e360911c1e90c5089e9cdd59021afcc"},{"path":"ZAP-IA-Studio/sistema/src/resources/router.js","size":6252,"sha256":"140de1fde5af609fb042fcc17acf5f938c6eea610945906431f45cd23e46b0d3"},{"path":"ZAP-IA-Studio/sistema/src/security-settings/pin.js","size":1745,"sha256":"7d41e8afe1cd24d8ed0de3e211cfb1cdb4b792dfa20f08242d29bdd6a7508c66"},{"path":"ZAP-IA-Studio/sistema/src/security-settings/record.js","size":837,"sha256":"95bad58b6faa0cef714ed7259d789e9a36877db6f5142accf32170d09c5b9c67"},{"path":"ZAP-IA-Studio/sistema/src/security-settings/repository.js","size":3490,"sha256":"d5756389f59fbe9b5d010031597cda6804392a07a6cebb744e835e57ed304292"},{"path":"ZAP-IA-Studio/sistema/src/security-settings/router.js","size":7382,"sha256":"72f05d9688a412330a12e5beea1e8c063115e5a65df6ee215638928908887dc2"},{"path":"ZAP-IA-Studio/sistema/src/server.js","size":191473,"sha256":"9c8bdec5c7f22a0aafc505b0cffa3a0052ca4af6a0cd4a632ed087ad23ad6ba2"},{"path":"ZAP-IA-Studio/sistema/src/simulator/repository.js","size":3352,"sha256":"bb70afe634a60ddf5e256840e0c74b948764351ede02a08e83d5cedb975a6c62"},{"path":"ZAP-IA-Studio/sistema/src/simulator/router.js","size":1980,"sha256":"c16f0e9c884b4369f8ba572816b56f8d3b02851b627bfc7511a950c623bcb9ed"},{"path":"ZAP-IA-Studio/sistema/src/simulator/runtime.js","size":5978,"sha256":"4e25b765603698201a4f5a7551ab3a60a98fc2b179c25d43a8f56a65cbf93516"},{"path":"ZAP-IA-Studio/sistema/src/simulator/service.js","size":8878,"sha256":"25c61eb36a89428b0dad04fa4f708056706b54d61ad0bb56592901e2f06918b4"},{"path":"ZAP-IA-Studio/sistema/src/storage.js","size":76527,"sha256":"fa36c4981f5092939c3b832529a4ca7500e129b95f38aa1867b0809f77db04a5"},{"path":"ZAP-IA-Studio/sistema/src/supabaseCloud.js","size":115939,"sha256":"791aeef10f54f7c9e0c5702fb6342894e0239fda402755273eb6e423b79d1596"},{"path":"ZAP-IA-Studio/sistema/src/templates.js","size":19815,"sha256":"b99f9b01b7376fb6eb73511a585981128511c1afb6569e44531265e2c3af17b2"},{"path":"ZAP-IA-Studio/sistema/src/training/importPreview.js","size":3794,"sha256":"9e2a8c28fe83b19654d970f5c2fca3267428e788bfeb192c9828830898016629"},{"path":"ZAP-IA-Studio/sistema/src/training/repository.js","size":3530,"sha256":"1724902ce9e1d0322a1a50b54d2b8d6a8d24f683856e2bafd242a7a85d17c7a8"},{"path":"ZAP-IA-Studio/sistema/src/training/router.js","size":4985,"sha256":"d22c2791dca2b958c3e55d56425e1102bc0126bd9257f1b478d082f1a3c938a9"},{"path":"ZAP-IA-Studio/sistema/src/training/runtimePreview.js","size":911,"sha256":"3a450f154edefc665b471a8998c5aa480be1cd5e2fcf6be816e035370469a681"},{"path":"ZAP-IA-Studio/sistema/src/trainingPackEngine.js","size":72149,"sha256":"c3a8b146184e4237a3cabce2bb2898e16670bda5ae11cb137656d9db7e01b92f"},{"path":"ZAP-IA-Studio/sistema/src/trueClock.js","size":3198,"sha256":"d6656ff91a8104b6aeada5249a6b15871319838ab7ab9578e9766b939c11b605"},{"path":"ZAP-IA-Studio/sistema/src/updatePublicKey.js","size":230,"sha256":"e12e7b343a32e4641d4fa647b342e94844fcc81bd978a668bc8c26d70a99d654"},{"path":"ZAP-IA-Studio/sistema/src/updateSignature.js","size":2313,"sha256":"7475ba4c5295f98bb9755966c687a2152d29b2a26673736fbc3f038e6dc806ee"},{"path":"ZAP-IA-Studio/sistema/src/updateTransaction.js","size":7004,"sha256":"dd83acbcd58effe8a918888a4eb416d8d6b5204af1c282d585d916e8045c302e"},{"path":"ZAP-IA-Studio/sistema/src/waCompactAuth.js","size":7112,"sha256":"7d282d75c74d9b243b0f86d693d9829b8cb30ca22d0f73b15121ec2e3b5fb7f7"},{"path":"ZAP-IA-Studio/sistema/src/whatsappManager.js","size":165399,"sha256":"6e57597a05e8533c7e99a92d9d87b569b1868578a2440badeed8579772d32ede"},{"path":"ZAP-IA-Studio/sistema/src/zipReader.js","size":10434,"sha256":"5babe72c4d9e4c6e6e5f84fd7ef9946a4c0b899859df88fbd36a49425828c96e"},{"path":"ZAP-IA-Studio/sistema/vercel.json","size":6548,"sha256":"48e6c5fbb1b1679694697c3716b553f28ecceb147447d2b6d2d2750c3c14ec31"}]}
+{
+  "format": 1,
+  "version": "5.8.28",
+  "files": [
+    {
+      "path": "ZAP-IA-Studio/Ferramentas_Extras/Linux_Criar_Atalho_Desktop.sh",
+      "size": 169,
+      "sha256": "9616f95163b1b3c9ff9d74e570412d19ff185a3a3fef307ff30154be19e0e353"
+    },
+    {
+      "path": "ZAP-IA-Studio/Ferramentas_Extras/Linux_Reparar_Sistema.sh",
+      "size": 167,
+      "sha256": "7f39723fd81b52e5d2fdec6a8dca7a33ef84f7b384271fe5df99fbf27389c5eb"
+    },
+    {
+      "path": "ZAP-IA-Studio/Ferramentas_Extras/Termux_Instalar_ou_Reparar.sh",
+      "size": 506,
+      "sha256": "a9c359025115b81e8de8c510f27aa483207ffb8d3a92d69ed0c5e8daf67a57e1"
+    },
+    {
+      "path": "ZAP-IA-Studio/Ferramentas_Extras/Windows_Criar_Atalho_Desktop.bat",
+      "size": 399,
+      "sha256": "793b1a0858414aa7af20882a209b173e1dc8c6078f4d93dc71b9ba92cc21a2bb"
+    },
+    {
+      "path": "ZAP-IA-Studio/Ferramentas_Extras/Windows_Reparar_Sistema.bat",
+      "size": 600,
+      "sha256": "89ebffae0c116d82aed7c995c043e45426cbd2abbf0758db94f9b0a4fe2de485"
+    },
+    {
+      "path": "ZAP-IA-Studio/GUIA_VIBE_CODER_TREINAMENTO.md",
+      "size": 15809,
+      "sha256": "3f87e3fb833bdbb3d7595bea54dc52b30cb9c31e7ef9cf3bd4879348ffddec24"
+    },
+    {
+      "path": "ZAP-IA-Studio/INICIAR_NO_LINUX.sh",
+      "size": 319,
+      "sha256": "94c220b346ff6b67fc752ad169d20c79928bb0130cd2c54704b9151a9733efc5"
+    },
+    {
+      "path": "ZAP-IA-Studio/INICIAR_NO_TERMUX.sh",
+      "size": 8273,
+      "sha256": "cf6dde7bc8140b638ce34afe646ac81eb0a2dbd869b189770ddb02ce2597e9c1"
+    },
+    {
+      "path": "ZAP-IA-Studio/INICIAR_NO_WINDOWS.bat",
+      "size": 844,
+      "sha256": "2c003ae3d0a8871e184b1ab2c6675439fc2605e0f2065e59ddbc4edf370fed7b"
+    },
+    {
+      "path": "ZAP-IA-Studio/LEIA-ME.txt",
+      "size": 3077,
+      "sha256": "ee37311a13cb8e0095115e6076b5ccaaddadae31ae0dbfdb4871b6b9c9629102"
+    },
+    {
+      "path": "ZAP-IA-Studio/MANUAL_OFICIAL.html",
+      "size": 15096,
+      "sha256": "e33aee92d6900298dc11bea8a79ab6e9547e6b730064b78fc94b5e83072862b0"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/.env.example",
+      "size": 2333,
+      "sha256": "c27fecfeff8e75e2936ee70334607075cdb01566946143d970b16e3f8443eec3"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/.npmrc",
+      "size": 174,
+      "sha256": "467564df09bffbac3a532ca5efd7fa56abe6db68111d8ea29fdcf5d8c39c4b65"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/1_Instalar_No_Windows.bat",
+      "size": 1249,
+      "sha256": "f43426d524a1834843bc325ea8c29f70a78f189d772e66f04b03c3bc5726f562"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/2_Iniciar_Atendente_IA.bat",
+      "size": 742,
+      "sha256": "c425bcf755659c037ce89d798457773c900cae1265ad713cc91ae8b84b0139f9"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/3_Criar_Atalho_Area_de_Trabalho.bat",
+      "size": 481,
+      "sha256": "20e9ae0beedc7076d2b84bd6a2d31c82461924e4f70635aa56deb5177dff3673"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/4_Instalar_No_Termux.sh",
+      "size": 1814,
+      "sha256": "b72245ab52a2387f369319760065edd7687549d3dec5daf437369e56f747ba31"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/5_Iniciar_No_Termux.sh",
+      "size": 3087,
+      "sha256": "2976ea2d422c5551949efef7456a4fdd2e80ac893298e11e0d4bb2d232010b96"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/LEIA-ME_COMO_USAR.md",
+      "size": 8177,
+      "sha256": "902cc333c259d7a109ddf925e4f3a9bc819b84796e7dbaafb092080f797019a5"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/api/index.js",
+      "size": 57,
+      "sha256": "9e31ab60ddb3cfee03ad14560de4373e6de9fd829d18b9cbaaa0662927545341"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/dist_kit/Ferramentas_Extras/Linux_Criar_Atalho_Desktop.sh",
+      "size": 169,
+      "sha256": "9616f95163b1b3c9ff9d74e570412d19ff185a3a3fef307ff30154be19e0e353"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/dist_kit/Ferramentas_Extras/Linux_Reparar_Sistema.sh",
+      "size": 167,
+      "sha256": "7f39723fd81b52e5d2fdec6a8dca7a33ef84f7b384271fe5df99fbf27389c5eb"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/dist_kit/Ferramentas_Extras/Termux_Instalar_ou_Reparar.sh",
+      "size": 506,
+      "sha256": "a9c359025115b81e8de8c510f27aa483207ffb8d3a92d69ed0c5e8daf67a57e1"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/dist_kit/Ferramentas_Extras/Windows_Criar_Atalho_Desktop.bat",
+      "size": 399,
+      "sha256": "793b1a0858414aa7af20882a209b173e1dc8c6078f4d93dc71b9ba92cc21a2bb"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/dist_kit/Ferramentas_Extras/Windows_Reparar_Sistema.bat",
+      "size": 600,
+      "sha256": "89ebffae0c116d82aed7c995c043e45426cbd2abbf0758db94f9b0a4fe2de485"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/dist_kit/GUIA_VIBE_CODER_TREINAMENTO.md",
+      "size": 15809,
+      "sha256": "3f87e3fb833bdbb3d7595bea54dc52b30cb9c31e7ef9cf3bd4879348ffddec24"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/dist_kit/INICIAR_NO_LINUX.sh",
+      "size": 319,
+      "sha256": "94c220b346ff6b67fc752ad169d20c79928bb0130cd2c54704b9151a9733efc5"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/dist_kit/INICIAR_NO_TERMUX.sh",
+      "size": 8273,
+      "sha256": "cf6dde7bc8140b638ce34afe646ac81eb0a2dbd869b189770ddb02ce2597e9c1"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/dist_kit/INICIAR_NO_WINDOWS.bat",
+      "size": 844,
+      "sha256": "2c003ae3d0a8871e184b1ab2c6675439fc2605e0f2065e59ddbc4edf370fed7b"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/dist_kit/LEIA-ME.txt",
+      "size": 3077,
+      "sha256": "ee37311a13cb8e0095115e6076b5ccaaddadae31ae0dbfdb4871b6b9c9629102"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/dist_kit/MANUAL_OFICIAL.html",
+      "size": 15096,
+      "sha256": "e33aee92d6900298dc11bea8a79ab6e9547e6b730064b78fc94b5e83072862b0"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/package-lock.json",
+      "size": 99941,
+      "sha256": "f18404b6147a92e45801bf0656d7c3670887b05d1b57a796f9ab53236372dfce"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/package.json",
+      "size": 1074,
+      "sha256": "1dfcdf6c984a734a29b03b1767d80b4c6b72daf4ca88fd771e30bd4485590e73"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/GUIA_VIBE_CODER_TREINAMENTO.md",
+      "size": 15800,
+      "sha256": "173fc7c4d554ef6fb4d55b7108d372ebf1567e5a054894dafaf064e5c404ad14"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/app.js",
+      "size": 418578,
+      "sha256": "7569ea074fb99bcd426b427d76ff6c7068f10c95d127de7e4f3521eab13dbdb4"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/atualizar.sh",
+      "size": 7292,
+      "sha256": "d7587f428569d4ead5cd9b3047ac6aa8c6fa30cfc7e14c5f509cb5010196c74b"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/campanhas.css",
+      "size": 4562,
+      "sha256": "a22d94325216b2a778b487bd7ccc63e9b21a7eb0e3b0729893009da7ec6fbbb6"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/campanhas.js",
+      "size": 24608,
+      "sha256": "9cc329a88f700645ac283abd0b26fe3bead76a03e64eaa1cf1e17b6a5fed877b"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/fonts/OFL-Manrope.txt",
+      "size": 4480,
+      "sha256": "4b8929f05a122b7abb9059501dc7dc4df86f8c97d5a1769d60d82cf2d2795dde"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/fonts/manrope-latin-ext.woff2",
+      "size": 15160,
+      "sha256": "2f7335119075b2079f1d882530bbc18728461612bf90743203d73a74a48f4d9b"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/fonts/manrope-latin.woff2",
+      "size": 24532,
+      "sha256": "8c2def024c1bf31aacf3624ae3c4d701269b4ec3dc765c04830839f0d36b2d9e"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/hero-conversa.webp",
+      "size": 76312,
+      "sha256": "cc7d285c649a83b3bdbcfeb9e18961493a2fab186244171aa6fa253ef4ca6626"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/icon-v2.svg",
+      "size": 47164,
+      "sha256": "66468ae850c90e4de7d6872889c2df6b85c03a4a1b434116aa2acf19352cae9f"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/icon.svg",
+      "size": 47164,
+      "sha256": "66468ae850c90e4de7d6872889c2df6b85c03a4a1b434116aa2acf19352cae9f"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/ienvia-icon-v2.png",
+      "size": 35238,
+      "sha256": "e8dbec07c63e342dd301462527b02c9ea8ef666b29c17a865d33beeb27906897"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/ienvia-icon.png",
+      "size": 35238,
+      "sha256": "e8dbec07c63e342dd301462527b02c9ea8ef666b29c17a865d33beeb27906897"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/ienvia-logo-v2.png",
+      "size": 97418,
+      "sha256": "b3a14341bf7b054e5a48a9fcb4ece87b19547fc63413769666ce94129cc51feb"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/ienvia-logo.png",
+      "size": 97418,
+      "sha256": "b3a14341bf7b054e5a48a9fcb4ece87b19547fc63413769666ce94129cc51feb"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/inbox-realtime.js",
+      "size": 211851,
+      "sha256": "a67ea70df4a77910db66293ebe1fd4a4ff0577656e742f200108ee3ee46e3c7c"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/index.html",
+      "size": 28663,
+      "sha256": "b53f7b40f4e35494d19dd1413f39b2c492b4a171221b297f1de98ff2b44229ac"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/manifest.json",
+      "size": 809,
+      "sha256": "723b7ff42f93e7ad4de7c87a8df714da3f9a1734d70dee0e9b588b513e059f21"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/offline.html",
+      "size": 1228,
+      "sha256": "dcc77efa6696f13432c876e3d606217a6bdeaa91f9cd6f6e9f50a28fbd91be76"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/painel.html",
+      "size": 214261,
+      "sha256": "f563d00ef589061ea23e79ed1f167826014f560ce129944aa6fa082659073fe6"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/pwa-icons/192.png",
+      "size": 17544,
+      "sha256": "b5bcbec95ae41802c1c934fcdeb96a1053dec7ab18d1f85a3d886df568c6bbdb"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/pwa-icons/512.png",
+      "size": 34777,
+      "sha256": "b8686a1c13be9ff75fb3ad7dd2b9c92a7d1b715ceef39d04c9226c70867c99ef"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/spatial.css",
+      "size": 21385,
+      "sha256": "6a9fe7fb37c9df1f344e4d24ae6698f4849bc7fbb515355a2854db8d5513718b"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/spatial.js",
+      "size": 3955,
+      "sha256": "28338417470f150edbafbc8d8c0db8ecbfa0356c0ebc34940e798e515f1d2190"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/styles.css",
+      "size": 113347,
+      "sha256": "baa9a207ad691e65b9a1e2c7213f97a712293e960b4143018f169c12f77b8a2a"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/sw.js",
+      "size": 2028,
+      "sha256": "670ca1a0a2a205be59f81940cbf6fbe8a0838071a6f81717639fc60127c7f30b"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/vendor/three/LICENSE",
+      "size": 1081,
+      "sha256": "8b378ebe60e2fe500158cb0ac71cb5e8b7d92953c2abcc63a0eb90499653b5bc"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/vendor/three/three.core.js",
+      "size": 415816,
+      "sha256": "f3556fb8c9aff8fc6f8e090b918ae5d4e6b45152afb93815002d3319d875cdec"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/public/vendor/three/three.module.js",
+      "size": 392831,
+      "sha256": "6a238d5d0c711f1f008488aff06a2ab9ab478959842044d243e89c316f6a5fc2"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/assinar-versao.mjs",
+      "size": 2091,
+      "sha256": "6b19f429719482416835a6fba90979a6f614ca6709c93e51f6f21f88440039b8"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/audit-crm-official-parity.py",
+      "size": 4636,
+      "sha256": "d0caa9795c39df330befd5fb57e54dcce09c448d368f279d9b3a1fa6c4e7513b"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/auto_update_boot.mjs",
+      "size": 6783,
+      "sha256": "b12e046399a747d8d6bf98a10b421c91a805fc2fc35264553c2f44174347f6d2"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/build-resources-pix.mjs",
+      "size": 2015,
+      "sha256": "b0128a94e6d6646720f3b77542919d676338e7fb484413af31ba795f1851f028"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/build-simulator-fixtures.mjs",
+      "size": 5074,
+      "sha256": "4c2e22ed1247d9eeb4720200d687200f3988be9692c618313979f7b229fcf0d9"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/build-visual-review.mjs",
+      "size": 7669,
+      "sha256": "a6b6d876b4121826c36f096a57ab91cfde268dde74952166774ceae8e573bb46"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/capture-accounts-review.mjs",
+      "size": 752,
+      "sha256": "ce3dbc9ec07ba2230510effe65b12a24f8c20e191be83bd92bfde3c608b97702"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/capture-ai-settings-review.mjs",
+      "size": 817,
+      "sha256": "47065944cf26be4cc29413ccd12220759fc73daaa3cc36c59506930bd7198b0a"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/capture-crm-parity-review.mjs",
+      "size": 1303,
+      "sha256": "af7ffdd383e1e196a2c98a02a53aacdc9ec86f3b1c554f384b270f1f006f8b8b"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/capture-overview-parity-review.mjs",
+      "size": 701,
+      "sha256": "93c21a115841b60e82614f58e73e13402f0a81ad76d6a7149fc223cb50748871"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/capture-security-settings-review.mjs",
+      "size": 795,
+      "sha256": "13237c57e933ee06da6dc827cefbd11bcaef88510d3ef343b8002cbdc73856a8"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/capture-simulator-review.mjs",
+      "size": 697,
+      "sha256": "e4884fe5a6af655fdb5f6b897152d95b145db5ac65021bd93a74c50b9406451d"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/evolution-setup.sh",
+      "size": 3025,
+      "sha256": "b521ac0c6fef5080b602877b1d43129b33e71ab23b730494ab38b9e96ed1bc1a"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/gratisvps-provision.sh",
+      "size": 6329,
+      "sha256": "e650cc0578f9c2f3e5f6df6f3fd509d974efb2ac978f141e54b6f4469f74fa3c"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/migrate-crm-tags-legacy.mjs",
+      "size": 3729,
+      "sha256": "c865bb256c45fcd7feb944f9a4985fdddb9d6c9456cbc04c1f7f13fe81213018"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/oracle-provision.sh",
+      "size": 6090,
+      "sha256": "3d586fb0e5b6cd1d48ee4d67e8f8a6733e48a34dc8e9cf55e6859980deff4c91"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/plan-legacy-channel-import.mjs",
+      "size": 843,
+      "sha256": "a01f74d171bbda1ccecb936545525fe65ad1f32f691e1c1d47e692c80cd42b91"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/preview-visual-review.mjs",
+      "size": 1357,
+      "sha256": "3ac75847896d3bc433ef8b6bb83c2471275049534c3c28b705c7f362410a0886"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/serve-static-release.mjs",
+      "size": 1226,
+      "sha256": "cb1d67da3290448a59d1db0876c710bda7dfbb6f63fa380dce9e1b90eb6a19c2"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/setup_linux_portable.sh",
+      "size": 12551,
+      "sha256": "8e5b87e61b05710faa49075c6e25d87814c77e9bc9a2c0df5a9b8b4d1c89d44d"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/setup_windows_portable.ps1",
+      "size": 16840,
+      "sha256": "4f17f809465ab10f5906e5ebbf67ce7b8b6f808d46f3e9744ee124ea48755688"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/scripts/test-isolated.mjs",
+      "size": 2230,
+      "sha256": "32091f1fffc90f0a2854d0cb75e7e45046168f757bd2600f8d4f8e9647a71ef9"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/accounts/record.js",
+      "size": 2486,
+      "sha256": "c301812aa0d14d676c108339bf0733f5a92858a54940438d00b1e2a75a2cba41"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/accounts/repository.js",
+      "size": 3615,
+      "sha256": "4d7f1c3e42fbae4377b870f209e82b300136c596e1cabce5db6201ba4642f5c4"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/accounts/router.js",
+      "size": 15506,
+      "sha256": "75330501428a23250a2be26c0f965f1ea1a0ccae894a0ac52e7c3dadf32fe098"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/accounts/workspace-port.js",
+      "size": 2852,
+      "sha256": "623da6f102e172473be5141eca7758986c29103273f64b45ee16e5678c303a53"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/ai-settings/record.js",
+      "size": 1115,
+      "sha256": "52a883dc8f107562bc3b3ae88da5be534d38092a1364217278f9c47746ccd653"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/ai-settings/repository.js",
+      "size": 3462,
+      "sha256": "b684b3d732db3ac1129a941f4aa0e1a86a42483f14785af7c5477b65c9b9fb3c"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/ai-settings/router.js",
+      "size": 8608,
+      "sha256": "02310e07c139b6f8cbe684fcbf5027f474e536ce42cd81bec30808a37239bfaf"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/ai-settings/vault.js",
+      "size": 2220,
+      "sha256": "82bc5ab62ad0f27e96f71a0c88fe6ccd0db299f26879a667347578fb7cbb6bf8"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/aiEngine.js",
+      "size": 66016,
+      "sha256": "b65f9643ba1fe409187c0d0a613f626b61d7cf959f20872404cf5b9f4a01d549"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/audioProcessor.js",
+      "size": 12772,
+      "sha256": "e2562875a7bc45c4f57bfab267d630c8dc15a3e600d1f844fd1d924f529e8f9e"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/browserOrigin.js",
+      "size": 1728,
+      "sha256": "d4ca659c38ed85376839cd8d9802a1ab9eed99cf026dacc1bc2919ae7000bcb9"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campaigns/coordination.js",
+      "size": 3912,
+      "sha256": "cf8e8fb5f5cc6116af8e3692ca0f3dff63186e510fcb1cc196e48bd0d958d666"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campaigns/drivers.js",
+      "size": 7905,
+      "sha256": "82c3b5a4f13e3c893ce431ce11d142d2c67db1cc8b52b6059961dfcc0b28669b"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campaigns/executionRouter.js",
+      "size": 8860,
+      "sha256": "3d93278b70f7b09bf48f4d0af5c904b76190178a0fda7400d4a7a9a8869529f7"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campaigns/executor.js",
+      "size": 13937,
+      "sha256": "010e1646a439fbb124a431019bdad2746c6d9b6924d46c458b550ef5ec1839fb"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campaigns/media.js",
+      "size": 2911,
+      "sha256": "f1e94b88242d8f4a0e948e0f75612a867406f20f4543e6390c049b1a7cb7872c"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campaigns/router.js",
+      "size": 16530,
+      "sha256": "d77cf2324f93d3a443749ae6f4c9bad21d0ba11d86189cdcb0bbe756cd0eb6a7"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campaigns/scheduler.js",
+      "size": 2756,
+      "sha256": "906ff85a4fc020c7d8200982db120f8afc73360d19a558478b08dbefc5de4244"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campaigns/worker.js",
+      "size": 4271,
+      "sha256": "122ea3e2ecdb4fc062998abefbe75829efe2bde88d5903927c9da244df4aa8fd"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaApi.js",
+      "size": 11989,
+      "sha256": "7c658dd4597cdda1f09896d08da33b6c499268e283db00324147aaf3bd5ec69f"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaDownload.js",
+      "size": 3132,
+      "sha256": "5a2437f0ca839b5ee8161259a839bf4de7c9370eeb172116108355d79437f20d"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaEmissor.js",
+      "size": 3673,
+      "sha256": "8813edf9e0fd01fb5baee18c01dd24a2f0df22769a91dbce2b1e90e95b9522b5"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaEstado.js",
+      "size": 4344,
+      "sha256": "36a9904db1e5bf7a55b9acd37c9c4edc6463bf79c5c6e6411b6ec14131d75bf6"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaEtapas.js",
+      "size": 3255,
+      "sha256": "b1c529e7f909af78be74f23825408dff3460e91497364e6eb23bb10bdb9346a9"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaEvolutionProxy.js",
+      "size": 2869,
+      "sha256": "21c087d202cc9729d6e2de5952e6c9c5a291427d8153037e1c13ea77c2973e5d"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaExecutor.js",
+      "size": 2839,
+      "sha256": "b3b8225a54e01b50e70cacfdc1700b5a6a905e759af1617825d65e61e65dfe6d"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaHorarios.js",
+      "size": 2256,
+      "sha256": "fdfb7e2bd5b0a25d548c257fc0d265389b2239d8e99e93b101fb91554b66dc4e"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaIA.js",
+      "size": 2171,
+      "sha256": "7233569511d8005ebe6bcd1052919f6ebdfc5f309f22fb7add04e6b4a7f8e646"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaImportacao.js",
+      "size": 6347,
+      "sha256": "ac10a652248ba5e55610b794d2027efe53f7dfa5ddca5b589531ac5915fec684"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaIntegracaoMotor.js",
+      "size": 3939,
+      "sha256": "25d602ba88e607dd4cb421066b7a17c7f6733a2c59312784084d4de1483675ab"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaMediaPrivada.js",
+      "size": 8693,
+      "sha256": "2db108314592184af67b5bee79e3cc7d808bc07026a621ac88783e8fa85a5eb7"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaMotor.js",
+      "size": 3673,
+      "sha256": "fe19435aca9f81d94b381cd367fef302eb29ea20a3453486c7377e794eb7b823"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaPlano.js",
+      "size": 4564,
+      "sha256": "df1a5b89f27a202d56d2200bcb1489d55511e42b52e799e9e8660e1fc9fd4bb0"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaProxyRemoto.js",
+      "size": 1902,
+      "sha256": "0532a027f3fcb4916c9ecb8d16c872e121262cc224395e619fe00c2fcd70f5f7"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaRepositorio.js",
+      "size": 4349,
+      "sha256": "447ee6074848a20ad6fa7d88a51b393dffd02d06d0242f802a875dc69f79a496"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaResposta.js",
+      "size": 1424,
+      "sha256": "97eabfb3cfa347e0b60d2c1fddc7e0a3f47bec00c4054e02eaee2527c6823c61"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaSelecao.js",
+      "size": 5441,
+      "sha256": "7dda38d41e8940edbb690cc941a685c97df98019fe49d1e7e894fbc31b962ceb"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaVariacoes.js",
+      "size": 3840,
+      "sha256": "47581b6c25f94744cf043b23e77456ecbf3291ee58220a7640c9309d7ab137d1"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/campanhaXlsx.js",
+      "size": 4779,
+      "sha256": "e8c9e6c0620c00fb5c0594ec9a917c6aafc45695201be3495137dc67fa3f886c"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/channels/legacyBridge.js",
+      "size": 5712,
+      "sha256": "9e99d66acb5899e08c18aa59855d719d08e03c935ea7fe3d293705058765710f"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/channels/legacyIdentity.js",
+      "size": 2694,
+      "sha256": "48ec60404d69317bb3a733450e6dfff4baef69def0083291d3a96a7ae1a13318"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/channels/router.js",
+      "size": 11584,
+      "sha256": "008a01c1e7747663e322aa3e9b1848be63dd5cc2ad2403cf2acd812d6f8a019c"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/cloudConfig.js",
+      "size": 1762,
+      "sha256": "215aa80ef03061b27ecc011faf888a23a77d0085ad9a23e63626b294f340697c"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/cloudSendScope.js",
+      "size": 914,
+      "sha256": "7d6e2972a52c17de8e6ac2820f452fb174daa69008ee0dff0bb6a125bf74342f"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/commandStatus.js",
+      "size": 953,
+      "sha256": "d62026c7ef39de911e3aa585a9b17d673fc5b21fdca8ffbc8641a3677f61e3cc"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/connections/controls.js",
+      "size": 2840,
+      "sha256": "4e65d8dc9762e5821835be735f04acdb7f08f5347c2d8bda6588816838a76f30"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/connections/model.js",
+      "size": 1520,
+      "sha256": "0a7e52375a7d166a30bd21775d648e3cb4d85f8ee12214585fcecfc2b67d6756"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/connections/router.js",
+      "size": 5930,
+      "sha256": "94b879cddd79bc77e0ff9e9615070c5591a25a4cac8d3b66a71bca02a8e54dc5"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/crm/contracts.js",
+      "size": 144,
+      "sha256": "e3f191bb187f611d0adb23a1a90fd134b980f6536d1688762996f65d6059de51"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/crm/router.js",
+      "size": 9630,
+      "sha256": "2b19c811831953b27ff825a0fe56fcce3230f613d102801b4516d7f7c038fc6f"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/crmV2/eventIngress.js",
+      "size": 1751,
+      "sha256": "32e2680ec9fa10e473a5e45aee7e69bb4607f4759d76b2909e0ee6d77adc07e5"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/crmV2/evolutionEvent.js",
+      "size": 6685,
+      "sha256": "5ce2fc6b9f13f77c8994d35f2f11bbf620b6b2f29b3a532e75c003217a17b457"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/crmV2/readOnlyEvolutionDiagnostics.js",
+      "size": 10317,
+      "sha256": "0ec31a57883784df562d642a29ca0b3f4f6387d875fced3436f97540287b239f"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/dashboard/connections.js",
+      "size": 3668,
+      "sha256": "1673758b72fd47703339b2d72bcb6ceffdc13d23082bd6bc6750e799dd3dfd3b"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/dashboard/model.js",
+      "size": 2224,
+      "sha256": "3e9f0a44e81a2bb26b373724a12b5841cec07b3009d8adb72946e9c91ce7ed9e"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/dashboard/parity.js",
+      "size": 6975,
+      "sha256": "832d4acba959d4c8d3fcb0ba806a6641bcbf89c7c3a7451b414972ed8f27456f"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/dashboard/router.js",
+      "size": 4916,
+      "sha256": "4fbd26e1d56b26762b90e790f477261234fcc31309439f52060d8c8de3195100"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/evolutionApiCloud.js",
+      "size": 44006,
+      "sha256": "d83c9a4058a9026240f0bac2b3ea3e0661d69164cc1ad589e596a655e6f98498"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/evolutionApiHistory.js",
+      "size": 1836,
+      "sha256": "d949512a8e0dd08ba621e677bce480d3d6a716d6f5027405acd3e29b5321e059"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/evolutionApiResponse.js",
+      "size": 1944,
+      "sha256": "01b4a2009b93c683f37e6d9d62ac1fb29a589461614444bdf1408daef861c123"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/evolutionApiWebhook.js",
+      "size": 14037,
+      "sha256": "7d2a1a4ffcb82cda54fd25c32ea9ff6a617e58825afd39c4056d5a2a48cf40eb"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/evolutionIdentity.js",
+      "size": 2414,
+      "sha256": "4de3a1bdc751f4f3e3b54f3fd2bb5754d9141976d429935b336072e01bca4c04"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/geminiPrazo.js",
+      "size": 1707,
+      "sha256": "1333ad96677042492f02b0c310a4ad057e9f15d90c811da9e2afcaeb50e31e81"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/historyJournal.js",
+      "size": 2279,
+      "sha256": "d81086b819fda54c509abb7d1410b649df2c23db07f975f213998ed6319e2a01"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/inboxRealtime.js",
+      "size": 1905,
+      "sha256": "795bd0e9164b2f10bd5e1a7e0a880ca6a6e600f3690df0f84efd81a56ceeacfa"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/inboxRealtimeBrowser.js",
+      "size": 248,
+      "sha256": "20a8f60c667f1536e36e21e47e7e336074757eb1d06544643b54144d801dbc80"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/instances/baileysEvents.js",
+      "size": 3834,
+      "sha256": "e5893147ae23ccae79f28bb35463d6290835da3ceda4fc7018753bd5fb258b46"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/instances/baileysSession.js",
+      "size": 10990,
+      "sha256": "9f768e8dad505fe9e3fc8c5a65d19f0667d7e128b93d0e89a0a2d6bf24e7b467"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/instances/contracts.js",
+      "size": 3842,
+      "sha256": "770a7da5aa14b0328c4371c47c223d6a76f71d399eaa2ece4fcaa6238d25373a"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/instances/evolutionDriver.js",
+      "size": 6387,
+      "sha256": "7c05428dda1d2a83797c7df86e0036371bb6c6c2cad642aea359b87afa47bede"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/instances/executor.js",
+      "size": 3309,
+      "sha256": "89d82d4615437ca82d3748cb0513f975cfcbd65652e2ea39dacbc12709764bc5"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/instances/history.js",
+      "size": 191,
+      "sha256": "d20c7d4238ae7aec82c3caba3d832491fad929e614a08864bd18c93156b15027"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/instances/ingressJournal.js",
+      "size": 6119,
+      "sha256": "2a8bf091b90ffd4dfb1e37aac8a2be2c3da8e9e62f19b427d0c22c0ad86240b5"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/instances/legacyLocalDriver.js",
+      "size": 2185,
+      "sha256": "008bbbef34aa81c3cdfa4e96c9c65e045f773d433f7abdb39a1992d28092b0ce"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/instances/localSessionDriver.js",
+      "size": 1958,
+      "sha256": "83de63e267c1eb30bf01a75f12a2c5a72a7fe09a9fe0d329f8f819aea2225bbe"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/instances/reconciliation.js",
+      "size": 3432,
+      "sha256": "edd584a552311b1f4b9c86b2ce18e0286294195653fab420f021a774f3a61fe5"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/instances/repository.js",
+      "size": 4189,
+      "sha256": "4bc937355432a68cb8a202443f4eec2b3b57a7b00dbbee8f359549407ed9466d"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/instances/runtime.js",
+      "size": 8365,
+      "sha256": "b069d35465727595112fca85f995634a9f128be47f4ba5f3a232c7386bdc3009"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/instances/workerSupervisor.js",
+      "size": 5673,
+      "sha256": "eb6bbdf569899e4e24aba13242ca39ce4619d03319f6b81e47de624ad1d258ab"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/pairingSafety.js",
+      "size": 2185,
+      "sha256": "4e5db542c4915ce08d969b725d33f7f5f0d1bb0064b05189d787b16ac4f34d6a"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/pix.js",
+      "size": 5410,
+      "sha256": "1b7525071a329c294487d18ff7b8fb876cf46c7e91c82de07c7ceca3c8769711"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/resources/repository.js",
+      "size": 3339,
+      "sha256": "c25e5a6ea2515b33ae084c08b7da9d692e360911c1e90c5089e9cdd59021afcc"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/resources/router.js",
+      "size": 6252,
+      "sha256": "140de1fde5af609fb042fcc17acf5f938c6eea610945906431f45cd23e46b0d3"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/security-settings/pin.js",
+      "size": 1745,
+      "sha256": "7d41e8afe1cd24d8ed0de3e211cfb1cdb4b792dfa20f08242d29bdd6a7508c66"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/security-settings/record.js",
+      "size": 837,
+      "sha256": "95bad58b6faa0cef714ed7259d789e9a36877db6f5142accf32170d09c5b9c67"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/security-settings/repository.js",
+      "size": 3490,
+      "sha256": "d5756389f59fbe9b5d010031597cda6804392a07a6cebb744e835e57ed304292"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/security-settings/router.js",
+      "size": 7382,
+      "sha256": "72f05d9688a412330a12e5beea1e8c063115e5a65df6ee215638928908887dc2"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/server.js",
+      "size": 191473,
+      "sha256": "9c8bdec5c7f22a0aafc505b0cffa3a0052ca4af6a0cd4a632ed087ad23ad6ba2"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/simulator/repository.js",
+      "size": 3352,
+      "sha256": "bb70afe634a60ddf5e256840e0c74b948764351ede02a08e83d5cedb975a6c62"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/simulator/router.js",
+      "size": 1980,
+      "sha256": "c16f0e9c884b4369f8ba572816b56f8d3b02851b627bfc7511a950c623bcb9ed"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/simulator/runtime.js",
+      "size": 5978,
+      "sha256": "4e25b765603698201a4f5a7551ab3a60a98fc2b179c25d43a8f56a65cbf93516"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/simulator/service.js",
+      "size": 8878,
+      "sha256": "25c61eb36a89428b0dad04fa4f708056706b54d61ad0bb56592901e2f06918b4"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/storage.js",
+      "size": 76527,
+      "sha256": "fa36c4981f5092939c3b832529a4ca7500e129b95f38aa1867b0809f77db04a5"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/supabaseCloud.js",
+      "size": 115939,
+      "sha256": "791aeef10f54f7c9e0c5702fb6342894e0239fda402755273eb6e423b79d1596"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/templates.js",
+      "size": 19815,
+      "sha256": "b99f9b01b7376fb6eb73511a585981128511c1afb6569e44531265e2c3af17b2"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/training/importPreview.js",
+      "size": 3794,
+      "sha256": "9e2a8c28fe83b19654d970f5c2fca3267428e788bfeb192c9828830898016629"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/training/repository.js",
+      "size": 3530,
+      "sha256": "1724902ce9e1d0322a1a50b54d2b8d6a8d24f683856e2bafd242a7a85d17c7a8"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/training/router.js",
+      "size": 4985,
+      "sha256": "d22c2791dca2b958c3e55d56425e1102bc0126bd9257f1b478d082f1a3c938a9"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/training/runtimePreview.js",
+      "size": 911,
+      "sha256": "3a450f154edefc665b471a8998c5aa480be1cd5e2fcf6be816e035370469a681"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/trainingPackEngine.js",
+      "size": 72149,
+      "sha256": "c3a8b146184e4237a3cabce2bb2898e16670bda5ae11cb137656d9db7e01b92f"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/trueClock.js",
+      "size": 3198,
+      "sha256": "d6656ff91a8104b6aeada5249a6b15871319838ab7ab9578e9766b939c11b605"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/updatePublicKey.js",
+      "size": 230,
+      "sha256": "e12e7b343a32e4641d4fa647b342e94844fcc81bd978a668bc8c26d70a99d654"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/updateSignature.js",
+      "size": 2313,
+      "sha256": "7475ba4c5295f98bb9755966c687a2152d29b2a26673736fbc3f038e6dc806ee"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/updateTransaction.js",
+      "size": 7004,
+      "sha256": "dd83acbcd58effe8a918888a4eb416d8d6b5204af1c282d585d916e8045c302e"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/waCompactAuth.js",
+      "size": 7112,
+      "sha256": "7d282d75c74d9b243b0f86d693d9829b8cb30ca22d0f73b15121ec2e3b5fb7f7"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/whatsappManager.js",
+      "size": 165399,
+      "sha256": "6e57597a05e8533c7e99a92d9d87b569b1868578a2440badeed8579772d32ede"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/src/zipReader.js",
+      "size": 10434,
+      "sha256": "5babe72c4d9e4c6e6e5f84fd7ef9946a4c0b899859df88fbd36a49425828c96e"
+    },
+    {
+      "path": "ZAP-IA-Studio/sistema/vercel.json",
+      "size": 6548,
+      "sha256": "48e6c5fbb1b1679694697c3716b553f28ecceb147447d2b6d2d2750c3c14ec31"
+    }
+  ]
+}

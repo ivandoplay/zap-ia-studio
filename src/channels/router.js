@@ -3,7 +3,7 @@ import {parseExecutionSnapshot} from '../instances/contracts.js';
 import {parseHistoryQuery,parseInstanceThreads,parseInstanceMessages} from '../instances/history.js';
 import {parseDispatchDiagnosis,parseDispatchReview,parseReviewInput} from '../instances/reconciliation.js';
 import {parseLegacyLinkSnapshot} from './legacyBridge.js';
-import {isChannelId,parseChannelInput} from '../../public/v2/assets/channel-policy.js';
+import {isChannelId,parseChannelInput} from '../shared/contracts/channel-policy.js';
 function dto(value,connection=null,canPair=false){
  if(!value||!isChannelId(value.id)||!Number.isInteger(value.revision)||value.revision<1||!Number.isFinite(Date.parse(value.createdAt))||!Number.isFinite(Date.parse(value.updatedAt)))throw Error('Invalid channel DTO');
  const config=parseChannelInput({name:value.name,transport:value.transport,crmVisible:value.crmVisible,aiEnabled:value.aiEnabled,campaignsEnabled:value.campaignsEnabled,tags:value.tags});

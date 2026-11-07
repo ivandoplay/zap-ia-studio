@@ -1,6 +1,6 @@
 // Conversas — leitura real sobre zapia_contacts.
 //
-// A caixa nova da navegação (public/v2/conversations.html) foi desenhada para consumir
+// A caixa nova da navegação foi desenhada (no painel v2, já removido) para consumir
 // "instâncias + threads". Nesta conta a instância real é o chip legado (zapia_wa_slots) e a
 // thread real é o contato (zapia_contacts). O histórico por instância em UUID nunca foi
 // populado; os dados vivos estão no CRM legado. Este módulo é a ponte explícita entre os dois,

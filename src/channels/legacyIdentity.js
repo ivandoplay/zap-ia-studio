@@ -1,5 +1,5 @@
 // Fronteira pura do formato antigo. Não abre arquivos, sessões ou sockets.
-import {isChannelId} from '../../public/v2/assets/channel-policy.js';
+import {isChannelId} from '../shared/contracts/channel-policy.js';
 export const LEGACY_SLOT_IDS=Object.freeze(['slot_1','slot_2','slot_3']);
 const invalid=(code,message)=>{throw Object.assign(new Error(message),{code,status:400,statusCode:400});};
 export function normalizeLegacySlotId(value='slot_1'){

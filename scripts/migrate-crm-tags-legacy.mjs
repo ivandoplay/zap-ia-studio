@@ -2,7 +2,7 @@
 // Lê customTags do storage legado, converte para saved_tag_library_v1 e prepara aplicação aos contatos.
 // Não escreve no banco remoto nem envia mensagens. Gera um JSON de migração para revisão estática.
 import {readFileSync, existsSync} from 'fs';
-import {crmUuid} from '../public/v2/assets/crm-metadata-contract.js';
+import {crmUuid} from '../src/shared/contracts/crm-metadata-contract.js';
 
 const STORAGE_CANDIDATES = [
   'data/database.json',

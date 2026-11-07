@@ -14,7 +14,7 @@ import {createTrainingFileRepository} from './training/repository.js';
 import {createWorkspaceDraftCloudRepository} from './workspaceDrafts/cloudRepository.js';
 import {createDraftSecrets} from './draftSecrets.js';
 import {createCampaignRunner} from './campaigns/runner.js';
-import {createAccountPlan} from '../public/v2/assets/accounts-domain.js';
+import {createAccountPlan} from './shared/contracts/accounts-domain.js';
 import {previewTrainingRuntime} from './training/runtimePreview.js';
 import {previewTrainingImport} from './training/importPreview.js';
 import { composeConnectionState } from './dashboard/connections.js';
@@ -214,7 +214,7 @@ app.get(['/painel', '/app'], (_req, res) => {
 });
 // ── PÁGINAS DO PAINEL ANTIGO ─────────────────────────────────────────────────
 // Decisão do titular (07/11/2026): o painel é o antigo (`/painel.html`). O v2 foi congelado
-// e as telas dele saíram do ar — nenhuma rota serve mais `public/v2` como página.
+// e as telas dele saíram do ar; a pasta public/v2 foi removida do repositório.
 // Cada aba do painel antigo tem URL própria, gerada por scripts/gerar-paginas-painel.mjs a
 // partir de painel.html; `window.IENVIA_PAGINA` (injetado no HTML gerado) diz ao app.js qual
 // abrir, e o hash (#crm) continua tendo prioridade para não quebrar link antigo.

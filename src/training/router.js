@@ -1,4 +1,4 @@
-import {Router,json} from 'express';import {trainingUuid,createTrainingDocument,validateTrainingDocument,structuralTrainingPreview} from '../../public/v2/assets/training-domain.js';import {trainingFingerprint} from './repository.js';
+import {Router,json} from 'express';import {trainingUuid,createTrainingDocument,validateTrainingDocument,structuralTrainingPreview} from '../shared/contracts/training-domain.js';import {trainingFingerprint} from './repository.js';
 const fail=(status,message)=>Object.assign(Error(message),{status});
 export function createTrainingRouter({getLocalContext,repository,allowWrites=false,readSource=ctx=>{if(!ctx.data?.business)throw fail(503,'Treinamento de origem indisponível neste ambiente.');const business=ctx.data.business;return {business,pack:business.trainingPackId?ctx.data.customPacks?.[business.trainingPackId]||null:null};},previewPrompt,previewImport}={}){
  const router=Router();router.use((_q,r,n)=>{r.setHeader('Cache-Control','no-store, private');n();});router.use(json({limit:'6mb',strict:true}));

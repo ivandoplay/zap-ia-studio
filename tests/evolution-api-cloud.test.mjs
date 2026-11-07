@@ -264,3 +264,69 @@ test('Evolution API cria rotas distintas por tenant com URL e chave compartilhad
   assert.ok(sends.some(x=>x.endsWith(`/zap-ia-${ownerA}-slot_1`)));
   assert.ok(sends.some(x=>x.endsWith(`/zap-ia-${ownerB}-slot_1`)));
 });
+
+test('agenda: mesmo telefone em formatos diferentes é UM contato (PN, c.us e LID)', async () => {
+  // Regressão: a chave da agenda era o JID cru, então @s.whatsapp.net, @c.us e o LID
+  // numérico do mesmo telefone viravam três contatos. Medido em produção: 11.151 e
+  // 18.480 linhas repetidas nas agendas dos dois chips.
+  globalThis.fetch = async (url) => {
+    const href = String(url);
+    let body = {};
+    if (href.endsWith('/instance/fetchInstances')) body = [{ instanceName: 'zap-ia-slot_1', connectionStatus: 'open' }];
+    else if (href.includes('/instance/connectionState/')) body = { instance: { state: 'open' } };
+    else if (href.includes('/chat/findContacts/')) {
+      body = [
+        { id: '5586999997777@s.whatsapp.net', pushName: 'Ana' },
+        { id: '5586999997777@c.us', pushName: 'Ana' },
+        { id: '5586999997777@lid', number: '5586999997777', phoneNumber: '5586999997777', name: 'Ana Maria' },
+        { id: '5586999997777:12@s.whatsapp.net', pushName: 'Ana' },
+        { id: '5586999996666@s.whatsapp.net', pushName: 'Bruno' }
+      ];
+    }
+    return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+  };
+  const contatos = await getEvolutionApiContacts('11111111-1111-4111-8111-111111111111');
+  assert.equal(contatos.length, 2, 'duas pessoas, não cinco linhas');
+  const ana = contatos.find((c) => c.phone === '5586999997777');
+  assert.ok(ana, 'o telefone canônico é a chave');
+  assert.equal(ana.name, 'Ana Maria', 'fica o nome mais completo');
+  assert.ok(contatos.some((c) => c.phone === '5586999996666'));
+});
+
+test('nota de voz: passa pela normalizacao OGG/Opus do painel antigo e manda seconds', async () => {
+  // O painel antigo (/api/crm/:chatId/send-audio) converte com convertToCanonicalWhatsAppVoice
+  // antes de enviar. A rota nova reusa o MESMO conversor (OGG/Opus 16k mono, vendor WhatsApp).
+  const { convertToCanonicalWhatsAppVoice, isNativeOggOpus } = await import('../src/audioProcessor.js');
+  const { sendEvolutionApiVoice } = await import('../src/evolutionApiCloud.js');
+  requests.length = 0;
+  globalThis.fetch = async (url, options = {}) => {
+    const href = String(url);
+    requests.push({ url: href, options });
+    let body = {};
+    if (href.endsWith('/instance/fetchInstances')) body = [{ instanceName: 'zap-ia-slot_1', connectionStatus: 'open' }];
+    else if (href.includes('/instance/connectionState/')) body = { instance: { state: 'open' } };
+    else if (href.includes('/message/sendWhatsAppAudio')) body = { key: { id: 'audio-1' } };
+    return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+  };
+  // Entrada no formato que o navegador grava (WebM/Opus) — o conversor tem de normalizar.
+  const { execFileSync } = await import('node:child_process');
+  const { readFileSync } = await import('node:fs');
+  const bin = (await import('ffmpeg-static')).default;
+  execFileSync(bin, ['-v','error','-f','lavfi','-i','anullsrc=r=16000:cl=mono','-t','0.4','-c:a','libopus','-f','ogg','/tmp/teste-voz.ogg','-y']);
+  const ogg = readFileSync('/tmp/teste-voz.ogg');
+  assert.ok(isNativeOggOpus(ogg), 'a entrada de teste é OGG/Opus válido');
+  const canonico = await convertToCanonicalWhatsAppVoice(ogg, 'voz.ogg');
+  assert.ok(canonico.durationSec >= 0);
+  await sendEvolutionApiVoice('11111111-1111-4111-8111-111111111111', '5586999997777@s.whatsapp.net',
+    `data:audio/ogg;base64,${ogg.toString('base64')}`);
+  const envio = requests.find((r) => r.url.includes('/message/sendWhatsAppAudio'));
+  assert.ok(envio, 'a nota de voz sai pelo endpoint de áudio');
+  const corpo = JSON.parse(envio.options.body);
+  assert.equal(corpo.number, '5586999997777');
+  assert.ok(typeof corpo.audio === 'string' && corpo.audio.length > 0);
+  assert.ok(!corpo.audio.startsWith('data:'), 'nunca manda data URL para o provedor');
+  assert.ok(Number.isInteger(corpo.seconds) && corpo.seconds >= 1, 'duração é enviada ao provedor');
+  // O áudio enviado é OGG/Opus normalizado, não o arquivo cru.
+  const enviado = Buffer.from(corpo.audio, 'base64');
+  assert.ok(isNativeOggOpus(enviado), 'o que sai é OGG/Opus canônico');
+});

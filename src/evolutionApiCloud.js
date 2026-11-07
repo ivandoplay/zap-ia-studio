@@ -159,7 +159,7 @@ export async function sendEvolutionApiText(userId, chatId, text, options = {}) {
   if (options.quoted?.messageId) body.quoted = { key: { id: String(options.quoted.messageId), remoteJid: chatJidForChat(chatId), fromMe: options.quoted.fromMe !== false }, ...(options.quoted.text ? { message: { conversation: String(options.quoted.text) } } : {}) };
   return requireEvolutionMessageId(await tenantCall(userId, chatId, '/message/sendText', 'POST', body));
 }
-export async function sendEvolutionApiMedia(userId, chatId, { url, type = 'document', caption = '', filename = '', mimeType = '' } = {}) {
+export async function sendEvolutionApiMedia(userId, chatId, { url, type = 'document', caption = '', filename = '', mimeType = '', seconds = null } = {}) {
   if (!url) throw Object.assign(new Error('URL de mídia ausente.'), { statusCode: 400 });
   // A Evolution API v2 aceita URL http(s) ou base64 puro — nunca "data:...;base64,".
   // O painel novo monta o data URL; aqui removemos o prefixo antes de enviar.
@@ -171,12 +171,35 @@ export async function sendEvolutionApiMedia(userId, chatId, { url, type = 'docum
     if (!mime) mime = media.slice(5, comma).split(';')[0] || '';
     media = media.slice(comma + 1);
   }
-  return requireEvolutionMessageId(await tenantCall(userId, chatId, '/message/sendMedia', 'POST', { number: numberForChat(chatId), mediatype: type, media, caption, fileName: filename, ...(mime ? { mimetype: mime } : {}) }));
+  const corpo = { number: numberForChat(chatId), mediatype: type, media, caption, fileName: filename, ...(mime ? { mimetype: mime } : {}) };
+  // Áudio anexo (não nota de voz) também leva a duração: sem `seconds` o WhatsApp mostra
+  // 0:00 no player. O painel antigo já mandava isso pelo worker.
+  if (Number.isFinite(Number(seconds)) && Number(seconds) > 0) corpo.seconds = Math.round(Number(seconds));
+  return requireEvolutionMessageId(await tenantCall(userId, chatId, '/message/sendMedia', 'POST', corpo));
 }
+// Nota de voz: MESMA preparação do painel antigo (`/api/crm/:chatId/send-audio` →
+// convertToCanonicalWhatsAppVoice): OGG/Opus 16 kHz mono, vendor "WhatsApp", com duração e
+// waveform. Sem isso o WhatsApp recebe áudio fora do padrão de PTT e a reprodução falha.
 export async function sendEvolutionApiVoice(userId, chatId, url) {
   if (!url) throw Object.assign(new Error('URL de áudio ausente.'), { statusCode: 400 });
-  const audio = String(url).startsWith('data:') ? String(url).slice(String(url).indexOf(',') + 1) : url;
-  return requireEvolutionMessageId(await tenantCall(userId, chatId, '/message/sendWhatsAppAudio', 'POST', { number: numberForChat(chatId), audio }));
+  const bruto = String(url);
+  const ehDataUrl = bruto.startsWith('data:');
+  const base64Cru = ehDataUrl ? bruto.slice(bruto.indexOf(',') + 1) : bruto;
+  let audio = base64Cru;
+  let seconds = null;
+  if (ehDataUrl) {
+    const mime = bruto.slice(5, bruto.indexOf(';')) || '';
+    const bytes = Buffer.from(base64Cru, 'base64');
+    const { convertToCanonicalWhatsAppVoice } = await import('./audioProcessor.js');
+    const canonico = await convertToCanonicalWhatsAppVoice(bytes, `voz.${mime.includes('ogg') ? 'ogg' : 'audio'}`);
+    audio = canonico.buffer.toString('base64');
+    seconds = Math.max(1, Math.round(Number(canonico.durationSec) || 1));
+  }
+  return requireEvolutionMessageId(await tenantCall(userId, chatId, '/message/sendWhatsAppAudio', 'POST', {
+    number: numberForChat(chatId),
+    audio,
+    ...(seconds ? { seconds } : {})
+  }));
 }
 export async function sendEvolutionApiContact(userId, chatId, contact = {}) {
   const phone = String(contact.phone || '').replace(/\D/g, '');
@@ -485,12 +508,24 @@ function contactJidFromEvolution(raw = {}) {
   return evolutionContactJid(raw);
 }
 
+// Mesmo telefone em formatos diferentes (@s.whatsapp.net, @c.us, @lid / LID numérico) é UMA
+// pessoa: a chave da agenda é o telefone. Antes o `jid` cru era a chave, então cada variante
+// virava um contato separado — era a origem dos milhares de "duplicados" da agenda.
+function agendaIdentity({ jid = '', phone = '', remoteJidAlt = '' }) {
+  const jidPhone = String(jid).split('@')[0].split(':')[0].replace(/\D/g, '');
+  const altPhone = String(remoteJidAlt).split('@')[0].split(':')[0].replace(/\D/g, '');
+  const phoneDigits = String(phone || '').replace(/\D/g, '');
+  const candidato = [phoneDigits, altPhone, jidPhone].find((v) => /^[1-9][0-9]{7,14}$/.test(v)) || '';
+  return candidato;
+}
+
 export async function getEvolutionApiContacts(userId = null) {
   if (!userId) return [];
   const rows = (await listInstances()).filter((item) => instanceOwnedBy(item, userId));
   const contacts = new Map();
   const pageSize = 1000;
   const maxPages = 10; // Fail-safe: never fetch an unbounded directory from one request.
+  const lidos = new Set();
   for (const item of rows) {
     const state = await connectionState(item.name).catch(() => ({ state: 'unknown', readFailed: true }));
     if (state.state !== 'open') continue;
@@ -506,14 +541,34 @@ export async function getEvolutionApiContacts(userId = null) {
       for (const raw of pageRows) {
         const jid = contactJidFromEvolution(raw);
         if (!jid || /@(g\.us|broadcast|newsletter)$/i.test(jid)) continue;
-        // JIDs are only unique inside one WhatsApp instance; retain the slot in the key.
-        const chatId = slotId === 'slot_1' ? jid : `${slotId}::${jid}`;
-        const name = evolutionContactName(raw);
-        const phone = evolutionContactPhone(raw);
-        contacts.set(chatId, {
-          chatId, slotId, phone, name,
-          avatarUrl: raw.profilePictureUrl || raw.profilePicUrl || '',
-          stage: 'novo', lastMessageAt: raw.updatedAt || null,
+        const name = evolutionContactName(raw) || null;
+        // Regras da agenda (as mesmas que o painel antigo respeita):
+        //  - LID (`@lid` ou número solto com mais de 13 dígitos) NUNCA é telefone;
+        //  - fora isso, o telefone vem do campo próprio ou do JID, e é a chave canônica:
+        //    o mesmo número em `@s.whatsapp.net`, `@c.us` ou `:12@...` é UMA pessoa.
+        const jidTexto = String(jid);
+        const local = jidTexto.split('@')[0].split(':')[0].replace(/\D/g, '');
+        const ehLid = /@lid$/i.test(jidTexto) || (!jidTexto.includes('@') && local.length > 13);
+        const doCampo = String(evolutionContactPhone(raw) || '').replace(/\D/g, '');
+        const valido = (v) => /^[1-9][0-9]{7,14}$/.test(v);
+        // LID só vira telefone quando a própria Evolution manda o `phoneNumber` junto
+        // (é o caso do contato que o painel antigo mostra certo). Sem isso, não há como
+        // provar que o LID é a mesma pessoa — unir por nome juntaria homônimos.
+        const telefone = ehLid ? (valido(doCampo) ? doCampo : '') : (valido(doCampo) ? doCampo : (valido(local) ? local : ''));
+        const phone = telefone;
+        const chave = telefone ? `tel:${telefone}` : jidTexto;
+        const unica = slotId === 'slot_1' ? chave : `${slotId}::${chave}`;
+        lidos.add(unica);
+        const anterior = contacts.get(unica);
+        const nomeMelhor = (name && name.length > String(anterior?.name || '').length) ? name : (anterior?.name ?? null);
+        contacts.set(unica, {
+          chatId: slotId === 'slot_1' ? jid : `${slotId}::${jid}`,
+          slotId,
+          phone: phone || anterior?.phone || '',
+          name: nomeMelhor,
+          avatarUrl: raw.profilePictureUrl || raw.profilePicUrl || anterior?.avatarUrl || '',
+          stage: anterior?.stage || 'novo',
+          lastMessageAt: raw.updatedAt || anterior?.lastMessageAt || null,
           // Evolution address-book membership is not the same as a CRM-saved contact.
           messages: [], savedContact: false, directoryImport: true
         });

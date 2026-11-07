@@ -885,10 +885,29 @@ const draftSecrets = (() => {
   let instance = null;
   return () => (instance ||= createDraftSecrets(process.env));
 })();
+// Biblioteca de mídia da campanha (mesma das pastas da aba): lista os arquivos da pasta do
+// bloco e assina o link na hora do envio. O runner nunca monta caminho de storage sozinho.
+const campaignMediaProviderFor = client => async ({ ownerId, folderId, tipo, arquivoId } = {}) => {
+  if (!client || typeof client.from !== 'function') return [];
+  if (arquivoId) {
+    const servico = IS_VERCEL
+      ? criarServicoMediaCampanha({ client, admin: getAdminClient(), supabaseUrl: SUPABASE_URL })
+      : (() => { const proxy = criarProxyMediaCampanha({ client, userId: ownerId });
+          return { ticket: async x => (await proxy({ tipo: 'ticket', arquivoId: x.arquivoId })).ticket }; })();
+    const t = await servico.ticket({ userId: ownerId, arquivoId });
+    return { url: t.signedUrl, mime: t.mime, tamanho: t.tamanho };
+  }
+  const { data, error } = await client.from('ienvia_campanha_arquivos')
+    .select('owner_id,pasta_id,arquivo_id,nome_original,mime,tamanho')
+    .eq('owner_id', ownerId).eq('pasta_id', folderId).eq('tipo', tipo).eq('excluindo', false)
+    .order('ordem', { ascending: true }).limit(500);
+  if (error) throw Object.assign(new Error('Biblioteca de mídia indisponível.'), { status: 409, code: 'CAMPAIGN_MEDIA_PENDING' });
+  return (Array.isArray(data) ? data : []).map(f => ({ arquivoId: f.arquivo_id, pastaId: f.pasta_id, nome: f.nome_original, mime: f.mime, tamanho: f.tamanho }));
+};
 const campaignRunnerFor = req => {
   const client = req?.dashboardContext?.viewerClient || req?.cloudAuth?.client || null;
   if (!client || typeof client.from !== 'function') return null;
-  return createCampaignRunner({client});
+  return createCampaignRunner({client, mediaProvider: campaignMediaProviderFor(client)});
 };
 // Agendamento contínuo: o relógio é externo (cron da Vercel, autenticado por segredo) e
 // chama o MESMO runner. Sem `CAMPAIGN_CRON_SECRET` + `CAMPAIGN_CRON_OWNER_ID` a rota
@@ -906,6 +925,7 @@ const campaignSchedulerFor = req => {
     ? createCampaignRunner({
         client,
         ownerOverride: CAMPAIGN_CRON_OWNER_ID,
+        mediaProvider: campaignMediaProviderFor(client),
         // Sem sessão, a lista de destinatários vem do caminho de serviço explícito.
         recipientsProvider: ({ ownerId, campaignId }) => createCampaignScheduler({ client }).pendentesDe({ ownerId, campaignId, limite: 25 })
       })

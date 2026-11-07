@@ -13,6 +13,7 @@
 //  - erro no meio não reenvia: a etapa fica marcada e o resumo mostra o motivo.
 import { randomUUID } from 'node:crypto';
 import { sendEvolutionApiText, sendEvolutionApiMedia, sendEvolutionApiVoice } from '../evolutionApiCloud.js';
+import { convertToCanonicalWhatsAppVoice } from '../audioProcessor.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PHONE = /^[1-9][0-9]{7,14}$/;
@@ -73,7 +74,7 @@ const progressOf = draft => {
 
 // `ownerOverride` só existe para o relógio automático, que roda com a chave de serviço e
 // sem sessão: a conta vem do ambiente, nunca do corpo de uma requisição de navegador.
-export function createCampaignRunner({ client, transport = null, maxPerRun = 5, now = () => new Date(), random = Math.random, ownerOverride = null, recipientsProvider = null } = {}) {
+export function createCampaignRunner({ client, transport = null, maxPerRun = 5, now = () => new Date(), random = Math.random, ownerOverride = null, recipientsProvider = null, mediaProvider = null } = {}) {
   if (!client || typeof client.from !== 'function') throw new TypeError('Cliente autenticado obrigatório.');
   const bridge = transport || {
     sendText: sendEvolutionApiText,
@@ -123,6 +124,24 @@ export function createCampaignRunner({ client, transport = null, maxPerRun = 5, 
     return rows;
   }
 
+  // Arquivo do bloco de mídia: o rascunho guarda a pasta e a forma de escolha
+  // (`{ id, tipo:'imagem'|'audio', pastaId, selecao, notaVoz }`). A lista de arquivos vem
+  // do provedor de mídia (biblioteca privada da campanha) — o runner não lê o bucket.
+  async function loadBlockFiles(ownerId, block) {
+    if (typeof mediaProvider !== 'function') return [];
+    const out = await mediaProvider({ ownerId, folderId: block.pastaId, tipo: block.tipo });
+    return Array.isArray(out) ? out : [];
+  }
+
+  // Escolha do arquivo: rodízio sequencial (estável pelo telefone) ou sorteio.
+  function pickFile(files, block, phone) {
+    if (!files.length) throw fail(409, 'CAMPAIGN_MEDIA_EMPTY', 'A pasta do bloco de mídia está vazia.');
+    if (block.selecao === 'aleatorio') return files[Math.min(files.length - 1, Math.floor(random() * files.length))];
+    let soma = 0;
+    for (const ch of String(phone || '')) soma += ch.charCodeAt(0);
+    return files[soma % files.length];
+  }
+
   // Reserva uma etapa: só um processo consegue marcar em_envio -> enviado.
   async function claimRecipient(ownerId, campaignId, recipientRow, step, slotId) {
     const key = recipientRow.destinatario_id || recipientRow.recipientId || recipientRow.id;
@@ -147,6 +166,41 @@ export function createCampaignRunner({ client, transport = null, maxPerRun = 5, 
       .maybeSingle();
     if (error) throw fail(503, 'CAMPAIGN_PROGRESS_UNAVAILABLE', 'Progresso não confirmado. Consulte antes de repetir.');
     return Boolean(data);
+  }
+
+  // O arquivo chega do provedor de mídia já com a URL assinada (`url`) ou com os bytes
+  // (`buffer`). O runner nunca inventa caminho: sem um dos dois, a etapa falha declarada.
+  // Link do arquivo: o provedor de mídia assina na hora (60 s), como na aba de arquivos.
+  async function signedUrlOf(arquivo, ownerId) {
+    if (typeof arquivo?.url === 'string' && /^https?:/i.test(arquivo.url)) return arquivo.url;
+    if (typeof mediaProvider === 'function' && arquivo?.arquivoId) {
+      const out = await mediaProvider({ ownerId, arquivoId: arquivo.arquivoId });
+      if (typeof out?.url === 'string' && /^https?:/i.test(out.url)) {
+        return out.url;
+      }
+    }
+    return '';
+  }
+
+  async function resolveMediaUrl(arquivo, tipo, ownerId) {
+    const assinada = await signedUrlOf(arquivo, ownerId);
+    if (assinada) return assinada;
+    if (Buffer.isBuffer(arquivo?.buffer) && arquivo.buffer.length) {
+      const mime = arquivo.mime || (tipo === 'image' ? 'image/jpeg' : 'audio/ogg');
+      return `data:${mime};base64,${arquivo.buffer.toString('base64')}`;
+    }
+    throw fail(409, 'CAMPAIGN_MEDIA_PENDING', 'O arquivo do bloco não está disponível na biblioteca.');
+  }
+
+  async function resolveMediaBytes(arquivo, ownerId) {
+    if (Buffer.isBuffer(arquivo?.buffer) && arquivo.buffer.length) return arquivo.buffer;
+    const url = await signedUrlOf(arquivo, ownerId);
+    if (url) {
+      const r = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(15000) });
+      if (!r.ok) throw fail(409, 'CAMPAIGN_MEDIA_PENDING', 'Não foi possível baixar o áudio da biblioteca.');
+      return Buffer.from(await r.arrayBuffer());
+    }
+    throw fail(409, 'CAMPAIGN_MEDIA_PENDING', 'O arquivo do bloco não está disponível na biblioteca.');
   }
 
   // Um "run" processa no máximo `cap` destinatários, respeitando o intervalo do rascunho.
@@ -202,9 +256,33 @@ export function createCampaignRunner({ client, transport = null, maxPerRun = 5, 
           if (!id) throw fail(502, 'CAMPAIGN_UNCONFIRMED', 'O provedor não confirmou o envio.');
           results.push({ phone, status: 'sent', providerMessageId: String(id) });
         } else {
-          if (!Array.isArray(block.textos) || !block.textos.length) throw fail(409, 'CAMPAIGN_MEDIA_EMPTY', 'Bloco de mídia sem arquivo aprovado.');
-          // Mídia exige o link privado do arquivo; sem ele a etapa fica pendente, não inventamos.
-          throw fail(409, 'CAMPAIGN_MEDIA_PENDING', 'Bloco de mídia precisa do arquivo aprovado no plano.');
+          // Mídia: reusa o MESMO caminho da conversa (`sendEvolutionApiMedia`/`sendVoice`) —
+          // nada de um segundo motor de envio. O rascunho escolhe a pasta; o arquivo sai por
+          // link assinado (ou base64 na nota de voz, como no painel antigo).
+          const arquivos = await loadBlockFiles(ownerId, block);
+          const arquivo = pickFile(arquivos, block, phone);
+          const legenda = Array.isArray(block.textos) && block.textos.length
+            ? expandCampaignText(block, { nome: recipient.nome || '', telefone: phone }, random)
+            : '';
+          let sent;
+          if (block.tipo === 'audio') {
+            if (block.notaVoz) {
+              // Nota de voz: normaliza para OGG/Opus canônico antes de enviar.
+              const bytes = await resolveMediaBytes(arquivo, ownerId);
+              const canonico = await convertToCanonicalWhatsAppVoice(bytes, arquivo.nome || 'voz.ogg');
+              const base64 = canonico.buffer.toString('base64');
+              sent = await bridge.sendVoice(ownerId, chatId, `data:audio/ogg;base64,${base64}`);
+            } else {
+              const url = await resolveMediaUrl(arquivo, 'audio', ownerId);
+              sent = await bridge.sendMedia(ownerId, chatId, { url, type: 'audio', caption: legenda, filename: arquivo.nome || 'audio.ogg', mimeType: arquivo.mime || 'audio/ogg', seconds: arquivo.durationSec || null });
+            }
+          } else {
+            const url = await resolveMediaUrl(arquivo, 'image', ownerId);
+            sent = await bridge.sendMedia(ownerId, chatId, { url, type: 'image', caption: legenda, filename: arquivo.nome || 'imagem.jpg', mimeType: arquivo.mime || 'image/jpeg' });
+          }
+          const id = sent?.key?.id || sent?.id || '';
+          if (!id) throw fail(502, 'CAMPAIGN_UNCONFIRMED', 'O provedor não confirmou o envio.');
+          results.push({ phone, status: 'sent', tipo: block.tipo, providerMessageId: String(id) });
         }
         executed += 1;
       } catch (error) {

@@ -127,6 +127,87 @@ test('exige chip válido e destinatário com telefone plausível', async () => {
   assert.equal(out.executed, 0);
 });
 
+// ── mídia ─────────────────────────────────────────────────────────────────────
+// Regressão: o bloco de imagem/áudio era recusado com CAMPAIGN_MEDIA_PENDING porque o
+// runner não tinha de onde tirar o arquivo. Agora usa a MESMA ponte da conversa
+// (sendMedia/sendVoice) com o link assinado da biblioteca privada.
+const baseDraft = bloco => ({
+  status: 'pronta', fuso: 'America/Fortaleza', dias: [0,1,2,3,4,5,6], inicio: '00:00', fim: '23:59',
+  intervalo_min_ms: 0, lote_min: 10, enviados: 0, plano: {blocos: [bloco]}
+});
+const ARQUIVO = '44444444-4444-4444-8444-444444444444';
+const PASTA = '55555555-5555-4555-8555-555555555555';
+
+test('campanha de imagem envia o arquivo da pasta pelo mesmo caminho da conversa', async () => {
+  const {client} = fakeClient({draft: baseDraft({id: 'b1', tipo: 'imagem', pastaId: PASTA, selecao: 'sequencial'}), recipients: [
+    {destinatario_id: DEST, telefone: '558699999999', nome: 'Ana', enviado: false}
+  ]});
+  const enviados = [];
+  const pedidos = [];
+  const runner = createCampaignRunner({
+    client,
+    now: () => new Date('2026-11-06T15:00:00Z'),
+    transport: {sendText: async () => ({key: {id: 'x'}}), sendMedia: async (userId, chatId, opts) => { enviados.push({chatId, ...opts}); return {key: {id: 'img_1'}}; }},
+    mediaProvider: async query => {
+      pedidos.push(query);
+      if (query.arquivoId) return {url: 'https://storage.test/sign/foto.jpg?token=abc'};
+      return [{arquivoId: ARQUIVO, pastaId: PASTA, nome: 'foto.jpg', mime: 'image/jpeg', tamanho: 1000}];
+    }
+  });
+  const out = await runner.run({ownerId: OWNER, campaignId: CAMP, slotId: 'slot_1'});
+  assert.equal(out.executed, 1);
+  assert.equal(pedidos[0].folderId, PASTA, 'a pasta vem do bloco do rascunho');
+  assert.equal(pedidos[1].arquivoId, ARQUIVO, 'o link é assinado só do arquivo escolhido');
+  assert.equal(enviados.length, 1);
+  assert.equal(enviados[0].type, 'image');
+  assert.equal(enviados[0].url, 'https://storage.test/sign/foto.jpg?token=abc');
+  assert.equal(enviados[0].mimeType, 'image/jpeg');
+  assert.match(out.results[0].providerMessageId, /img_1/);
+});
+
+test('campanha de áudio: nota de voz vai normalizada e anexo leva duração', async () => {
+  // Áudio real: o conversor do painel antigo executa ffmpeg, então um OGG sintético
+  // seria rejeitado (mesma lição do teste da nota de voz em evolution-api-cloud).
+  const {execFileSync} = await import('node:child_process');
+  const {readFileSync} = await import('node:fs');
+  const bin = (await import('ffmpeg-static')).default;
+  execFileSync(bin, ['-v','error','-f','lavfi','-i','anullsrc=r=16000:cl=mono','-t','0.4','-c:a','libopus','-f','ogg','/tmp/teste-campanha-voz.ogg','-y']);
+  const oggFake = readFileSync('/tmp/teste-campanha-voz.ogg');
+  for (const notaVoz of [true, false]) {
+    const {client} = fakeClient({draft: baseDraft({id: 'b1', tipo: 'audio', pastaId: PASTA, selecao: 'sequencial', notaVoz}), recipients: [
+      {destinatario_id: DEST, telefone: '558699999999', nome: 'Ana', enviado: false}
+    ]});
+    const vozes = [];
+    const anexos = [];
+    const runner = createCampaignRunner({
+      client,
+      now: () => new Date('2026-11-06T15:00:00Z'),
+      transport: {
+        sendText: async () => ({key: {id: 'x'}}),
+        sendVoice: async (userId, chatId, url) => { vozes.push({chatId, url}); return {key: {id: 'voz_1'}}; },
+        sendMedia: async (userId, chatId, opts) => { anexos.push({chatId, ...opts}); return {key: {id: 'anexo_1'}}; }
+      },
+      mediaProvider: async query => query.arquivoId
+        ? {url: 'https://storage.test/sign/voz.ogg?token=abc'}
+        : [{arquivoId: ARQUIVO, pastaId: PASTA, nome: 'voz.ogg', mime: 'audio/ogg', tamanho: 66}]
+    });
+    // O download do arquivo para a nota de voz vai pelo link assinado.
+    globalThis.fetch = async () => ({ok: true, arrayBuffer: async () => oggFake.buffer.slice(oggFake.byteOffset, oggFake.byteOffset + oggFake.length)});
+    const out = await runner.run({ownerId: OWNER, campaignId: CAMP, slotId: 'slot_1'});
+    assert.equal(out.executed, 1, notaVoz ? 'nota de voz enviada' : 'áudio anexo enviado');
+    if (notaVoz) {
+      assert.equal(vozes.length, 1);
+      assert.ok(vozes[0].url.startsWith('data:audio/ogg;base64,'), 'a nota de voz sai como OGG');
+      assert.equal(anexos.length, 0);
+    } else {
+      assert.equal(anexos.length, 1);
+      assert.equal(anexos[0].type, 'audio');
+      assert.equal(anexos[0].url, 'https://storage.test/sign/voz.ogg?token=abc');
+      assert.equal(vozes.length, 0);
+    }
+  }
+});
+
 // ── cofre ─────────────────────────────────────────────────────────────────────
 test('cofre só existe com chave de 32 bytes; hex e base64 são aceitos', () => {
   assert.equal(vaultKeyFromEnv({}), null);

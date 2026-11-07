@@ -161,11 +161,22 @@ export async function sendEvolutionApiText(userId, chatId, text, options = {}) {
 }
 export async function sendEvolutionApiMedia(userId, chatId, { url, type = 'document', caption = '', filename = '', mimeType = '' } = {}) {
   if (!url) throw Object.assign(new Error('URL de mídia ausente.'), { statusCode: 400 });
-  return requireEvolutionMessageId(await tenantCall(userId, chatId, '/message/sendMedia', 'POST', { number: numberForChat(chatId), mediatype: type, media: url, caption, fileName: filename, ...(mimeType ? { mimetype: mimeType } : {}) }));
+  // A Evolution API v2 aceita URL http(s) ou base64 puro — nunca "data:...;base64,".
+  // O painel novo monta o data URL; aqui removemos o prefixo antes de enviar.
+  let media = String(url);
+  let mime = mimeType;
+  if (media.startsWith('data:')) {
+    const comma = media.indexOf(',');
+    if (comma < 0) throw Object.assign(new Error('Arquivo de mídia inválido.'), { statusCode: 400 });
+    if (!mime) mime = media.slice(5, comma).split(';')[0] || '';
+    media = media.slice(comma + 1);
+  }
+  return requireEvolutionMessageId(await tenantCall(userId, chatId, '/message/sendMedia', 'POST', { number: numberForChat(chatId), mediatype: type, media, caption, fileName: filename, ...(mime ? { mimetype: mime } : {}) }));
 }
 export async function sendEvolutionApiVoice(userId, chatId, url) {
   if (!url) throw Object.assign(new Error('URL de áudio ausente.'), { statusCode: 400 });
-  return requireEvolutionMessageId(await tenantCall(userId, chatId, '/message/sendWhatsAppAudio', 'POST', { number: numberForChat(chatId), audio: url }));
+  const audio = String(url).startsWith('data:') ? String(url).slice(String(url).indexOf(',') + 1) : url;
+  return requireEvolutionMessageId(await tenantCall(userId, chatId, '/message/sendWhatsAppAudio', 'POST', { number: numberForChat(chatId), audio }));
 }
 export async function sendEvolutionApiContact(userId, chatId, contact = {}) {
   const phone = String(contact.phone || '').replace(/\D/g, '');

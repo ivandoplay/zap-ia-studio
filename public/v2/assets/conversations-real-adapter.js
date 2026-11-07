@@ -57,6 +57,22 @@ export function createRealConversationsAdapter({ request, scope = () => '', onSc
       return value;
     },
 
+    // Mídia vai em base64 para a rota dedicada; o servidor não grava o binário.
+    async sendMedia({instanceId, threadId, type, file, caption = '', voiceMessage = false, signal} = {}) {
+      if (!file) fail('Escolha um arquivo antes de enviar.', 400);
+      const data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Não foi possível ler o arquivo.'));
+        reader.readAsDataURL(file);
+      });
+      const value = await write(`${threadPath(instanceId, threadId)}/media`, 'POST', {
+        type, data, filename: String(file.name || ''), caption: String(caption || ''), voiceMessage: voiceMessage === true
+      }, signal);
+      if (value.sent !== true) fail('O envio do arquivo não foi confirmado pelo provedor.');
+      return value;
+    },
+
     async markRead({instanceId, threadId, unread = false, signal} = {}) {
       return write(`${threadPath(instanceId, threadId)}/read`, 'POST', {unread: unread === true}, signal);
     },
@@ -106,7 +122,13 @@ export function createRealConversationsAdapter({ request, scope = () => '', onSc
       return {
         viewer: data.viewer,
         tenant: data.tenant || { id: data.viewer.id, displayName: data.viewer.displayName || 'Minha conta' },
-        features: { manage: false, send: false, metadata: false },
+        // A caixa nova envia, marca lida, fixa, arquiva, pausa a IA e edita ficha pelo mesmo
+        // backend; quem decide é a conta (suporte continua somente leitura no servidor).
+        features: {
+          manage: data.features?.manage === true,
+          send: data.features?.send === true,
+          metadata: data.features?.metadata === true
+        },
         crmProfilesRead: data.features?.crmProfilesRead === true,
         instances,
         hasMore: false,

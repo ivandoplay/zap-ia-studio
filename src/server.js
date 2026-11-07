@@ -12,6 +12,8 @@ import {createResourceFileRepository} from './resources/repository.js';
 import {createTrainingRouter} from './training/router.js';
 import {createTrainingFileRepository} from './training/repository.js';
 import {createWorkspaceDraftCloudRepository} from './workspaceDrafts/cloudRepository.js';
+import {createDraftSecrets} from './draftSecrets.js';
+import {createCampaignRunner} from './campaigns/runner.js';
 import {createAccountPlan} from '../public/v2/assets/accounts-domain.js';
 import {previewTrainingRuntime} from './training/runtimePreview.js';
 import {previewTrainingImport} from './training/importPreview.js';
@@ -821,7 +823,7 @@ app.use('/api/connections', createConnectionsRouter(workspaceReadDependencies));
 app.use('/api/channels',createChannelsRouter({...workspaceReadDependencies,allowCrmProjection:true}));
 // Conversas reais na navegação nova. Lê o CRM legado vivo (zapia_contacts) e expõe
 // instância/thread/mensagem no formato que a caixa de entrada nova consome.
-app.use('/api/conversations-v3',createConversationsV3Router({...workspaceReadDependencies,store:()=>tenantStorageContext.getStore()}));
+app.use('/api/conversations-v3',createConversationsV3Router({...workspaceReadDependencies,store:()=>tenantStorageContext.getStore(),sendEnabled:true}));
 // Comandos reais da caixa nova (enviar, lida, fixar, arquivar, nota, pausa, ficha).
 // O armazenamento é o mesmo que a leitura acima consome; o envio usa a ponte Evolution
 // do chip conectado da conta. Suporte continua somente leitura.
@@ -833,9 +835,45 @@ app.use('/api/conversations-v3',createConversationsCommandsRouter({getLocalConte
 const crmAccountWrites = req => req.dashboardContext?.viewer?.role === 'master' && req.dashboardContext?.viewer?.id === req.dashboardContext?.tenant?.id;
 app.use('/api/crm-v2',createCrmRouter({...workspaceReadDependencies,allowWrites:true,allowAccountWrites:crmAccountWrites}));
 // Origem global, identidade delegada e implantação ainda não homologadas: sem consulta cloud nem ativação.
+// Cofre de chaves/PIN e executor de campanha: criados no primeiro uso (sem chave
+// configurada a aba responde 503 em vez de derrubar o processo no boot).
+const draftSecrets = (() => {
+  let instance = null;
+  return () => (instance ||= createDraftSecrets(process.env));
+})();
+const campaignRunnerFor = req => {
+  const client = req?.dashboardContext?.viewerClient || req?.cloudAuth?.client || null;
+  if (!client || typeof client.from !== 'function') return null;
+  return createCampaignRunner({client});
+};
 // Administração/Contas: a carteira vem das contas reais (zapia_users), sem senha nem chave.
 // Enquanto a porta de provisionamento não existe na nuvem, a gravação da carteira é
 // só de auditoria/perfil e a criação de conta continua recusada (canProvision:false).
+// Provisionamento de conta: cria o usuário no Auth e o perfil em zapia_users.
+// Se o perfil falhar, o usuário criado é removido — não deixamos conta órfã.
+const provisionAccountInCloud = async (plan) => {
+  const admin = getAdminClient();
+  const email = `${plan.username}@zapia.local`;
+  const password = `${crypto.randomBytes(18).toString('base64url')}!A9`;
+  const created = await admin.auth.admin.createUser({email, password, email_confirm: true});
+  if (created?.error || !created?.data?.user?.id) {
+    throw Object.assign(new Error('Não foi possível criar a conta no Auth.'), {status: 503});
+  }
+  const userId = created.data.user.id;
+  const prof = await admin.from('zapia_users').insert({
+    user_id: userId,
+    username: plan.username,
+    display_name: plan.displayName,
+    role: 'user',
+    is_active: true,
+    max_wa_slots: Number.isInteger(plan.instanceLimit) ? Math.max(1, Math.min(3, plan.instanceLimit)) : 1
+  });
+  if (prof.error) {
+    await admin.auth.admin.deleteUser(userId).catch(() => {});
+    throw Object.assign(new Error('Criação cancelada: o perfil não pôde ser gravado.'), {status: 503});
+  }
+  return {id: userId, username: plan.username, provisioning: 'existing'};
+};
 const readAccountsFromCloud = async () => {
   const admin = getAdminClient();
   const {data, error} = await admin.from('zapia_users').select('user_id, username, display_name, role, is_active, max_wa_slots').order('created_at', {ascending: true});
@@ -851,10 +889,10 @@ const readAccountsFromCloud = async () => {
   }));
   return {accounts};
 };
-app.use('/api/accounts-v2',createAccountsRouter({getLocalContext:workspaceReadDependencies.getLocalContext,repository:draftRepository('accounts'),readSource:IS_VERCEL?readAccountsFromCloud:undefined,allowWrites:true,allowWorkspaceWrites:true}));
-app.use('/api/security-settings-v2',createSecuritySettingsRouter({...workspaceReadDependencies,repository:draftRepository('security'),allowWrites:true,allowPinWrites:false,readApprovedMessages:async ctx=>{if(!ctx.data?.business)return [];const record=await draftRepository('training').read(ctx.tenant.id);const business=record?.document.training||ctx.data.business,id=ctx.data.business.trainingPackId;let pack=record?.document.pack||ctx.data.customPacks?.[id]||null;if(!record&&!pack&&id&&ctx.viewer.role==='master'&&ctx.viewer.id===ctx.tenant.id)pack=getTrainingPack(id);const rows=pack?.canonicalCore?.approvedMessages;if(rows?.length)return rows.map(m=>({id:m.id,title:m.title||m.id,text:m.text}));if(id&&!pack&&!record)return [];const first=String(business.assistantName||business.name||'eu').trim().split(/\s+/)[0];return [{id:'ABERTURA',title:'Abertura Consultiva Universal · original',text:business.soloIdentity?`Opa{{nome ? ', ' + nome : ''}}! Tudo bem? Aqui é o *${first}*. Posso te mostrar rapidinho como funciona meu trabalho?`:`Olá{{nome ? ', ' + nome : ''}}! Tudo bem? Aqui é do atendimento da *${business.name||'nossa equipe'}*. Posso te explicar rapidinho como funciona nosso trabalho?`}];}}));
+app.use('/api/accounts-v2',createAccountsRouter({getLocalContext:workspaceReadDependencies.getLocalContext,repository:draftRepository('accounts'),readSource:IS_VERCEL?readAccountsFromCloud:undefined,provisionAccount:IS_VERCEL?provisionAccountInCloud:null,allowWrites:true,allowWorkspaceWrites:true}));
+app.use('/api/security-settings-v2',createSecuritySettingsRouter({...workspaceReadDependencies,repository:draftRepository('security'),allowWrites:true,allowPinWrites:true,pinProtector:draftSecrets().pinProtector,readApprovedMessages:async ctx=>{if(!ctx.data?.business)return [];const record=await draftRepository('training').read(ctx.tenant.id);const business=record?.document.training||ctx.data.business,id=ctx.data.business.trainingPackId;let pack=record?.document.pack||ctx.data.customPacks?.[id]||null;if(!record&&!pack&&id&&ctx.viewer.role==='master'&&ctx.viewer.id===ctx.tenant.id)pack=getTrainingPack(id);const rows=pack?.canonicalCore?.approvedMessages;if(rows?.length)return rows.map(m=>({id:m.id,title:m.title||m.id,text:m.text}));if(id&&!pack&&!record)return [];const first=String(business.assistantName||business.name||'eu').trim().split(/\s+/)[0];return [{id:'ABERTURA',title:'Abertura Consultiva Universal · original',text:business.soloIdentity?`Opa{{nome ? ', ' + nome : ''}}! Tudo bem? Aqui é o *${first}*. Posso te mostrar rapidinho como funciona meu trabalho?`:`Olá{{nome ? ', ' + nome : ''}}! Tudo bem? Aqui é do atendimento da *${business.name||'nossa equipe'}*. Posso te explicar rapidinho como funciona nosso trabalho?`}];}}));
 
-app.use('/api/ai-settings-v2',createAiSettingsRouter({...workspaceReadDependencies,repository:draftRepository('ai'),allowWrites:true,allowSecretWrites:true}));
+app.use('/api/ai-settings-v2',createAiSettingsRouter({...workspaceReadDependencies,repository:draftRepository('ai'),allowWrites:true,allowSecretWrites:true,vault:draftSecrets().vault}));
 app.use('/api/simulator-v2',createSimulatorRouter({...workspaceReadDependencies,repository:draftRepository('simulator'),trainingRepository:draftRepository('training'),resourceRepository:draftRepository('resources'),allowSessions:true,allowTeach:true,readSource:ctx=>{if(!ctx.data?.business)throw Object.assign(new Error('Origem local do Simulador indisponível; integração remota não homologada.'),{status:503});const business=structuredClone(ctx.data.business),id=business.trainingPackId;let pack=ctx.data.customPacks?.[id]||null;if(id&&!pack&&ctx.viewer.role==='master'&&ctx.viewer.id===ctx.tenant.id)pack=getTrainingPack(id);return {business,pack:pack?structuredClone(pack):null,botEnabled:ctx.data.settings?.botEnabled!==false,simulatorHistoryCount:Array.isArray(ctx.data.simulatorHistory)?ctx.data.simulatorHistory.length:0};}}));
 app.use('/api/resources-v2',createResourceRouter({...workspaceReadDependencies,repository:draftRepository('resources'),allowWrites:true,allowTranscription:false,readLinkedMessages:ctx=>{if(!ctx.data?.business)return [];const id=ctx.data.business.trainingPackId;let p=ctx.data.customPacks?.[id]||null;if(!p&&id&&ctx.viewer.role==='master'&&ctx.viewer.id===ctx.tenant.id)p=getTrainingPack(id);return (p?.canonicalCore?.approvedMessages||[]).map(m=>({id:m.id,title:m.title||m.id}));}}));
 // Rascunho local; não existe rota de ativação nem habilitação por parâmetro público.
@@ -862,7 +900,7 @@ app.use('/api/training-v2',createTrainingRouter({getLocalContext:workspaceReadDe
 // UUID separado do legado. Todos os gates de escrita, IA e mídia permanecem false por padrão.
 // Rascunho de campanha homologado na conta real (dono master). A execução continua fechada:
 // sem canal atribuído, sem worker e sem homologação de ienvia_campaign_execution_accounts.
-app.use('/api/campaigns-v2',createCampaignRouter({...workspaceReadDependencies,allowWrites:true,allowAccountWrites:crmAccountWrites,storageOrigin:SUPABASE_URL,
+app.use('/api/campaigns-v2',createCampaignRouter({...workspaceReadDependencies,allowWrites:true,allowAccountWrites:crmAccountWrites,storageOrigin:SUPABASE_URL,allowExecution:true,campaignRunner:req=>campaignRunnerFor(req),
  getAIRequester:async(scope,input)=>{let ai;if(IS_VERCEL){const r=await scope.ctx.viewerClient.from('zapia_workspaces').select('settings').eq('user_id',scope.ownerId).maybeSingle();if(r.error)throw Error('Configuração indisponível.');ai=r.data?.settings?.ai;}else ai=scope.ctx.data?.settings?.ai;if(!campanhaTemChave(ai))return null;return async()=>{const result=await gerarVariacoesParaCampanha({settings:{ai},...input});if(result?.ok!==true)throw Error('Geração indisponível.');return JSON.stringify(result.variacoes);};},
  getMediaService:async scope=>{if(IS_VERCEL){const admin=getAdminClient(),service=criarServicoMediaCampanha({client:scope.ctx.viewerClient,admin,supabaseUrl:SUPABASE_URL});return {...service,iniciar:async x=>{await limparUploadsExpirados({client:scope.ctx.viewerClient,admin,userId:scope.ownerId});return service.iniciar(x);}};}const proxy=criarProxyMediaCampanha({client:scope.ctx.viewerClient,userId:scope.ownerId});return {
  iniciar:async x=>(await proxy({tipo:'iniciar',pastaId:x.pastaId,body:{tamanho:x.tamanho}})).upload,

@@ -13,7 +13,7 @@ const bad=()=>fail(503,'CAMPAIGNS_INVALID_RESULT','Resposta de campanhas inváli
 const id=v=>{if(!isCampaignId(v))throw invalid();return v;};
 const keys=(v,allowed)=>{if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).some(k=>!allowed.includes(k)))throw invalid();};
 function databaseError(e,write=false){const c=e?.code;if(['PGRST202','42P01','42883'].includes(c))return fail(503,'CAMPAIGNS_SETUP_REQUIRED','Os rascunhos UUID precisam da migração aprovada. O legado não foi convertido.');if(c==='55000')return fail(503,'CAMPAIGNS_WRITES_DISABLED','As alterações não foram homologadas para esta conta.');if(c==='40001')return fail(409,'CAMPAIGNS_CONFLICT','O rascunho ou este pedido mudou. Consulte novamente; não repetimos a operação.');if(c==='P0002')return fail(404,'CAMPAIGNS_NOT_FOUND','Rascunho não encontrado nesta conta.');if(c==='42501')return fail(403,'CAMPAIGNS_FORBIDDEN','Acesso não autorizado.');if(['22023','22007','22008','22003','22P02'].includes(c))return invalid();return fail(503,write?'CAMPAIGNS_OUTCOME_UNKNOWN':'CAMPAIGNS_UNAVAILABLE',write?'Não foi possível confirmar a alteração. Consulte o rascunho antes de decidir; não repita automaticamente.':'Não foi possível consultar campanhas. Nenhum dado foi inventado.');}
-export function createCampaignRouter({getLocalContext,allowWrites=false,allowAccountWrites=null,allowExecution=false,allowAI=false,allowMedia=false,getAIRequester,getMediaService,storageOrigin=null}={}){
+export function createCampaignRouter({getLocalContext,allowWrites=false,allowAccountWrites=null,allowExecution=false,allowAI=false,allowMedia=false,getAIRequester,getMediaService,storageOrigin=null,campaignRunner=null,vault=null,pinProtector=null}={}){
  let safeStorageOrigin=null;try{const u=new URL(storageOrigin);if(u.protocol==='https:'&&!u.username&&!u.password&&u.pathname==='/'&&!u.search&&!u.hash)safeStorageOrigin=u.origin;}catch{}
  const router=Router(),upload=multer({storage:multer.memoryStorage(),limits:{fileSize:4*1024*1024,files:1,fields:3,fieldSize:4*1024*1024,parts:4}}).single('file');
  router.use((_req,res,next)=>{res.setHeader('Cache-Control','no-store, private');next();});router.use(json({limit:'4mb',strict:true}));
@@ -22,7 +22,7 @@ export function createCampaignRouter({getLocalContext,allowWrites=false,allowAcc
  async function context(req,write=false){const ctx=req.dashboardContext||await getLocalContext?.(req);if(!ctx)throw fail(401,'CAMPAIGNS_AUTH_REQUIRED','Entre pelo painel existente.');if(write&&ctx.viewer?.id!==ctx.tenant?.id)throw fail(403,'CAMPAIGNS_SUPPORT_READ_ONLY','Suporte permanece somente leitura.');if(!isCampaignId(ctx.viewer?.id)||!isCampaignId(ctx.tenant?.id)||typeof ctx.viewerClient?.rpc!=='function')throw fail(503,'CAMPAIGNS_ACCOUNT_REQUIRED','Conta autenticada indisponível. Não há fallback para outra conta.');if(write&&!(allowWrites===true&&(typeof allowAccountWrites!=='function'||allowAccountWrites(req)===true)))throw fail(503,'CAMPAIGNS_WRITES_DISABLED','As alterações continuam desativadas até a homologação e autorização da migração.');return {ctx,ownerId:ctx.tenant.id,viewerId:ctx.viewer.id};}
  async function same(req,s){const now=req.dashboardContext||await getLocalContext?.(req);if(now?.tenant?.id!==s.ownerId||now?.viewer?.id!==s.viewerId)throw fail(409,'CAMPAIGNS_CONTEXT_CHANGED','A conta mudou durante a operação. Consulte a conta original; o resultado foi descartado e não será repetido.');}
  async function rpc(req,s,name,args,write=false){let r;try{r=await s.ctx.viewerClient.rpc(name,args).abortSignal(AbortSignal.timeout(5500));}catch{throw databaseError(null,write);}if(r?.error)throw databaseError(r.error,write);await same(req,s);if(!r?.data||r.data.ownerId!==s.ownerId||typeof r.data.writesEnabled!=='boolean')throw bad();return r.data;}
- function reply(res,s,d,status=200){const writable=allowWrites===true&&s.ownerId===s.viewerId&&d.writesEnabled===true;return res.status(status).json({ok:true,...d,permissions:{canEditDrafts:writable},capabilities:{canSend:false,canAutomate:false,canControl:false,canGenerateVariations:writable&&allowAI===true&&typeof getAIRequester==='function',canUploadMedia:writable&&allowMedia===true&&typeof getMediaService==='function'&&safeStorageOrigin!==null},source:'uuid_drafts',executionAvailable:allowExecution===true,storageOrigin:allowMedia===true?safeStorageOrigin:null});}
+ function reply(res,s,d,status=200){const writable=allowWrites===true&&s.ownerId===s.viewerId&&d.writesEnabled===true;return res.status(status).json({ok:true,...d,permissions:{canEditDrafts:writable},capabilities:{canSend:writable&&allowExecution===true&&!!campaignRunner,canAutomate:writable&&allowExecution===true&&!!campaignRunner,canControl:writable&&allowExecution===true&&!!campaignRunner,canGenerateVariations:writable&&allowAI===true&&typeof getAIRequester==='function',canUploadMedia:writable&&allowMedia===true&&typeof getMediaService==='function'&&safeStorageOrigin!==null},source:'uuid_drafts',executionAvailable:allowExecution===true&&!!campaignRunner,storageOrigin:allowMedia===true?safeStorageOrigin:null});}
  const emptyQuery=req=>{if(Object.keys(req.query).length)throw invalid();};
  function jsonBody(req,allowed){emptyQuery(req);if(!req.is('application/json'))throw fail(415,'CAMPAIGNS_JSON_REQUIRED','Envie JSON.');keys(req.body,allowed);if(Buffer.byteLength(JSON.stringify(req.body),'utf8')>4194304)throw fail(413,'CAMPAIGNS_TOO_LARGE','Requisição acima do limite.');return req.body;}
  const canonical=fn=>{try{return fn();}catch{throw invalid();}};
@@ -50,6 +50,26 @@ export function createCampaignRouter({getLocalContext,allowWrites=false,allowAcc
  route('post','/folders/:folderId/uploads/:fileId/finish',async(req,res)=>{const s=await context(req,true),b=jsonBody(req,['nome']),folderId=id(req.params.folderId),fileId=id(req.params.fileId);if(typeof b.nome!=='string'||b.nome.length>500||/[\u0000-\u001f\u007f]/.test(b.nome))throw invalid();const m=await media(req,s),d=await m.finalizar({userId:s.ownerId,pastaId:folderId,arquivoId:fileId,nome:b.nome});await same(req,s);if(d?.owner_id!==s.ownerId||d.arquivo_id!==fileId||d.pasta_id!==folderId)throw bad();reply(res,s,{ownerId:s.ownerId,writesEnabled:true,arquivo:d});});
  route('post','/files/:fileId/delete',async(req,res)=>{const s=await context(req,true),b=jsonBody(req,['confirmo']),fileId=id(req.params.fileId);if(b.confirmo!==true)throw invalid();const m=await media(req,s);await m.excluir({userId:s.ownerId,arquivoId:fileId});await same(req,s);reply(res,s,{ownerId:s.ownerId,writesEnabled:true});});
  route('post','/files/:fileId/ticket',async(req,res)=>{const s=await context(req,true);jsonBody(req,[]);const fileId=id(req.params.fileId),m=await media(req,s),d=await m.ticket({userId:s.ownerId,arquivoId:fileId});await same(req,s);reply(res,s,{ownerId:s.ownerId,writesEnabled:true,...d});});
+ // ── Execução da campanha nova ────────────────────────────────────────────────
+ // Fica aqui, e não no worker legado: o envio é HTTP (Evolution), então a própria
+ // Vercel executa em lotes. Sem chip escolhido não envia; nada é reenviado sozinho.
+ route('post','/drafts/:id/run',async(req,res)=>{
+   if(allowExecution!==true||!campaignRunner)throw fail(503,'CAMPAIGNS_EXECUTION_DISABLED','Execução não habilitada neste ambiente.');
+   const runner=typeof campaignRunner==='function'?campaignRunner(req):campaignRunner;
+   if(!runner)throw fail(503,'CAMPAIGNS_EXECUTION_DISABLED','Execução exige conta autenticada na nuvem.');
+   const s=await context(req,true),cid=id(req.params.id),b=jsonBody(req,['slotId','maxPerRun']);
+   if(typeof b.slotId!=='string'||!/^slot_[1-9]$/.test(b.slotId))throw invalid();
+   const maxPerRun=b.maxPerRun===undefined?5:b.maxPerRun;
+   if(!Number.isInteger(maxPerRun)||maxPerRun<1||maxPerRun>25)throw invalid();
+   const out=await runner.run({ownerId:s.ownerId,campaignId:cid,slotId:b.slotId,maxPerRun});
+   await same(req,s);
+   reply(res,s,{ownerId:s.ownerId,writesEnabled:true,...out});
+ });
+ route('get','/drafts/:id/progress',async(req,res)=>{
+   const s=await context(req),cid=id(req.params.id),d=await rpc(req,s,'ienvia_campaign_get_draft',{p_owner:s.ownerId,p_id:cid});
+   const doc=d.document||{};
+   reply(res,s,{ownerId:s.ownerId,writesEnabled:false,status:doc.status||'rascunho',enviados:Number(doc.enviados)||0,falhas:Number(doc.falhas)||0,pendentes:Number(doc.pendentes)||0,proxima_acao_em:doc.proxima_acao_em||null,ultima_execucao:doc.ultima_execucao||null});
+ });
  // Não aceita comandos de execução nem os encaminha ao legado.
  router.use((_req,res)=>res.status(404).json({ok:false,code:'CAMPAIGNS_ROUTE_UNAVAILABLE',error:'Operação indisponível. Este serviço prepara rascunhos; não executa campanhas.'}));
  router.use((e,_req,res,_next)=>sendError(res,fail(e.type==='entity.too.large'?413:400,'CAMPAIGNS_INPUT_INVALID','JSON inválido ou requisição acima do limite.')));

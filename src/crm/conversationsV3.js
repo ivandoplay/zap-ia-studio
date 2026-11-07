@@ -92,7 +92,7 @@ function normalized(text) {
   return String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
-export function createConversationsV3Router({ getLocalContext, store: cloudAuthStore = null } = {}) {
+export function createConversationsV3Router({sendEnabled = false,  getLocalContext, store: cloudAuthStore = null } = {}) {
   const router = Router();
   router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store, private'); next(); });
 
@@ -179,7 +179,14 @@ export function createConversationsV3Router({ getLocalContext, store: cloudAuthS
         viewer: { id: ctx.viewer?.id, role: ctx.viewer?.role || 'operador', displayName: ctx.viewer?.displayName || 'Operador' },
         tenant: { id: ctx.tenant?.id || ctx.viewer?.id, displayName: ctx.tenant?.displayName || ctx.data?.business?.name || 'Minha conta' },
         source: 'legacy_contacts',
-        features: { crmProfilesRead: false },
+        // O que a caixa realmente sabe fazer nesta conta: as rotas de envio, nota,
+        // pausa e ficha existem no mesmo módulo e estão liberadas para a conta dona.
+        features: {
+          crmProfilesRead: false,
+          send: sendEnabled === true,
+          manage: sendEnabled === true,
+          metadata: sendEnabled === true
+        },
         items,
         total: items.length,
         hasMore: false,

@@ -9,12 +9,15 @@
 //    e o texto é persistido na conversa com o provedor e o id da mensagem;
 //  - erro de origem sobe como erro; nada é marcado como enviado sem confirmação.
 import {Router, json} from 'express';
-import {sendEvolutionApiText, markEvolutionApiRead} from '../evolutionApiCloud.js';
+import {sendEvolutionApiText, markEvolutionApiRead, sendEvolutionApiMedia, sendEvolutionApiVoice} from '../evolutionApiCloud.js';
 import {phonesMatch} from '../storage.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SLOT = /^slot_[0-9]+$/;
 const MAX_TEXT = 4000;
+// Mídia do compositor: mesmo teto do WhatsApp (~16 MB) e só tipos que o Evolution aceita.
+const MAX_MEDIA_BYTES = 16 * 1024 * 1024;
+const MEDIA_TYPES = Object.freeze(['image', 'video', 'document', 'audio']);
 
 const str = (value, max = 200) => (typeof value === 'string' ? value.trim().slice(0, max) : '');
 
@@ -33,9 +36,26 @@ function splitChatId(rawChatId) {
 
 const fail = (status, code, message) => Object.assign(new Error(message), {status, code});
 
+// O painel manda o tipo do WhatsApp (image/video/document/audio); o provedor quer o mime.
+function dataUrlMime(type, filename) {
+  const ext = String(filename || '').split('.').pop().toLowerCase();
+  const table = {
+    image: {png: 'image/png', webp: 'image/webp', gif: 'image/gif', jpg: 'image/jpeg', jpeg: 'image/jpeg'},
+    video: {mp4: 'video/mp4', '3gp': 'video/3gpp', mov: 'video/quicktime'},
+    audio: {ogg: 'audio/ogg', mp3: 'audio/mpeg', m4a: 'audio/mp4', wav: 'audio/wav', opus: 'audio/ogg'},
+    document: {pdf: 'application/pdf', doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', csv: 'text/csv', txt: 'text/plain', zip: 'application/zip'}
+  };
+  return table[type]?.[ext] || {image: 'image/jpeg', video: 'video/mp4', audio: 'audio/ogg', document: 'application/octet-stream'}[type];
+}
+
 // `transport` permite injetar a ponte de envio nos testes sem tocar no WhatsApp.
 export function createConversationsCommandsRouter({getLocalContext, allowSend = false, transport = null, store: cloudAuthStore = null} = {}) {
-  const bridge = transport || {sendText: sendEvolutionApiText, markRead: markEvolutionApiRead};
+  const bridge = transport || {
+    sendText: sendEvolutionApiText,
+    sendMedia: sendEvolutionApiMedia,
+    sendVoice: sendEvolutionApiVoice,
+    markRead: markEvolutionApiRead
+  };
   const router = Router();
   router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store, private'); next(); });
   router.use(json({limit: '16kb', strict: true}));
@@ -175,6 +195,65 @@ export function createConversationsCommandsRouter({getLocalContext, allowSend = 
         providerMessageId: providerId,
         conversationId: encodeURIComponent(target.storageKey),
         text,
+        at: new Date().toISOString(),
+        delivery: 'accepted'
+      });
+    } catch (error) {
+      const mapped = error?.statusCode && !error.status
+        ? fail(error.statusCode === 503 ? 503 : 502, 'WHATSAPP_SEND_FAILED', error.message)
+        : error;
+      return sendError(res, mapped);
+    }
+  });
+
+  // ── Enviar mídia (imagem, vídeo, documento ou áudio) ────────────────────────
+  // O arquivo chega em base64 do compositor. Nunca é gravado em disco: vai direto ao
+  // provedor e o que fica no histórico é a referência (tipo, nome, tamanho, legenda).
+  router.post('/instances/:instanceId/threads/:threadKey/media', async (req, res) => {
+    try {
+      const ctx = await context(req, true);
+      const target = resolve(ctx, req.params.instanceId, req.params.threadKey);
+      const body = req.body || {};
+      if (Object.keys(body).some(key => !['type', 'data', 'filename', 'caption', 'voiceMessage', 'requestId'].includes(key))) {
+        throw fail(400, 'MESSAGE_INVALID', 'Esta rota aceita apenas o arquivo, o tipo e a legenda.');
+      }
+      const type = str(body.type, 20).toLowerCase();
+      if (!MEDIA_TYPES.includes(type)) throw fail(400, 'MEDIA_TYPE_INVALID', 'Tipo de arquivo não suportado (imagem, vídeo, documento ou áudio).');
+      const raw = String(body.data || '');
+      if (!raw) throw fail(400, 'MEDIA_EMPTY', 'Selecione o arquivo antes de enviar.');
+      // Aceita data URL ("data:image/png;base64,...") ou base64 puro.
+      const base64 = raw.includes(',') ? raw.slice(raw.indexOf(',') + 1) : raw;
+      if (!/^[A-Za-z0-9+/=\r\n]+$/.test(base64)) throw fail(400, 'MEDIA_INVALID', 'Arquivo inválido.');
+      const bytes = Math.floor((base64.replace(/[^A-Za-z0-9+/=]/g, '').length * 3) / 4);
+      if (bytes < 1 || bytes > MAX_MEDIA_BYTES) throw fail(413, 'MEDIA_TOO_LARGE', 'O arquivo passa de 16 MB.');
+      const caption = str(body.caption, 1024);
+      const filename = str(body.filename, 120) || `${type}-${Date.now()}`;
+      const voiceMessage = body.voiceMessage === true;
+      const dataUri = `data:${dataUrlMime(type, filename)};base64,${base64}`;
+
+      if (!bridge || typeof bridge.sendMedia !== 'function') {
+        throw fail(503, 'CONVERSATIONS_SEND_UNAVAILABLE', 'Envio de arquivos indisponível nesta conta.');
+      }
+      const result = type === 'audio' && voiceMessage && typeof bridge.sendVoice === 'function'
+        ? await bridge.sendVoice(ctx.tenant.id, target.chatId, dataUri)
+        : await bridge.sendMedia(ctx.tenant.id, target.chatId, {url: dataUri, type, caption, filename, mimeType: dataUrlMime(type, filename)});
+      const providerId = str(result?.key?.id || result?.id || '', 120) || null;
+
+      const storage = guarded(ctx);
+      storage.appendContactMessage(target.storageKey, {
+        role: 'owner',
+        text: caption,
+        deliveryStatus: 'accepted',
+        media: {type, filename, bytes, ...(voiceMessage ? {voiceMessage: true} : {})},
+        ...(providerId ? {waMsgId: providerId} : {})
+      });
+      storage.markContactRead(target.storageKey);
+      return reply(res, {
+        sent: true,
+        provider: 'evolution_api',
+        providerMessageId: providerId,
+        conversationId: encodeURIComponent(target.storageKey),
+        media: {type, filename, bytes, caption, ...(voiceMessage ? {voiceMessage: true} : {})},
         at: new Date().toISOString(),
         delivery: 'accepted'
       });

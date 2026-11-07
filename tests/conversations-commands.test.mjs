@@ -67,6 +67,8 @@ async function withServer(handler, fn, {allowSend = true, ctx = context()} = {})
     allowSend,
     transport: {
       sendText: handler.sendText,
+      sendMedia: handler.sendMedia,
+      sendVoice: handler.sendVoice,
       markRead: handler.markRead
     }
   }));
@@ -318,5 +320,54 @@ test('número de outro chip continua bloqueado na instância do chip 1', async (
       method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: 'nao deveria sair'})
     });
     assert.equal(res.status, 404);
+  }, {ctx: base});
+});
+
+// Mídia no compositor: o arquivo vai em base64, o histórico guarda a referência e o
+// provedor recebe um data URL com o mime certo. Nunca grava binário no banco.
+test('envia imagem pelo compositor e registra a referência na conversa', async () => {
+  const sent = [];
+  const handler = {
+    sendText: async () => ({key: {id: 'nao'}}),
+    sendMedia: async (userId, chatId, media) => { sent.push({userId, chatId, media}); return {key: {id: 'wamid_img'}}; }
+  };
+  const base = context();
+  base.storage.contacts['263762531643591@lid'] = {name: 'Chip 2', slotId: 'slot_1', phone: '558681638438', messages: []};
+  base.data.contacts = base.storage.contacts;
+  await withServer(handler, async (url) => {
+    const res = await fetch(`${url}/api/conversations-v3/instances/${INSTANCE}/threads/${encodeURIComponent('263762531643591@lid')}/media`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({type: 'image', data: Buffer.from('foto-falsa').toString('base64'), filename: 'veiculo.jpg', caption: 'Foto do carro'})
+    });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.providerMessageId, 'wamid_img');
+    assert.match(sent[0].media.url, /^data:image\/jpeg;base64,/);
+    assert.equal(sent[0].media.caption, 'Foto do carro');
+    const message = base.storage.contacts['263762531643591@lid'].messages.at(-1);
+    assert.equal(message.media.type, 'image');
+    assert.equal(message.media.filename, 'veiculo.jpg');
+    assert.equal(message.text, 'Foto do carro');
+    assert.equal(message.waMsgId, 'wamid_img');
+  }, {ctx: base});
+});
+
+test('recusa tipo de arquivo não suportado e base64 acima do limite', async () => {
+  const handler = {sendMedia: async () => ({key: {id: 'nunca'}})};
+  const base = context();
+  base.storage.contacts['263762531643591@lid'] = {slotId: 'slot_1', phone: '558681638438', messages: []};
+  base.data.contacts = base.storage.contacts;
+  await withServer(handler, async (url) => {
+    const bad = await fetch(`${url}/api/conversations-v3/instances/${INSTANCE}/threads/${encodeURIComponent('263762531643591@lid')}/media`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({type: 'executavel', data: 'QUJD'})
+    });
+    assert.equal(bad.status, 400);
+    assert.equal((await bad.json()).code, 'MEDIA_TYPE_INVALID');
+    const big = await fetch(`${url}/api/conversations-v3/instances/${INSTANCE}/threads/${encodeURIComponent('263762531643591@lid')}/media`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({type: 'document', data: 'A'.repeat(23 * 1024 * 1024)})
+    });
+    assert.equal(big.status, 413);
   }, {ctx: base});
 });

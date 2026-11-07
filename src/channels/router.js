@@ -52,6 +52,30 @@ export function createChannelsRouter({getLocalContext,allowCrmProjection=false}=
   const instanceId=req.params.id.toLowerCase(),{data,error}=await ctx.viewerClient.rpc('ienvia_get_instance_execution',{p_owner:ctx.tenant.id,p_instance:instanceId}).abortSignal(AbortSignal.timeout(4000));if(error)throw dbError(error);
   const execution=parseExecutionSnapshot(data,{ownerId:ctx.tenant.id,instanceId});return res.json({ok:true,execution,state:!execution.assignment?'unassigned':execution.assignment.enabled&&execution.assignment.executorEnabled?'configured_not_verified':'disabled',capabilities:{canDispatch:false,canPair:false},connection:{status:'not_verified'},operationalMigrationPending:true});
  }catch(error){return sendError(res,error);}});
+ // ── Amarrar o chip a um executor ─────────────────────────────────────────────
+ // `ienvia_register_instance_executor` cria/atualiza o executor e
+ // `ienvia_assign_instance_executor` liga o chip a ele com revisão (CAS). Sem isso a
+ // campanha não tem por onde enviar; com isso a tela deixa de ser só leitura.
+ router.post('/:id/executor',async(req,res)=>{try{
+  const ctx=await context(req,true);if(!isChannelId(req.params.id))throw Object.assign(Error('Instância UUID inválida.'),{status:400});
+  if(ctx.viewer.id!==ctx.tenant.id)throw Object.assign(Error('Suporte permanece somente leitura.'),{status:403});
+  const b=req.body||{};
+  if(Object.keys(b).some(k=>!['executorId','enabled','revision','transport','confirmo'].includes(k)))throw Object.assign(Error('Campos inválidos.'),{status:400});
+  if(b.confirmo!==true)throw Object.assign(Error('Confirmação explícita obrigatória para amarrar o chip.'),{status:400});
+  const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if(!UUID.test(String(b.executorId||'')))throw Object.assign(Error('Executor inválido.'),{status:400});
+  if(typeof b.enabled!=='boolean'||!Number.isSafeInteger(b.revision)||b.revision<0)throw Object.assign(Error('Estado ou revisão inválidos.'),{status:400});
+  const transport=['evolution_api','local_worker'].includes(b.transport)?b.transport:'evolution_api';
+  const instanceId=req.params.id.toLowerCase();
+  const reg=await ctx.viewerClient.rpc('ienvia_register_instance_executor',{p_owner:ctx.tenant.id,p_executor:b.executorId,p_transport:transport,p_enabled:b.enabled}).abortSignal(AbortSignal.timeout(5000));
+  if(reg.error)throw dbError(reg.error);
+  const asg=await ctx.viewerClient.rpc('ienvia_assign_instance_executor',{p_instance:instanceId,p_executor:b.executorId,p_revision:b.revision,p_enabled:b.enabled}).abortSignal(AbortSignal.timeout(5000));
+  if(asg.error)throw dbError(asg.error);
+  const after=await ctx.viewerClient.rpc('ienvia_get_instance_execution',{p_owner:ctx.tenant.id,p_instance:instanceId}).abortSignal(AbortSignal.timeout(4000));
+  if(after.error)throw dbError(after.error);
+  const execution=parseExecutionSnapshot(after.data,{ownerId:ctx.tenant.id,instanceId});
+  return res.json({ok:true,execution,state:!execution.assignment?'unassigned':execution.assignment.enabled&&execution.assignment.executorEnabled?'configured_not_verified':'disabled'});
+ }catch(error){return sendError(res,error);}});
  router.get('/:id/legacy-link',async(req,res)=>{try{
   const ctx=await context(req);if(!isChannelId(req.params.id))throw Object.assign(Error('Canal UUID inválido.'),{status:400});
   const channelId=req.params.id.toLowerCase(),{data,error}=await ctx.viewerClient.rpc('ienvia_get_channel_legacy_link',{p_owner:ctx.tenant.id,p_channel:channelId}).abortSignal(AbortSignal.timeout(4000));if(error)throw dbError(error);

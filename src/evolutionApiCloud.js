@@ -641,6 +641,23 @@ async function connectSlot(slotId, userId, baseUrl, pairingPhone = null) {
   return { slotId, ...slot };
 }
 
+
+// Pareamento pelo Evolution para o painel novo (`/api/channels/:id/pairing`).
+// Reusa ensureInstance + connectSlot + lifecycleInstanceName do painel antigo; o QR volta
+// pronto para a tela. Nada é inventado: se a Evolution não responder, o erro sobe.
+export async function evolutionApiConnectSlot({ userId, slotId, baseUrl, pairingPhone = null }) {
+  if (!userId || !/^slot_[1-3]$/.test(String(slotId || ''))) throw Object.assign(new Error('Chip inválido para pareamento.'), { statusCode: 400 });
+  if (!baseUrl) throw Object.assign(new Error('Não foi possível resolver o endereço público do webhook.'), { statusCode: 503 });
+  const slot = await connectSlot(slotId, userId, baseUrl, pairingPhone);
+  return { slotId, instanceName: slot.name, status: slot.status, qrDataUrl: slot.qrDataUrl || null, pairingCode: slot.pairingCode || null };
+}
+export async function evolutionApiDisconnectSlot({ userId, slotId }) {
+  if (!userId || !/^slot_[1-3]$/.test(String(slotId || ''))) throw Object.assign(new Error('Chip inválido para desconectar.'), { statusCode: 400 });
+  const name = await lifecycleInstanceName(userId, slotId);
+  await apiCall(`/instance/logout/${encodeURIComponent(name)}`, { method: 'DELETE' });
+  slotCache.delete(cacheKey(userId, slotId));
+  return { slotId, instanceName: name, status: 'disconnected' };
+}
 evolutionApiCloudRouter.get('/diagnostics/read-only', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store, private');
   res.setHeader('Pragma', 'no-cache');

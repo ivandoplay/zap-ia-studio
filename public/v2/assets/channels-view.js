@@ -33,10 +33,12 @@ export function mountChannels({adapter,demo=false,onExitSupport=()=>{},host=null
     pair.textContent=live==='connected'?'Desconectar':linked?'Conectar número':'Sem vínculo';
     pair.disabled=!state.permissions.canEdit||!linked||busy;
     pair.setAttribute('aria-label',`${pair.textContent} em ${channel.name}`);
-    pair.onclick=async()=>{if(!confirm(`Confirma ${live==='connected'?'desconectar':'conectar'} o número de ${channel.name}? A conexão é feita pelo motor Ienvia.`))return;
-      pair.disabled=true;feedback('Falando com o motor Ienvia…');
+    pair.onclick=async()=>{if(!confirm(`Confirma ${live==='connected'?'desconectar':'conectar'} o número de ${channel.name}? O QR será gerado na hora.`))return;
+      pair.disabled=true;feedback('Pedindo o QR ao provedor…');
       try{const out=await adapter.pairing(channel.id,{action:live==='connected'?'disconnect':'connect',confirmo:true});
-        feedback(out.qrReady?'Comando aceito. Leia o QR no painel antigo (Início & Conexão) para concluir.':'Comando enviado ao motor. O status será conferido na lista.');
+        if(live==='connected'){feedback('Número desconectado. O chip ficou livre para um novo pareamento.');await load();return;}
+        showQr(channel,out);
+        feedback(out.qrDataUrl||out.pairingCode?'Leia o QR (ou digite o código) no WhatsApp para concluir.':'O Evolution aceitou o pedido, mas ainda não devolveu o QR. Tente de novo em alguns segundos.');
         await load();
       }catch(error){feedback(error.message||'O motor não confirmou a conexão. Nada foi alterado.');pair.disabled=false;}
     };
@@ -45,6 +47,19 @@ export function mountChannels({adapter,demo=false,onExitSupport=()=>{},host=null
    list.append(row);
   }
  }
+ // QR do pareamento: vem pronto do Evolution (o mesmo caminho que envia mensagem). Nada de
+ // mandar o usuário para o painel antigo.
+ function qrBox(){let box=document.getElementById('channelPairQr');if(box)return box;
+  box=document.createElement('section');box.id='channelPairQr';box.className='channel-qr-box';box.hidden=true;
+  box.innerHTML='<h3>Parear número</h3><p class="channel-qr-title"></p><img alt="QR de pareamento" width="240" height="240"><p class="channel-qr-code"></p><button type="button" class="button button-secondary">Fechar</button>';
+  box.querySelector('button').onclick=()=>{box.hidden=true;};
+  const list=$('channels-list')||document.body;if(list.parentElement)list.parentElement.insertBefore(box,list.nextSibling);else document.body.append(box);
+  return box;}
+ function showQr(channel,out){const box=qrBox(),img=box.querySelector('img'),code=box.querySelector('.channel-qr-code');
+  box.querySelector('.channel-qr-title').textContent='Conecte '+channel.name+' pelo WhatsApp: Aparelhos conectados → Conectar aparelho.';
+  if(out.qrDataUrl){img.src=out.qrDataUrl;img.hidden=false;}else{img.removeAttribute('src');img.hidden=true;}
+  code.textContent=out.pairingCode?('Ou digite este código no WhatsApp: '+out.pairingCode):'';
+  box.hidden=false;box.scrollIntoView({block:'nearest'});}
  function renderPreview(){if(!demo||!adapter.preview)return;$('channel-crm-preview').hidden=false;const preview=adapter.preview(),policies=Object.fromEntries(preview.channels.map(c=>[c.id,c])),shown=filterCrmContacts(preview.contacts,policies,$('channel-crm-filter').value);const list=$('channel-crm-contacts');list.replaceChildren();
   for(const contact of shown.slice(0,6)){const row=document.createElement('div');row.className='crm-example-row';const title=document.createElement('strong');title.textContent=contact.name;const detail=document.createElement('span');detail.textContent=`${policies[contact.channelId]?.name||'Canal não migrado'} · ${contact.messages.length} mensagens preservadas`;row.append(title,detail);list.append(row);}
   if(!shown.length)list.textContent='Nenhuma conversa de exemplo neste filtro.';$('channel-crm-preserved').textContent=`${shown.length} conversa(s) neste filtro · ${preview.contacts.length} conversas e ${preview.contacts.reduce((n,c)=>n+c.messages.length,0)} mensagens guardadas no exemplo. Nada é apagado.`;

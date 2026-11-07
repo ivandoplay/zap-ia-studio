@@ -29,6 +29,28 @@ export function createEvolutionWebhookRouter({ env = process.env, adminClient = 
   router.get('/status', (_req, res) => res.json({ ok: true, evolutionApiConfigured: Boolean(env.EVOLUTION_API_KEY), webhookAuthenticated: Boolean(env.EVOLUTION_WEBHOOK_SECRET), supabase: cloud }));
   router.post(['/send', '/clear'], (_req, res) => res.status(404).json({ ok: false, error: 'Rota desativada.' }));
 
+
+// Versão ATIVA das regras de Segurança (a que o dono ativou no painel novo).
+// Lida do workspace da conta; documento de rascunho sem `active` é ignorado.
+async function activeSecuritySettings(userId) {
+  try {
+    const { data, error } = await adminClient().from('ienvia_workspace_drafts')
+      .select('document').eq('owner_id', userId).eq('namespace', 'security').maybeSingle();
+    if (error || !data?.document || data.document.active !== true) return null;
+    const s = data.document.settings;
+    return s && typeof s === 'object' && !Array.isArray(s) ? s : null;
+  } catch { return null; }
+}
+// Só os campos que o atendimento consome entram; o resto do documento não vaza para as settings.
+function applyActiveSecurity(live, active) {
+  const out = { ...live };
+  if (typeof active.botEnabled === 'boolean') out.botEnabled = active.botEnabled;
+  if (Array.isArray(active.ignoredContacts)) out.ignoredContacts = active.ignoredContacts.filter(x => x && typeof x.phone === 'string').map(x => ({ phone: x.phone, name: String(x.name || '') }));
+  for (const k of ['humanHandoff', 'antiBan', 'schedule']) {
+    if (active[k] && typeof active[k] === 'object' && !Array.isArray(active[k])) out[k] = { ...(live[k] || {}), ...active[k] };
+  }
+  return out;
+}
   async function tenantFor(identity) {
     if (!cloud) return { settings: { botEnabled: false }, profile: {}, slotEnabled: false };
     const admin = adminClient();
@@ -39,7 +61,14 @@ export function createEvolutionWebhookRouter({ env = process.env, adminClient = 
     ]);
     if (u.error || w.error || slot.error) throw new Error('tenant_read_failed');
     if (!u.data?.is_active || !w.data || (u.data.role !== 'master' && Number(identity.slotId.slice(-1)) > Number(u.data.max_wa_slots || 1))) throw Object.assign(new Error('tenant_inactive'), { statusCode: 403 });
-    return { settings: w.data.settings || {}, profile: w.data.business || {}, slotEnabled: slot.data?.ai_enabled !== false && w.data.settings?.waSlots?.[identity.slotId]?.aiEnabled !== false };
+    // Regras de Segurança ATIVAS: a aba Segurança do painel novo grava em
+    // ienvia_workspace_drafts (rascunho). Sem aplicar a versão aprovada, ligar/desligar IA,
+    // horário e handoff ali não valeria nada — e desligar o painel antigo apagaria o ajuste.
+    // Aqui a versão ativa é aplicada SOBRE as settings vivas; sem ativação, nada muda.
+    const live = w.data.settings || {};
+    const security = await activeSecuritySettings(identity.userId);
+    const merged = security ? applyActiveSecurity(live, security) : live;
+    return { settings: merged, profile: w.data.business || {}, slotEnabled: slot.data?.ai_enabled !== false && merged?.waSlots?.[identity.slotId]?.aiEnabled !== false };
   }
   async function merge(identity, chatId, messages = [], { name = '', event = '', ackId = '', ack = 0, patch = {} } = {}) {
     if (cloud) {

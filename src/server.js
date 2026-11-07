@@ -149,7 +149,7 @@ import {
   exportProfileBundleZip
 } from './trainingPackEngine.js';
 import { evolutionApiWebhookRouter } from './evolutionApiWebhook.js';
-import { evolutionApiCloudRouter, getEvolutionApiSlotStatus, getEvolutionApiContacts, getEvolutionApiChats, sendEvolutionApiText, sendEvolutionApiMedia, sendEvolutionApiContact, reactEvolutionApiMessage, editEvolutionApiMessage, deleteEvolutionApiMessage, markEvolutionApiRead, blockEvolutionApiContact, requestEvolutionApiHistory } from './evolutionApiCloud.js';
+import { evolutionApiConnectSlot, evolutionApiDisconnectSlot, evolutionApiCloudRouter, getEvolutionApiSlotStatus, getEvolutionApiContacts, getEvolutionApiChats, sendEvolutionApiText, sendEvolutionApiMedia, sendEvolutionApiContact, reactEvolutionApiMessage, editEvolutionApiMessage, deleteEvolutionApiMessage, markEvolutionApiRead, blockEvolutionApiContact, requestEvolutionApiHistory } from './evolutionApiCloud.js';
 import { mergeEvolutionApiHistoryPage } from './evolutionApiHistory.js';
 
 export const app = express();
@@ -831,40 +831,40 @@ app.use('/api/connections', createConnectionsRouter(workspaceReadDependencies));
 // contato legado. As instâncias ainda vêm de zapia_wa_slots até a migração operacional.
 // Pareamento de número pela aba nova: delega ao MESMO motor que o painel anterior usa
 // (worker na nuvem ou whatsappManager local). Sem motor, a rota responde 503 e nada muda.
+// Endereço público usado no webhook da Evolution (mesma regra do router /evolution-cloud).
+const publicBaseUrl = () => {
+  if (process.env.VERCEL || process.env.VERCEL_ENV) {
+    const host = process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL || 'zap-ia-studio.vercel.app';
+    return new URL(`https://${String(host).replace(/^https?:\/\//i, '')}`).origin;
+  }
+  const configured = process.env.PUBLIC_BASE_URL || process.env.APP_BASE_URL;
+  return configured ? new URL(configured).origin : null;
+};
 const channelPairingBridge = {
   enabled: true,
   async connect({ctx, slotId, pairingPhone}) {
+    // Pareamento pelo Evolution: é o mesmo caminho que já envia mensagem de verdade
+    // (`sendEvolutionApiText`), então não depende de worker local — que na Vercel está
+    // offline e deixava a tela de Canais sem QR. O QR volta para o painel novo.
     if (usesCloudBridge({ cloudAuth: ctx.cloudAuth, mode: ctx.mode })) {
-      const out = await dispatchCommandToWorker(
-        ctx.cloudAuth?.client || ctx.viewerClient,
-        ctx.cloudAuth?.authUser?.id || ctx.viewer.id,
-        'wa_connect',
-        { pairingPhone: pairingPhone || null, slotId, targetDeviceId: null },
-        9500,
-        { slotId, targetDeviceId: null }
-      );
-      return { engine: 'cloud_worker', ...out };
+      const userId = ctx.cloudAuth?.authUser?.id || ctx.viewer.id;
+      const out = await evolutionApiConnectSlot({ userId, slotId, baseUrl: publicBaseUrl(), pairingPhone: pairingPhone || null });
+      return { engine: 'evolution_api', ...out };
     }
     await whatsappManager.connect(pairingPhone || null, slotId);
     return { engine: 'local_worker' };
   },
   async disconnect({ctx, slotId}) {
     if (usesCloudBridge({ cloudAuth: ctx.cloudAuth, mode: ctx.mode })) {
-      const out = await dispatchCommandToWorker(
-        ctx.cloudAuth?.client || ctx.viewerClient,
-        ctx.cloudAuth?.authUser?.id || ctx.viewer.id,
-        'wa_disconnect',
-        { clearSession: false, slotId },
-        8800,
-        { slotId }
-      );
-      return { engine: 'cloud_worker', ...out };
+      const userId = ctx.cloudAuth?.authUser?.id || ctx.viewer.id;
+      const out = await evolutionApiDisconnectSlot({ userId, slotId });
+      return { engine: 'evolution_api', ...out };
     }
     await whatsappManager.disconnect(false, slotId);
     return { engine: 'local_worker' };
   }
 };
-app.use('/api/channels',createChannelsRouter({...workspaceReadDependencies,allowCrmProjection:true,pairing:channelPairingBridge}));
+app.use('/api/channels',createChannelsRouter({...workspaceReadDependencies,allowCrmProjection:true,pairing:channelPairingBridge,canPair:true}));
 // Conversas reais na navegação nova. Lê o CRM legado vivo (zapia_contacts) e expõe
 // instância/thread/mensagem no formato que a caixa de entrada nova consome.
 app.use('/api/conversations-v3',createConversationsV3Router({...workspaceReadDependencies,store:()=>tenantStorageContext.getStore(),sendEnabled:true}));

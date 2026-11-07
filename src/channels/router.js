@@ -4,10 +4,10 @@ import {parseHistoryQuery,parseInstanceThreads,parseInstanceMessages} from '../i
 import {parseDispatchDiagnosis,parseDispatchReview,parseReviewInput} from '../instances/reconciliation.js';
 import {parseLegacyLinkSnapshot} from './legacyBridge.js';
 import {isChannelId,parseChannelInput} from '../../public/v2/assets/channel-policy.js';
-function dto(value,connection=null){
+function dto(value,connection=null,canPair=false){
  if(!value||!isChannelId(value.id)||!Number.isInteger(value.revision)||value.revision<1||!Number.isFinite(Date.parse(value.createdAt))||!Number.isFinite(Date.parse(value.updatedAt)))throw Error('Invalid channel DTO');
  const config=parseChannelInput({name:value.name,transport:value.transport,crmVisible:value.crmVisible,aiEnabled:value.aiEnabled,campaignsEnabled:value.campaignsEnabled,tags:value.tags});
- return {id:value.id,...config,revision:value.revision,createdAt:value.createdAt,updatedAt:value.updatedAt,connection:connection||{status:'not_verified',checkedAt:null},capabilities:{canPair:false,reason:'CHANNEL_DRIVER_MIGRATION_PENDING'}};
+ return {id:value.id,...config,revision:value.revision,createdAt:value.createdAt,updatedAt:value.updatedAt,connection:connection||{status:'not_verified',checkedAt:null},capabilities:canPair===true?{canPair:true}:{canPair:false,reason:'CHANNEL_DRIVER_MIGRATION_PENDING'}};
 }
 // ── Status real da conexão ────────────────────────────────────────────────────
 // O cadastro de canais nasceu sem driver e respondia sempre "não verificada".
@@ -39,7 +39,7 @@ function connectionFor(channelId,link,snapshot){
 function dbError(error){
  const code=error?.code;return Object.assign(new Error(['PGRST202','42P01','42883'].includes(code)?'O cadastro de canais ainda precisa da migração aprovada. Nenhuma conexão foi criada.':code==='40001'?'Este canal mudou em outra tela. Recarregue antes de salvar.':code==='P0002'?'Canal não encontrado nesta conta.':code==='42501'?'Acesso não autorizado.':code==='22023'?'Configuração de canal inválida.':'Não foi possível confirmar o cadastro. Recarregue antes de decidir; não repetimos a operação.'),{status:code==='40001'?409:code==='P0002'?404:code==='42501'?403:code==='22023'?400:503,code:['PGRST202','42P01','42883'].includes(code)?'CHANNELS_SETUP_REQUIRED':code==='40001'?'CHANNEL_CONFLICT':'CHANNELS_UNAVAILABLE'});
 }
-export function createChannelsRouter({getLocalContext,allowCrmProjection=false,pairing=null}={}){
+export function createChannelsRouter({getLocalContext,allowCrmProjection=false,pairing=null,canPair=false}={}){
  const router=Router();router.use((_q,res,next)=>{res.setHeader('Cache-Control','no-store, private');next();});
  async function context(req,write=false){const ctx=req.dashboardContext||await getLocalContext?.(req);if(!ctx)throw Object.assign(Error('Entre pelo painel existente.'),{status:401});if(write&&ctx.viewer.id!==ctx.tenant.id)throw Object.assign(Error('Suporte permanece somente leitura.'),{status:403});if(!ctx.viewer.id||!ctx.viewerClient)throw Object.assign(Error('O cadastro novo exige uma conta autenticada na nuvem. Não há fallback para outra conta ou para os três chips legados.'),{status:503,code:'CHANNELS_ACCOUNT_REQUIRED'});return ctx;}
  const sendError=(res,error)=>res.status(error.status||503).json({ok:false,code:error.code||'CHANNELS_UNAVAILABLE',...error.code==='CHANNELS_CONTEXT_CHANGED'?{scopeChanged:true}:{},error:error.status?error.message:'Não foi possível validar os dados de canais. Nenhum estado de conexão foi presumido.'});
@@ -52,7 +52,7 @@ export function createChannelsRouter({getLocalContext,allowCrmProjection=false,p
     const r=await ctx.viewerClient.rpc('ienvia_get_channel_legacy_link',{p_owner:ctx.tenant.id,p_channel:value.id}).abortSignal(AbortSignal.timeout(2500));
     if(!r.error&&r.data)link=parseLegacyLinkSnapshot(r.data,{ownerId:ctx.tenant.id,channelId:value.id});
    }catch{}
-   return dto(value,connectionFor(value.id,link,snapshot));
+   return dto(value,connectionFor(value.id,link,snapshot),canPair===true&&!!link.legacySlotId);
   }));
  }
  router.get('/',async(req,res)=>{try{

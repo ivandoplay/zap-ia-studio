@@ -103,7 +103,7 @@ export function createCampaignScheduler({ client, runner, runnerFor = null, maxC
       let falhas = 0;
       let motivo = null;
       try {
-        const out = await executor.run({ ownerId, campaignId, slotId: chip, maxPerRun: itens.length });
+        const out = await executor.run({ ownerId, campaignId, slotId: chip, maxPerRun: itens.length, destinatarios: itens });
         enviados = Math.max(0, Math.min(itens.length, Number(out?.executed) || 0));
         falhas = Math.max(0, Number(out?.failed) || 0);
         // O motivo da falha vem do próprio runner: é o que permite diagnosticar sem adivinhar.

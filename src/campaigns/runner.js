@@ -150,7 +150,7 @@ export function createCampaignRunner({ client, transport = null, maxPerRun = 5, 
   }
 
   // Um "run" processa no máximo `cap` destinatários, respeitando o intervalo do rascunho.
-  async function run({ ownerId, campaignId, slotId, apenasDestinatario = null }) {
+  async function run({ ownerId, campaignId, slotId, apenasDestinatario = null, destinatarios = null }) {
     if (!UUID.test(String(ownerId || ''))) throw fail(401, 'CAMPAIGN_AUTH_REQUIRED', 'Entre na sua conta.');
     if (ownerOverride && String(ownerId) !== String(ownerOverride)) throw fail(403, 'CAMPAIGN_OWNER_MISMATCH', 'Conta do relógio diferente da configurada.');
     if (!UUID.test(String(campaignId || ''))) throw fail(400, 'CAMPAIGN_INVALID', 'Campanha inválida.');
@@ -171,7 +171,9 @@ export function createCampaignRunner({ client, transport = null, maxPerRun = 5, 
       throw fail(409, 'CAMPAIGN_BLOCK_INVALID', 'O primeiro bloco da campanha não é texto, imagem ou áudio.');
     }
 
-    const recipients = await loadRecipients(ownerId, campaignId);
+    // Quando o relógio já reservou o lote, a lista É a reserva: reler "pendentes" aqui
+    // devolveria vazio, porque a própria reserva mudou o estado para enviado.
+    const recipients = Array.isArray(destinatarios) ? destinatarios : await loadRecipients(ownerId, campaignId);
     // O agendador reserva a etapa no banco e pede SÓ aquele destinatário: assim o tick
     // nunca envia para quem outra execução já reservou.
     const pending = recipients.filter(r => r.enviado !== true && r.excluido !== true)

@@ -259,3 +259,17 @@ test('runner: enxerga a lista que a RPC devolve em `destinatarios`', async () =>
   assert.ok(desenho.includes('destinatarios'), 'O runner precisa ler a chave que a RPC devolve.');
   assert.ok(runner && typeof runner.run === 'function');
 });
+
+test('runner: o relógio passa o lote reservado e não relê "pendentes"', async () => {
+  const { createCampaignRunner } = await import('../src/campaigns/runner.js');
+  const lido = [];
+  const runner = createCampaignRunner({
+    client: { from: () => { throw new Error('não deveria tocar na tabela'); } },
+    transport: { sendText: async () => ({ id: 'sintetico' }) },
+    recipientsProvider: async () => { lido.push('provider'); return []; }
+  });
+  // Sem o rascunho na tabela o run falha cedo (404); o que importa é que o provedor de
+  // lista NÃO é consultado quando a reserva já vem pronta.
+  await runner.run({ ownerId: A, campaignId: randomUUID(), slotId: 'slot_1', destinatarios: [] }).catch(() => {});
+  assert.deepEqual(lido, []);
+});

@@ -103,7 +103,12 @@ export function createCampaignRunner({ client, transport = null, maxPerRun = 5, 
         .rpc('ienvia_campaign_draft_recipients', { p_owner: ownerId, p_id: campaignId, p_offset: offset })
         .abortSignal(AbortSignal.timeout(8000));
       if (error) throw fail(503, 'CAMPAIGN_RECIPIENTS_UNAVAILABLE', 'A lista de destinatários não pôde ser lida.');
-      const items = Array.isArray(data?.items) ? data.items : Array.isArray(data) ? data : [];
+      // A RPC de destinatários devolve `destinatarios`; aceitar só `items` fazia a lista
+      // chegar vazia e a campanha "concluir" sem enviar ninguém.
+      const items = Array.isArray(data?.items) ? data.items
+        : Array.isArray(data?.destinatarios) ? data.destinatarios
+        : Array.isArray(data?.destinatarios?.items) ? data.destinatarios.items
+        : Array.isArray(data) ? data : [];
       rows.push(...items);
       if (items.length < 50 || rows.length >= 1000) break;
       offset += items.length;

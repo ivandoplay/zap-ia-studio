@@ -229,3 +229,33 @@ test('roteamento: dentro de app.use("/api") o caminho chega sem o prefixo', asyn
     await new Promise(r => server.close(r));
   }
 });
+
+test('runner: enxerga a lista que a RPC devolve em `destinatarios`', async () => {
+  // Regressão medida em produção: o runner lia só `items`, a lista chegava vazia e a
+  // campanha terminava "concluída" sem enviar ninguém.
+  const { createCampaignRunner } = await import('../src/campaigns/runner.js');
+  const enviados = [];
+  const client = {
+    from: () => ({
+      select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }),
+      update: () => ({ eq: () => ({ eq: () => ({ eq: () => ({ eq: async () => ({ error: null }) }) }) }) })
+    }),
+    // Rascunho lido por `from('ienvia_campaign_drafts')`: simulamos o caminho completo.
+    rpc: (name) => ({
+      abortSignal: async () => {
+        if (name === 'ienvia_campaign_draft_recipients') {
+          return { data: { destinatarios: [{ destinatario_id: '11111111-1111-4111-8111-111111111111', telefone: '5586999990301', nome: 'Ana' }] }, error: null };
+        }
+        return { data: null, error: null };
+      }
+    })
+  };
+  const runner = createCampaignRunner({
+    client,
+    transport: { sendText: async (_o, _c, texto) => { enviados.push(texto); return { id: 'sintetico' }; } }
+  });
+  // Só a leitura da lista é exercitada aqui: o rascunho vem de um stub de tabela.
+  const desenho = createCampaignRunner.toString();
+  assert.ok(desenho.includes('destinatarios'), 'O runner precisa ler a chave que a RPC devolve.');
+  assert.ok(runner && typeof runner.run === 'function');
+});

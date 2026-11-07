@@ -105,6 +105,7 @@ import { importarDestinatarios } from './campanhaImportacao.js';
 import { importarXlsx } from './campanhaXlsx.js';
 import { criarCampanha, editarCampanha, controlarCampanha, detalharCampanha, resolverIncertezaCampanha, listarDestinatariosCampanha, removerDestinatarioCampanha } from './campanhaApi.js';
 import { criarServicoMediaCampanha, limparUploadsExpirados } from './campanhaMediaPrivada.js';
+import { createCampaignScheduler } from './campaigns/scheduling.js';
 import { criarProxyMediaCampanha } from './campanhaProxyRemoto.js';
 import { getSafeCommandStatus } from './commandStatus.js';
 // Não iniciar o WhatsApp sobre uma atualização incompleta. Falhas de recuperação
@@ -556,7 +557,10 @@ function attachAtomicCloudFlush(res, tenantStore) {
 // Rotas do dashboard que também precisam do workspace do tenant (contatos vivos).
 const CONVERSATIONS_WORKSPACE_ROUTE = /^\/conversations-v3(?:\/|$)/;
 const WORKSPACE_ONLY_ROUTE = /^\/(?:training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/;
-const isDashboardRequest = (req) => /^\/(?:channels|conversations-v3|crm-v2|campaigns-v2|training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/.test(req.path)||/^(?:\/dashboard\/(?:summary|appearance|parity)|\/connections\/(?:summary|configuration|pairing))\/?$/.test(req.path);
+// O disparo do relógio de campanhas é autenticado por segredo próprio do cron, não por
+// sessão de navegador: ele não pode entrar no fluxo de contexto por usuário.
+const CRON_PATH = /^\/api\/campaigns-v2\/schedule\/tick$/;
+const isDashboardRequest = (req) => /^\/(?:channels|conversations-v3|crm-v2|campaigns-v2|training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/.test(req.path)&&!CRON_PATH.test(req.path)||/^(?:\/dashboard\/(?:summary|appearance|parity)|\/connections\/(?:summary|configuration|pairing))\/?$/.test(req.path);
 async function makeDashboardContext(verified, actAsUserId = '') {
   const profile = verified.profile;
   const viewer = { id: verified.authUser.id, displayName: profile.display_name || profile.displayName || profile.username || 'Minha conta', role: profile.role || 'user' };
@@ -881,6 +885,25 @@ const campaignRunnerFor = req => {
   if (!client || typeof client.from !== 'function') return null;
   return createCampaignRunner({client});
 };
+// Agendamento contínuo: o relógio é externo (cron da Vercel, autenticado por segredo) e
+// chama o MESMO runner. Sem `CAMPAIGN_CRON_SECRET` + `CAMPAIGN_CRON_OWNER_ID` a rota
+// nem é registrada — nada roda sozinho por acidente.
+// Durante o cron não existe sessão de navegador: o relógio usa a chave de serviço, marcada
+// com `__servico` para escolher os RPCs de serviço e um runner que lê o mesmo rascunho.
+const campaignSchedulerFor = req => {
+  let client = req?.dashboardContext?.viewerClient || req?.cloudAuth?.client || null;
+  const servico = Boolean(req?.campaignCron) && Boolean(CAMPAIGN_CRON_OWNER_ID);
+  if (servico) {
+    try { const admin = getAdminClient(); admin.__servico = true; client = admin; } catch { client = null; }
+  }
+  if (!client || typeof client.from !== 'function') return null;
+  const runner = servico
+    ? createCampaignRunner({client, ownerOverride: CAMPAIGN_CRON_OWNER_ID})
+    : null;
+  return createCampaignScheduler({client, runner, runnerFor: () => runner || campaignRunnerFor(req)});
+};
+const CAMPAIGN_CRON_SECRET = String(process.env.CAMPAIGN_CRON_SECRET || '').trim();
+const CAMPAIGN_CRON_OWNER_ID = String(process.env.CAMPAIGN_CRON_OWNER_ID || '').trim();
 // Administração/Contas: a carteira vem das contas reais (zapia_users), sem senha nem chave.
 // Enquanto a porta de provisionamento não existe na nuvem, a gravação da carteira é
 // só de auditoria/perfil e a criação de conta continua recusada (canProvision:false).
@@ -945,7 +968,7 @@ app.use('/api/training-v2',createTrainingRouter({getLocalContext:workspaceReadDe
 // UUID separado do legado. Todos os gates de escrita, IA e mídia permanecem false por padrão.
 // Rascunho de campanha homologado na conta real (dono master). A execução continua fechada:
 // sem canal atribuído, sem worker e sem homologação de ienvia_campaign_execution_accounts.
-app.use('/api/campaigns-v2',createCampaignRouter({...workspaceReadDependencies,allowWrites:true,allowAccountWrites:crmAccountWrites,storageOrigin:SUPABASE_URL,allowExecution:true,allowAI:true,allowMedia:true,campaignRunner:req=>campaignRunnerFor(req),
+app.use('/api/campaigns-v2',createCampaignRouter({...workspaceReadDependencies,allowWrites:true,allowAccountWrites:crmAccountWrites,storageOrigin:SUPABASE_URL,allowExecution:true,allowAI:true,allowMedia:true,campaignRunner:req=>campaignRunnerFor(req),campaignScheduler:req=>campaignSchedulerFor(req),cronSecret:CAMPAIGN_CRON_SECRET,cronOwnerId:CAMPAIGN_CRON_OWNER_ID,
  getAIRequester:async(scope,input)=>{let ai;if(IS_VERCEL){const r=await scope.ctx.viewerClient.from('zapia_workspaces').select('settings').eq('user_id',scope.ownerId).maybeSingle();if(r.error)throw Error('Configuração indisponível.');ai=r.data?.settings?.ai;}else ai=scope.ctx.data?.settings?.ai;if(!campanhaTemChave(ai))return null;return async()=>{const result=await gerarVariacoesParaCampanha({settings:{ai},...input});if(result?.ok!==true)throw Error('Geração indisponível.');return JSON.stringify(result.variacoes);};},
  getMediaService:async scope=>{if(IS_VERCEL){const admin=getAdminClient(),service=criarServicoMediaCampanha({client:scope.ctx.viewerClient,admin,supabaseUrl:SUPABASE_URL});return {...service,iniciar:async x=>{await limparUploadsExpirados({client:scope.ctx.viewerClient,admin,userId:scope.ownerId});return service.iniciar(x);}};}const proxy=criarProxyMediaCampanha({client:scope.ctx.viewerClient,userId:scope.ownerId});return {
  iniciar:async x=>(await proxy({tipo:'iniciar',pastaId:x.pastaId,body:{tamanho:x.tamanho}})).upload,

@@ -71,7 +71,9 @@ const progressOf = draft => {
   return { total, done, failed, skipped, pending };
 };
 
-export function createCampaignRunner({ client, transport = null, maxPerRun = 5, now = () => new Date(), random = Math.random } = {}) {
+// `ownerOverride` só existe para o relógio automático, que roda com a chave de serviço e
+// sem sessão: a conta vem do ambiente, nunca do corpo de uma requisição de navegador.
+export function createCampaignRunner({ client, transport = null, maxPerRun = 5, now = () => new Date(), random = Math.random, ownerOverride = null } = {}) {
   if (!client || typeof client.from !== 'function') throw new TypeError('Cliente autenticado obrigatório.');
   const bridge = transport || {
     sendText: sendEvolutionApiText,
@@ -148,8 +150,9 @@ export function createCampaignRunner({ client, transport = null, maxPerRun = 5, 
   }
 
   // Um "run" processa no máximo `cap` destinatários, respeitando o intervalo do rascunho.
-  async function run({ ownerId, campaignId, slotId }) {
+  async function run({ ownerId, campaignId, slotId, apenasDestinatario = null }) {
     if (!UUID.test(String(ownerId || ''))) throw fail(401, 'CAMPAIGN_AUTH_REQUIRED', 'Entre na sua conta.');
+    if (ownerOverride && String(ownerId) !== String(ownerOverride)) throw fail(403, 'CAMPAIGN_OWNER_MISMATCH', 'Conta do relógio diferente da configurada.');
     if (!UUID.test(String(campaignId || ''))) throw fail(400, 'CAMPAIGN_INVALID', 'Campanha inválida.');
     if (!SLOT.test(String(slotId || ''))) throw fail(400, 'CAMPAIGN_CHANNEL_INVALID', 'Escolha o chip que vai enviar.');
 
@@ -169,7 +172,10 @@ export function createCampaignRunner({ client, transport = null, maxPerRun = 5, 
     }
 
     const recipients = await loadRecipients(ownerId, campaignId);
-    const pending = recipients.filter(r => r.enviado !== true && r.excluido !== true);
+    // O agendador reserva a etapa no banco e pede SÓ aquele destinatário: assim o tick
+    // nunca envia para quem outra execução já reservou.
+    const pending = recipients.filter(r => r.enviado !== true && r.excluido !== true)
+      .filter(r => !apenasDestinatario || String(r.destinatario_id || r.recipientId || r.id) === String(apenasDestinatario));
     if (!pending.length) {
       return { ok: true, executed: 0, done: true, progress: progressOf(draft), ranAt: nowIso() };
     }

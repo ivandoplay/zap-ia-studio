@@ -574,3 +574,76 @@ p.u-espaco-topo-6 { margin-top: 6px; }
 .u-text-main { color: var(--text-main); }
 .u-mt-6 { margin-top: 6px; }
 .u-mt-10 { margin-top: 10px; }
+
+/* ------------------------------------------------- abas finais (6 restantes) */
+.u-mt-14 { margin-top: 14px; }
+.u-mt-18 { margin-top: 18px; }
+.u-mb-18 { margin-bottom: 18px; }
+.u-min-120 { min-width: 120px; }
+.u-min-140 { min-width: 140px; }
+.u-min-150-flex { flex: 1.2; min-width: 150px; }
+.u-altura-auto-36 { width: auto; min-height: 36px; }
+.u-altura-210 { width: 210px; min-height: 36px; }
+.u-altura-230 { width: 230px; min-height: 36px; }
+.u-altura-190 { width: 190px; min-height: 36px; }
+.u-altura-140 { width: auto; min-width: 140px; min-height: 36px; }
+.u-acento-esquerda { border-left: 3px solid var(--accent); }
+.u-acento-esquerda--aviso { border-left: 3px solid var(--warning); }
+.u-fio-topo { padding-top: 10px; border-top: 1px solid var(--border); }
+.u-fio-topo--justo { padding-top: 10px; border-top: 1px solid var(--border); margin-bottom: 0; }
+.u-fio-topo--coluna {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 0;
+}
+.u-secao-fio-topo { margin-top: 10px; padding-top: 16px; border-top: 1px solid var(--border); }
+.u-oculto-fio-topo { display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+.u-oculto-topo-12 { display: none; margin-top: 12px; }
+.u-painel-caixa--11 { background: var(--bg-card-subtle); border: 1px solid var(--border); border-radius: 10px; padding: 11px 12px; margin-bottom: 14px; }
+.u-linha-topo-8 { display: flex; align-items: flex-start; gap: 8px; }
+.u-linha-topo-9 { display: flex; align-items: flex-start; gap: 9px; }
+.u-rotulo-clicavel { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13.5px; }
+.u-rotulo-clicavel--mb { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13.5px; margin-bottom: 10px; }
+.u-rotulo-check { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; }
+.u-check-grupo { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 13px; line-height: 1.45; }
+.u-check-grupo--9 { display: flex; align-items: flex-start; gap: 9px; cursor: pointer; font-size: 13px; line-height: 1.45; }
+.u-ia-faixa {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.u-ia-titulo { font-weight: 600; color: var(--text-main); font-size: 14px; }
+.u-grade-min-230 { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+.u-etiqueta-clara { background: rgba(37, 211, 102, 0.14); color: var(--accent); }
+.u-etiqueta-vidro { background: rgba(255, 255, 255, 0.18); color: #fff; }
+.u-titulo-14-5-forte { font-weight: 700; font-size: 14.5px; }
+.u-ajuda-12-45 { font-size: 12.5px; color: var(--text-secondary); line-height: 1.45; }
+.u-ajuda-12-88 { font-size: 12px; opacity: 0.88; }
+.u-lista-recuo { padding-left: 18px; font-size: 13px; color: var(--text-secondary); display: flex; flex-direction: column; gap: 8px; }
+.u-dir-col-10 { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.u-max-alto-200 { max-height: 200px; }
+.u-acoes-linha-10 { display: flex; gap: 10px; flex-wrap: wrap; }
+.u-acoes-wrap-fim { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.u-linha-12 { display: flex; align-items: center; gap: 12px; }
+.u-wrap { flex-wrap: wrap; }
+
+/* gap 8 sem centralizar (o mesmo conjunto do CRM usa gap 6 em u-acoes-fina) */
+.u-acoes-fina-8 { display: flex; gap: 8px; }
+/* campos com largura fixa: sobem a especificidade para vencer input[type="..."] */
+input.u-altura-210, select.u-altura-210, input.u-altura-230, select.u-altura-230,
+input.u-altura-190, select.u-altura-190, input.u-altura-140, select.u-altura-140,
+input.u-altura-auto-36, select.u-altura-auto-36 { width: revert; min-height: 36px; }
+input.u-altura-210, select.u-altura-210 { width: 210px; }
+input.u-altura-230, select.u-altura-230 { width: 230px; }
+input.u-altura-190, select.u-altura-190 { width: 190px; }
+input.u-altura-140, select.u-altura-140 { width: auto; min-width: 140px; }
+input.u-altura-auto-36, select.u-altura-auto-36 { width: auto; }
+.u-sem-borda { border: 0; }

@@ -552,6 +552,7 @@ function attachAtomicCloudFlush(res, tenantStore) {
 
 // Rotas do dashboard que também precisam do workspace do tenant (contatos vivos).
 const CONVERSATIONS_WORKSPACE_ROUTE = /^\/conversations-v3(?:\/|$)/;
+const WORKSPACE_ONLY_ROUTE = /^\/(?:training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/;
 const isDashboardRequest = (req) => /^\/(?:channels|conversations-v3|crm-v2|campaigns-v2|training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/.test(req.path)||/^(?:\/dashboard\/(?:summary|appearance|parity)|\/connections\/(?:summary|configuration|pairing))\/?$/.test(req.path);
 async function makeDashboardContext(verified, actAsUserId = '') {
   const profile = verified.profile;
@@ -594,6 +595,15 @@ app.use('/api', async (req, res, next) => {
       if (req.path === '/wa/toggle-bot' && typeof req.body?.enabled !== 'boolean') return res.status(400).json({ ok: false, error: 'enabled deve ser booleano (true ou false).' });
       if (isDashboardRequest(req)) {
         req.dashboardContext = await makeDashboardContext(verified, actAsUserId);
+        // Abas sem conversa (Treinamento, Catálogo, IA, Segurança, Contas, Simulador) leem
+        // business/settings reais: carregamos o workspace do tenant sem os contatos. O chat
+        // continua carregando o workspace completo, com contatos, no bloco abaixo.
+        if (WORKSPACE_ONLY_ROUTE.test(req.path) && !(actAsUserId && actAsUserId !== verified.authUser.id)) {
+          const store = await loadTenantContextFromCloud(verified.client, verified.authUser, verified.profile, {withContacts: false});
+          req.cloudAuth = {client: verified.client, authUser: verified.authUser, profile: verified.profile, tenantStore: store, isRemoteImpersonation: false, impersonatedBy: null};
+          attachAtomicCloudFlush(res, store);
+          return tenantStorageContext.run(store, () => next());
+        }
         // A caixa de Conversas da nuvem lê o CRM vivo (zapia_contacts), e não só a
         // projeção do dashboard. Carregamos o workspace do tenant para quem consome
         // contatos, mantendo o mesmo escopo de contato usado no envio.
@@ -737,8 +747,21 @@ app.use('/api', async (req, res, next) => {
 const workspaceReadDependencies = {
   readEvolution: getEvolutionApiSlotStatus,
   buildRuntime: buildCloudMultiSlotWaState,
-  getLocalContext: () => {
-    if (IS_VERCEL) return null;
+  getLocalContext: async (req) => {
+    if (IS_VERCEL) {
+      // Abas que não são de conversa também precisam do workspace real da conta.
+      // Carrega sem contatos (o middleware já preparou req.cloudAuth no mesmo request).
+      const auth = req?.cloudAuth;
+      if (!auth?.client || !auth?.authUser) return null;
+      if (req._workspaceLazy) return req._workspaceLazy;
+      req._workspaceLazy = loadTenantContextFromCloud(auth.client, auth.authUser, auth.profile || {}, {withContacts: false})
+        .then(store => {
+          req.cloudAuth = {...auth, tenantStore: store};
+          return {...req.dashboardContext, mode: 'vercel_cloud', data: store.data, runtime: store.waRuntime || req.dashboardContext?.runtime, store, storage: store};
+        })
+        .catch(() => null);
+      return req._workspaceLazy;
+    }
     const worker = cloudWorker.getStatus(), now = new Date().toISOString();
     const runtime = whatsappManager.getPublicState();
     const maxWaSlots = worker.user ? clampMaxWaSlots(worker.user.maxWaSlots ?? worker.user.max_wa_slots, worker.user.role) : 3;

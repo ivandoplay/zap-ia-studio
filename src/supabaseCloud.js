@@ -611,13 +611,18 @@ export async function fetchAllCloudContacts(client, uid, { since = '', fields = 
   return rows;
 }
 
-export async function loadTenantContextFromCloud(client, authUser, profile, { scopedContactId = null } = {}) {
+// `withContacts: false` carrega só o workspace (business/settings/runtime). As abas que não
+// mostram conversa — Treinamento, Catálogo, IA, Segurança, Contas, Simulador — não devem
+// arrastar 250 contatos por requisição, mas precisam do dado real da conta.
+export async function loadTenantContextFromCloud(client, authUser, profile, { scopedContactId = null, withContacts = true } = {}) {
   const uid = authUser.id;
   const isMaster = profile?.role === 'master';
 
   const [wsRes, contactsRes, rtRes, slotsRes, devicesRes] = await Promise.all([
     client.from('zapia_workspaces').select('*').eq('user_id', uid).maybeSingle(),
-    (scopedContactId ? fetchScopedCloudContact(client, uid, scopedContactId) : fetchAllCloudContacts(client, uid, { fields: 'chat_id, data' })).then(data => ({ data })),
+    (!withContacts
+      ? Promise.resolve({ data: [] })
+      : (scopedContactId ? fetchScopedCloudContact(client, uid, scopedContactId) : fetchAllCloudContacts(client, uid, { fields: 'chat_id, data' })).then(data => ({ data }))),
     client.from('zapia_wa_runtime').select('*').eq('user_id', uid).maybeSingle(),
     client.from('zapia_wa_slots').select('*').eq('user_id', uid),
     client.from('zapia_worker_devices').select('*').eq('user_id', uid).order('heartbeat_at', { ascending: false })

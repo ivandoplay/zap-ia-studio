@@ -600,6 +600,15 @@ app.use('/api', async (req, res, next) => {
         // continua carregando o workspace completo, com contatos, no bloco abaixo.
         if (WORKSPACE_ONLY_ROUTE.test(req.path) && !(actAsUserId && actAsUserId !== verified.authUser.id)) {
           const store = await loadTenantContextFromCloud(verified.client, verified.authUser, verified.profile, {withContacts: false});
+          // Os routers das abas leem `req.dashboardContext.data`; o contexto do dashboard
+          // sozinho não traz workspace, então anexamos aqui o dado real do tenant.
+          req.dashboardContext = {
+            ...req.dashboardContext,
+            data: store.data,
+            runtime: store.waRuntime || req.dashboardContext?.runtime,
+            store,
+            storage: store
+          };
           req.cloudAuth = {client: verified.client, authUser: verified.authUser, profile: verified.profile, tenantStore: store, isRemoteImpersonation: false, impersonatedBy: null};
           attachAtomicCloudFlush(res, store);
           return tenantStorageContext.run(store, () => next());

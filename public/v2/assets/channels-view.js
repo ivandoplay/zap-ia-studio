@@ -26,7 +26,23 @@ export function mountChannels({adapter,demo=false,onExitSupport=()=>{},host=null
    badge.textContent=statusOf(channel);badge.className='tag '+(live==='connected'?'tag-green':live==='qr_ready'||live==='connecting'?'tag-amber':'tag-neutral');
    row.querySelector('.channel-connection small').textContent=demo?'Estado fictício':(STATUS_DETAIL[live]||'Status indisponível');
    const flags=row.querySelectorAll('.channel-flag span');flags[0].textContent=channel.crmVisible?'Visível':'Oculto';flags[0].className=channel.crmVisible?'flag-on':'flag-off';flags[1].textContent=channel.aiEnabled?'Permitida':'Desativada';flags[2].textContent=channel.campaignsEnabled?'Elegível':'Não elegível';flags[1].className=channel.aiEnabled?'flag-on':'flag-off';flags[2].className=channel.campaignsEnabled?'flag-on':'flag-off';
-   const button=row.querySelector('button');button.disabled=!state.permissions.canEdit;button.setAttribute('aria-label',`Configurar ${channel.name}`);button.onclick=()=>open(channel);list.append(row);
+   let button=row.querySelector('button');button.disabled=!state.permissions.canEdit;button.setAttribute('aria-label',`Configurar ${channel.name}`);button.onclick=()=>open(channel);
+   if(!demo){const live=channel.connection?.status,actions=document.createElement('div');actions.className='channel-actions';
+    const pair=document.createElement('button');pair.type='button';pair.className='button button-secondary';
+    const linked=Boolean(channel.connection?.legacySlotId);
+    pair.textContent=live==='connected'?'Desconectar':linked?'Conectar número':'Sem vínculo';
+    pair.disabled=!state.permissions.canEdit||!linked||busy;
+    pair.setAttribute('aria-label',`${pair.textContent} em ${channel.name}`);
+    pair.onclick=async()=>{if(!confirm(`Confirma ${live==='connected'?'desconectar':'conectar'} o número de ${channel.name}? A conexão é feita pelo motor Ienvia.`))return;
+      pair.disabled=true;feedback('Falando com o motor Ienvia…');
+      try{const out=await adapter.pairing(channel.id,{action:live==='connected'?'disconnect':'connect',confirmo:true});
+        feedback(out.qrReady?'Comando aceito. Leia o QR no painel antigo (Início & Conexão) para concluir.':'Comando enviado ao motor. O status será conferido na lista.');
+        await load();
+      }catch(error){feedback(error.message||'O motor não confirmou a conexão. Nada foi alterado.');pair.disabled=false;}
+    };
+    actions.append(pair);row.append(actions);
+   }
+   list.append(row);
   }
  }
  function renderPreview(){if(!demo||!adapter.preview)return;$('channel-crm-preview').hidden=false;const preview=adapter.preview(),policies=Object.fromEntries(preview.channels.map(c=>[c.id,c])),shown=filterCrmContacts(preview.contacts,policies,$('channel-crm-filter').value);const list=$('channel-crm-contacts');list.replaceChildren();

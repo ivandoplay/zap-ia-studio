@@ -39,7 +39,7 @@ function connectionFor(channelId,link,snapshot){
 function dbError(error){
  const code=error?.code;return Object.assign(new Error(['PGRST202','42P01','42883'].includes(code)?'O cadastro de canais ainda precisa da migração aprovada. Nenhuma conexão foi criada.':code==='40001'?'Este canal mudou em outra tela. Recarregue antes de salvar.':code==='P0002'?'Canal não encontrado nesta conta.':code==='42501'?'Acesso não autorizado.':code==='22023'?'Configuração de canal inválida.':'Não foi possível confirmar o cadastro. Recarregue antes de decidir; não repetimos a operação.'),{status:code==='40001'?409:code==='P0002'?404:code==='42501'?403:code==='22023'?400:503,code:['PGRST202','42P01','42883'].includes(code)?'CHANNELS_SETUP_REQUIRED':code==='40001'?'CHANNEL_CONFLICT':'CHANNELS_UNAVAILABLE'});
 }
-export function createChannelsRouter({getLocalContext,allowCrmProjection=false}={}){
+export function createChannelsRouter({getLocalContext,allowCrmProjection=false,pairing=null}={}){
  const router=Router();router.use((_q,res,next)=>{res.setHeader('Cache-Control','no-store, private');next();});
  async function context(req,write=false){const ctx=req.dashboardContext||await getLocalContext?.(req);if(!ctx)throw Object.assign(Error('Entre pelo painel existente.'),{status:401});if(write&&ctx.viewer.id!==ctx.tenant.id)throw Object.assign(Error('Suporte permanece somente leitura.'),{status:403});if(!ctx.viewer.id||!ctx.viewerClient)throw Object.assign(Error('O cadastro novo exige uma conta autenticada na nuvem. Não há fallback para outra conta ou para os três chips legados.'),{status:503,code:'CHANNELS_ACCOUNT_REQUIRED'});return ctx;}
  const sendError=(res,error)=>res.status(error.status||503).json({ok:false,code:error.code||'CHANNELS_UNAVAILABLE',...error.code==='CHANNELS_CONTEXT_CHANGED'?{scopeChanged:true}:{},error:error.status?error.message:'Não foi possível validar os dados de canais. Nenhum estado de conexão foi presumido.'});
@@ -95,6 +95,26 @@ export function createChannelsRouter({getLocalContext,allowCrmProjection=false}=
  // `ienvia_register_instance_executor` cria/atualiza o executor e
  // `ienvia_assign_instance_executor` liga o chip a ele com revisão (CAS). Sem isso a
  // campanha não tem por onde enviar; com isso a tela deixa de ser só leitura.
+ // ── Conectar / desconectar o número deste chip ───────────────────────────────
+ // O QR e o código de 8 dígitos continuam sendo gerados pelo motor (o mesmo do
+ // painel antigo). Aqui só autorizamos o dono, resolvemos o slot vinculado e
+ // traduzimos o resultado — sem inventar estado se o motor não responder.
+ router.post('/:id/pairing',async(req,res)=>{try{
+  const ctx=await context(req,true);if(!isChannelId(req.params.id))throw Object.assign(Error('Instância UUID inválida.'),{status:400});
+  const channelId=req.params.id.toLowerCase(),b=req.body||{};
+  if(Object.keys(b).some(k=>!['action','pairingPhone','confirmo'].includes(k)))throw Object.assign(Error('Campos inválidos.'),{status:400});
+  if(!['connect','disconnect'].includes(b.action))throw Object.assign(Error('Ação de conexão inválida.'),{status:400});
+  if(b.confirmo!==true)throw Object.assign(Error('Confirmação explícita obrigatória para mexer na conexão.'),{status:400});
+  if(req.pairing?.enabled!==true||typeof req.pairing.connect!=='function'||typeof req.pairing.disconnect!=='function')throw Object.assign(Error('A conexão de números ainda não está liberada neste servidor. Nada foi alterado.'),{status:503,code:'PAIRING_UNAVAILABLE'});
+  const linked=await ctx.viewerClient.rpc('ienvia_get_channel_legacy_link',{p_owner:ctx.tenant.id,p_channel:channelId}).abortSignal(AbortSignal.timeout(4000));
+  if(linked.error)throw dbError(linked.error);
+  const link=parseLegacyLinkSnapshot(linked.data,{ownerId:ctx.tenant.id,channelId});
+  if(!link.legacySlotId)throw Object.assign(Error('Este cadastro não está vinculado a um chip antigo. Vincule antes de conectar um número.'),{status:409,code:'CHANNEL_UNLINKED'});
+  const out=b.action==='connect'?await req.pairing.connect({ctx,slotId:link.legacySlotId,pairingPhone:b.pairingPhone||null}):await req.pairing.disconnect({ctx,slotId:link.legacySlotId});
+  const snapshot=await readSlotStatus(ctx);
+  const row=snapshot?.slots.get(link.legacySlotId);
+  return res.json({ok:true,slotId:link.legacySlotId,action:b.action,engine:out?.engine||'unknown',connection:connectionFor(channelId,link,snapshot),qrReady:['qr_ready','connecting'].includes(row?.status),requiresQrRefresh:out?.requiresDeviceChoice===true});
+ }catch(error){return sendError(res,error);}});
  router.post('/:id/executor',async(req,res)=>{try{
   const ctx=await context(req,true);if(!isChannelId(req.params.id))throw Object.assign(Error('Instância UUID inválida.'),{status:400});
   if(ctx.viewer.id!==ctx.tenant.id)throw Object.assign(Error('Suporte permanece somente leitura.'),{status:403});

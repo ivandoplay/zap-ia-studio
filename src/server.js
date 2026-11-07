@@ -820,7 +820,42 @@ app.use('/api/dashboard', createDashboardRouter(workspaceReadDependencies));
 app.use('/api/connections', createConnectionsRouter(workspaceReadDependencies));
 // Leitura de ficha por thread liberada: usa a projeção salva (ienvia_instance_threads), nunca o
 // contato legado. As instâncias ainda vêm de zapia_wa_slots até a migração operacional.
-app.use('/api/channels',createChannelsRouter({...workspaceReadDependencies,allowCrmProjection:true}));
+// Pareamento de número pela aba nova: delega ao MESMO motor que o painel anterior usa
+// (worker na nuvem ou whatsappManager local). Sem motor, a rota responde 503 e nada muda.
+const channelPairingBridge = {
+  enabled: true,
+  async connect({ctx, slotId, pairingPhone}) {
+    if (usesCloudBridge({ cloudAuth: ctx.cloudAuth, mode: ctx.mode })) {
+      const out = await dispatchCommandToWorker(
+        ctx.cloudAuth?.client || ctx.viewerClient,
+        ctx.cloudAuth?.authUser?.id || ctx.viewer.id,
+        'wa_connect',
+        { pairingPhone: pairingPhone || null, slotId, targetDeviceId: null },
+        9500,
+        { slotId, targetDeviceId: null }
+      );
+      return { engine: 'cloud_worker', ...out };
+    }
+    await whatsappManager.connect(pairingPhone || null, slotId);
+    return { engine: 'local_worker' };
+  },
+  async disconnect({ctx, slotId}) {
+    if (usesCloudBridge({ cloudAuth: ctx.cloudAuth, mode: ctx.mode })) {
+      const out = await dispatchCommandToWorker(
+        ctx.cloudAuth?.client || ctx.viewerClient,
+        ctx.cloudAuth?.authUser?.id || ctx.viewer.id,
+        'wa_disconnect',
+        { clearSession: false, slotId },
+        8800,
+        { slotId }
+      );
+      return { engine: 'cloud_worker', ...out };
+    }
+    await whatsappManager.disconnect(false, slotId);
+    return { engine: 'local_worker' };
+  }
+};
+app.use('/api/channels',createChannelsRouter({...workspaceReadDependencies,allowCrmProjection:true,pairing:channelPairingBridge}));
 // Conversas reais na navegação nova. Lê o CRM legado vivo (zapia_contacts) e expõe
 // instância/thread/mensagem no formato que a caixa de entrada nova consome.
 app.use('/api/conversations-v3',createConversationsV3Router({...workspaceReadDependencies,store:()=>tenantStorageContext.getStore(),sendEnabled:true}));

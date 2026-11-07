@@ -1364,10 +1364,28 @@ app.get('/api/crm/contact-directory', async (req, res) => {
   try {
     const imported = await getCachedEvolutionContactDirectory(userId);
     const saved = Object.values(storage.data.contacts || {});
+    // O CRM salvo também traz a MESMA pessoa duas vezes: a linha @lid e a linha
+    // @s.whatsapp.net com o mesmo telefone. Fica a do número (que é a conversa real) e a
+    // linha LID é descartada — é a origem dos 30 repetidos medidos no Chip 1.
     const contactsById = new Map();
+    const telefonesSalvos = new Map();
+    const foneDoSalvo = (contacto) => isLikelyRealPhone(contacto.phone) ? normalizePhoneDigits(contacto.phone) : '';
     for (const rawContact of saved) {
       const contact = normalizeDirectoryContact(rawContact);
-      if (contact?.chatId) contactsById.set(contact.chatId, contact);
+      if (!contact?.chatId || /@lid$/i.test(contact.chatId)) continue;
+      const fone = foneDoSalvo(contact);
+      if (!fone) continue;
+      const slot = contact.slotId || String(contact.chatId).match(/^(slot_[1-3])::/i)?.[1] || 'slot_1';
+      if (!telefonesSalvos.has(slot)) telefonesSalvos.set(slot, new Set());
+      telefonesSalvos.get(slot).add(fone);
+    }
+    for (const rawContact of saved) {
+      const contact = normalizeDirectoryContact(rawContact);
+      if (!contact?.chatId) continue;
+      const slot = contact.slotId || String(contact.chatId).match(/^(slot_[1-3])::/i)?.[1] || 'slot_1';
+      const fone = foneDoSalvo(contact);
+      if (/@lid$/i.test(contact.chatId) && fone && telefonesSalvos.get(slot)?.has(fone)) continue;
+      contactsById.set(contact.chatId, contact);
     }
 
     // Telefones que JÁ existem na agenda por chip: usados para não repetir a mesma pessoa.
@@ -1408,8 +1426,9 @@ app.get('/api/crm/contact-directory', async (req, res) => {
       // dela já está na agenda deste chip, a linha LID é repetição, não contato novo.
       // Medido em produção: 30 linhas assim no Chip 1 (ex.: 263762531643591@lid e
       // 558681638438@s.whatsapp.net, o próprio número do chip).
-      const ehAliasLid = /@lid$/i.test(String(contact.chatId)) && isLikelyRealPhone(contact.phone)
-        && telefonesPorSlot.get(slotId)?.has(normalizePhoneDigits(contact.phone)) === true;
+      const foneLid = isLikelyRealPhone(contact.phone) ? normalizePhoneDigits(contact.phone) : '';
+      const ehAliasLid = Boolean(foneLid) && /@lid$/i.test(String(contact.chatId))
+        && telefonesPorSlot.get(slotId)?.has(foneLid) === true;
       if (ehAliasLid) {
         duplicateIds += 1;
         continue;

@@ -27,6 +27,7 @@ export const PAGINAS = [
   { tab: 'simulador', rota: 'simulador', titulo: 'Simulador' },
   { tab: 'ia', rota: 'inteligencia-artificial', titulo: 'Motor de IA' },
   { tab: 'seguranca', rota: 'seguranca', titulo: 'Segurança' },
+  { tab: 'configuracoes', rota: 'configuracoes', titulo: 'Configurações' },
   { tab: 'contas', rota: 'contas', titulo: 'Contas' }
 ];
 

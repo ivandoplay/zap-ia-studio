@@ -1156,204 +1156,339 @@
 
       <!-- ==================== ABA 6: SEGURANÇA, ANTI-BAN, FILA & PIN ==================== -->
       <section id="tab-seguranca" class="tab-pane" hidden>
-        <div class="page-header">
+        <div class="page-head">
           <div>
-            <h1>Anti-Ban, Fila Segura de Prospecção, PIN & Família</h1>
-            <p>Dispare abordagens em cadência humana segura, proteja o painel com PIN na rede Wi-Fi e filtre contatos pessoais.</p>
+            <h1 class="page-title">Segurança &amp; Anti-Ban</h1>
+            <p class="page-subtitle">Cadência humana na fila, proteção nas respostas, acesso ao painel e a lista de quem a IA nunca atende.</p>
           </div>
           <button type="button" id="btnSaveSecurity" class="btn btn-primary">Salvar regras de segurança</button>
         </div>
 
-        <!-- NOVO: Fila Segura de Abordagem Ativa (M01) com Cadência Anti-Ban -->
-        <div class="panel u-acento-esquerda">
-          <div class="panel-header">
-            <div>
-              <h2 class="panel-title">Fila Segura de Abordagem Ativa (Cadência Humana Anti-Ban)</h2>
-              <p class="panel-desc u-mb-0 u-mt-2">
-                Cole uma lista pequena de contatos do dia (1 por linha: <code>5586999998888;Nome da Loja</code>). O sistema envia <strong>um por vez</strong> aguardando intervalo aleatório humano e respeita o teto diário.
-              </p>
-            </div>
-          </div>
+        <div id="segStatusBar" class="seg-status"></div>
 
-          <div class="grid-equal u-mt-14">
-            <div>
-              <div class="form-group">
-                <label class="form-label" for="batchLeadsTextarea">Lista de Contatos (Telefone com DDD ; Nome opcional)</label>
-                <textarea id="batchLeadsTextarea" rows="5" placeholder="5586999112233;Auto Norte Veículos&#10;5586988445566; Garagem Premium"></textarea>
-              </div>
-              <div class="grid-equal u-gap-10">
-                <div class="form-group">
-                  <label class="form-label" for="proactiveMinDelaySec">Espera mínima (seg)</label>
-                  <input type="number" id="proactiveMinDelaySec" min="20" max="600" value="45" />
-                </div>
-                <div class="form-group">
-                  <label class="form-label" for="proactiveMaxDelaySec">Espera máxima (seg)</label>
-                  <input type="number" id="proactiveMaxDelaySec" min="30" max="900" value="110" />
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <div class="grid-equal u-gap-10">
-                <div class="form-group">
-                  <label class="form-label" for="batchTemplateSelect">Mensagem Aprovada</label>
-                  <select id="batchTemplateSelect"></select>
-                </div>
-                <div class="form-group">
-                  <label class="form-label" for="batchChannelMode">Modo de Saída Multi-Chip</label>
-                  <select id="batchChannelMode">
-                    <option value="auto_rotate">🔄 Rodízio Anti-Ban (Alternar Chips)</option>
-                    <option value="slot_1">📱 Somente Chip 1</option>
-                    <option value="slot_2">📱 Somente Chip 2</option>
-                    <option value="slot_3">📱 Somente Chip 3</option>
-                  </select>
-                </div>
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="dailyProactiveLimit">Teto base / dia por Chip conectado</label>
-                <input type="number" id="dailyProactiveLimit" min="1" max="150" value="25" />
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="batchMessageText">Texto da Abordagem (aceita {{nome}})</label>
-                <textarea id="batchMessageText" rows="3" placeholder="Texto de abertura..."></textarea>
-              </div>
-
-              <div id="proactiveQueueStatusBox" class="log-row u-mb-10"></div>
-
-              <div class="u-acoes-wrap">
-                <button type="button" id="btnStartBatchQueue" class="btn btn-primary btn-sm">Iniciar Fila Segura</button>
-                <button type="button" id="btnPauseBatchQueue" class="btn btn-secondary btn-sm">Pausar / Retomar</button>
-                <button type="button" id="btnClearBatchQueue" class="btn btn-danger btn-sm">Limpar Fila</button>
-              </div>
-            </div>
-          </div>
+        <div class="seg-abas" role="tablist" aria-label="Seções de segurança">
+          <button type="button" class="seg-aba ativa" data-seg="fila" role="tab" aria-selected="true">
+            <svg class="icon-svg u-icon-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+            <span>Fila segura</span><span id="segBadgeFila" class="seg-aba-num">0</span>
+          </button>
+          <button type="button" class="seg-aba" data-seg="antiban" role="tab" aria-selected="false">
+            <svg class="icon-svg u-icon-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span>Anti-Ban</span>
+          </button>
+          <button type="button" class="seg-aba" data-seg="acesso" role="tab" aria-selected="false">
+            <svg class="icon-svg u-icon-sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span>Acesso &amp; horário</span>
+          </button>
+          <button type="button" class="seg-aba" data-seg="ignorados" role="tab" aria-selected="false">
+            <svg class="icon-svg u-icon-sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M4.9 4.9l14.2 14.2"/></svg>
+            <span>Ignorados</span><span id="segBadgeIgnorados" class="seg-aba-num">0</span>
+          </button>
         </div>
 
-        <div class="grid-equal">
-          <!-- Anti-Ban -->
-          <div class="panel">
-            <div class="panel-header">
-              <div>
-                <h2 class="panel-title">Proteção Anti-Ban nas Respostas</h2>
-                <p class="panel-desc u-mb-0 u-mt-2">Faz o atendimento parecer uma pessoa real digitando no aparelho.</p>
-              </div>
-            </div>
+        <div class="seg-corpo">
+          <div id="sub-fila" class="seg-sub ativo">
+          <div class="panel u-acento-esquerda">
+                    <div class="panel-header">
+                      <div>
+                        <h2 class="panel-title">Fila Segura de Abordagem Ativa (Cadência Humana Anti-Ban)</h2>
+                        <p class="panel-desc u-mb-0 u-mt-2">
+                          Cole uma lista pequena de contatos do dia (1 por linha: <code>5586999998888;Nome da Loja</code>). O sistema envia <strong>um por vez</strong> aguardando intervalo aleatório humano e respeita o teto diário.
+                        </p>
+                      </div>
+                    </div>
 
-            <!-- Quick Presets (para não-programadores) -->
-            <div class="u-acoes-wrap u-mb-14">
-              <button type="button" class="btn btn-secondary btn-sm" onclick="applyAntiBanPreset('natural')">🌿 Natural</button>
-              <button type="button" class="btn btn-secondary btn-sm" onclick="applyAntiBanPreset('moderado')">⚖️ Moderado</button>
-              <button type="button" class="btn btn-secondary btn-sm" onclick="applyAntiBanPreset('agressivo')">🛡️ Agressivo</button>
-            </div>
+                    <div class="grid-equal u-mt-14">
+                      <div>
+                        <div class="form-group">
+                          <label class="form-label" for="batchLeadsTextarea">Lista de Contatos (Telefone com DDD ; Nome opcional)</label>
+                          <textarea id="batchLeadsTextarea" rows="5" placeholder="5586999112233;Auto Norte Veículos&#10;5586988445566; Garagem Premium"></textarea>
+                        </div>
+                        <div class="grid-equal u-gap-10">
+                          <div class="form-group">
+                            <label class="form-label" for="proactiveMinDelaySec">Espera mínima (seg)</label>
+                            <input type="number" id="proactiveMinDelaySec" min="20" max="600" value="45" />
+                          </div>
+                          <div class="form-group">
+                            <label class="form-label" for="proactiveMaxDelaySec">Espera máxima (seg)</label>
+                            <input type="number" id="proactiveMaxDelaySec" min="30" max="900" value="110" />
+                          </div>
+                        </div>
+                      </div>
 
-            <div class="form-group">
-              <label class="form-label" for="debounceSeconds">Juntar mensagens picadas (Segundos de espera)</label>
-              <input type="number" id="debounceSeconds" min="1" max="25" value="6" />
-              <div class="form-hint">Se o cliente mandar 3 frases seguidas, o robô aguarda e responde tudo junto.</div>
-            </div>
+                      <div>
+                        <div class="grid-equal u-gap-10">
+                          <div class="form-group">
+                            <label class="form-label" for="batchTemplateSelect">Mensagem Aprovada</label>
+                            <select id="batchTemplateSelect"></select>
+                          </div>
+                          <div class="form-group">
+                            <label class="form-label" for="batchChannelMode">Modo de Saída Multi-Chip</label>
+                            <select id="batchChannelMode">
+                              <option value="auto_rotate">🔄 Rodízio Anti-Ban (Alternar Chips)</option>
+                              <option value="slot_1">📱 Somente Chip 1</option>
+                              <option value="slot_2">📱 Somente Chip 2</option>
+                              <option value="slot_3">📱 Somente Chip 3</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div class="form-group">
+                          <label class="form-label" for="dailyProactiveLimit">Teto base / dia por Chip conectado</label>
+                          <input type="number" id="dailyProactiveLimit" min="1" max="150" value="25" />
+                        </div>
+                        <div class="form-group">
+                          <label class="form-label" for="batchMessageText">Texto da Abordagem (aceita {{nome}})</label>
+                          <textarea id="batchMessageText" rows="3" placeholder="Texto de abertura..."></textarea>
+                        </div>
 
-            <div class="grid-equal u-gap-12">
-              <div class="form-group">
-                <label class="form-label" for="minTypingMs">Digitando mínimo (ms)</label>
-                <input type="number" id="minTypingMs" min="500" max="10000" step="100" value="1800" />
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="maxTypingMs">Digitando máximo (ms)</label>
-                <input type="number" id="maxTypingMs" min="1000" max="15000" step="100" value="5200" />
-              </div>
-            </div>
+                        <div id="proactiveQueueStatusBox" class="log-row u-mb-10"></div>
 
-            <div class="form-group u-dir-col-10">
-              <label class="u-rotulo-clicavel">
-                <input type="checkbox" id="simulateTypingCheck" checked />
-                <span>Exibir status "Digitando..." antes de enviar cada resposta</span>
-              </label>
-              <label class="u-rotulo-clicavel">
-                <input type="checkbox" id="splitLongMessagesCheck" checked />
-                <span>Dividir textos grandes em até 3 balões curtos naturais</span>
-              </label>
-            </div>
+                        <div class="u-acoes-wrap">
+                          <button type="button" id="btnStartBatchQueue" class="btn btn-primary btn-sm">Iniciar Fila Segura</button>
+                          <button type="button" id="btnPauseBatchQueue" class="btn btn-secondary btn-sm">Pausar / Retomar</button>
+                          <button type="button" id="btnClearBatchQueue" class="btn btn-danger btn-sm">Limpar Fila</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
           </div>
 
-          <!-- Transbordo Humano + WhatsApp do Dono + PIN do Painel -->
+          <div id="sub-antiban" class="seg-sub">
           <div class="panel">
-            <h2 class="panel-title u-mb-6">Alerta no Seu WhatsApp & PIN do Painel</h2>
-            <p class="panel-desc">Receba avisos de fechamento e proteja seu painel no Wi-Fi local.</p>
+                      <div class="panel-header">
+                        <div>
+                          <h2 class="panel-title">Proteção Anti-Ban nas Respostas</h2>
+                          <p class="panel-desc u-mb-0 u-mt-2">Faz o atendimento parecer uma pessoa real digitando no aparelho.</p>
+                        </div>
+                      </div>
 
-            <div class="form-group">
-              <label class="u-rotulo-clicavel--mb">
-                <input type="checkbox" id="pauseOnOwnerReplyCheck" checked />
-                <span><strong>Pausar IA automaticamente</strong> se eu responder pelo meu celular</span>
-              </label>
-              <label class="form-label" for="pauseDurationMinutes">Tempo de pausa automática padrão (minutos)</label>
-              <input type="number" id="pauseDurationMinutes" min="5" max="1440" value="60" />
-            </div>
+                      <!-- Quick Presets (para não-programadores) -->
+                      <div class="u-acoes-wrap u-mb-14">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="applyAntiBanPreset('natural')">🌿 Natural</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="applyAntiBanPreset('moderado')">⚖️ Moderado</button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="applyAntiBanPreset('agressivo')">🛡️ Agressivo</button>
+                      </div>
 
-            <div class="form-group u-fio-topo">
-              <label class="form-label" for="ownerPersonalWhatsapp">Seu WhatsApp Pessoal para receber Resumos</label>
-              <div class="u-acoes-fina-8">
-                <input type="text" id="ownerPersonalWhatsapp" placeholder="Ex: 5586999998888 (com DDD)" inputmode="tel" autocomplete="tel" />
-                <button type="button" id="btnTestOwnerAlert" class="btn btn-secondary btn-sm">Testar alerta</button>
-              </div>
-            </div>
+                      <div class="form-group">
+                        <label class="form-label" for="debounceSeconds">Juntar mensagens picadas (Segundos de espera)</label>
+                        <input type="number" id="debounceSeconds" min="1" max="25" value="6" />
+                        <div class="form-hint">Se o cliente mandar 3 frases seguidas, o robô aguarda e responde tudo junto.</div>
+                      </div>
 
-            <div class="form-group u-fio-topo--justo">
-              <label class="form-label" for="securityPinInput">PIN de Bloqueio do Painel na Rede Wi-Fi (opcional)</label>
-              <input type="password" id="securityPinInput" placeholder="Deixe vazio p/ livre ou digite 4 a 8 dígitos" autocomplete="new-password" inputmode="numeric" />
-              <div class="form-hint">Protege seu painel quando estiver rodando no Termux ou PC conectado em Wi-Fi compartilhado.</div>
-            </div>
-          </div>
-        </div>
+                      <div class="grid-equal u-gap-12">
+                        <div class="form-group">
+                          <label class="form-label" for="minTypingMs">Digitando mínimo (ms)</label>
+                          <input type="number" id="minTypingMs" min="500" max="10000" step="100" value="1800" />
+                        </div>
+                        <div class="form-group">
+                          <label class="form-label" for="maxTypingMs">Digitando máximo (ms)</label>
+                          <input type="number" id="maxTypingMs" min="1000" max="15000" step="100" value="5200" />
+                        </div>
+                      </div>
 
-        <div class="grid-equal">
-          <!-- Horário de Funcionamento -->
-          <div class="panel">
-            <h2 class="panel-title u-mb-6">Horário de Atendimento</h2>
-            <p class="panel-desc">Escolha se o robô atende 24 horas ou segue seu expediente.</p>
-
-            <div class="form-group">
-              <label class="form-label" for="scheduleMode">Modo de Operação</label>
-              <select id="scheduleMode">
-                <option value="always">Atender 24 horas por dia, 7 dias por semana</option>
-                <option value="business_hours_only">Atender apenas dentro do horário comercial</option>
-                <option value="outside_hours_only">Atender apenas FORA do horário comercial (plantão)</option>
-              </select>
-            </div>
-
-            <div class="grid-equal u-gap-12">
-              <div class="form-group">
-                <label class="form-label" for="scheduleStart">Início do expediente</label>
-                <input type="time" id="scheduleStart" value="08:00" />
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="scheduleEnd">Fim do expediente</label>
-                <input type="time" id="scheduleEnd" value="18:00" />
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="offHoursReplyMessage">Mensagem automática fora do horário (opcional)</label>
-              <textarea id="offHoursReplyMessage" rows="2"></textarea>
-            </div>
+                      <div class="form-group u-dir-col-10">
+                        <label class="u-rotulo-clicavel">
+                          <input type="checkbox" id="simulateTypingCheck" checked />
+                          <span>Exibir status "Digitando..." antes de enviar cada resposta</span>
+                        </label>
+                        <label class="u-rotulo-clicavel">
+                          <input type="checkbox" id="splitLongMessagesCheck" checked />
+                          <span>Dividir textos grandes em até 3 balões curtos naturais</span>
+                        </label>
+                      </div>
+                    </div>
           </div>
 
-          <!-- Lista de Contatos Ignorados -->
+          <div id="sub-acesso" class="seg-sub">
+                      <div class="seg-dupla">
+                        <div class="panel">
+                                    <h2 class="panel-title u-mb-6">Alerta no Seu WhatsApp & PIN do Painel</h2>
+                                    <p class="panel-desc">Receba avisos de fechamento e proteja seu painel no Wi-Fi local.</p>
+
+                                    <div class="form-group">
+                                      <label class="u-rotulo-clicavel--mb">
+                                        <input type="checkbox" id="pauseOnOwnerReplyCheck" checked />
+                                        <span><strong>Pausar IA automaticamente</strong> se eu responder pelo meu celular</span>
+                                      </label>
+                                      <label class="form-label" for="pauseDurationMinutes">Tempo de pausa automática padrão (minutos)</label>
+                                      <input type="number" id="pauseDurationMinutes" min="5" max="1440" value="60" />
+                                    </div>
+
+                                    <div class="form-group u-fio-topo">
+                                      <label class="form-label" for="ownerPersonalWhatsapp">Seu WhatsApp Pessoal para receber Resumos</label>
+                                      <div class="u-acoes-fina-8">
+                                        <input type="text" id="ownerPersonalWhatsapp" placeholder="Ex: 5586999998888 (com DDD)" inputmode="tel" autocomplete="tel" />
+                                        <button type="button" id="btnTestOwnerAlert" class="btn btn-secondary btn-sm">Testar alerta</button>
+                                      </div>
+                                    </div>
+
+                                    <div class="form-group u-fio-topo--justo">
+                                      <label class="form-label" for="securityPinInput">PIN de Bloqueio do Painel na Rede Wi-Fi (opcional)</label>
+                                      <input type="password" id="securityPinInput" placeholder="Deixe vazio p/ livre ou digite 4 a 8 dígitos" autocomplete="new-password" inputmode="numeric" />
+                                      <div class="form-hint">Protege seu painel quando estiver rodando no Termux ou PC conectado em Wi-Fi compartilhado.</div>
+                                    </div>
+                                  </div>
+                        <div class="panel">
+                                    <h2 class="panel-title u-mb-6">Horário de Atendimento</h2>
+                                    <p class="panel-desc">Escolha se o robô atende 24 horas ou segue seu expediente.</p>
+
+                                    <div class="form-group">
+                                      <label class="form-label" for="scheduleMode">Modo de Operação</label>
+                                      <select id="scheduleMode">
+                                        <option value="always">Atender 24 horas por dia, 7 dias por semana</option>
+                                        <option value="business_hours_only">Atender apenas dentro do horário comercial</option>
+                                        <option value="outside_hours_only">Atender apenas FORA do horário comercial (plantão)</option>
+                                      </select>
+                                    </div>
+
+                                    <div class="grid-equal u-gap-12">
+                                      <div class="form-group">
+                                        <label class="form-label" for="scheduleStart">Início do expediente</label>
+                                        <input type="time" id="scheduleStart" value="08:00" />
+                                      </div>
+                                      <div class="form-group">
+                                        <label class="form-label" for="scheduleEnd">Fim do expediente</label>
+                                        <input type="time" id="scheduleEnd" value="18:00" />
+                                      </div>
+                                    </div>
+
+                                    <div class="form-group">
+                                      <label class="form-label" for="offHoursReplyMessage">Mensagem automática fora do horário (opcional)</label>
+                                      <textarea id="offHoursReplyMessage" rows="2"></textarea>
+                                    </div>
+                                  </div>
+                      </div>
+          </div>
+
+          <div id="sub-ignorados" class="seg-sub">
           <div class="panel">
-            <h2 class="panel-title u-mb-6">Contatos Ignorados (Família, Amigos & Opt-Out)</h2>
-            <p class="panel-desc">A IA nunca responderá nem enviará abordagem para os números abaixo.</p>
+                      <h2 class="panel-title u-mb-6">Contatos Ignorados (Família, Amigos & Opt-Out)</h2>
+                      <p class="panel-desc">A IA nunca responderá nem enviará abordagem para os números abaixo.</p>
 
-            <div class="u-acoes-wrap-fim">
-              <input type="text" id="ignoreNameInput" placeholder="Nome (ex: Mãe)"  aria-label="Nome do contato ignorado na lista branca" class="u-flex-1 u-min-120" />
-              <input type="text" id="ignorePhoneInput" placeholder="DDD + Número (ex: 86999887766)"  aria-label="Número de WhatsApp com DDD para lista branca" inputmode="tel" autocomplete="tel" class="u-min-150-flex" />
-              <button type="button" id="btnAddIgnored" class="btn btn-secondary">Bloquear IA</button>
-            </div>
+                      <div class="u-acoes-wrap-fim">
+                        <input type="text" id="ignoreNameInput" placeholder="Nome (ex: Mãe)"  aria-label="Nome do contato ignorado na lista branca" class="u-flex-1 u-min-120" />
+                        <input type="text" id="ignorePhoneInput" placeholder="DDD + Número (ex: 86999887766)"  aria-label="Número de WhatsApp com DDD para lista branca" inputmode="tel" autocomplete="tel" class="u-min-150-flex" />
+                        <button type="button" id="btnAddIgnored" class="btn btn-secondary">Bloquear IA</button>
+                      </div>
 
-            <div id="ignoredContactsList" class="log-list u-max-alto-200"></div>
+                      <div id="ignoredContactsList" class="log-list u-max-alto-200"></div>
+                    </div>
           </div>
         </div>
       </section>
 
-      <!-- ==================== ABA 7: CRM & CENTRAL DE CONVERSAS PRO ==================== -->
+      <section id="tab-configuracoes" class="tab-pane" hidden>
+        <div class="page-head">
+          <div>
+            <h1 class="page-title">Configurações</h1>
+            <p class="page-subtitle">A marca do sistema, seus dados em arquivo e a manutenção do motor.</p>
+          </div>
+          <button type="button" class="btn btn-secondary" onclick="switchTab('contas')">Clientes &amp; permissões</button>
+        </div>
+
+        <div id="confStatusBar" class="seg-status"></div>
+
+        <div class="conf-grade">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Nome &amp; Marca do Sistema</h2>
+                <p class="panel-desc u-mb-0 u-mt-2">O nome que aparece no topo, na aba do navegador e nas telas de login.</p>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="confBrandName">Nome principal</label>
+              <input type="text" id="confBrandName" placeholder="Ex: Ienvia" maxlength="40" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="confBrandSubtitle">Subtítulo abaixo do nome</label>
+              <input type="text" id="confBrandSubtitle" placeholder="Ex: Atendente Universal" maxlength="60" />
+            </div>
+            <div class="conf-previa">
+              <span class="conf-previa-rotulo">Prévia</span>
+              <div class="brand u-moldura-centro">
+                <div class="brand-mark u-marca-28" aria-hidden="true">
+                  <img src="/ienvia-icon-v2.png" alt="" class="u-simbolo-img" />
+                </div>
+                <div>
+                  <div id="confPreviaNome" class="brand-title">Ienvia</div>
+                  <div id="confPreviaSub" class="brand-sub">Atendente Universal</div>
+                </div>
+              </div>
+            </div>
+            <div class="u-acoes-8">
+              <button type="button" class="btn btn-primary" id="btnConfSalvarMarca">Salvar marca</button>
+              <button type="button" class="btn btn-secondary" onclick="document.getElementById('btnOpenBrandModal')?.click()">Abrir em janela</button>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Backup &amp; Restauração</h2>
+                <p class="panel-desc u-mb-0 u-mt-2">Um arquivo .JSON com clientes, conversas e todas as configurações.</p>
+              </div>
+            </div>
+            <div class="conf-linhas">
+              <div class="conf-linha">
+                <div class="conf-linha-txt">
+                  <strong>Baixar backup completo</strong>
+                  <small id="confBackupInfo">Clientes, conversas e configurações em um só arquivo.</small>
+                </div>
+                <button type="button" id="btnConfBackup" class="btn btn-secondary btn-sm">Baixar .JSON</button>
+              </div>
+              <div class="conf-linha">
+                <div class="conf-linha-txt">
+                  <strong>Restaurar de um backup</strong>
+                  <small>Substitui os dados atuais pelos do arquivo. Confirme com atenção.</small>
+                </div>
+                <label for="confRestoreInput" class="btn btn-secondary btn-sm u-cursor-pointer">Escolher arquivo</label>
+                <input type="file" id="confRestoreInput" accept=".json,application/json" class="u-none" />
+              </div>
+              <div class="conf-linha">
+                <div class="conf-linha-txt">
+                  <strong>Exportar contatos em planilha</strong>
+                  <small>CSV do CRM, para abrir no Excel ou Google Sheets.</small>
+                </div>
+                <a id="btnConfCsv" href="/api/crm/export.csv" class="btn btn-secondary btn-sm">Baixar .CSV</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Manutenção &amp; Versão</h2>
+                <p class="panel-desc u-mb-0 u-mt-2">Motor oficial e pacote de atualização.</p>
+              </div>
+              <span id="confVersaoBadge" class="tag">—</span>
+            </div>
+            <div class="conf-linhas">
+              <div class="conf-linha">
+                <div class="conf-linha-txt">
+                  <strong>Baixar motor (.ZIP)</strong>
+                  <small>Windows, Linux e Android Termux — pacote portátil.</small>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="downloadLatestMotorZip()">Baixar</button>
+              </div>
+              <div class="conf-linha">
+                <div class="conf-linha-txt">
+                  <strong>Testar o atendente</strong>
+                  <small>Abrir o simulador com o treinamento atual.</small>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="switchTab('simulador')">Abrir</button>
+              </div>
+              <div class="conf-linha">
+                <div class="conf-linha-txt">
+                  <strong>Estado do motor</strong>
+                  <small id="confMotorSub">Verificando versão instalada...</small>
+                </div>
+                <span id="confMotorSelo" class="ready-pill warn">—</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="tab-crm" class="tab-pane active">
         <!-- Barra Superior Compacta: Visões Segmentadas + Busca + Nova Conversa + Menu ⋯ -->
         <div class="crm-hub-topbar">

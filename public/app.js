@@ -420,6 +420,7 @@ const HUB_BY_TAB = {
   simulador: 'cerebro',
   ia: 'config',
   seguranca: 'config',
+  configuracoes: 'config',
   campanhas: 'config',
   contas: 'contas'
 };
@@ -1335,6 +1336,8 @@ function renderAll() {
   renderStatsAndLogs();
   renderReadinessAndFunnel();
   if (typeof window.renderVisaoGeral === 'function') window.renderVisaoGeral();
+  if (typeof window.renderSegStatus === 'function') window.renderSegStatus();
+  if (typeof window.renderConfiguracoes === 'function') window.renderConfiguracoes();
   renderProactiveSelectors();
   renderProactiveQueueStatus();
   renderProfileSelectors();
@@ -1350,6 +1353,177 @@ function renderAll() {
   }
 }
 
+
+
+// ======================== SEGURANÇA (sub-abas) + CONFIGURAÇÕES ========================
+(function segurancaEConfiguracoes() {
+  const $s = (id) => document.getElementById(id);
+
+  // ---------- sub-abas da Segurança ----------
+  window.segTrocar = function segTrocar(qual) {
+    document.querySelectorAll('.seg-aba').forEach((b) => {
+      const on = b.dataset.seg === qual;
+      b.classList.toggle('ativa', on);
+      b.setAttribute('aria-selected', String(on));
+    });
+    document.querySelectorAll('.seg-sub').forEach((p) => {
+      p.classList.toggle('ativo', p.id === 'sub-' + qual);
+    });
+  };
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.seg-aba');
+    if (btn && btn.dataset.seg) window.segTrocar(btn.dataset.seg);
+  });
+
+  // ---------- barra de status da Segurança ----------
+  function item(estado, rotulo) {
+    return `<span class="seg-status-item ${estado}"><span class="seg-status-dot"></span>${rotulo}</span>`;
+  }
+  function renderSegStatus() {
+    const barra = $s('segStatusBar');
+    if (!barra) return;
+    const ab = state.settings?.antiBan || {};
+    const sc = state.settings?.schedule || {};
+    const hh = state.settings?.humanHandoff || {};
+    const fila = state.proactiveQueueState || {};
+    const ignorados = (state.settings?.ignoredContacts || []).length;
+    const pin = Boolean(state.settings?.securityPin);
+    const partes = [];
+    partes.push(item(ab.simulateTyping !== false ? 'ligado' : 'desligado',
+      'Digitando ' + (ab.simulateTyping !== false ? 'ligado' : 'desligado')));
+    partes.push(item(ab.splitLongMessages !== false ? 'ligado' : 'desligado',
+      'Dividir mensagens ' + (ab.splitLongMessages !== false ? 'ligado' : 'desligado')));
+    partes.push(item((sc.mode || 'always') === 'always' ? 'desligado' : 'ligado',
+      (sc.mode || 'always') === 'always' ? 'Atende 24h' : 'Atende ' + (sc.startHour || '08:00') + '–' + (sc.endHour || '18:00')));
+    partes.push(item(fila.running ? 'ligado' : (fila.paused ? 'desligado' : ''),
+      fila.running ? 'Fila rodando · ' + (fila.remaining || 0) + ' na espera'
+        : (fila.paused ? 'Fila pausada' : 'Fila parada')));
+    partes.push(item(hh.ownerPersonalWhatsapp ? 'ligado' : 'desligado',
+      hh.ownerPersonalWhatsapp ? 'Alerta pessoal ativo' : 'Sem alerta pessoal'));
+    partes.push(item(pin ? 'ligado' : '', pin ? 'PIN ligado' : 'Sem PIN'));
+    if (ignorados) partes.push(item('ligado', ignorados + ' contato' + (ignorados > 1 ? 's' : '') + ' ignorado' + (ignorados > 1 ? 's' : '')));
+    barra.innerHTML = partes.join('');
+    const bf = $s('segBadgeFila');
+    if (bf) bf.textContent = fila.remaining || 0;
+    const bi = $s('segBadgeIgnorados');
+    if (bi) bi.textContent = ignorados;
+    const salvar = $s('btnSaveSecurity');
+    if (salvar) salvar.classList.toggle('u-pulse', false);
+  }
+  window.renderSegStatus = renderSegStatus;
+
+  // ---------- Configurações ----------
+  function nomeMarca(br = {}) {
+    const bruto = String(br.appName || '').trim();
+    return /^(?:zap-ia(?: studio)?)$/i.test(bruto) ? 'Ienvia' : (bruto || 'Ienvia');
+  }
+  function renderConfiguracoes() {
+    const br = state.settings?.branding || {};
+    const nome = nomeMarca(br);
+    const sub = br.appSubtitle || 'Atendente Universal';
+    const ni = $s('confBrandName');
+    if (ni && document.activeElement !== ni) ni.value = nome;
+    const si = $s('confBrandSubtitle');
+    if (si && document.activeElement !== si) si.value = sub;
+    const pn = $s('confPreviaNome');
+    if (pn) pn.textContent = (ni?.value || nome);
+    const ps = $s('confPreviaSub');
+    if (ps) ps.textContent = (si?.value || sub);
+
+    const versao = state.appVersion || '—';
+    const badge = $s('confVersaoBadge');
+    if (badge) badge.textContent = 'v' + versao;
+    const selo = $s('confMotorSelo');
+    const motorSub = $s('confMotorSub');
+    const wa = state.waState || {};
+    const online = Boolean(wa.workerOnline);
+    const mesma = wa.workerVersion && wa.workerVersion === versao;
+    if (selo) {
+      selo.className = 'ready-pill ' + (online && mesma ? 'ok' : 'warn');
+      selo.textContent = online ? (mesma ? 'atualizado' : 'desatualizado') : 'offline';
+    }
+    if (motorSub) {
+      motorSub.textContent = online
+        ? 'Motor v' + (wa.workerVersion || '?') + ' em ' + (wa.workerPlatform || 'seu dispositivo')
+        : 'Motor não conectado agora';
+    }
+    const info = $s('confBackupInfo');
+    if (info) {
+      const n = (state.contacts || []).length;
+      info.textContent = n + ' cliente' + (n === 1 ? '' : 's') + ' no CRM · backup inclui conversas e configurações.';
+    }
+    // barra de status do topo
+    const barra = $s('confStatusBar');
+    if (barra) {
+      const itens = [];
+      itens.push('<span class="seg-status-item ligado"><span class="seg-status-dot"></span>Marca: ' + (ni?.value || nome) + '</span>');
+      itens.push('<span class="seg-status-item ' + (online ? 'ligado' : 'alerta') + '"><span class="seg-status-dot"></span>' +
+        (online ? 'Motor online' : 'Motor offline') + '</span>');
+      const ultimo = state.settings?.lastBackupAt;
+      itens.push('<span class="seg-status-item"><span class="seg-status-dot"></span>' +
+        (ultimo ? 'Backup em ' + new Date(ultimo).toLocaleDateString('pt-BR') : 'Nenhum backup baixado ainda') + '</span>');
+      barra.innerHTML = itens.join('');
+    }
+  }
+  window.renderConfiguracoes = renderConfiguracoes;
+
+  // prévia ao digitar
+  document.addEventListener('input', (e) => {
+    if (e.target.id === 'confBrandName') {
+      const p = $s('confPreviaNome'); if (p) p.textContent = e.target.value || 'Ienvia';
+    }
+    if (e.target.id === 'confBrandSubtitle') {
+      const p = $s('confPreviaSub'); if (p) p.textContent = e.target.value || 'Atendente Universal';
+    }
+  });
+
+  document.addEventListener('change', (e) => {
+    if (e.target.id !== 'confRestoreInput') return;
+    // reaproveita o MESMO input escondido que já tem handler (restoreFullBackupInput)
+    const arquivo = e.target.files?.[0];
+    e.target.value = '';
+    if (!arquivo) return;
+    const alvo = $s('restoreFullBackupInput');
+    if (!alvo) return;
+    const dt = new DataTransfer();
+    dt.items.add(arquivo);
+    alvo.files = dt.files;
+    alvo.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#btnConfBackup')) {
+      const real = $s('btnExportFullBackup');
+      if (real) real.click();
+      return;
+    }
+    if (e.target.closest('#btnConfSalvarMarca')) {
+      const nome = ($s('confBrandName')?.value || '').trim() || 'Ienvia';
+      const sub = ($s('confBrandSubtitle')?.value || '').trim();
+      const form = $s('brandForm');
+      const ni = $s('brandNameInput');
+      const si = $s('brandSubtitleInput');
+      if (ni) ni.value = nome;
+      if (si) si.value = sub;
+      if (form) form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+    }
+  });
+
+  // entra no ciclo de render existente
+  const renderOriginal = window.renderAll;
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => { try { renderSegStatus(); renderConfiguracoes(); } catch (_) {} }, 500);
+  });
+  const switchAntes = window.switchTab;
+  if (typeof switchAntes === 'function') {
+    window.switchTab = function switchTabComSeg(id) {
+      const r = switchAntes.apply(this, arguments);
+      if (id === 'seguranca') setTimeout(renderSegStatus, 60);
+      if (id === 'configuracoes') setTimeout(renderConfiguracoes, 60);
+      return r;
+    };
+  }
+})();
 
 // ======================== VISÃO GERAL: NÚMEROS, ALERTAS E CONTROLE RÁPIDO ========================
 // Tela inicial nova: lê o MESMO estado que o resto do painel já carrega (nada de endpoint novo).
@@ -9614,7 +9788,7 @@ initSaasCommercialGrowthHub();
 // (definido no HTML da página); o hash (#crm, #treinamento...) tem prioridade quando existe,
 // para não quebrar links antigos. Nenhuma aba é aberta "por acidente": sem página e sem
 // hash, fica a que já está marcada como ativa no HTML.
-const TABS_VALIDAS = ['dashboard', 'simulador', 'treinamento', 'audios', 'catalogo', 'ia', 'seguranca', 'crm', 'contas', 'campanhas'];
+const TABS_VALIDAS = ['dashboard', 'simulador', 'treinamento', 'audios', 'catalogo', 'ia', 'seguranca', 'crm', 'contas', 'campanhas', 'configuracoes'];
 const initialHash = (window.location.hash || '').replace('#', '');
 const paginaInicial = typeof window.IENVIA_PAGINA === 'string' ? window.IENVIA_PAGINA : '';
 if (TABS_VALIDAS.includes(initialHash)) {

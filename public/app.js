@@ -1334,6 +1334,7 @@ function renderAll() {
   renderWaState();
   renderStatsAndLogs();
   renderReadinessAndFunnel();
+  if (typeof window.renderVisaoGeral === 'function') window.renderVisaoGeral();
   renderProactiveSelectors();
   renderProactiveQueueStatus();
   renderProfileSelectors();
@@ -1348,6 +1349,275 @@ function renderAll() {
     renderManagedUsers();
   }
 }
+
+
+// ======================== VISÃO GERAL: NÚMEROS, ALERTAS E CONTROLE RÁPIDO ========================
+// Tela inicial nova: lê o MESMO estado que o resto do painel já carrega (nada de endpoint novo).
+// Os números são calculados de state.waState / state.contacts / state.proactiveQueueState / state.stats.
+(function visaoGeral() {
+  const $v = (id) => document.getElementById(id);
+
+  function pintarTendencia(el, texto, classe) {
+    if (!el) return;
+    el.textContent = texto || '';
+    el.className = 'visao-tendencia' + (classe ? ' ' + classe : '');
+    el.style.visibility = texto ? 'visible' : 'hidden';
+  }
+
+  let _campanhasCache = null;
+  let _campanhasEm = 0;
+  function contarCampanhasAtivas() {
+    const lista = _campanhasCache;
+    return Array.isArray(lista) ? lista.filter((c) => c && c.status === 'ativa').length : null;
+  }
+  // Busca uma vez (e a cada 60s) a mesma lista que a aba Campanhas usa.
+  async function carregarCampanhasVisao() {
+    if (Array.isArray(_campanhasCache) && Date.now() - _campanhasEm < 60000) return;
+    _campanhasEm = Date.now();
+    try {
+      const r = await api('/api/campaigns');
+      _campanhasCache = Array.isArray(r?.campanhas) ? r.campanhas : [];
+      const ativas = contarCampanhasAtivas();
+      const el = $v('visaoKpiCampanhas');
+      if (el) el.textContent = ativas;
+      const pe = $v('visaoKpiCampanhasPe');
+      if (pe) pe.textContent = ativas ? 'rodando agora' : 'nenhuma rodando';
+      pintarTendencia($v('visaoTendenciaCampanha'), ativas ? ativas + ' ativas' : 'paradas', ativas ? 'sobe' : '');
+    } catch (_) { /* sem rede: mantém o traço */ }
+  }
+
+  function renderVisaoGeral() {
+    const wa = state.waState || {};
+    const contatos = state.contacts || [];
+    const stats = state.stats || {};
+    const fila = state.proactiveQueueState || {};
+
+    // --- esperando humano ---
+    const esperando = contatos.filter((c) => c.stage === 'aguardando_humano').length;
+    const humanoEl = $v('statHandoffsPending');
+    if (humanoEl) humanoEl.textContent = esperando;
+    pintarTendencia($v('visaoTendenciaHumano'), esperando ? esperando + ' agora' : 'em dia',
+      esperando ? 'atencao' : 'sobe');
+
+    // --- IA respondendo (bot ligado e chip conectado) ---
+    const botOn = wa.botEnabled !== false && (state.settings?.botEnabled !== false);
+    const conectados = Number(wa.connectedCount || 0);
+    const iaEl = $v('visaoKpiIa');
+    if (iaEl) iaEl.textContent = botOn && conectados > 0 ? 'Ligada' : 'Pausada';
+    const iaPe = $v('visaoKpiIaPe');
+    if (iaPe) iaPe.textContent = botOn ? 'atendimento automático' : 'pausada — só manual';
+    pintarTendencia($v('visaoTendenciaIa'), botOn ? 'no ar' : 'off', botOn ? 'sobe' : 'cai');
+    const kpiIa = $v('visaoKpiIa');
+    if (kpiIa) kpiIa.classList.toggle('u-text-muted', !botOn);
+
+    // --- campanhas ---
+    const ativas = contarCampanhasAtivas();
+    const campEl = $v('visaoKpiCampanhas');
+    if (campEl) campEl.textContent = ativas === null ? '—' : ativas;
+    const campPe = $v('visaoKpiCampanhasPe');
+    if (campPe) campPe.textContent = ativas === null ? 'abra Campanhas' : (ativas ? 'rodando agora' : 'nenhuma rodando');
+
+    // --- chips ---
+    const maxChips = Number(wa.maxWaSlots || 1);
+    const chipsEl = $v('visaoKpiChips');
+    if (chipsEl) chipsEl.textContent = conectados + '/' + maxChips;
+    const chipsPe = $v('visaoKpiChipsPe');
+    if (chipsPe) chipsPe.textContent = conectados === maxChips ? 'todos conectados' : (maxChips - conectados) + ' fora do ar';
+    pintarTendencia($v('visaoTendenciaChips'), conectados ? 'online' : 'off', conectados ? 'sobe' : 'cai');
+
+    // --- mensagens ---
+    const recebidas = Number(stats.totalIncoming || 0);
+    const respondidas = Number(stats.totalAiReplies || 0);
+    const msgEl = $v('visaoKpiMensagens');
+    if (msgEl) msgEl.textContent = recebidas;
+    const msgPe = $v('visaoKpiMensagensPe');
+    if (msgPe) msgPe.textContent = respondidas + ' respostas da IA';
+    pintarTendencia($v('visaoTendenciaMensagens'), respondidas ? Math.round((respondidas / Math.max(recebidas, 1)) * 100) + '%' : '', 'sobe');
+
+    // --- fila segura ---
+    const naFila = Number(fila.remaining || 0);
+    const enviados = Number(fila.sentSession || 0);
+    const filaEl = $v('visaoKpiFila');
+    if (filaEl) filaEl.textContent = naFila;
+    const filaPe = $v('visaoKpiFilaPe');
+    if (filaPe) filaPe.textContent = fila.running ? 'rodando · ' + enviados + ' enviados hoje' : (naFila ? 'parada' : 'fila vazia');
+    pintarTendencia($v('visaoTendenciaFila'), fila.running ? 'ativa' : (fila.paused ? 'pausa' : ''),
+      fila.running ? 'sobe' : 'atencao');
+
+    // --- resumo no pé do controle rápido ---
+    const resumo = $v('visaoFilaResumo');
+    if (resumo) {
+      resumo.textContent = fila.running
+        ? 'Fila ativa · ' + naFila + ' na espera · ' + enviados + '/' + Number(fila.dailyLimit || 25) + ' hoje'
+        : (naFila ? 'Fila parada · ' + naFila + ' na espera' : 'Nenhuma fila rodando');
+    }
+
+    renderVisaoAtencao({ wa, contatos, stats, fila, conectados, maxChips, esperando });
+    sincronizarChavesVisao();
+    carregarCampanhasVisao();
+  }
+
+  function renderVisaoAtencao(ctx) {
+    const box = $v('visaoAtencao');
+    if (!box) return;
+    const itens = [];
+    const add = (nivel, num, titulo, pe, tab) =>
+      itens.push({ nivel, num, titulo, pe, tab });
+
+    if (ctx.esperando > 0) {
+      add('aviso', ctx.esperando, 'Conversas esperando você',
+        'A IA parou e o cliente aguarda resposta humana', 'crm');
+    }
+    if (ctx.conectados === 0) {
+      add('critico', '0', 'Nenhum chip conectado',
+        'Sem conexão o atendente não responde nem dispara', 'dashboard');
+    } else if (ctx.conectados < ctx.maxChips) {
+      add('aviso', ctx.maxChips - ctx.conectados, 'Chip desconectado',
+        'Você tem ' + ctx.maxChips + ' chips e ' + ctx.conectados + ' online', 'dashboard');
+    }
+    const ai = state.settings?.ai || {};
+    if (!ai.geminiApiKey && !ai.openrouterApiKey) {
+      add('critico', '0', 'Sem chave de IA',
+        'Cole uma chave no Motor de IA para o atendente funcionar', 'ia');
+    }
+    if (!state.settings?.humanHandoff?.ownerPersonalWhatsapp) {
+      add('ok', '?', 'Alerta pessoal desligado',
+        'Você não recebe aviso no seu WhatsApp quando o cliente chama', 'seguranca');
+    }
+    if (ctx.fila.paused) {
+      add('aviso', ctx.fila.remaining || 0, 'Fila segura pausada',
+        'Retome a cadência anti-ban para continuar os disparos', 'seguranca');
+    }
+    const naoIniciado = !ctx.stats || (!ctx.stats.totalIncoming && !ctx.stats.totalAiReplies);
+    if (naoIniciado) {
+      add('ok', 'i', 'Primeiro atendimento pendente',
+        'Conecte um chip e mande uma mensagem de teste no Simulador', 'simulador');
+    }
+
+    const peso = { critico: 0, aviso: 1, ok: 2 };
+    const escolhidos = itens.sort((a, b) => peso[a.nivel] - peso[b.nivel]).slice(0, 3);
+    box.innerHTML = escolhidos.map((i) => `
+      <button type="button" class="visao-alerta ${i.nivel}" onclick="switchTab('${i.tab}')">
+        <span class="visao-alerta-num">${i.num}</span>
+        <span class="visao-alerta-txt"><strong>${i.titulo}</strong><small>${i.pe}</small></span>
+      </button>
+    `).join('');
+  }
+
+  // ---------- chaves do controle rápido ----------
+  function lerChaves() {
+    const ab = state.settings?.antiBan || {};
+    const hh = state.settings?.humanHandoff || {};
+    const sc = state.settings?.schedule || {};
+    const ia = $v('visaoChaveIa');
+    const dig = $v('visaoChaveDigitando');
+    const div = $v('visaoChaveDividir');
+    const pau = $v('visaoChavePausar');
+    const hor = $v('visaoChaveHorario');
+    if (ia) ia.checked = (state.waState?.botEnabled !== false) && (state.settings?.botEnabled !== false);
+    if (dig) dig.checked = ab.simulateTyping !== false;
+    if (div) div.checked = ab.splitLongMessages !== false;
+    if (pau) pau.checked = hh.pauseOnOwnerReply !== false;
+    if (hor) hor.checked = (sc.mode || 'always') !== 'always';
+    const horSub = $v('visaoChaveHorarioSub');
+    if (horSub) {
+      horSub.textContent = (sc.mode || 'always') === 'always'
+        ? '24 horas por dia'
+        : 'Das ' + (sc.startHour || '08:00') + ' às ' + (sc.endHour || '18:00');
+    }
+    const iaSub = $v('visaoChaveIaSub');
+    if (iaSub) iaSub.textContent = state.waState?.botEnabled === false ? 'Pausada — responda manualmente' : 'Atendimento automático';
+    const pausarSub = $v('visaoChavePausarSub');
+    if (pausarSub) pausarSub.textContent = pau && pau.checked ? 'Você assume a conversa' : 'A IA continua mesmo se você responder';
+  }
+
+  function sincronizarChavesVisao() {
+    try { lerChaves(); } catch (_) {}
+  }
+  window.visaoSincronizarChaves = sincronizarChavesVisao;
+
+  // Salva pela MESMA rota que as abas originais usam.
+  window.visaoSalvarChave = async function visaoSalvarChave(chave, valor) {
+    try {
+      if (chave === 'ia') {
+        await api('/api/wa/toggle-bot', { method: 'POST', body: JSON.stringify({ enabled: valor }) });
+        state.waState.botEnabled = valor;
+        state.settings = { ...(state.settings || {}), botEnabled: valor };
+        // mantém os interruptores das outras abas em sincronia
+        const master = $v('masterBotToggle');
+        if (master) master.checked = valor;
+        const iaToggle = $v('aiBotEnabledToggle');
+        if (iaToggle) iaToggle.checked = valor;
+        showToast(valor ? 'IA ativada — o atendente está no ar.' : 'IA pausada — você atende manualmente.');
+      } else if (chave === 'horario') {
+        const sc = { ...(state.settings?.schedule || {}) };
+        sc.mode = valor ? 'business_hours_only' : 'always';
+        if (valor && (!sc.startHour || !sc.endHour)) { sc.startHour = '08:00'; sc.endHour = '18:00'; }
+        const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ schedule: sc }) });
+        state.settings = res.settings || { ...(state.settings || {}), schedule: sc };
+        const sel = $v('scheduleMode');
+        if (sel) sel.value = sc.mode;
+        showToast(valor ? 'Horário de atendimento ligado.' : 'Atendendo 24 horas.');
+      } else {
+        const campo = chave === 'digitando' ? 'simulateTyping'
+          : chave === 'dividir' ? 'splitLongMessages'
+          : 'pauseOnOwnerReply';
+        if (chave === 'pausar') {
+          const hh = { ...(state.settings?.humanHandoff || {}), pauseOnOwnerReply: valor, notifyOwnerOnHandoff: true };
+          const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ humanHandoff: hh }) });
+          state.settings = res.settings || { ...(state.settings || {}), humanHandoff: hh };
+          const chk = $v('pauseOnOwnerReplyCheck');
+          if (chk) chk.checked = valor;
+        } else {
+          const ab = { ...(state.settings?.antiBan || {}), [campo]: valor };
+          const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ antiBan: ab }) });
+          state.settings = res.settings || { ...(state.settings || {}), antiBan: ab };
+          const chk = $v(chave === 'digitando' ? 'simulateTypingCheck' : 'splitLongMessagesCheck');
+          if (chk) chk.checked = valor;
+        }
+        showToast('Preferência salva.');
+      }
+      renderVisaoGeral();
+    } catch (err) {
+      showToast(err.message || 'Não foi possível salvar.', true);
+      lerChaves(); // devolve o interruptor ao estado real
+    }
+  };
+
+  // ---------- saudação e relógio ----------
+  function renderOla() {
+    const agora = new Date();
+    const h = agora.getHours();
+    const ola = h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
+    const el = $v('visaoSaudacao');
+    if (el) el.textContent = ola;
+    const rel = $v('visaoRelogio');
+    if (rel) {
+      rel.textContent = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      rel.title = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
+    }
+  }
+
+  window.renderVisaoGeral = renderVisaoGeral;
+  window.renderVisaoOla = renderOla;
+
+  // Entra no ciclo de render existente sem alterar a ordem das outras abas.
+  const renderAllOriginal = window.__renderAllHook || null;
+  document.addEventListener('DOMContentLoaded', () => {
+    renderOla();
+    setTimeout(() => { renderOla(); renderVisaoGeral(); }, 400);
+    setInterval(renderOla, 30000);
+  });
+  // Atualiza sempre que o switchTab ativar a aba (barato: só leitura de estado).
+  const switchOriginal = window.switchTab;
+  if (typeof switchOriginal === 'function') {
+    window.switchTab = function switchTabComVisao(id) {
+      const r = switchOriginal.apply(this, arguments);
+      if (!id || id === 'dashboard') setTimeout(renderVisaoGeral, 60);
+      return r;
+    };
+  }
+})();
 
 // ======================== ABA 1: CONEXÃO, FUNIL & DISPARADOR ATIVO ========================
 
@@ -2269,7 +2539,12 @@ function renderStatsAndLogs() {
   logsBox.innerHTML = state.logs
     .slice(0, 45)
     .map((l) => {
-      const time = new Date(l.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      // aceita timestamp, at ou qualquer data legível (o log do motor já veio com 'at')
+      const bruto = l.timestamp ?? l.at ?? l.createdAt ?? l.date;
+      const data = bruto ? new Date(bruto) : null;
+      const time = data && !Number.isNaN(data.getTime())
+        ? data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+        : '';
       const cls = l.type === 'alert' ? 'alert' : l.type === 'error' ? 'error' : '';
       return `
         <div class="log-row ${cls}">

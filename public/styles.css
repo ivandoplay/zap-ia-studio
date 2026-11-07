@@ -5141,3 +5141,268 @@ label:has(input[type="checkbox"]) {
   .crm-filter-field { display: grid; grid-template-columns: 68px minmax(0, 1fr); align-items: center; }
   .crm-inbox-composer { padding-inline: 8px; }
 }
+
+
+/* ==========================================================================
+   VISÃO GERAL — tela inicial operacional (rede de números + controle rápido)
+   Referências de padrão: Tremor ("mostre o dado, esconda o cromo"),
+   alert tiles com contador + link direto e action header.
+   ========================================================================== */
+.visao-topo { align-items: center; }
+.visao-ola-linha { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.visao-ola-titulo {
+  font-size: 25px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+.visao-relogio {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 9px;
+}
+.visao-ola-sub { margin: 5px 0 0; font-size: 13px; color: var(--text-secondary); }
+
+/* ---- KPIs ---- */
+.visao-kpis {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.visao-kpi {
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 12px 13px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 160ms var(--ease-out), transform 160ms var(--ease-out),
+    background 160ms var(--ease-out);
+}
+.visao-kpi:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-card-subtle);
+  transform: translateY(-1px);
+}
+.visao-kpi:focus-visible { outline: 2px solid var(--accent-border); outline-offset: 2px; }
+.visao-kpi-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.visao-kpi-icone {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+.visao-kpi-icone.atencao {
+  background: var(--warning-soft);
+  border-color: rgba(245, 158, 11, 0.32);
+  color: var(--warning);
+}
+.visao-kpi-icone.ia,
+.visao-kpi-icone.conexao {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent-bright);
+}
+.visao-kpi-icone.campanha,
+.visao-kpi-icone.mensagem,
+.visao-kpi-icone.fila { color: var(--info, #38bdf8); }
+.visao-kpi-num { font-size: 29px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.visao-kpi-num--texto {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
+}
+.visao-kpi-rotulo { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.visao-kpi-pe {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.visao-tendencia {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--bg-card-subtle);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.visao-tendencia.sobe { color: var(--accent-bright); background: var(--accent-soft); }
+.visao-tendencia.cai { color: #f87171; background: rgba(239, 68, 68, 0.12); }
+.visao-tendencia.atencao { color: var(--warning); background: var(--warning-soft); }
+
+/* ---- Faixa de atenção ---- */
+.visao-atencao {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 9px;
+  margin-bottom: 14px;
+}
+.visao-atencao:empty { display: none; }
+.visao-alerta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms var(--ease-out), background 160ms var(--ease-out);
+}
+.visao-alerta:hover { border-color: var(--border-strong); }
+.visao-alerta-num {
+  font-size: 19px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  min-width: 26px;
+  text-align: center;
+  line-height: 1.1;
+}
+.visao-alerta-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.visao-alerta-txt strong { font-size: 12.5px; font-weight: 700; }
+.visao-alerta-txt small {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.visao-alerta.critico {
+  border-color: rgba(239, 68, 68, 0.34);
+  background: rgba(239, 68, 68, 0.08);
+}
+.visao-alerta.critico .visao-alerta-num { color: #f87171; }
+.visao-alerta.aviso {
+  border-color: rgba(245, 158, 11, 0.34);
+  background: var(--warning-soft);
+}
+.visao-alerta.aviso .visao-alerta-num { color: var(--warning); }
+.visao-alerta.ok { border-color: var(--accent-border); background: var(--accent-soft); }
+.visao-alerta.ok .visao-alerta-num { color: var(--accent-bright); }
+
+/* ---- Grade principal: duas colunas de verdade ---- */
+.visao-grade {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+.visao-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.visao-funil {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  box-shadow: none;
+}
+#funnelSummaryBar.visao-funil:empty::after {
+  content: "Sem contatos no funil ainda — o gráfico aparece assim que o primeiro contato entrar.";
+  display: block;
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 10px 2px;
+}
+.visao-chaves { display: flex; flex-direction: column; margin-top: 2px; }
+.visao-chave {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+}
+.visao-chave:last-child { border-bottom: 0; }
+.visao-chave-txt { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.visao-chave-txt strong { font-size: 12.5px; font-weight: 600; }
+.visao-chave-txt small {
+  font-size: 11px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.visao-controle-selo {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.visao-controle-pe {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.visao-fila-resumo { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+.visao-col--direita .visao-atividade { flex: 1 1 auto; min-height: 320px; }
+.visao-atividade { display: flex; flex-direction: column; }
+.visao-atividade .visao-log { flex: 1 1 auto; overflow-y: auto; min-height: 180px; }
+.visao-conexao .status-stage { min-height: 150px; padding: 18px 16px; }
+.visao-conexao .pairing-section { padding: 14px 16px; }
+
+/* a coluna da direita pode ser mais curta que a da esquerda: quem sobe é a conexão */
+.visao-col--direita { justify-content: flex-start; height: 100%; }
+.visao-col--direita .visao-atividade { flex: 1 1 auto; }
+.visao-conexao { margin-bottom: 0; }
+
+@media (max-width: 1500px) {
+  .visao-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 1100px) {
+  .visao-grade { grid-template-columns: minmax(0, 1fr); }
+  .visao-log { max-height: 260px; }
+}
+@media (max-width: 700px) {
+  .visao-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .visao-ola-titulo { font-size: 21px; }
+  .visao-kpi-num { font-size: 25px; }
+  .visao-fila-resumo { margin-left: 0; }
+}

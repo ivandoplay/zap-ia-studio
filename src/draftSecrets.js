@@ -10,9 +10,22 @@ import { createSecurityPinProtector } from './security-settings/pin.js';
 
 const fail = message => Object.assign(new Error(message), { status: 503 });
 
+// Ordem de preferência: chave dedicada; sem ela, deriva da chave de serviço do próprio
+// projeto (já é segredo de servidor, nunca chega ao navegador). A origem fica registrada
+// para o diagnóstico dizer de onde veio o cofre — sem imprimir segredo.
+export function vaultKeySource(env = process.env) {
+  if (String(env.AI_DRAFT_VAULT_KEY || '').trim()) return 'AI_DRAFT_VAULT_KEY';
+  if (String(env.SUPABASE_SERVICE_ROLE_KEY || '').trim()) return 'SUPABASE_SERVICE_ROLE_KEY';
+  return null;
+}
 export function vaultKeyFromEnv(env = process.env) {
   const raw = String(env.AI_DRAFT_VAULT_KEY || '').trim();
-  if (!raw) return null;
+  if (!raw) {
+    const fallback = String(env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+    if (!fallback) return null;
+    // Derivação com rótulo próprio: não reaproveita bytes do JWT diretamente.
+    return createHash('sha256').update(`ienvia-vault-root-v1:${fallback}`).digest();
+  }
   if (/^[a-f0-9]{64}$/i.test(raw)) return Buffer.from(raw, 'hex');
   try {
     const buf = Buffer.from(raw, 'base64');
@@ -32,6 +45,7 @@ export function createDraftSecrets(env = process.env) {
   const pinProtector = key ? createSecurityPinProtector({ key: derive(key, 'pin') }) : null;
   return {
     available: Boolean(key),
+    keySource: key ? vaultKeySource(env) : null,
     vault,
     pinProtector,
     requireVault() {

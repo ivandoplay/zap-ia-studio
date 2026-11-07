@@ -212,18 +212,13 @@ app.get(['/painel', '/app'], (_req, res) => {
   res.setHeader('Cache-Control', 'no-cache');
   res.sendFile(path.join(ROOT_DIR, 'public', 'painel.html'));
 });
-app.get(['/visao-geral', '/visao-geral/'], (_req, res) => {
-  res.setHeader('Cache-Control', 'no-cache');
-  res.sendFile(path.join(ROOT_DIR, 'public', 'v2', 'index.html'));
-});
-// ── PAINEL NOVO (v2): CONGELADO ───────────────────────────────────────────────
-// Decisão do titular (07/11/2026): seguir com o painel antigo (`/painel.html`) e remover o v2
-// depois, de uma vez, incluindo o que foi criado no banco. As telas do v2 deixam de ser
-// servidas e mandam para o painel antigo; o código continua no repositório, inerte.
-// Páginas separadas do painel antigo (geradas por scripts/gerar-paginas-painel.mjs a partir de
-// painel.html). Cada aba tem URL própria e o app abre a página certa por window.IENVIA_PAGINA.
-// Ordem de atendimento das páginas do painel antigo. Cada aba tem URL própria e o app
-// abre a página certa por window.IENVIA_PAGINA (definido no HTML gerado).
+// ── PÁGINAS DO PAINEL ANTIGO ─────────────────────────────────────────────────
+// Decisão do titular (07/11/2026): o painel é o antigo (`/painel.html`). O v2 foi congelado
+// e as telas dele saíram do ar — nenhuma rota serve mais `public/v2` como página.
+// Cada aba do painel antigo tem URL própria, gerada por scripts/gerar-paginas-painel.mjs a
+// partir de painel.html; `window.IENVIA_PAGINA` (injetado no HTML gerado) diz ao app.js qual
+// abrir, e o hash (#crm) continua tendo prioridade para não quebrar link antigo.
+// Apelidos de rota que já circularam (alguns vieram do v2) caem todos na página certa.
 const PAGINAS_PAINEL = {
   '/visao-geral': 'visao-geral',
   '/configuracoes': 'seguranca',
@@ -258,6 +253,13 @@ if (!IS_VERCEL) {
     res.sendFile(path.join(ROOT_DIR, 'public', 'painel.html'));
   });
 }
+// Apelidos de rota do painel: sempre 302 para a página do painel antigo correspondente.
+// Só entram os apelidos — as rotas que TÊM página gerada (`/visao-geral/`, `/contas/`...)
+// ficam de fora, senão redirecionariam para si mesmas em loop. Fica antes do static.
+const rotasSoApelido = Object.keys(PAGINAS_PAINEL)
+  .filter(rota => `/${PAGINAS_PAINEL[rota]}` !== rota);
+app.get(rotasSoApelido, v2ParaPainelAntigo);
+
 app.use(
   express.static(path.join(ROOT_DIR, 'public'), {
     etag: true,

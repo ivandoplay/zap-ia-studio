@@ -22,12 +22,28 @@
   ],
   "rewrites": [
     {
+      "source": "/visao-geral",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/visao-geral/",
+      "destination": "/api/index.js"
+    },
+    {
       "source": "/contas",
-      "destination": "/v2/accounts.html"
+      "destination": "/api/index.js"
     },
     {
       "source": "/contas/",
-      "destination": "/v2/accounts.html"
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/conexoes",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/conexoes/",
+      "destination": "/api/index.js"
     },
     {
       "source": "/configuracoes",
@@ -116,22 +132,6 @@
     {
       "source": "/canais/",
       "destination": "/api/index.js"
-    },
-    {
-      "source": "/conexoes",
-      "destination": "/v2/connections.html"
-    },
-    {
-      "source": "/conexoes/",
-      "destination": "/v2/connections.html"
-    },
-    {
-      "source": "/visao-geral",
-      "destination": "/v2/index.html"
-    },
-    {
-      "source": "/visao-geral/",
-      "destination": "/v2/index.html"
     },
     {
       "source": "/painel",

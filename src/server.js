@@ -1370,15 +1370,31 @@ app.get('/api/crm/contact-directory', async (req, res) => {
       if (contact?.chatId) contactsById.set(contact.chatId, contact);
     }
 
+    // A MESMA pessoa aparece como LID (@lid) e como número (@s.whatsapp.net); se o telefone
+    // dela já está na agenda, a linha LID não é um contato novo — é a mesma pessoa. Medido em
+    // produção: 30 linhas repetidas assim no Chip 1 (ex.: 263762531643591@lid + 558681638438).
+    const phonesBySlot = new Map();
+    for (const rawContact of [...saved, ...imported]) {
+      const contacto = normalizeDirectoryContact(rawContact);
+      const slot = contacto.slotId || String(contacto.chatId).match(/^(slot_[1-3])::/i)?.[1] || 'slot_1';
+      if (!isLikelyRealPhone(contacto.phone)) continue;
+      if (!phonesBySlot.has(slot)) phonesBySlot.set(slot, new Set());
+      phonesBySlot.get(slot).add(normalizePhoneDigits(contacto.phone));
+    }
+    const aliasLidDoTelefone = (contacto, slot) => {
+      if (!/@lid$/i.test(String(contacto.chatId))) return false;
+      return phonesBySlot.get(slot)?.has(normalizePhoneDigits(contacto.phone)) === true;
+    };
+
     const seenBySlot = new Set();
     let hiddenUnnamed = 0;
     let invalidIds = 0;
     let duplicateIds = 0;
     for (const rawContact of saved) {
-      const contact = normalizeDirectoryContact(rawContact);
-      const normalized = normalizeDirectoryChatId(contact);
+      const contacto = normalizeDirectoryContact(rawContact);
+      const normalized = normalizeDirectoryChatId(contacto);
       if (!normalized) continue;
-      const slotId = contact.slotId || String(contact.chatId).match(/^(slot_[1-3])::/i)?.[1] || 'slot_1';
+      const slotId = contacto.slotId || String(contacto.chatId).match(/^(slot_[1-3])::/i)?.[1] || 'slot_1';
       seenBySlot.add(`${slotId}|${normalized}`);
     }
     for (const rawContact of imported) {
@@ -1389,6 +1405,10 @@ app.get('/api/crm/contact-directory', async (req, res) => {
         continue;
       }
       const slotId = contact.slotId || String(contact.chatId).match(/^(slot_[1-3])::/i)?.[1] || 'slot_1';
+      if (aliasLidDoTelefone(contact, slotId)) {
+        duplicateIds += 1;
+        continue;
+      }
       const dedupeKey = `${slotId}|${normalized}`;
       if (contactsById.has(contact.chatId)) {
         const existing = normalizeDirectoryContact(contactsById.get(contact.chatId));

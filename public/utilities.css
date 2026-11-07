@@ -104,6 +104,8 @@
 /* -------------------------------------------------------------- componentes */
 /* Linha de ações no cabeçalho de página: era `display:flex; gap:10px; wrap`. */
 .u-acoes { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.u-acoes-8 { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.u-acoes-8--max-460 { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; width: 100%; max-width: 460px; }
 .u-acoes-fim { display: flex; gap: 10px; justify-content: flex-end; align-items: center; }
 .u-acoes-full { display: flex; gap: 10px; width: 100%; justify-content: center; align-items: center; }
 
@@ -356,3 +358,219 @@ p.u-text-md { font-size: 13px; line-height: 1.5; }
 .empty-state p.u-espaco-topo-6,
 p.u-espaco-topo-6 { margin-top: 6px; }
 .empty-state p.u-espaco-topo-6 { margin-bottom: 0; }
+
+/* ------------------------------------------------------------ aba CONTAS */
+/* Larguras de janela de modal. */
+.u-max-440 { max-width: 440px; }
+.u-max-460 { max-width: 460px; }
+.u-max-500 { max-width: 500px; }
+.u-max-510 { max-width: 510px; }
+.u-max-540 { max-width: 540px; }
+.u-max-580 { max-width: 580px; }
+.u-max-600 { max-width: 600px; }
+.u-max-610 { max-width: 610px; }
+.u-max-620 { max-width: 620px; }
+.u-max-680 { max-width: 680px; }
+.u-max-920 { max-width: 920px; }
+
+/* Alturas fixas (editor e prévia de arquivo). */
+.u-alto-36 { width: 100%; height: 36px; }
+.u-alto-490 { height: 490px; }
+
+/* Caixas com rolagem própria. */
+.u-rolagem-160 { max-height: 160px; overflow-y: auto; }
+.u-rolagem-220 { max-height: 220px; overflow-y: auto; }
+.u-rolagem-260 { max-height: 260px; overflow-y: auto; }
+.u-rolagem-280 { max-height: 280px; overflow-y: auto; }
+.u-rolagem-300 { max-height: 300px; overflow-y: auto; }
+.u-rolagem-440 { max-height: 440px; overflow-y: auto; }
+.u-rolagem-500 { max-height: 500px; overflow-y: auto; }
+
+/* Linha com ícone + texto. */
+.u-inline-flex-9 { display: inline-flex; align-items: center; gap: 9px; }
+
+/* Grade que se adapta à largura disponível. */
+.u-grade-auto-230 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+/* Caixa de texto e blocos de conteúdo da ficha da conta. */
+.u-painel-caixa {
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 12px;
+}
+.u-painel-caixa--topo { margin-bottom: 14px; }
+.u-painel-caixa--borda-10 { border-radius: 10px; }
+.u-pre-rolagem {
+  white-space: pre-wrap;
+  font-size: 12.5px;
+  color: var(--text-main);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+}
+.u-pre-rolagem--curto { padding: 10px; font-size: 11.5px; max-height: 160px; }
+.u-item-caixa {
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  min-height: 50px;
+}
+.u-legenda-caixa {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 11px;
+}
+.u-rolagem-caixa {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.u-lista-rolagem { margin: 6px 0 0 18px; display: flex; flex-direction: column; gap: 4px; }
+
+/* Avisos e notas em destaque (verde = ok, azul = informação). */
+.u-aviso-suave {
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+.u-aviso-suave--ok {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+.u-aviso-suave--info {
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.28);
+}
+.u-realce-codigo {
+  display: block;
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.28);
+  border-radius: 6px;
+}
+.u-nota-lateral {
+  background: var(--bg-card-subtle);
+  border-left: 3px solid var(--accent);
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  max-height: 70px;
+  overflow: hidden;
+}
+.u-rodape-secao {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.u-rodape-secao--coluna {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.u-rodape-secao--espaco { margin-top: 16px; }
+.u-caixa-vazia-texto {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.u-menu-fixo { display: none; position: fixed; z-index: 999; min-width: 220px; }
+.u-menu-fixo.u-aberto { display: block; }
+
+/* Complementos da aba CONTAS (mesma familia das anteriores). */
+.u-max-100 { max-width: 100%; }
+.u-mb-2 { margin-bottom: 2px; }
+.u-mb-4 { margin-bottom: 4px; }
+.u-mt-16 { margin-top: 16px; }
+.u-acoes-topo-4 { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+.u-acoes-topo-16 { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.u-acoes-linha { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.u-acoes-entre-8 { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.u-acoes-entre-wrap { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.u-acoes-entre-topo { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.u-cabecalho-fio {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.u-campo-130 { flex: 1; min-width: 130px; font-size: 12px; }
+.u-campo-160 { flex: 1; min-width: 160px; }
+.u-campo-145 { width: auto; min-width: 145px; font-size: 12.5px; padding: 7px 10px; }
+.u-botao-xs { min-height: 28px; padding: 3px 10px; }
+.u-botao-32 { min-height: 32px; padding: 4px 9px; }
+.u-acoes-max-460 { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; width: 100%; max-width: 460px; }
+.u-selo-topo { color: var(--text-main); display: block; margin-bottom: 4px; }
+.u-selo-topo--8 { font-size: 13px; display: block; margin-bottom: 8px; }
+.u-titulo-conta { font-size: 14.5px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.u-caixa-clicavel { min-height: 32px; padding: 4px 9px; cursor: pointer; }
+.u-faixa-aviso {
+  display: none;
+  margin-bottom: 16px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.u-faixa-aviso.u-aberto { display: block; }
+.u-aviso-inline {
+  display: none;
+  margin-top: 10px;
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+.u-aviso-inline.u-aberto { display: block; }
+.u-seletor-cor { width: 42px; height: 38px; padding: 2px; border-radius: 8px; cursor: pointer; }
+.u-link-forte { font-size: 12px; font-weight: 700; color: var(--accent-bright); cursor: pointer; margin-bottom: 8px; }
+.u-painel-caixa--solta { background: var(--bg-card-subtle); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+.u-sem-linha { text-decoration: none; }
+.u-mt-0 { margin-top: 0; }
+.u-acoes-topo { display: flex; justify-content: flex-end; gap: 10px; }
+.u-acoes-fim-8 { display: flex; justify-content: flex-end; gap: 8px; }
+.u-acoes-fina { display: flex; gap: 6px; }
+.u-acoes-entre-10 { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.u-acoes-entre-6-wrap { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-bottom: 6px; flex-wrap: wrap; }
+.u-titulo-14-5 { font-size: 14.5px; }
+.u-detalhes-resumo { cursor: pointer; font-weight: 700; font-size: 13px; color: var(--text-main); }
+.u-caixa-espaco { margin: 0 0 10px; }
+.u-menu-fixo { position: fixed; z-index: 999; min-width: 220px; }
+.u-faixa-aviso--topo { margin-bottom: 16px; background: var(--accent-soft); border: 1px solid var(--accent-border); border-radius: 12px; padding: 14px 16px; }
+.u-pre-caixa { white-space: pre-wrap; color: var(--text-main); background: var(--bg-input); padding: 10px; border-radius: 8px; border: 1px solid var(--border); }
+.u-grade-auto-min-230 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+.u-aviso-caixa { background: var(--bg-card-subtle); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+.u-pre-caixa-alto {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  padding: 14px;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  color: var(--text-main);
+}
+.u-text-main { color: var(--text-main); }
+.u-mt-6 { margin-top: 6px; }
+.u-mt-10 { margin-top: 10px; }

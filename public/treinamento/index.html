@@ -317,7 +317,7 @@
             <h1><svg class="icon-svg u-icon-lg u-icon-titulo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Central de Conexão & Monitoramento</h1>
             <p>Conecte seu WhatsApp, dispare abordagens ativas aprovadas e acompanhe todo o funil em tempo real.</p>
           </div>
-          <div class="u-acoes">
+          <div class="u-acoes-8">
             <button type="button" class="btn btn-secondary" onclick="downloadLatestMotorZip()" title="Baixar última versão do Motor Ienvia (.ZIP para Windows PC e Android Termux)">
               <svg class="icon-svg u-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
               <span>Baixar Motor (.ZIP)</span>
@@ -1893,29 +1893,29 @@
             <h1>Clientes SaaS &amp; Operações</h1>
             <p>Gerencie assinantes, acompanhe o progresso de ativação, acesse qualquer cliente em Modo Suporte em 1 clique e controle acessos manualmente.</p>
           </div>
-          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <div class="u-acoes-8">
             <button type="button" class="btn btn-secondary btn-sm" onclick="openSaasSalesUrl()">
-              <svg class="icon-svg" style="width:14px; height:14px;" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+              <svg class="icon-svg u-icon-sm"  viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
               <span>Vitrine Principal 3D</span>
             </button>
             <button type="button" id="btnRefreshManagedUsers" class="btn btn-secondary btn-sm">Atualizar</button>
             <button type="button" id="btnOpenCreateClientModal" class="btn btn-primary btn-sm" onclick="document.getElementById('createClientModal')?.classList.add('open')">
-              <svg class="icon-svg" style="width:15px; height:15px;" viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+              <svg class="icon-svg u-icon"  viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
               <span>Novo Cliente</span>
             </button>
           </div>
         </div>
 
         <!-- Kit de Boas-Vindas Recém-Gerado (Destaque Imediato no Topo) -->
-        <div id="welcomeKitCreatedBox" style="display:none; margin-bottom:16px; background:var(--accent-soft); border:1px solid var(--accent-border); border-radius:12px; padding:14px 16px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
-            <strong style="font-size:13px; color:var(--accent-bright);">Kit de Acesso Pronto para Enviar ao Cliente</strong>
-            <div style="display:flex; gap:6px;">
+        <div id="welcomeKitCreatedBox" class="u-none u-faixa-aviso--topo">
+          <div class="u-acoes-entre-10 u-acoes-entre-wrap u-mb-8">
+            <strong class="u-text-md u-text-accent">Kit de Acesso Pronto para Enviar ao Cliente</strong>
+            <div class="u-acoes-fina">
               <button type="button" id="btnCopyWelcomeKit" class="btn btn-primary btn-sm">Copiar Mensagem</button>
               <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('welcomeKitCreatedBox').style.display='none'">Fechar</button>
             </div>
           </div>
-          <pre id="welcomeKitPreviewText" style="white-space:pre-wrap; font-size:11.5px; color:var(--text-main); background:var(--bg-input); padding:10px; border-radius:8px; border:1px solid var(--border); max-height:160px; overflow-y:auto;"></pre>
+          <pre id="welcomeKitPreviewText" class="u-pre-caixa u-text-xs u-rolagem-160"></pre>
         </div>
 
         <!-- KPIs EXECUTIVOS DO SEU SAAS -->
@@ -1923,14 +1923,14 @@
 
         <!-- LISTA DE CONTAS CADASTRADAS COM FILTROS E BUSCA (ACIMA DA DOBRA!) -->
         <div class="panel">
-          <div class="panel-header" style="margin-bottom:14px;">
+          <div class="panel-header u-mb-14">
             <div>
               <h2 class="panel-title">Carteira de Clientes da Plataforma</h2>
-              <p class="panel-desc" style="margin-bottom:0;">Entre em Modo Suporte em 1 clique, copie o Kit de Acesso, edite notas financeiras ou bloqueie/libere contas.</p>
+              <p class="panel-desc u-mb-0">Entre em Modo Suporte em 1 clique, copie o Kit de Acesso, edite notas financeiras ou bloqueie/libere contas.</p>
             </div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; width:100%; max-width:460px;">
-              <input type="text" id="masterUserSearchInput" placeholder="Buscar cliente, @usuario ou nota..." style="flex:1; min-width:160px;" aria-label="Buscar conta de cliente por nome, usuário ou nota" />
-              <select id="masterUserFilterSelect" style="width:auto; min-width:145px; font-size:12.5px; padding:7px 10px;" aria-label="Filtrar contas de clientes por status">
+            <div class="u-acoes-8--max-460">
+              <input type="text" id="masterUserSearchInput" placeholder="Buscar cliente, @usuario ou nota..."  aria-label="Buscar conta de cliente por nome, usuário ou nota" class="u-campo-160" />
+              <select id="masterUserFilterSelect"  aria-label="Filtrar contas de clientes por status" class="u-campo-145">
                 <option value="all">Todas as contas</option>
                 <option value="active">Somente Ativas</option>
                 <option value="online">Motor Online Agora</option>
@@ -1947,70 +1947,70 @@
         <!-- Guia Operacional Recolhível (Progressive Disclosure) -->
         <details class="pro-accordion">
           <summary>Guia Rápido: Como entregar contas vendidas e operar o Modo Suporte</summary>
-          <div class="pro-accordion-body" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:12px; font-size:12.5px; color:var(--text-secondary);">
-            <div style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:9px; padding:12px;">
-              <strong style="color:var(--text-main); display:block; margin-bottom:4px;">1. Cadastro + Kit Automático</strong>
+          <div class="pro-accordion-body u-grade-auto-min-230 u-gap-12 u-text-breve u-text-secondary">
+            <div class="u-painel-caixa">
+              <strong class="u-selo-topo">1. Cadastro + Kit Automático</strong>
               Clique em <strong>Novo Cliente</strong> acima. O sistema cria o workspace isolado por RLS e gera a mensagem pronta para você colar no WhatsApp do comprador.
             </div>
-            <div style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:9px; padding:12px;">
-              <strong style="color:var(--text-main); display:block; margin-bottom:4px;">2. Chave IA Própria (Custo R$ 0 p/ você)</strong>
+            <div class="u-painel-caixa">
+              <strong class="u-selo-topo">2. Chave IA Própria (Custo R$ 0 p/ você)</strong>
               Ao entrar, o cliente segue o Checklist guiado para colar a própria chave gratuita do Google AI Studio, preencher o negócio e parear o WhatsApp.
             </div>
-            <div style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:9px; padding:12px;">
-              <strong style="color:var(--text-main); display:block; margin-bottom:4px;">3. Modo Suporte em 1 Clique</strong>
+            <div class="u-painel-caixa">
+              <strong class="u-selo-topo">3. Modo Suporte em 1 Clique</strong>
               Precisa ajudar na configuração? Clique em <strong>Acessar Painel</strong> no card do cliente para ajustar o treinamento dele sem precisar pedir senha.
             </div>
           </div>
         </details>
 
         <!-- CENTRAL COMERCIAL & PLAYBOOK DE CRESCIMENTO SAAS (EXCLUSIVA ADMIN MASTER) -->
-        <div class="panel saas-growth-hub" style="margin-top:16px;">
-          <div class="panel-header" style="margin-bottom:12px;">
+        <div class="panel saas-growth-hub u-mt-16">
+          <div class="panel-header u-mb-12">
             <div>
               <h2 class="panel-title">Central Comercial &amp; Playbook de Vendas do seu SaaS</h2>
-              <p class="panel-desc" style="margin-top:3px;">
+              <p class="panel-desc u-mt-3">
                 Personalize sua Página Principal 3D na raiz do domínio (sem sub-rotas), copie scripts prontos de fechamento e escale assinaturas recorrentes.
               </p>
             </div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <div class="u-acoes-wrap">
               <button type="button" class="btn btn-secondary btn-sm" onclick="openSaasSalesUrl()">Abrir Página Principal</button>
               <button type="button" class="btn btn-primary btn-sm" onclick="copySaasSalesUrl()">Copiar Link Oficial</button>
             </div>
           </div>
 
           <div class="saas-url-builder">
-            <div class="form-group" style="margin:0;">
+            <div class="form-group u-m-0">
               <label class="form-label" for="salesPageCloserPhone">WhatsApp de Fechamento</label>
               <input type="text" id="salesPageCloserPhone" value="558681303979" placeholder="Ex: 5586999998888" inputmode="numeric" />
             </div>
-            <div class="form-group" style="margin:0;">
+            <div class="form-group u-m-0">
               <label class="form-label" for="salesPrice1">1 Chip (R$/mês)</label>
               <input type="number" id="salesPrice1" value="147" min="1" max="9999" />
             </div>
-            <div class="form-group" style="margin:0;">
+            <div class="form-group u-m-0">
               <label class="form-label" for="salesPrice2">2 Chips (R$/mês)</label>
               <input type="number" id="salesPrice2" value="247" min="1" max="9999" />
             </div>
-            <div class="form-group" style="margin:0;">
+            <div class="form-group u-m-0">
               <label class="form-label" for="salesPrice3">3 Chips (R$/mês)</label>
               <input type="number" id="salesPrice3" value="347" min="1" max="9999" />
             </div>
           </div>
 
           <div class="saas-url-preview-bar">
-            <code id="salesPageGeneratedUrl" style="font-size:12px; color:var(--accent-bright); word-break:break-all;">https://zap-ia-studio.vercel.app</code>
+            <code id="salesPageGeneratedUrl" class="u-text-sm u-text-accent u-break">https://zap-ia-studio.vercel.app</code>
           </div>
 
-          <div style="margin-top:16px;">
-            <strong style="font-size:13px; display:block; margin-bottom:8px;">Scripts Comerciais Prontos (Copy de Conversão Direta no WhatsApp)</strong>
+          <div class="u-mt-16">
+            <strong class="u-selo-topo--8">Scripts Comerciais Prontos (Copy de Conversão Direta no WhatsApp)</strong>
             <div id="saasPlaybookScriptsGrid" class="sales-scripts-grid"></div>
           </div>
 
-          <details style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px;">
-            <summary style="cursor:pointer; font-weight:700; font-size:13px; color:var(--text-main);">
+          <details class="u-rodape-secao u-rodape-secao--espaco">
+            <summary class="u-cursor-pointer u-bold u-text-md u-text-main">
               5 Alavancas Práticas para Escalar Assinaturas Mensais (Playbook de Aquisição)
             </summary>
-            <div class="growth-lever-grid" style="margin-top:12px;">
+            <div class="growth-lever-grid u-mt-12">
               <div class="growth-lever-card">
                 <strong>1. Auditoria Noturna "Cliente Oculto" (20h30–22h)</strong>
                 <p>Mande mensagem para 15 clínicas ou lojas da sua cidade após as 20h30 perguntando preço. No dia seguinte, mostre ao dono quantas horas levou para responderem e envie sua página principal interativa.</p>
@@ -2048,7 +2048,7 @@
     <button type="button" class="mob-nav-btn" data-mobhub="crm" data-mobtab="crm" aria-label="Conversas do CRM">
       <svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
       <span>Conversas</span>
-      <span id="mobCrmBadge" class="mob-badge" style="display:none;">0</span>
+      <span id="mobCrmBadge" class="mob-badge u-none">0</span>
     </button>
 
     <button type="button" class="mob-nav-btn" data-mobhub="cerebro" data-mobtab="treinamento" aria-label="Atendente, treinamento">
@@ -2061,7 +2061,7 @@
       <span>Ajustes</span>
     </button>
 
-    <button type="button" id="mobMasterUsersBtn" class="mob-nav-btn" data-mobhub="contas" data-mobtab="contas" aria-label="Clientes SaaS" style="display:none;">
+    <button type="button" id="mobMasterUsersBtn" class="mob-nav-btn u-none" data-mobhub="contas" data-mobtab="contas" aria-label="Clientes SaaS">
       <svg class="icon-svg" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
       <span>Clientes</span>
     </button>
@@ -2075,74 +2075,74 @@
   <!-- POPOVER / BOTTOM SHEET: CONTA, TEMA, SOM & PREFERÊNCIAS -->
   <div id="accountSheet" class="action-sheet-backdrop" role="dialog" aria-modal="true" aria-label="Conta e preferências">
     <div class="action-sheet-card">
-      <div style="display:flex; justify-content:space-between; align-items:center; padding-bottom:8px; border-bottom:1px solid var(--border);">
-        <div style="min-width:0;">
-          <strong id="accountSheetDisplayName" style="font-size:14.5px; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">Minha Conta</strong>
-          <span id="accountSheetRoleSub" style="font-size:11.5px; color:var(--text-secondary);">Workspace Isolado</span>
+      <div class="u-cabecalho-fio">
+        <div class="u-min-w-0">
+          <strong id="accountSheetDisplayName" class="u-titulo-conta">Minha Conta</strong>
+          <span id="accountSheetRoleSub" class="u-text-xs u-text-secondary">Workspace Isolado</span>
         </div>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('accountSheet')">Fechar</button>
       </div>
 
-      <div id="accountSheetWorkerLine" style="font-size:12px; color:var(--text-secondary); background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:8px; padding:8px 11px;">
+      <div id="accountSheetWorkerLine" class="u-legenda-caixa">
         Status do motor: verificando...
       </div>
 
       <button type="button" id="themeToggleBtn" class="sheet-item-btn">
-        <span style="display:inline-flex; align-items:center; gap:9px;">
+        <span class="u-inline-flex-9">
           <svg class="icon-svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path></svg>
           <span id="themeToggleLabel">Modo Claro</span>
         </span>
-        <span style="font-size:11px; color:var(--text-muted);">Alternar</span>
+        <span class="u-text-2xs u-text-muted">Alternar</span>
       </button>
 
       <button type="button" id="btnSoundToggle" class="sheet-item-btn">
-        <span style="display:inline-flex; align-items:center; gap:9px;">
+        <span class="u-inline-flex-9">
           <svg class="icon-svg" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
           <span id="soundToggleLabel">Som: Ativo</span>
         </span>
-        <span style="font-size:11px; color:var(--text-muted);">Alerta</span>
+        <span class="u-text-2xs u-text-muted">Alerta</span>
       </button>
 
       <button type="button" id="btnDesktopNotifyToggle" class="sheet-item-btn">
-        <span style="display:inline-flex; align-items:center; gap:9px;">
+        <span class="u-inline-flex-9">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
           <span id="desktopNotifyLabel">Notificações na Tela: Ativar</span>
         </span>
-        <span style="font-size:11px; color:var(--text-muted);">2º Plano</span>
+        <span class="u-text-2xs u-text-muted">2º Plano</span>
       </button>
 
       <button type="button" class="sheet-item-btn" onclick="closeModal('accountSheet'); document.getElementById('btnOpenBrandModal')?.click();">
-        <span style="display:inline-flex; align-items:center; gap:9px;">
+        <span class="u-inline-flex-9">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
           <span>Personalizar Nome &amp; Marca</span>
         </span>
       </button>
 
       <button type="button" id="btnOpenChangeMyPass" class="sheet-item-btn">
-        <span style="display:inline-flex; align-items:center; gap:9px;">
+        <span class="u-inline-flex-9">
           <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
           <span>Alterar Minha Senha</span>
         </span>
-        <span style="font-size:11px; color:var(--text-muted);">Segurança</span>
+        <span class="u-text-2xs u-text-muted">Segurança</span>
       </button>
 
       <button type="button" id="btnSheetDownloadMotor" class="sheet-item-btn" onclick="closeModal('accountSheet'); downloadLatestMotorZip();">
-        <span style="display:inline-flex; align-items:center; gap:9px;">
+        <span class="u-inline-flex-9">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           <span>Baixar Motor Atualizado (.ZIP)</span>
         </span>
-        <span id="sheetMotorVersionHint" style="font-size:11px; color:var(--accent-bright); font-weight:600; font-variant-numeric:tabular-nums;">v5.0.1</span>
+        <span id="sheetMotorVersionHint" class="u-text-2xs u-text-accent u-semi u-tabular">v5.0.1</span>
       </button>
 
-      <button type="button" id="btnInstallPwa" class="sheet-item-btn" style="display:none;">
-        <span style="display:inline-flex; align-items:center; gap:9px;">
+      <button type="button" id="btnInstallPwa" class="sheet-item-btn u-none">
+        <span class="u-inline-flex-9">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           <span>Instalar Aplicativo na Tela</span>
         </span>
       </button>
 
       <button type="button" id="btnCloudLogout" class="sheet-item-btn danger">
-        <span style="display:inline-flex; align-items:center; gap:9px;">
+        <span class="u-inline-flex-9">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
           <span>Sair desta Conta</span>
         </span>
@@ -2153,8 +2153,8 @@
   <!-- POPOVER / BOTTOM SHEET: FERRAMENTAS AVANÇADAS DO CRM (⋯) -->
   <div id="crmToolsSheet" class="action-sheet-backdrop" role="dialog" aria-modal="true" aria-label="Ferramentas da Central de Conversas">
     <div class="action-sheet-card">
-      <div style="display:flex; justify-content:space-between; align-items:center; padding-bottom:8px; border-bottom:1px solid var(--border);">
-        <strong style="font-size:14.5px;">Ferramentas &amp; Backup do CRM</strong>
+      <div class="u-cabecalho-fio">
+        <strong class="u-titulo-14-5">Ferramentas &amp; Backup do CRM</strong>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('crmToolsSheet')">Fechar</button>
       </div>
 
@@ -2174,12 +2174,12 @@
         <span>Baixar Backup Completo (.JSON)</span>
       </button>
 
-      <label for="restoreFullBackupInput" class="sheet-item-btn" style="cursor:pointer;">
+      <label for="restoreFullBackupInput" class="sheet-item-btn u-cursor-pointer">
         <span>Restaurar Backup (.JSON)</span>
       </label>
-      <input type="file" id="restoreFullBackupInput" accept=".json,application/json" style="display:none;" />
+      <input type="file" id="restoreFullBackupInput" accept=".json,application/json" class="u-none"  />
 
-      <a id="btnExportCrmCsv" href="/api/crm/export.csv" class="sheet-item-btn" style="text-decoration:none;" onclick="closeModal('crmToolsSheet')">
+      <a id="btnExportCrmCsv" href="/api/crm/export.csv" class="sheet-item-btn u-sem-linha"  onclick="closeModal('crmToolsSheet')">
         <span>Exportar Contatos em Planilha (.CSV)</span>
       </a>
     </div>
@@ -2188,40 +2188,40 @@
   <!-- MODAL: CADASTRAR NOVO CLIENTE SAAS (MASTER) -->
   <!-- MODAL: WIZARD CONECTAR NOVO NÚMERO (Local vs Nuvem) -->
   <div id="createClientModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="createClientModalTitle">
-    <div class="modal-dialog" style="max-width:540px;">
+    <div class="modal-dialog u-max-540">
       <div class="modal-head">
         <h3 id="createClientModalTitle" class="panel-title">Cadastrar Novo Cliente SaaS</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('createClientModal')">Fechar</button>
       </div>
-      <form id="createManagedUserForm" class="modal-body" style="display:flex; flex-direction:column; gap:12px;">
-        <p class="panel-desc" style="margin-bottom:2px;">
+      <form id="createManagedUserForm" class="modal-body u-dir-col u-gap-12">
+        <p class="panel-desc u-mb-2">
           A conta nasce 100% limpa, isolada por RLS e com guia passo a passo para o próprio cliente configurar sua chave IA.
         </p>
 
-        <div class="grid-equal" style="gap:10px;">
-          <div class="form-group" style="margin:0;">
+        <div class="grid-equal u-gap-10">
+          <div class="form-group u-m-0">
             <label class="form-label" for="newAccountDisplayName">Nome da Empresa / Cliente *</label>
             <input type="text" id="newAccountDisplayName" required placeholder="Ex: Clínica OdontoVida" />
           </div>
-          <div class="form-group" style="margin:0;">
+          <div class="form-group u-m-0">
             <label class="form-label" for="newAccountCustomerPhone">WhatsApp do Contratante</label>
             <input type="text" id="newAccountCustomerPhone" placeholder="Ex: 5586999887766" inputmode="tel" autocomplete="tel" />
           </div>
         </div>
 
-        <div class="grid-equal" style="gap:10px;">
-          <div class="form-group" style="margin:0;">
+        <div class="grid-equal u-gap-10">
+          <div class="form-group u-m-0">
             <label class="form-label" for="newAccountUsername">Usuário de Login *</label>
             <input type="text" id="newAccountUsername" required placeholder="Ex: odontovida" autocomplete="off" spellcheck="false" autocapitalize="none" autocorrect="off" />
           </div>
-          <div class="form-group" style="margin:0;">
+          <div class="form-group u-m-0">
             <label class="form-label" for="newAccountPassword">Senha Inicial *</label>
             <input type="text" id="newAccountPassword" required minlength="6" placeholder="Mínimo 6 caracteres" autocomplete="off" spellcheck="false" autocapitalize="none" autocorrect="off" />
           </div>
         </div>
 
-        <div class="grid-equal" style="gap:10px;">
-          <div class="form-group" style="margin:0;">
+        <div class="grid-equal u-gap-10">
+          <div class="form-group u-m-0">
             <label class="form-label" for="newAccountMaxWaSlots">Limite de Chips WhatsApp no Plano</label>
             <select id="newAccountMaxWaSlots">
               <option value="1" selected>1 Chip WhatsApp (Plano Padrão)</option>
@@ -2229,13 +2229,13 @@
               <option value="3">Até 3 Chips Simultâneos (Plano Pro)</option>
             </select>
           </div>
-          <div class="form-group" style="margin:0;">
+          <div class="form-group u-m-0">
             <label class="form-label" for="newAccountAdminNotes">Observações Comerciais (Só você vê)</label>
             <input type="text" id="newAccountAdminNotes" placeholder="Ex: Plano Mensal R$ 147 • Pago via PIX" />
           </div>
         </div>
 
-        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:4px;">
+        <div class="u-acoes-topo-4">
           <button type="button" class="btn btn-secondary" onclick="closeModal('createClientModal')">Cancelar</button>
           <button type="submit" id="btnCreateManagedUser" class="btn btn-primary">
             Criar Conta &amp; Gerar Kit
@@ -2250,7 +2250,7 @@
 
   <!-- MODAL: PERSONALIZAR MARCA / NOME DO SISTEMA (WHITE-LABEL) -->
   <div id="brandModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="brandModalTitle">
-    <div class="modal-dialog" style="max-width:480px;">
+    <div class="modal-dialog u-max-480">
       <div class="modal-head">
         <h3 id="brandModalTitle" class="panel-title">Personalizar Nome & Marca do Sistema</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('brandModal')">Fechar</button>
@@ -2264,7 +2264,7 @@
           <label class="form-label" for="brandSubtitleInput">Subtítulo abaixo do nome</label>
           <input type="text" id="brandSubtitleInput" placeholder="Ex: Atendente Universal" />
         </div>
-        <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <div class="u-acoes-topo">
           <button type="button" class="btn btn-secondary" onclick="closeModal('brandModal')">Cancelar</button>
           <button type="submit" class="btn btn-primary">Salvar Marca</button>
         </div>
@@ -2274,7 +2274,7 @@
 
   <!-- MODAL: BUSCA RÁPIDA GLOBAL (CTRL+K) -->
   <div id="cmdPaletteModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="cmdModalTitle">
-    <div class="modal-dialog" style="max-width:560px;">
+    <div class="modal-dialog u-max-560">
       <div class="modal-head">
         <h3 id="cmdModalTitle" class="panel-title">Busca Rápida Global (Ctrl+K)</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('cmdPaletteModal')">ESC</button>
@@ -2288,7 +2288,7 @@
 
   <!-- MODAL: ENSINAR / CORRIGIR RESPOSTA EM 1 CLIQUE (SIMULADOR) -->
   <div id="teachSimulatorModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="teachModalTitle">
-    <div class="modal-dialog" style="max-width:540px;">
+    <div class="modal-dialog u-max-540">
       <div class="modal-head">
         <h3 id="teachModalTitle" class="panel-title">Ensinar / Corrigir Resposta em 1 Clique</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('teachSimulatorModal')">Fechar</button>
@@ -2309,7 +2309,7 @@
             <option value="rule">Adicionar nas Regras de Ouro do perfil ativo</option>
           </select>
         </div>
-        <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <div class="u-acoes-topo">
           <button type="button" class="btn btn-secondary" onclick="closeModal('teachSimulatorModal')">Cancelar</button>
           <button type="submit" class="btn btn-primary">Salvar no Treinamento</button>
         </div>
@@ -2319,13 +2319,13 @@
 
   <!-- MODAL: EDITAR / CRIAR MENSAGEM APROVADA (M01–M13+) -->
   <div id="editPackMessageModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="editPackMsgTitle">
-    <div class="modal-dialog" style="max-width:560px;">
+    <div class="modal-dialog u-max-560">
       <div class="modal-head">
         <h3 id="editPackMsgTitle" class="panel-title">Editar Mensagem Aprovada</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('editPackMessageModal')">Fechar</button>
       </div>
       <form id="editPackMessageForm" class="modal-body">
-        <div class="grid-equal" style="gap:10px;">
+        <div class="grid-equal u-gap-10">
           <div class="form-group">
             <label class="form-label" for="packMsgId">Código (ex: M01, M14)</label>
             <input type="text" id="packMsgId" required placeholder="M14" spellcheck="false" autocapitalize="none" autocorrect="off" />
@@ -2339,7 +2339,7 @@
           <label class="form-label" for="packMsgText">Texto Aprovado (aceita {{nome}} no disparador)</label>
           <textarea id="packMsgText" rows="5" required></textarea>
         </div>
-        <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <div class="u-acoes-topo">
           <button type="button" class="btn btn-secondary" onclick="closeModal('editPackMessageModal')">Cancelar</button>
           <button type="submit" class="btn btn-primary">Salvar Mensagem</button>
         </div>
@@ -2349,13 +2349,13 @@
 
   <!-- MODAL: EDITAR / CRIAR SKILL NO PACOTE TURBO -->
   <div id="editPackSkillModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="editPackSkillTitle">
-    <div class="modal-dialog" style="max-width:600px;">
+    <div class="modal-dialog u-max-600">
       <div class="modal-head">
         <h3 id="editPackSkillTitle" class="panel-title">Criar / Editar Skill</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('editPackSkillModal')">Fechar</button>
       </div>
       <form id="editPackSkillForm" class="modal-body">
-        <div class="grid-equal" style="gap:10px;">
+        <div class="grid-equal u-gap-10">
           <div class="form-group">
             <label class="form-label" for="packSkillType">Categoria da Skill</label>
             <select id="packSkillType">
@@ -2380,7 +2380,7 @@
           <label class="form-label" for="packSkillExample">Orientação completa / Exemplo de resposta ideal</label>
           <textarea id="packSkillExample" rows="5" required placeholder="Descreva a conduta e um exemplo natural de resposta..."></textarea>
         </div>
-        <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <div class="u-acoes-topo">
           <button type="button" class="btn btn-secondary" onclick="closeModal('editPackSkillModal')">Cancelar</button>
           <button type="submit" class="btn btn-primary">Salvar Skill no Pacote</button>
         </div>
@@ -2390,7 +2390,7 @@
 
   <!-- MODAL: CADASTRAR / EDITAR ÁUDIO ESTRATÉGICO (3 CAMPOS + AUTO-TRANSCRIÇÃO IA) -->
   <div id="voiceLibraryModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="voiceModalTitle">
-    <div class="modal-dialog" style="max-width:610px;">
+    <div class="modal-dialog u-max-610">
       <div class="modal-head">
         <h3 id="voiceModalTitle" class="panel-title">Novo Áudio Estratégico (Voz Humana Real)</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeVoiceModal()">Fechar</button>
@@ -2401,14 +2401,14 @@
         <!-- CAMPO 1: O ÁUDIO -->
         <div class="form-group">
           <label class="form-label">1. Áudio na Voz Responsável (Convertido p/ OGG/Opus Nativo + Waveform 64b)</label>
-          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <div class="u-acoes-linha">
             <button type="button" id="btnVoiceModalRecord" class="btn btn-secondary">Gravar pelo Microfone</button>
-            <label for="voiceModalFileInput" class="btn btn-secondary" style="cursor:pointer;">Escolher Arquivo de Áudio</label>
-            <input type="file" id="voiceModalFileInput" accept="audio/*,.ogg,.opus,.mp3,.m4a,.wav,.webm" style="display:none;" />
-            <span id="voiceModalFileStatus" style="font-size:12px; color:var(--text-secondary);">Nenhum áudio selecionado</span>
+            <label for="voiceModalFileInput" class="btn btn-secondary u-cursor-pointer">Escolher Arquivo de Áudio</label>
+            <input type="file" id="voiceModalFileInput" accept="audio/*,.ogg,.opus,.mp3,.m4a,.wav,.webm" class="u-none"  />
+            <span id="voiceModalFileStatus" class="u-text-sm u-text-secondary">Nenhum áudio selecionado</span>
           </div>
-          <div id="voiceModalPreviewWrap" style="display:none; margin-top:10px; background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:8px; padding:10px;">
-            <audio id="voiceModalPreviewPlayer" controls style="width:100%; height:36px;"></audio>
+          <div id="voiceModalPreviewWrap" class="u-none u-mt-10 u-aviso-caixa">
+            <audio id="voiceModalPreviewPlayer" controls class="u-alto-36"></audio>
           </div>
           <div class="form-hint">Pode gravar agora ou enviar <code>.ogg</code>, <code>.opus</code>, <code>.mp3</code>, <code>.m4a</code> ou <code>.wav</code> — o sistema converte tudo automaticamente para o formato exato de gravação nativa do WhatsApp.</div>
         </div>
@@ -2419,7 +2419,7 @@
           <input type="text" id="voiceItemName" required placeholder="Ex: Explicação rápida — Como funciona a assessoria (Lojista sem tempo)" />
         </div>
 
-        <div class="grid-equal" style="gap:10px;">
+        <div class="grid-equal u-gap-10">
           <div class="form-group">
             <label class="form-label" for="voiceItemWhen">Quando usar (Gatilho / Contexto p/ a IA)</label>
             <input type="text" id="voiceItemWhen" placeholder="Ex: Quando pedir explicação por mensagem de como funciona" />
@@ -2442,9 +2442,9 @@
 
         <!-- CAMPO 3: TRANSCRIÇÃO DO ÁUDIO (+ BOTÃO TRANSCREVER COM IA) -->
         <div class="form-group">
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
-            <label class="form-label" for="voiceItemTranscription" style="margin-bottom:0;">3. Transcrição Fiel do Áudio *</label>
-            <button type="button" id="btnAutoTranscribeVoice" class="btn btn-secondary btn-sm" style="min-height:28px; padding:3px 10px;">
+          <div class="u-acoes-entre-6-wrap">
+            <label class="form-label u-mb-0" for="voiceItemTranscription">3. Transcrição Fiel do Áudio *</label>
+            <button type="button" id="btnAutoTranscribeVoice" class="btn btn-secondary btn-sm u-botao-xs">
               Transcrever Automaticamente com IA
             </button>
           </div>
@@ -2452,7 +2452,7 @@
           <div class="form-hint">A IA lê esta transcrição para encaixar o áudio na hora certa, responder detalhes extras sem repetir o que sua voz já diz e ter texto pronto se o cliente não puder ouvir áudio.</div>
         </div>
 
-        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
+        <div class="u-acoes-topo-16">
           <button type="button" class="btn btn-secondary" onclick="closeVoiceModal()">Cancelar</button>
           <button type="submit" id="btnSaveVoiceItem" class="btn btn-primary">Converter p/ Nativo WhatsApp & Salvar</button>
         </div>
@@ -2462,7 +2462,7 @@
 
   <!-- MODAL: ADICIONAR / EDITAR ITEM DO CATÁLOGO (ATÉ 5 MÍDIAS) -->
   <div id="catalogModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="catalogModalTitle">
-    <div class="modal-dialog" style="max-width:580px;">
+    <div class="modal-dialog u-max-580">
       <div class="modal-head">
         <h3 id="catalogModalTitle" class="panel-title">Item do Catálogo / Galeria de Mídias</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('catalogModal')">Fechar</button>
@@ -2473,7 +2473,7 @@
           <label class="form-label" for="catItemName">Nome do Produto, Veículo, Serviço ou Apresentação</label>
           <input type="text" id="catItemName" required placeholder="Ex: Apresentação Assessoria PDF ou Corolla XEi 2023" />
         </div>
-        <div class="grid-equal" style="gap:12px;">
+        <div class="grid-equal u-gap-12">
           <div class="form-group">
             <label class="form-label" for="catItemCategory">Categoria</label>
             <input type="text" id="catItemCategory" value="Produto" placeholder="Apresentação, Veículo, Serviço..." />
@@ -2497,7 +2497,7 @@
           <div class="form-hint">Se anexar áudio (.ogg/.mp3), o robô envia como Nota de Voz nativa ("Gravando áudio...") — ideal para a Skill S06!</div>
           <div id="catExistingMediaBox" class="thumb-mini-row"></div>
         </div>
-        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
+        <div class="u-acoes-topo-16">
           <button type="button" class="btn btn-secondary" onclick="closeModal('catalogModal')">Cancelar</button>
           <button type="submit" class="btn btn-primary">Salvar item no catálogo</button>
         </div>
@@ -2507,13 +2507,13 @@
 
   <!-- MODAL: DETALHES DO CLIENTE NO CRM & CHAT MANUAL RICO -->
   <div id="crmLeadModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="crmModalClientName">
-    <div class="modal-dialog" style="max-width:920px;">
+    <div class="modal-dialog u-max-920">
       <div class="modal-head">
         <div>
           <h3 id="crmModalClientName" class="panel-title">Cliente</h3>
-          <div id="crmModalClientPhone" style="font-size:12px; color:var(--text-secondary);"></div>
+          <div id="crmModalClientPhone" class="u-text-sm u-text-secondary"></div>
         </div>
-        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <div class="u-linha-wrap">
           <button type="button" id="btnToggleContactPause" class="btn btn-secondary btn-sm">Pausar IA</button>
           <button type="button" id="btnIgnoreFromCrm" class="btn btn-danger btn-sm">Ignorar (Pessoal)</button>
           <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('crmLeadModal')">Fechar</button>
@@ -2521,7 +2521,7 @@
       </div>
       <div class="modal-body">
         <div class="grid-2">
-          <div class="wa-frame" style="height:490px;">
+          <div class="wa-frame u-alto-490">
             <div id="crmChatHistory" class="wa-messages"></div>
 
             <!-- Barra de Atalhos Rápidos no Chat Manual do CRM -->
@@ -2535,10 +2535,10 @@
               <select id="crmQuickItemSelect" aria-label="Enviar item do catálogo">
                 <option value="">Enviar item catálogo...</option>
               </select>
-              <button type="button" id="btnCrmRecordAudio" class="btn btn-secondary btn-sm" style="min-height:32px; padding:4px 9px;" title="Gravar na hora e enviar Nota de Voz nativa (Skill S06)">Gravar Voz</button>
-              <label for="crmAudioFileInput" class="btn btn-secondary btn-sm" style="min-height:32px; padding:4px 9px; cursor:pointer;" title="Subir áudio avulso (.ogg/.mp3) como Nota de Voz">Subir Áudio</label>
-              <input type="file" id="crmAudioFileInput" accept="audio/*,.ogg,.opus,.mp3,.m4a,.wav,.webm" style="display:none;" />
-              <button type="button" id="btnCrmSendPix" class="btn btn-secondary btn-sm" style="min-height:32px; padding:4px 9px;">Enviar PIX</button>
+              <button type="button" id="btnCrmRecordAudio" class="btn btn-secondary btn-sm u-botao-32"  title="Gravar na hora e enviar Nota de Voz nativa (Skill S06)">Gravar Voz</button>
+              <label for="crmAudioFileInput" class="btn btn-secondary btn-sm u-cursor-pointer u-botao-32"  title="Subir áudio avulso (.ogg/.mp3) como Nota de Voz">Subir Áudio</label>
+              <input type="file" id="crmAudioFileInput" accept="audio/*,.ogg,.opus,.mp3,.m4a,.wav,.webm" class="u-none"  />
+              <button type="button" id="btnCrmSendPix" class="btn btn-secondary btn-sm u-botao-32">Enviar PIX</button>
             </div>
 
             <form id="crmManualSendForm" class="wa-composer">
@@ -2548,7 +2548,7 @@
           </div>
 
           <div>
-            <div class="grid-equal" style="gap:10px;">
+            <div class="grid-equal u-gap-10">
               <div class="form-group">
                 <label class="form-label" for="crmStageSelect">Etapa no Funil CRM</label>
                 <select id="crmStageSelect">
@@ -2561,18 +2561,18 @@
               <div class="form-group">
                 <label class="form-label" for="crmFollowUpInput">Retorno Agendado (Skill S19)</label>
                 <input type="datetime-local" id="crmFollowUpInput" />
-                <div class="form-hint" style="font-size:11px;">Você recebe lembrete no seu WhatsApp pessoal na hora marcada.</div>
+                <div class="form-hint u-text-2xs">Você recebe lembrete no seu WhatsApp pessoal na hora marcada.</div>
               </div>
             </div>
 
             <div class="form-group">
               <label class="form-label">Etiquetas Rápidas (Tags)</label>
-              <div id="crmTagsPicker" style="display:flex; gap:6px; flex-wrap:wrap;"></div>
+              <div id="crmTagsPicker" class="u-pilhas u-gap-6"></div>
             </div>
 
             <div class="form-group">
               <label class="form-label">Resumo gerado pela IA</label>
-              <div id="crmModalSummary" style="background:var(--bg-card-subtle); border:1px solid var(--border); padding:10px; border-radius:8px; font-size:12.5px; color:var(--text-secondary); min-height:50px;"></div>
+              <div id="crmModalSummary" class="u-item-caixa"></div>
             </div>
 
             <div class="form-group">
@@ -2580,7 +2580,7 @@
               <textarea id="crmModalNotes" rows="3" placeholder="Anote condições combinadas, estoque do lojista, preferências..."></textarea>
             </div>
 
-            <div style="display:flex; justify-content:space-between; gap:8px;">
+            <div class="u-acoes-entre-8">
               <button type="button" id="btnDeleteContact" class="btn btn-danger btn-sm">Excluir conversa</button>
               <button type="button" id="btnSaveCrmLead" class="btn btn-primary btn-sm">Salvar ficha</button>
             </div>
@@ -2599,7 +2599,7 @@
       </div>
       <div class="modal-body">
         <p class="panel-desc">Este é o conjunto exato de instruções compiladas dinamicamente (incluindo blindagem OWASP LLM01 e seleção de skills):</p>
-        <pre id="promptPreviewText" style="background:var(--bg-input); border:1px solid var(--border); padding:14px; border-radius:8px; white-space:pre-wrap; font-size:12.5px; color:var(--text-main); max-height:440px; overflow-y:auto;"></pre>
+        <pre id="promptPreviewText" class="u-pre-caixa-alto u-text-breve u-rolagem-440"></pre>
       </div>
     </div>
   </div>
@@ -2611,50 +2611,50 @@
         <h3 id="packModalTitle" class="panel-title">Detalhes do Pacote Turbo</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('packInspectorModal')">Fechar</button>
       </div>
-      <div id="packInspectorBody" class="modal-body" style="max-height:500px; overflow-y:auto;"></div>
+      <div id="packInspectorBody" class="modal-body u-rolagem-500"></div>
     </div>
   </div>
 
   <!-- MODAL: GERENCIAR ATALHOS DE RESPOSTAS RÁPIDAS "/" -->
   <div id="quickRepliesModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="qrModalTitle">
-    <div class="modal-dialog" style="max-width:620px;">
+    <div class="modal-dialog u-max-620">
       <div class="modal-head">
         <h3 id="qrModalTitle" class="panel-title">Respostas Rápidas com Barra (<code>/</code>)</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('quickRepliesModal')">Fechar</button>
       </div>
       <div class="modal-body">
-        <p class="panel-desc" style="margin-bottom:12px;">
+        <p class="panel-desc u-mb-12">
           Digite <code>/</code> no campo de mensagem da Central de Conversas para inserir qualquer resposta em 1 clique.
         </p>
-        <form id="quickReplyForm" style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:14px;">
+        <form id="quickReplyForm" class="u-painel-caixa u-painel-caixa--borda-10 u-painel-caixa--topo">
           <input type="hidden" id="qrEditId" value="" />
-          <div class="grid-equal" style="gap:10px; margin-bottom:8px;">
-            <div class="form-group" style="margin:0;">
+          <div class="grid-equal u-gap-10 u-mb-8">
+            <div class="form-group u-m-0">
               <label class="form-label" for="qrShortcutInput">Atalho (sem a barra) *</label>
               <input type="text" id="qrShortcutInput" required placeholder="Ex: pix, garantia, endereco" spellcheck="false" autocapitalize="none" autocorrect="off" />
             </div>
-            <div class="form-group" style="margin:0;">
+            <div class="form-group u-m-0">
               <label class="form-label" for="qrTitleInput">Título curto *</label>
               <input type="text" id="qrTitleInput" required placeholder="Ex: Dados para PIX" />
             </div>
           </div>
-          <div class="form-group" style="margin:0 0 10px;">
+          <div class="form-group u-caixa-espaco">
             <label class="form-label" for="qrTextInput">Texto da Resposta *</label>
             <textarea id="qrTextInput" rows="2" required placeholder="Texto que será preenchido na barra de resposta..."></textarea>
           </div>
-          <div style="display:flex; justify-content:flex-end; gap:8px;">
-            <button type="button" id="btnQrResetForm" class="btn btn-secondary btn-sm" style="display:none;" onclick="resetQuickReplyForm()">Cancelar edição</button>
+          <div class="u-acoes-fim-8">
+            <button type="button" id="btnQrResetForm" class="btn btn-secondary btn-sm u-none"  onclick="resetQuickReplyForm()">Cancelar edição</button>
             <button type="submit" class="btn btn-primary btn-sm">Salvar Atalho</button>
           </div>
         </form>
-        <div id="quickRepliesManagerList" style="display:flex; flex-direction:column; gap:8px; max-height:260px; overflow-y:auto;"></div>
+        <div id="quickRepliesManagerList" class="u-rolagem-260 u-dir-col u-gap-8"></div>
       </div>
     </div>
   </div>
 
   <!-- MODAL: INICIAR NOVA CONVERSA MANUAL NO INBOX -->
   <div id="newContactModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="newContactModalTitle">
-    <div class="modal-dialog" style="max-width:460px;">
+    <div class="modal-dialog u-max-460">
       <div class="modal-head">
         <h3 id="newContactModalTitle" class="panel-title">Nova Conversa / Contato Manual</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('newContactModal')">Fechar</button>
@@ -2680,7 +2680,7 @@
           <label class="form-label" for="newContactNotesInput">Observação Inicial (opcional)</label>
           <input type="text" id="newContactNotesInput" placeholder="Ex: Veio pelo Instagram / Indicação" />
         </div>
-        <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <div class="u-acoes-topo">
           <button type="button" class="btn btn-secondary" onclick="closeModal('newContactModal')">Cancelar</button>
           <button type="submit" class="btn btn-primary">Abrir na Central de Conversas</button>
         </div>
@@ -2690,7 +2690,7 @@
 
   <!-- MODAL: EDITAR DADOS COMERCIAIS DO CLIENTE SAAS (MASTER) -->
   <div id="editManagedUserModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="editManagedModalTitle">
-    <div class="modal-dialog" style="max-width:500px;">
+    <div class="modal-dialog u-max-500">
       <div class="modal-head">
         <h3 id="editManagedModalTitle" class="panel-title">Editar Cliente SaaS & Anotações</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('editManagedUserModal')">Fechar</button>
@@ -2701,7 +2701,7 @@
           <label class="form-label" for="editManagedDisplayName">Nome da Empresa / Cliente</label>
           <input type="text" id="editManagedDisplayName" required />
         </div>
-        <div class="grid-equal" style="gap:10px;">
+        <div class="grid-equal u-gap-10">
           <div class="form-group">
             <label class="form-label" for="editManagedCustomerPhone">WhatsApp do Contratante</label>
             <input type="text" id="editManagedCustomerPhone" placeholder="Ex: 5586999887766" inputmode="tel" autocomplete="tel" />
@@ -2719,7 +2719,7 @@
           <label class="form-label" for="editManagedAdminNotes">Observações Comerciais & Financeiras (Só você vê)</label>
           <textarea id="editManagedAdminNotes" rows="3" placeholder="Ex: Pagou R$ 147 no PIX em 26/10 • Próxima renovação combinada p/ 26/11"></textarea>
         </div>
-        <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <div class="u-acoes-topo">
           <button type="button" class="btn btn-secondary" onclick="closeModal('editManagedUserModal')">Cancelar</button>
           <button type="submit" class="btn btn-primary">Salvar Dados do Cliente</button>
         </div>
@@ -2729,13 +2729,13 @@
 
   <!-- MODAL: ALTERAR MINHA PRÓPRIA SENHA -->
   <div id="changeMyPasswordModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="changeMyPassTitle">
-    <div class="modal-dialog" style="max-width:440px;">
+    <div class="modal-dialog u-max-440">
       <div class="modal-head">
         <h3 id="changeMyPassTitle" class="panel-title">Alterar Minha Senha</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('changeMyPasswordModal')">Fechar</button>
       </div>
       <form id="changeMyPasswordForm" class="modal-body">
-        <p class="panel-desc" style="margin-top:0;">
+        <p class="panel-desc u-mt-0">
           Confirme sua senha atual e escolha uma nova senha com pelo menos 6 caracteres.
         </p>
         <div class="form-group">
@@ -2750,7 +2750,7 @@
           <label class="form-label" for="myConfirmPassInput">Confirmar Nova Senha</label>
           <input type="password" id="myConfirmPassInput" required minlength="6" autocomplete="new-password" spellcheck="false" autocapitalize="none" placeholder="Repita a nova senha..." />
         </div>
-        <div style="display:flex; justify-content:flex-end; gap:10px;">
+        <div class="u-acoes-topo">
           <button type="button" class="btn btn-secondary" onclick="closeModal('changeMyPasswordModal')">Cancelar</button>
           <button type="submit" id="btnSubmitChangeMyPass" class="btn btn-primary">Salvar Nova Senha</button>
         </div>
@@ -2760,31 +2760,31 @@
 
   <!-- MODAL: GERENCIAR ETIQUETAS COLORIDAS PERSONALIZADAS -->
   <div id="customTagsModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="customTagsModalTitle">
-    <div class="modal-dialog" style="max-width:480px;">
+    <div class="modal-dialog u-max-480">
       <div class="modal-head">
         <h3 id="customTagsModalTitle" class="panel-title">Etiquetas Coloridas do Funil</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('customTagsModal')">Fechar</button>
       </div>
       <div class="modal-body">
-        <form id="customTagForm" onsubmit="submitCustomTagForm(event)" style="display:flex; gap:8px; align-items:center; margin-bottom:14px;">
-          <input type="color" id="newCustomTagColor" value="#10b981" style="width:42px; height:38px; padding:2px; border-radius:8px; cursor:pointer;" aria-label="Cor da etiqueta" />
-          <input type="text" id="newCustomTagName" required maxlength="30" placeholder="Nome da etiqueta (ex: Aguardando PIX)" style="flex:1;" aria-label="Nome da etiqueta" />
+        <form id="customTagForm" onsubmit="submitCustomTagForm(event)" class="u-linha-wrap u-mb-14">
+          <input type="color" id="newCustomTagColor" value="#10b981"  aria-label="Cor da etiqueta" class="u-cursor-pointer u-seletor-cor" />
+          <input type="text" id="newCustomTagName" required maxlength="30" placeholder="Nome da etiqueta (ex: Aguardando PIX)"  aria-label="Nome da etiqueta" class="u-flex-1" />
           <button type="submit" class="btn btn-primary btn-sm">Salvar</button>
         </form>
-        <div id="customTagsManagerList" style="display:flex; flex-direction:column; gap:6px; max-height:300px; overflow-y:auto;"></div>
+        <div id="customTagsManagerList" class="u-coluna-6 u-rolagem-300"></div>
       </div>
     </div>
   </div>
 
   <!-- MODAL: PROGRAMAR ENVIO DE MENSAGEM FUTURA NO WHATSAPP -->
   <div id="scheduleMessageModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="schedMsgModalTitle">
-    <div class="modal-dialog" style="max-width:480px;">
+    <div class="modal-dialog u-max-480">
       <div class="modal-head">
         <h3 id="schedMsgModalTitle" class="panel-title">🕒 Programar Envio no WhatsApp</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('scheduleMessageModal')">Fechar</button>
       </div>
       <form id="scheduleMessageForm" onsubmit="submitScheduleMessageForm(event)" class="modal-body">
-        <p class="panel-desc" style="margin-top:0;">
+        <p class="panel-desc u-mt-0">
           O motor enviará automaticamente esta mensagem no WhatsApp do cliente exatamente na data e hora escolhidas.
         </p>
         <div class="form-group">
@@ -2794,13 +2794,13 @@
         <div class="form-group">
           <label class="form-label" for="schedMsgDateTimeInput">Data e Horário do Disparo *</label>
           <input type="datetime-local" id="schedMsgDateTimeInput" required />
-          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+          <div class="u-acoes-wrap u-gap-6 u-mt-6">
             <button type="button" class="composer-tool-btn" onclick="presetScheduleInput(30)">Daqui 30 min</button>
             <button type="button" class="composer-tool-btn" onclick="presetScheduleInput(120)">Daqui 2 horas</button>
             <button type="button" class="composer-tool-btn" onclick="presetScheduleInput('tomorrow9')">Amanhã às 09:00</button>
           </div>
         </div>
-        <div style="display:flex; justify-content:flex-end; gap:8px;">
+        <div class="u-acoes-fim-8">
           <button type="button" class="btn btn-secondary" onclick="closeModal('scheduleMessageModal')">Cancelar</button>
           <button type="submit" class="btn btn-primary">Agendar Envio</button>
         </div>
@@ -2810,32 +2810,32 @@
 
   <!-- MODAL: ENCAMINHAR MENSAGEM PARA OUTRO CONTATO -->
   <div id="forwardMessageModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="fwdMsgModalTitle">
-    <div class="modal-dialog" style="max-width:480px;">
+    <div class="modal-dialog u-max-480">
       <div class="modal-head">
         <h3 id="fwdMsgModalTitle" class="panel-title">↪ Encaminhar Mensagem</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('forwardMessageModal')">Fechar</button>
       </div>
       <div class="modal-body">
-        <div id="fwdMsgPreviewBox" style="background:var(--bg-card-subtle); border-left:3px solid var(--accent); padding:8px 10px; border-radius:6px; font-size:12px; color:var(--text-secondary); margin-bottom:12px; max-height:70px; overflow:hidden;"></div>
-        <input type="text" id="fwdSearchContactInput" placeholder="Buscar contato na lista ou digitar DDD+Número..." oninput="renderForwardContactsList(this.value)" style="margin-bottom:10px;" aria-label="Buscar contato para encaminhar" />
-        <div id="fwdContactsList" style="display:flex; flex-direction:column; gap:6px; max-height:280px; overflow-y:auto;"></div>
+        <div id="fwdMsgPreviewBox" class="u-nota-lateral u-mb-12"></div>
+        <input type="text" id="fwdSearchContactInput" placeholder="Buscar contato na lista ou digitar DDD+Número..." oninput="renderForwardContactsList(this.value)"  aria-label="Buscar contato para encaminhar" class="u-mb-10" />
+        <div id="fwdContactsList" class="u-coluna-6 u-rolagem-280"></div>
       </div>
     </div>
   </div>
 
   <!-- MENU FLUTUANTE ⋮ PARA QUALQUER CONVERSA DA LISTA -->
-  <div id="crmRowActionPopover" class="crm-mini-popover" style="display:none; position:fixed; z-index:999; min-width:220px;"></div>
+  <div id="crmRowActionPopover" class="crm-mini-popover u-menu-fixo"></div>
 
   <!-- MODAL: SALVAR / EDITAR CONTATO NA AGENDA (+ BAIXAR .VCF NO CELULAR) -->
   <div id="saveContactModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="saveContactModalTitle">
-    <div class="modal-dialog" style="max-width:510px;">
+    <div class="modal-dialog u-max-510">
       <div class="modal-head">
         <h3 id="saveContactModalTitle" class="panel-title">👤 Salvar Contato na Agenda</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('saveContactModal')">Fechar</button>
       </div>
       <form id="saveContactModalForm" onsubmit="submitSaveContactModal(event)" class="modal-body">
         <input type="hidden" id="saveContactChatId" value="" />
-        <div class="grid-equal" style="gap:10px;">
+        <div class="grid-equal u-gap-10">
           <div class="form-group">
             <label class="form-label" for="saveContactName">Nome Completo / Identificação *</label>
             <input type="text" id="saveContactName" required placeholder="Ex: João Silva — Loja Centro" />
@@ -2845,7 +2845,7 @@
             <input type="text" id="saveContactPhone" required inputmode="tel" autocomplete="tel" placeholder="Ex: 5586999887766" />
           </div>
         </div>
-        <div class="grid-equal" style="gap:10px;">
+        <div class="grid-equal u-gap-10">
           <div class="form-group">
             <label class="form-label" for="saveContactCompany">Empresa / Loja</label>
             <input type="text" id="saveContactCompany" placeholder="Ex: Auto Peças Silva" />
@@ -2864,7 +2864,7 @@
             </select>
           </div>
         </div>
-        <div class="grid-equal" style="gap:10px;">
+        <div class="grid-equal u-gap-10">
           <div class="form-group">
             <label class="form-label" for="saveContactEmail">E-mail</label>
             <input type="email" id="saveContactEmail" placeholder="cliente@email.com" />
@@ -2874,7 +2874,7 @@
             <input type="text" id="saveContactCity" placeholder="Ex: Parnaíba - PI" />
           </div>
         </div>
-        <div class="grid-equal" style="gap:10px;">
+        <div class="grid-equal u-gap-10">
           <div class="form-group">
             <label class="form-label" for="saveContactDoc">CPF / CNPJ</label>
             <input type="text" id="saveContactDoc" placeholder="Opcional" />
@@ -2894,11 +2894,11 @@
           <label class="form-label" for="saveContactNotes">Observações Fixas</label>
           <textarea id="saveContactNotes" rows="2" placeholder="Anotações úteis sobre o cliente..."></textarea>
         </div>
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-top:4px;">
+        <div class="u-acoes-entre-topo">
           <button type="button" id="btnSaveContactModalVcf" class="btn btn-secondary btn-sm" onclick="downloadContactModalVcf()">
             📲 Baixar p/ Celular (.vcf)
           </button>
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <div class="u-acoes-wrap">
             <button type="button" class="btn btn-secondary" onclick="closeModal('saveContactModal')">Cancelar</button>
             <button type="submit" class="btn btn-primary">💾 Salvar Contato</button>
           </div>
@@ -2909,22 +2909,22 @@
 
   <!-- MODAL: ENVIAR CARTÃO DE CONTATO (VCARD) NO WHATSAPP -->
   <div id="sendContactCardModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="sendVcardModalTitle">
-    <div class="modal-dialog" style="max-width:480px;">
+    <div class="modal-dialog u-max-480">
       <div class="modal-head">
         <h3 id="sendVcardModalTitle" class="panel-title">🪪 Enviar Cartão de Contato no WhatsApp</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('sendContactCardModal')">Fechar</button>
       </div>
       <div class="modal-body">
-        <p id="sendVcardModalSubtitle" class="panel-desc" style="margin-top:0;">
+        <p id="sendVcardModalSubtitle" class="panel-desc u-mt-0">
           Escolha um contato salvo abaixo ou preencha nome e telefone para enviar como cartão clicável no WhatsApp.
         </p>
-        <input type="text" id="sendVcardSearchInput" placeholder="Filtrar contato ou destinatário..." oninput="renderSendContactCardList(this.value)" style="margin-bottom:10px;" aria-label="Buscar contato para cartão" />
-        <div id="sendVcardContactsList" style="display:flex; flex-direction:column; gap:6px; max-height:220px; overflow-y:auto; margin-bottom:12px;"></div>
+        <input type="text" id="sendVcardSearchInput" placeholder="Filtrar contato ou destinatário..." oninput="renderSendContactCardList(this.value)"  aria-label="Buscar contato para cartão" class="u-mb-10" />
+        <div id="sendVcardContactsList" class="u-coluna-6 u-rolagem-220 u-mb-12"></div>
         <details id="customVcardDetailsBox">
-          <summary style="font-size:12px; font-weight:700; color:var(--accent-bright); cursor:pointer; margin-bottom:8px;">+ Enviar número avulso como cartão</summary>
-          <div style="display:flex; gap:6px; flex-wrap:wrap;">
-            <input type="text" id="customVcardName" aria-label="Nome do contato no cartão" autocomplete="name" placeholder="Nome no cartão" style="flex:1; min-width:130px; font-size:12px;" />
-            <input type="text" id="customVcardPhone" aria-label="Telefone com DDD do contato no cartão" autocomplete="tel" placeholder="DDD + Número" inputmode="tel" style="flex:1; min-width:130px; font-size:12px;" />
+          <summary class="u-text-sm u-bold u-text-accent u-cursor-pointer u-mb-8">+ Enviar número avulso como cartão</summary>
+          <div class="u-pilhas u-gap-6">
+            <input type="text" id="customVcardName" aria-label="Nome do contato no cartão" autocomplete="name" placeholder="Nome no cartão" class="u-campo-130"  />
+            <input type="text" id="customVcardPhone" aria-label="Telefone com DDD do contato no cartão" autocomplete="tel" placeholder="DDD + Número" inputmode="tel" class="u-campo-130"  />
             <button type="button" class="btn btn-primary btn-sm" onclick="sendCustomTypedVcardNow()">Enviar</button>
           </div>
         </details>
@@ -2934,69 +2934,69 @@
 
   <!-- MODAL: CENTRAL DE TREINAMENTO COM CHATGPT & VIBE CODING -->
   <div id="aiTrainingBuilderModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="aiBuilderModalTitle">
-    <div class="modal-dialog" style="max-width:680px;">
+    <div class="modal-dialog u-max-680">
       <div class="modal-head">
         <h3 id="aiBuilderModalTitle" class="panel-title">🤖 Criar Treinamento com ChatGPT ou Vibe Coding</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('aiTrainingBuilderModal')">Fechar</button>
       </div>
-      <div class="modal-body" style="display:flex; flex-direction:column; gap:14px;">
-        <div class="studio-subtabs" style="width:100%;">
+      <div class="modal-body u-dir-col u-gap-14">
+        <div class="studio-subtabs u-w-full">
           <button type="button" id="btnBuilderTabChatgpt" class="studio-subtab active" onclick="switchAiBuilderTab('chatgpt')">⚡ Rápido com ChatGPT / Claude (2 min)</button>
           <button type="button" id="btnBuilderTabVibecoder" class="studio-subtab" onclick="switchAiBuilderTab('vibecoder')">🛠️ Modo Vibe Coder (Documento & .ZIP)</button>
         </div>
 
         <!-- ABA 1: CHATGPT / CLAUDE RÁPIDO -->
-        <div id="aiBuilderPaneChatgpt" style="display:flex; flex-direction:column; gap:12px;">
-          <div style="background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25); border-radius:10px; padding:12px; font-size:12.5px; line-height:1.5;">
+        <div id="aiBuilderPaneChatgpt" class="u-dir-col u-gap-12">
+          <div class="u-aviso-suave u-aviso-suave--ok">
             <strong>Como funciona em 2 passos simples:</strong><br/>
             1️⃣ Clique em <strong>Copiar Super-Prompt</strong> abaixo e cole no ChatGPT, Claude ou Gemini (lá você conta por texto ou áudio sobre a empresa).<br/>
             2️⃣ Copie a resposta gerada pela IA, cole na caixa abaixo e clique em <strong>Aplicar Treinamento Completo</strong> — ele já preenche Identidade, Regras, FAQs, Mensagens Aprovadas (M01..) e Skills (S01../H01..) sozinho!
           </div>
 
-          <div class="form-group" style="margin-bottom:0;">
+          <div class="form-group u-mb-0">
             <label class="form-label" for="aiBuilderBriefInput">Resumo opcional do negócio (já vai embutido no prompt se preencher):</label>
             <textarea id="aiBuilderBriefInput" rows="2" placeholder="Opcional: Ex: Clínica Odontológica Sorriso Prime em Teresina, atendemos implantes, lentes e limpeza, aceitamos cartão em 12x e PIX... (ou deixe em branco para explicar lá no ChatGPT)"></textarea>
           </div>
 
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <div class="u-acoes-wrap">
             <button type="button" class="btn btn-primary" onclick="copyChatGptSuperPrompt()">📋 1. Copiar Super-Prompt para o ChatGPT</button>
             <button type="button" class="btn btn-secondary" onclick="downloadSampleBlueprintJson()">📦 Baixar Exemplo Pronto (.JSON)</button>
           </div>
 
-          <div style="border-top:1px solid var(--border); padding-top:12px; display:flex; flex-direction:column; gap:8px;">
-            <label class="form-label" for="aiBlueprintPasteArea" style="margin-bottom:0;">2. Cole aqui a resposta que o ChatGPT / Claude gerou:</label>
+          <div class="u-rodape-secao--coluna">
+            <label class="form-label u-mb-0" for="aiBlueprintPasteArea">2. Cole aqui a resposta que o ChatGPT / Claude gerou:</label>
             <textarea id="aiBlueprintPasteArea" rows="6" spellcheck="false" placeholder="Cole aqui o código JSON (ou Markdown) gerado pelo ChatGPT e clique em Aplicar abaixo..."></textarea>
-            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-              <label for="zipPackInput" class="btn btn-secondary btn-sm" style="cursor:pointer;" onclick="closeModal('aiTrainingBuilderModal')">📂 Ou enviar arquivo (.JSON / .MD / .ZIP)</label>
+            <div class="u-acoes-entre-wrap">
+              <label for="zipPackInput" class="btn btn-secondary btn-sm u-cursor-pointer"  onclick="closeModal('aiTrainingBuilderModal')">📂 Ou enviar arquivo (.JSON / .MD / .ZIP)</label>
               <button type="button" id="btnApplyPastedBlueprint" class="btn btn-primary" onclick="applyPastedAiTraining()">⚡ 2. Aplicar Treinamento Completo</button>
             </div>
           </div>
         </div>
 
         <!-- ABA 2: VIBE CODER PRO -->
-        <div id="aiBuilderPaneVibecoder" style="display:none; flex-direction:column; gap:12px;">
-          <div style="background:rgba(59,130,246,0.08); border:1px solid rgba(59,130,246,0.28); border-radius:10px; padding:12px; font-size:12.5px; line-height:1.55;">
+        <div id="aiBuilderPaneVibecoder" class="u-none u-gap-12 u-flex-col">
+          <div class="u-aviso-suave u-aviso-suave--info">
             <strong>Para Vibe Coders (Arena, Cursor, Claude Code, Windsurf, Bolt, ChatGPT Plus):</strong><br/>
             Baixe ou copie abaixo o <strong>Documento Oficial de Arquitetura (<code>GUIA_VIBE_CODER_TREINAMENTO.md</code>)</strong> e solte direto no seu agente de IA dizendo:<br/>
-            <code style="display:block; margin-top:6px; padding:6px 8px; background:rgba(0,0,0,0.28); border-radius:6px;">"Leia este guia técnico do Ienvia e gere o pacote completo de treinamento para a empresa [DESCRIÇÃO]."</code>
+            <code class="u-realce-codigo">"Leia este guia técnico do Ienvia e gere o pacote completo de treinamento para a empresa [DESCRIÇÃO]."</code>
           </div>
 
-          <div style="font-size:12.5px; color:var(--text-secondary); line-height:1.55;">
+          <div class="u-text-breve u-text-secondary">
             <strong>Os 3 formatos suportados nativamente pelo compilador do Ienvia:</strong>
-            <ul style="margin:6px 0 0 18px; display:flex; flex-direction:column; gap:4px;">
+            <ul class="u-lista-rolagem">
               <li><strong>Nível 1 — Blueprint Único (<code>.JSON</code>):</strong> 1 arquivo com <code>profile</code> + <code>approvedMessages</code> + <code>operationalSkills</code> + <code>humanizationSkills</code> + <code>objections</code>.</li>
               <li><strong>Nível 2 — Pacote Modular Turbo (<code>.ZIP</code>):</strong> Múltiplas pastas (<code>00-regras-canonicas.md</code>, <code>01-negocio/</code>, <code>03-skills/indice-skills.json</code>, <code>04-respostas/</code>, <code>12-humanizacao/</code> + áudios <code>.ogg</code>).</li>
               <li><strong>Nível 3 — Playbook em Markdown (<code>.MD</code>):</strong> Cabeçalhos <code>## M01</code>, <code>## S01</code>, <code>## H01</code> convertidos automaticamente em skills ativas.</li>
             </ul>
           </div>
 
-          <div style="font-size:12px; background:var(--bg-elevated); border:1px solid var(--border); border-radius:8px; padding:10px; line-height:1.5;">
+          <div class="u-caixa-vazia-texto u-text-sm">
             <strong>Tags Nativas de Automação disponíveis para usar nas Skills:</strong><br/>
             <code>[[CHAMAR_HUMANO:Motivo]]</code> · <code>[[AGENDAR_RETORNO:120|Motivo]]</code> · <code>[[GERAR_PIX:99.90|Descrição]]</code> · <code>[[ENVIAR_MIDIA:ID]]</code> · <code>[[ENVIAR_AUDIO:ID]]</code>
           </div>
 
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <a href="/GUIA_VIBE_CODER_TREINAMENTO.md" download="GUIA_VIBE_CODER_TREINAMENTO.md" class="btn btn-primary" style="text-decoration:none;">📥 Baixar Documento p/ Vibe Coders (.MD)</a>
+          <div class="u-acoes-wrap">
+            <a href="/GUIA_VIBE_CODER_TREINAMENTO.md" download="GUIA_VIBE_CODER_TREINAMENTO.md" class="btn btn-primary u-sem-linha">📥 Baixar Documento p/ Vibe Coders (.MD)</a>
             <button type="button" class="btn btn-secondary" onclick="copyFullVibeCoderSpecMd()">📋 Copiar Documento Técnico Inteiro</button>
           </div>
         </div>
@@ -3006,16 +3006,16 @@
 
   <!-- MODAL: ESCOLHER APARELHO QUANDO HÁ 2+ DISPOSITIVOS ONLINE NA CONTA -->
   <div id="deviceChoiceModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="deviceChoiceModalTitle">
-    <div class="modal-dialog" style="max-width:480px;">
+    <div class="modal-dialog u-max-480">
       <div class="modal-head">
         <h3 id="deviceChoiceModalTitle" class="panel-title">📱 Em qual aparelho conectar este Chip?</h3>
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('deviceChoiceModal')">Cancelar</button>
       </div>
-      <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
-        <p class="panel-desc" style="margin:0;">
+      <div class="modal-body u-dir-col u-gap-10">
+        <p class="panel-desc u-m-0">
           Detectamos <strong>mais de um aparelho online</strong> conectado na sua conta agora. Escolha abaixo em qual aparelho deseja hospedar esta sessão do WhatsApp:
         </p>
-        <div id="deviceChoiceList" style="display:flex; flex-direction:column; gap:8px;"></div>
+        <div id="deviceChoiceList" class="u-dir-col u-gap-8"></div>
       </div>
     </div>
   </div>

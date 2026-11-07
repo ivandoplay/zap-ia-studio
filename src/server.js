@@ -982,6 +982,15 @@ app.use('/api/security-settings-v2',createSecuritySettingsRouter({...workspaceRe
  // Alerta ao dono: mesmo envio do painel antigo (`POST /api/wa/test-owner-alert`), pelo
  // chip conectado. Exige confirmação explícita na chamada, porque a mensagem é real.
  allowOwnerAlert:true,
+ // Fila de abordagem: usa o MESMO envio de campanha (Evolution pelo slot), não um
+ // segundo motor. A fila é durável no banco; se um dia houver motor local, ele lê a mesma tabela.
+ allowQueue:true,
+ sendQueueItem:async({ownerId,slotId,phone,text})=>{
+  const chatId=`${slotId}::${phone}@s.whatsapp.net`;
+  const envio=await sendEvolutionApiText(ownerId,chatId,text);
+  const id=envio?.data?.key?.id||envio?.key?.id||envio?.data?.id||envio?.id||'';
+  return {messageId:String(id||'')};
+ },
  sendOwnerAlert:async({ownerId,phone})=>{
   const destino=`${phone}@s.whatsapp.net`;
   const texto=`Teste de alerta do painel Ienvia: se você recebeu esta mensagem, o aviso ao dono está funcionando. (${new Date().toLocaleString('pt-BR',{timeZone:'America/Fortaleza'})})`;

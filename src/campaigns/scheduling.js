@@ -101,6 +101,8 @@ export function createCampaignScheduler({ client, runner, runnerFor = null, maxC
         const out = await executor.run({ ownerId, campaignId, slotId: chip, maxPerRun: itens.length });
         enviados = Math.max(0, Math.min(itens.length, Number(out?.executed) || 0));
         falhas = Math.max(0, Number(out?.failed) || 0);
+        // O motivo da falha vem do próprio runner: é o que permite diagnosticar sem adivinhar.
+        motivo = (Array.isArray(out?.results) ? out.results.find(r => r && r.status === 'failed')?.code : null) || out?.blocked || motivo;
       } catch (error) {
         // Falha de contrato ANTES de qualquer envio (lista vazia, janela fechada, plano
         // inválido): nada saiu e a reserva volta para a fila. Se houve tentativa de envio,

@@ -95,6 +95,21 @@ END $$;
 REVOKE ALL ON FUNCTION public.ienvia_campanha_agenda_ativar(uuid,uuid,boolean,text,timestamptz) FROM PUBLIC,anon,authenticated,service_role;
 GRANT EXECUTE ON FUNCTION public.ienvia_campanha_agenda_ativar(uuid,uuid,boolean,text,timestamptz) TO authenticated;
 
+-- Libera a reserva de um lote inteiro (usado quando o envio recusou ANTES de qualquer
+-- mensagem sair: chip sem permissão de campanha, janela fechada, plano inválido).
+CREATE OR REPLACE FUNCTION public.ienvia_campanha_fila_liberar(p_owner uuid,p_id uuid,p_motivo text)
+ RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE n integer;
+BEGIN
+ PERFORM public.ienvia_campanha_acesso_servico(p_owner);
+ UPDATE public.ienvia_campanha_fila SET estado='pendente',motivo=left(coalesce(p_motivo,'recusado'),200)
+  WHERE owner_id=p_owner AND campanha_id=p_id AND estado='enviado' AND enviado_em IS NULL;
+ GET DIAGNOSTICS n = ROW_COUNT;
+ RETURN n;
+END $$;
+REVOKE ALL ON FUNCTION public.ienvia_campanha_fila_liberar(uuid,uuid,text) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.ienvia_campanha_fila_liberar(uuid,uuid,text) TO service_role;
+
 -- Reserva ATÔMICA de uma etapa: só um processo consegue levar cada destinatário.
 -- Devolve as linhas reservadas agora (nunca as já enviadas).
 CREATE OR REPLACE FUNCTION public.ienvia_campanha_fila_reservar(p_owner uuid,p_id uuid,p_limite integer)
@@ -113,7 +128,7 @@ BEGIN
    ORDER BY ordem LIMIT p_limite FOR UPDATE SKIP LOCKED
  ), ids AS (SELECT destinatario_id FROM pegos),
  marcados AS (
-  UPDATE public.ienvia_campanha_fila f SET estado='enviado',reservado_em=clock_timestamp(),enviado_em=clock_timestamp(),tentativas=f.tentativas+1
+  UPDATE public.ienvia_campanha_fila f SET estado='enviado',reservado_em=clock_timestamp(),tentativas=f.tentativas+1
    WHERE f.owner_id=p_owner AND f.campanha_id=p_id AND f.estado='pendente'
      AND f.destinatario_id IN (SELECT destinatario_id FROM ids)
    RETURNING f.destinatario_id,f.telefone,f.ordem

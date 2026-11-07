@@ -107,9 +107,9 @@ export function createCampaignScheduler({ client, runner, runnerFor = null, maxC
         // o erro não é "nada saiu" — a etapa fica como está e aparece no resumo.
         const nadaSaiu = ['CAMPAIGN_MEDIA_PENDING', 'CAMPAIGN_TEXT_EMPTY', 'CAMPAIGN_BLOCK_INVALID', 'CAMPAIGN_NOT_EXECUTABLE'].includes(error?.code);
         if (nadaSaiu) {
-          for (const destino of itens) {
-            await call(ownerId, 'ienvia_campanha_fila_devolver', { p_owner: ownerId, p_id: campaignId, p_dest: destino.destinatario_id, p_motivo: error.code }).catch(() => {});
-          }
+          // Um lote reservado sem envio volta inteiro: nada saiu, então nada pode ficar
+          // marcado como enviado nem se perder.
+          await call(ownerId, 'ienvia_campanha_fila_liberar', { p_owner: ownerId, p_id: campaignId, p_motivo: error.code }).catch(() => {});
         }
         falhas = itens.length;
         motivo = error?.code || 'send_failed';

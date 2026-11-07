@@ -12,6 +12,7 @@ import {createResourceFileRepository} from './resources/repository.js';
 import {createTrainingRouter} from './training/router.js';
 import {createTrainingFileRepository} from './training/repository.js';
 import {createWorkspaceDraftCloudRepository} from './workspaceDrafts/cloudRepository.js';
+import {createAccountPlan} from '../public/v2/assets/accounts-domain.js';
 import {previewTrainingRuntime} from './training/runtimePreview.js';
 import {previewTrainingImport} from './training/importPreview.js';
 import { composeConnectionState } from './dashboard/connections.js';
@@ -832,7 +833,25 @@ app.use('/api/conversations-v3',createConversationsCommandsRouter({getLocalConte
 const crmAccountWrites = req => req.dashboardContext?.viewer?.role === 'master' && req.dashboardContext?.viewer?.id === req.dashboardContext?.tenant?.id;
 app.use('/api/crm-v2',createCrmRouter({...workspaceReadDependencies,allowWrites:true,allowAccountWrites:crmAccountWrites}));
 // Origem global, identidade delegada e implantação ainda não homologadas: sem consulta cloud nem ativação.
-app.use('/api/accounts-v2',createAccountsRouter({getLocalContext:workspaceReadDependencies.getLocalContext,repository:draftRepository('accounts'),allowWrites:true,allowWorkspaceWrites:true}));
+// Administração/Contas: a carteira vem das contas reais (zapia_users), sem senha nem chave.
+// Enquanto a porta de provisionamento não existe na nuvem, a gravação da carteira é
+// só de auditoria/perfil e a criação de conta continua recusada (canProvision:false).
+const readAccountsFromCloud = async () => {
+  const admin = getAdminClient();
+  const {data, error} = await admin.from('zapia_users').select('user_id, username, display_name, role, is_active, max_wa_slots').order('created_at', {ascending: true});
+  if (error) throw Object.assign(new Error('Administração ou integração não habilitada. Consulte o estado antes de decidir.'), {status: 503});
+  if (!Array.isArray(data) || data.length > 1000) throw Object.assign(new Error('Carteira de contas inválida.'), {status: 503});
+  const accounts = data.map(row => createAccountPlan({
+    id: row.user_id,
+    username: row.username,
+    displayName: row.display_name || row.username,
+    role: row.role === 'master' ? 'master' : 'user',
+    isActive: row.is_active !== false,
+    maxWaSlots: Number.isInteger(row.max_wa_slots) ? row.max_wa_slots : null
+  }));
+  return {accounts};
+};
+app.use('/api/accounts-v2',createAccountsRouter({getLocalContext:workspaceReadDependencies.getLocalContext,repository:draftRepository('accounts'),readSource:IS_VERCEL?readAccountsFromCloud:undefined,allowWrites:true,allowWorkspaceWrites:true}));
 app.use('/api/security-settings-v2',createSecuritySettingsRouter({...workspaceReadDependencies,repository:draftRepository('security'),allowWrites:true,allowPinWrites:false,readApprovedMessages:async ctx=>{if(!ctx.data?.business)return [];const record=await draftRepository('training').read(ctx.tenant.id);const business=record?.document.training||ctx.data.business,id=ctx.data.business.trainingPackId;let pack=record?.document.pack||ctx.data.customPacks?.[id]||null;if(!record&&!pack&&id&&ctx.viewer.role==='master'&&ctx.viewer.id===ctx.tenant.id)pack=getTrainingPack(id);const rows=pack?.canonicalCore?.approvedMessages;if(rows?.length)return rows.map(m=>({id:m.id,title:m.title||m.id,text:m.text}));if(id&&!pack&&!record)return [];const first=String(business.assistantName||business.name||'eu').trim().split(/\s+/)[0];return [{id:'ABERTURA',title:'Abertura Consultiva Universal · original',text:business.soloIdentity?`Opa{{nome ? ', ' + nome : ''}}! Tudo bem? Aqui é o *${first}*. Posso te mostrar rapidinho como funciona meu trabalho?`:`Olá{{nome ? ', ' + nome : ''}}! Tudo bem? Aqui é do atendimento da *${business.name||'nossa equipe'}*. Posso te explicar rapidinho como funciona nosso trabalho?`}];}}));
 
 app.use('/api/ai-settings-v2',createAiSettingsRouter({...workspaceReadDependencies,repository:draftRepository('ai'),allowWrites:true,allowSecretWrites:true}));

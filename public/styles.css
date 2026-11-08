@@ -5703,6 +5703,77 @@ label:has(input[type="checkbox"]) {
 .motor-dispositivo-txt strong { font-size: 12.5px; }
 .motor-dispositivo-txt small { font-size: 10.5px; color: var(--text-muted); }
 
+/* miniatura alta demais deixava o cartão com cara de vazio: ocupa o cartão todo */
+#tab-catalogo .catalog-card { display: flex; flex-direction: column; }
+#tab-catalogo .catalog-media-preview { flex: 0 0 96px; height: 96px; }
+.catalog-card-linha {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.catalog-card-midia {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.catalog-card-midia.vazio { opacity: 0.55; }
+#tab-catalogo .catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  align-items: stretch;
+}
+
+/* ==========================================================================
+   CATÁLOGO & PIX — PIX como coluna, itens em grade
+   ========================================================================== */
+.catalogo-grade {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: 14px;
+  align-items: start;
+}
+.catalogo-grade > .panel { margin-bottom: 0; min-width: 0; }
+/* o catálogo é o assunto principal e fica com a coluna larga */
+.catalogo-itens { grid-column: 1; grid-row: 1; }
+.catalogo-pix { grid-column: 2; grid-row: 1; }
+@media (max-width: 1100px) {
+  .catalogo-grade { display: flex; flex-direction: column; }
+  /* no celular o catálogo é o que a pessoa vem ver: itens primeiro, PIX depois */
+  .catalogo-itens { order: 1; }
+  .catalogo-pix { order: 2; }
+}
+/* PIX na coluna estreita: tudo em pilha, com respiro curto */
+.catalogo-pix .grid-equal { grid-template-columns: minmax(0, 1fr); gap: 0; }
+.catalogo-pix .panel-header { flex-wrap: wrap; gap: 10px; }
+.catalogo-pix .u-acoes-linha-10 { flex-wrap: wrap; }
+.catalogo-pix .status-pill { font-size: 11px; }
+
+/* cartão do item: topo, preço, descrição e ações com hierarquia */
+.catalog-card-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.catalog-card-topo strong { font-size: 13.5px; line-height: 1.3; }
+.catalog-card-desc {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  flex: 1;
+  margin: 0;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.catalog-card-acoes { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.catalog-card-acoes .catalog-editar { flex: 1; }
+.catalog-thumb-txt { text-align: center; padding: 12px; }
+.catalog-vazio { grid-column: 1 / -1; }
+#tab-catalogo .catalog-grid { gap: 12px; }
+
 /* ==========================================================================
    TREINAMENTO — 4 sub-abas (Identidade · Regras · FAQ · Arquivos)
    ========================================================================== */

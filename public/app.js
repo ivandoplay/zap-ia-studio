@@ -3088,7 +3088,11 @@ function renderStatsAndLogs() {
     gemini: `Gemini (${ai.geminiModel || 'gemini-3.5-flash-lite'})`,
     openrouter: `OpenRouter (${ai.openrouterModel || 'custom'})`
   };
-  document.getElementById('activeEngineBadge').textContent = provMap[ai.provider] || 'Gemini';
+  // O selo do motor saiu do painel antigo, mas o render ainda passava por ele.
+  // Sem o guard, um único id ausente lançava exceção e abortava o renderAll —
+  // derrubando todas as abas renderizadas depois desta linha.
+  const engineBadge = document.getElementById('activeEngineBadge');
+  if (engineBadge) engineBadge.textContent = provMap[ai.provider] || 'Gemini';
 
   const logsBox = document.getElementById('logsContainer');
   if (!state.logs || state.logs.length === 0) {
@@ -3640,7 +3644,7 @@ function renderCatalogAndPix() {
 
   const grid = document.getElementById('catalogGrid');
   if (!items.length) {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Nenhum item encontrado. Clique em "+ Adicionar item / Galeria" para cadastrar produtos, apresentações PDF ou veículos.</div>`;
+    grid.innerHTML = `<div class="empty-state catalog-vazio">Nenhum item encontrado. Clique em "+ Adicionar item / Galeria" para cadastrar produtos, apresentações PDF ou veículos.</div>`;
     return;
   }
 
@@ -3656,29 +3660,36 @@ function renderCatalogAndPix() {
         if (firstFile.mimeType?.startsWith('image/')) {
           thumbHtml = `<img src="${escapeHtml(firstFile.url)}" alt="${escapeHtml(item.name)}" />`;
         } else if (firstFile.mimeType?.startsWith('audio/') || /\.(ogg|opus|mp3|m4a|wav|webm)$/i.test(firstFile.filename || '')) {
-          thumbHtml = `<div style="text-align:center; padding:12px;"><strong>🎤 Nota de Voz (S06)</strong><br/><small>${escapeHtml(firstFile.originalName || 'audio.ogg')}</small></div>`;
+          thumbHtml = `<div class="catalog-thumb-txt"><strong>🎤 Nota de Voz (S06)</strong><br/><small>${escapeHtml(firstFile.originalName || 'audio.ogg')}</small></div>`;
         } else {
-          thumbHtml = `<div style="text-align:center; padding:12px;"><strong>Documento PDF</strong><br/><small>${escapeHtml(firstFile.originalName || 'arquivo.pdf')}</small></div>`;
+          thumbHtml = `<div class="catalog-thumb-txt"><strong>Documento PDF</strong><br/><small>${escapeHtml(firstFile.originalName || 'arquivo.pdf')}</small></div>`;
         }
       }
       const badgeHtml = files.length > 0
         ? `<span class="media-count-badge">${files.length} arquivo${files.length > 1 ? 's' : ''}</span>`
         : '';
 
+      const totalMidia = files.length;
+      const resumoMidia = totalMidia
+        ? `<span class="catalog-card-midia">${totalMidia} ${totalMidia > 1 ? 'arquivos' : 'arquivo'}</span>`
+        : '<span class="catalog-card-midia vazio">Sem mídia</span>';
       const isActive = item.active !== false;
       return `
         <div class="catalog-card ${isActive ? '' : 'paused-item'}">
           <div class="catalog-media-preview">${thumbHtml}${badgeHtml}</div>
           <div class="catalog-card-body">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+            <div class="catalog-card-topo">
               <strong>${escapeHtml(item.name)}</strong>
               <span class="tag">${escapeHtml(item.category || 'Item')}</span>
             </div>
-            <div class="catalog-price">${item.price ? 'R$ ' + escapeHtml(item.price) : 'Sob consulta'}</div>
-            <p style="font-size:12.5px; color:var(--text-secondary); flex:1;">${escapeHtml(item.description || '')}</p>
-            <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
+            <div class="catalog-card-linha">
+              <span class="catalog-price">${item.price ? 'R$ ' + escapeHtml(item.price) : 'Sob consulta'}</span>
+              ${resumoMidia}
+            </div>
+            <p class="catalog-card-desc">${escapeHtml(item.description || '')}</p>
+            <div class="catalog-card-acoes">
               <button type="button" class="btn btn-secondary btn-sm" onclick="toggleCatalogItemActive('${escapeJsArg(item.id)}')">${isActive ? 'Pausar' : 'Ativar'}</button>
-              <button type="button" class="btn btn-secondary btn-sm" style="flex:1;" onclick="openEditCatalogItem('${escapeJsArg(item.id)}')">Editar</button>
+              <button type="button" class="btn btn-secondary btn-sm catalog-editar" onclick="openEditCatalogItem('${escapeJsArg(item.id)}')">Editar</button>
               <button type="button" class="btn btn-danger btn-sm" onclick="deleteCatalogItem('${escapeJsArg(item.id)}')">Excluir</button>
             </div>
           </div>

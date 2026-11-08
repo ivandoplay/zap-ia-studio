@@ -552,21 +552,21 @@
 <section id="tab-simulador" class="tab-pane active">
         <div class="page-header">
           <div>
-            <h1>Simulador de Atendimento com Áudio & Raio-X</h1>
-            <p>Grave áudio pelo microfone, envie comprovantes, abra o Raio-X de Skills de cada resposta e corrija qualquer fala em 1 clique.</p>
+            <h1>Simulador de Atendimento</h1>
+            <p>Fale como um cliente de verdade: digite, grave áudio ou mande comprovante — e veja a IA responder com o seu treinamento.</p>
           </div>
-          <div class="u-linha">
+          <div class="u-acoes-8">
             <span id="simAiStatusPill" class="status-pill ai-active">IA Ativa</span>
             <button type="button" id="btnResetSimulator" class="btn btn-secondary">Limpar conversa de teste</button>
           </div>
         </div>
 
-        <div class="grid-2">
+        <div class="grid-2 sim-grade">
           <div class="wa-frame">
             <div class="wa-topbar">
               <div>
-                <div  id="simProfileHeader" class="u-titulo-14-5-forte">Atendente Virtual</div>
-                <div  id="simProviderSub" class="u-ajuda-12-88">Online • Testando perfil ativo</div>
+                <div id="simProfileHeader" class="u-titulo-14-5-forte">Atendente Virtual</div>
+                <div id="simProviderSub" class="u-ajuda-12-88">Online • Testando perfil ativo</div>
               </div>
               <span class="tag u-etiqueta-vidro">Ambiente de Teste</span>
             </div>
@@ -598,21 +598,21 @@
             </form>
           </div>
 
-          <div>
-            <div class="panel">
+          <div class="sim-lateral">
+            <div class="panel sim-atalhos">
               <h3 class="panel-title u-mb-8">Atalhos rápidos para testar</h3>
-              <p class="panel-desc">Clique em qualquer situação abaixo para testar o comportamento exato do perfil ativo:</p>
-              <div id="simQuickPromptsBox" class="u-dir-col u-gap-8"></div>
+              <p class="panel-desc u-mb-0">Um clique manda a mensagem como se fosse o cliente <span id="simAtalhosContagem" class="sim-contagem"></span></p>
+              <div id="simQuickPromptsBox" class="sim-atalhos-lista"></div>
             </div>
 
-            <div class="panel">
-              <h3 class="panel-title u-mb-8">Como usar os 3 super-recursos do Simulador</h3>
+            <details class="panel sim-ajuda">
+              <summary class="sim-ajuda-topo">Como usar os 3 super-recursos do Simulador</summary>
               <ul class="u-lista-recuo">
                 <li><strong>Microfone ao Vivo:</strong> clique no ícone de microfone ao lado do campo de texto para falar como um cliente no WhatsApp e testar a escuta nativa do Gemini.</li>
                 <li><strong>Raio-X da Resposta:</strong> clique em <em>"Raio-X de Skills & Latência"</em> abaixo de qualquer resposta da IA para ver quais Skills (Sxx/Hxx), Objeções e Personas foram acionadas.</li>
                 <li><strong>Ensinar em 1 Clique:</strong> achou que uma resposta podia ser melhor? Clique em <em>"Corrigir resposta"</em> no próprio balão que ela já entra nas regras do perfil!</li>
               </ul>
-            </div>
+            </details>
           </div>
         </div>
       </section>

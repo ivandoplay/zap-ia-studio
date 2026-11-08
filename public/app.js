@@ -1451,6 +1451,27 @@ function renderAll() {
   window.__iaAbrir = abrir;
 })();
 
+// Contas: carteira, central comercial e guia de entrega. Sem recriar campos.
+(function contasSubabas() {
+  const abas = Array.from(document.querySelectorAll('[data-contas-aba]'));
+  const paineis = Array.from(document.querySelectorAll('[data-contas-painel]'));
+  if (!abas.length || !paineis.length) return;
+
+  function abrir(nome) {
+    abas.forEach((b) => {
+      const on = b.dataset.contasAba === nome;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    paineis.forEach((p) => {
+      p.hidden = p.dataset.contasPainel !== nome;
+    });
+  }
+
+  abas.forEach((b) => b.addEventListener('click', () => abrir(b.dataset.contasAba)));
+  window.__contasAbrir = abrir;
+})();
+
 (function menuMais() {
   const GRUPOS = window.MAIS_GRUPOS;
   function montar() {
@@ -9625,7 +9646,7 @@ window.copyClientWelcomeKit = async function copyClientWelcomeKit(username, disp
   const pre = document.getElementById('welcomeKitPreviewText');
   if (box && pre) {
     pre.textContent = kit;
-    box.style.display = 'block';
+    box.classList.remove('u-none');
   }
   try {
     await navigator.clipboard.writeText(kit);

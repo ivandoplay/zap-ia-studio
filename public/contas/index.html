@@ -2291,17 +2291,17 @@
       <section id="tab-contas" class="tab-pane active">
         <div class="page-header">
           <div>
-            <h1>Clientes SaaS &amp; Operações</h1>
-            <p>Gerencie assinantes, acompanhe o progresso de ativação, acesse qualquer cliente em Modo Suporte em 1 clique e controle acessos manualmente.</p>
+            <h1>Contas &amp; Comercial</h1>
+            <p>Quem são seus assinantes, como cada um está de ativação — e o material pronto para vender mais.</p>
           </div>
           <div class="u-acoes-8">
             <button type="button" class="btn btn-secondary btn-sm" onclick="openSaasSalesUrl()">
-              <svg class="icon-svg u-icon-sm"  viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+              <svg class="icon-svg u-icon-sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
               <span>Vitrine Principal 3D</span>
             </button>
             <button type="button" id="btnRefreshManagedUsers" class="btn btn-secondary btn-sm">Atualizar</button>
             <button type="button" id="btnOpenCreateClientModal" class="btn btn-primary btn-sm" onclick="document.getElementById('createClientModal')?.classList.add('open')">
-              <svg class="icon-svg u-icon"  viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+              <svg class="icon-svg u-icon" viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
               <span>Novo Cliente</span>
             </button>
           </div>
@@ -2313,7 +2313,7 @@
             <strong class="u-text-md u-text-accent">Kit de Acesso Pronto para Enviar ao Cliente</strong>
             <div class="u-acoes-fina-8">
               <button type="button" id="btnCopyWelcomeKit" class="btn btn-primary btn-sm">Copiar Mensagem</button>
-              <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('welcomeKitCreatedBox').style.display='none'">Fechar</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('welcomeKitCreatedBox').classList.add('u-none')">Fechar</button>
             </div>
           </div>
           <pre id="welcomeKitPreviewText" class="u-pre-caixa u-text-xs u-rolagem-160"></pre>
@@ -2322,118 +2322,127 @@
         <!-- KPIs EXECUTIVOS DO SEU SAAS -->
         <div id="saasMasterKpiGrid" class="saas-kpi-grid"></div>
 
-        <!-- LISTA DE CONTAS CADASTRADAS COM FILTROS E BUSCA (ACIMA DA DOBRA!) -->
-        <div class="panel">
-          <div class="panel-header u-mb-14">
-            <div>
-              <h2 class="panel-title">Carteira de Clientes da Plataforma</h2>
-              <p class="panel-desc u-mb-0">Entre em Modo Suporte em 1 clique, copie o Kit de Acesso, edite notas financeiras ou bloqueie/libere contas.</p>
+        <div class="treino-subabas" role="tablist" aria-label="Seções de contas">
+          <button type="button" class="treino-subaba active" data-contas-aba="carteira" role="tab" aria-selected="true">Carteira de clientes</button>
+          <button type="button" class="treino-subaba" data-contas-aba="comercial" role="tab" aria-selected="false">Central comercial</button>
+          <button type="button" class="treino-subaba" data-contas-aba="guia" role="tab" aria-selected="false">Guia de entrega</button>
+        </div>
+
+        <div class="treino-painel" data-contas-painel="carteira">
+          <div class="panel">
+            <div class="panel-header u-mb-14">
+              <div>
+                <h2 class="panel-title">Carteira de Clientes da Plataforma</h2>
+                <p class="panel-desc u-mb-0">Entre em Modo Suporte em 1 clique, copie o Kit de Acesso, edite notas financeiras ou bloqueie/libere contas.</p>
+              </div>
+              <div class="u-acoes-8--max-460">
+                <input type="text" id="masterUserSearchInput" placeholder="Buscar cliente, @usuario ou nota..." aria-label="Buscar conta de cliente por nome, usuário ou nota" class="u-campo-160" />
+                <select id="masterUserFilterSelect" aria-label="Filtrar contas de clientes por status" class="u-campo-145">
+                  <option value="all">Todas as contas</option>
+                  <option value="active">Somente Ativas</option>
+                  <option value="online">Motor Online Agora</option>
+                  <option value="pending_setup">Setup Incompleto</option>
+                  <option value="blocked">Bloqueadas</option>
+                </select>
+              </div>
             </div>
-            <div class="u-acoes-8--max-460">
-              <input type="text" id="masterUserSearchInput" placeholder="Buscar cliente, @usuario ou nota..."  aria-label="Buscar conta de cliente por nome, usuário ou nota" class="u-campo-160" />
-              <select id="masterUserFilterSelect"  aria-label="Filtrar contas de clientes por status" class="u-campo-145">
-                <option value="all">Todas as contas</option>
-                <option value="active">Somente Ativas</option>
-                <option value="online">Motor Online Agora</option>
-                <option value="pending_setup">Setup Incompleto</option>
-                <option value="blocked">Bloqueadas</option>
-              </select>
+            <div id="managedUsersListContainer">
+              <div class="empty-state">Carregando carteira de contas...</div>
             </div>
-          </div>
-          <div id="managedUsersListContainer">
-            <div class="empty-state">Carregando carteira de contas...</div>
           </div>
         </div>
 
-        <!-- Guia Operacional Recolhível (Progressive Disclosure) -->
-        <details class="pro-accordion">
-          <summary>Guia Rápido: Como entregar contas vendidas e operar o Modo Suporte</summary>
-          <div class="pro-accordion-body u-grade-auto-min-230 u-gap-12 u-text-breve u-text-secondary">
-            <div class="u-painel-caixa">
-              <strong class="u-selo-topo">1. Cadastro + Kit Automático</strong>
-              Clique em <strong>Novo Cliente</strong> acima. O sistema cria o workspace isolado por RLS e gera a mensagem pronta para você colar no WhatsApp do comprador.
-            </div>
-            <div class="u-painel-caixa">
-              <strong class="u-selo-topo">2. Chave IA Própria (Custo R$ 0 p/ você)</strong>
-              Ao entrar, o cliente segue o Checklist guiado para colar a própria chave gratuita do Google AI Studio, preencher o negócio e parear o WhatsApp.
-            </div>
-            <div class="u-painel-caixa">
-              <strong class="u-selo-topo">3. Modo Suporte em 1 Clique</strong>
-              Precisa ajudar na configuração? Clique em <strong>Acessar Painel</strong> no card do cliente para ajustar o treinamento dele sem precisar pedir senha.
-            </div>
-          </div>
-        </details>
-
-        <!-- CENTRAL COMERCIAL & PLAYBOOK DE CRESCIMENTO SAAS (EXCLUSIVA ADMIN MASTER) -->
-        <div class="panel saas-growth-hub u-mt-16">
-          <div class="panel-header u-mb-12">
-            <div>
-              <h2 class="panel-title">Central Comercial &amp; Playbook de Vendas do seu SaaS</h2>
-              <p class="panel-desc u-mt-3">
-                Personalize sua Página Principal 3D na raiz do domínio (sem sub-rotas), copie scripts prontos de fechamento e escale assinaturas recorrentes.
-              </p>
-            </div>
-            <div class="u-acoes-wrap">
-              <button type="button" class="btn btn-secondary btn-sm" onclick="openSaasSalesUrl()">Abrir Página Principal</button>
-              <button type="button" class="btn btn-primary btn-sm" onclick="copySaasSalesUrl()">Copiar Link Oficial</button>
-            </div>
-          </div>
-
-          <div class="saas-url-builder">
-            <div class="form-group u-m-0">
-              <label class="form-label" for="salesPageCloserPhone">WhatsApp de Fechamento</label>
-              <input type="text" id="salesPageCloserPhone" value="558681303979" placeholder="Ex: 5586999998888" inputmode="numeric" />
-            </div>
-            <div class="form-group u-m-0">
-              <label class="form-label" for="salesPrice1">1 Chip (R$/mês)</label>
-              <input type="number" id="salesPrice1" value="147" min="1" max="9999" />
-            </div>
-            <div class="form-group u-m-0">
-              <label class="form-label" for="salesPrice2">2 Chips (R$/mês)</label>
-              <input type="number" id="salesPrice2" value="247" min="1" max="9999" />
-            </div>
-            <div class="form-group u-m-0">
-              <label class="form-label" for="salesPrice3">3 Chips (R$/mês)</label>
-              <input type="number" id="salesPrice3" value="347" min="1" max="9999" />
-            </div>
-          </div>
-
-          <div class="saas-url-preview-bar">
-            <code id="salesPageGeneratedUrl" class="u-text-sm u-text-accent u-break">https://zap-ia-studio.vercel.app</code>
-          </div>
-
-          <div class="u-mt-16">
-            <strong class="u-selo-topo--8">Scripts Comerciais Prontos (Copy de Conversão Direta no WhatsApp)</strong>
-            <div id="saasPlaybookScriptsGrid" class="sales-scripts-grid"></div>
-          </div>
-
-          <details class="u-rodape-secao u-rodape-secao--espaco">
-            <summary class="u-cursor-pointer u-bold u-text-md u-text-main">
-              5 Alavancas Práticas para Escalar Assinaturas Mensais (Playbook de Aquisição)
-            </summary>
-            <div class="growth-lever-grid u-mt-12">
-              <div class="growth-lever-card">
-                <strong>1. Auditoria Noturna "Cliente Oculto" (20h30–22h)</strong>
-                <p>Mande mensagem para 15 clínicas ou lojas da sua cidade após as 20h30 perguntando preço. No dia seguinte, mostre ao dono quantas horas levou para responderem e envie sua página principal interativa.</p>
+        <div class="treino-painel" data-contas-painel="comercial" hidden>
+          <div class="panel saas-growth-hub">
+            <div class="panel-header u-mb-12">
+              <div>
+                <h2 class="panel-title">Central Comercial &amp; Playbook de Vendas</h2>
+                <p class="panel-desc u-mt-3">
+                  Personalize sua Página Principal 3D na raiz do domínio (sem sub-rotas), copie scripts prontos de fechamento e escale assinaturas recorrentes.
+                </p>
               </div>
-              <div class="growth-lever-card">
-                <strong>2. Parceria com Gestores de Tráfego Local (20% Recorrente)</strong>
-                <p>Todo gestor de tráfego sofre quando gera leads e o cliente demora para responder no WhatsApp. Ofereça comissão recorrente para ele indicar o Ienvia aos clientes de tráfego dele.</p>
-              </div>
-              <div class="growth-lever-card">
-                <strong>3. Vídeo Curto "Tela Dividida" (Voz OGG + Dossiê)</strong>
-                <p>Grave 35 segundos mostrando um lead mandando áudio de um lado e o Ienvia respondendo com nota de voz de ondas verdes + enviando o Dossiê de 3 Linhas no seu celular pessoal.</p>
-              </div>
-              <div class="growth-lever-card">
-                <strong>4. Upsell Multi-Chip na Carteira Atual (1 → 2 ou 3 Chips)</strong>
-                <p>Ofereça aos assinantes de 1 Chip um segundo número exclusivo para prospecção ativa com <strong>Rodízio Inteligente Anti-Ban</strong> por +R$ 100/mês.</p>
-              </div>
-              <div class="growth-lever-card">
-                <strong>5. Programa "Indique 1 Lojista = 1 Mês Abonado"</strong>
-                <p>Quando um cliente bater as primeiras vendas pelo painel, ofereça isenção da próxima mensalidade a cada amigo empresário indicado que ativar um plano.</p>
+              <div class="u-acoes-wrap">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="openSaasSalesUrl()">Abrir Página Principal</button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="copySaasSalesUrl()">Copiar Link Oficial</button>
               </div>
             </div>
-          </details>
+
+            <div class="saas-url-builder">
+              <div class="form-group u-m-0">
+                <label class="form-label" for="salesPageCloserPhone">WhatsApp de Fechamento</label>
+                <input type="text" id="salesPageCloserPhone" value="558681303979" placeholder="Ex: 5586999998888" inputmode="numeric" />
+              </div>
+              <div class="form-group u-m-0">
+                <label class="form-label" for="salesPrice1">1 Chip (R$/mês)</label>
+                <input type="number" id="salesPrice1" value="147" min="1" max="9999" />
+              </div>
+              <div class="form-group u-m-0">
+                <label class="form-label" for="salesPrice2">2 Chips (R$/mês)</label>
+                <input type="number" id="salesPrice2" value="247" min="1" max="9999" />
+              </div>
+              <div class="form-group u-m-0">
+                <label class="form-label" for="salesPrice3">3 Chips (R$/mês)</label>
+                <input type="number" id="salesPrice3" value="347" min="1" max="9999" />
+              </div>
+            </div>
+
+            <div class="saas-url-preview-bar">
+              <code id="salesPageGeneratedUrl" class="u-text-sm u-text-accent u-break">https://zap-ia-studio.vercel.app</code>
+            </div>
+
+            <div class="u-mt-16">
+              <strong class="u-selo-topo--8">Scripts Comerciais Prontos (Copy de Conversão Direta no WhatsApp)</strong>
+              <div id="saasPlaybookScriptsGrid" class="sales-scripts-grid"></div>
+            </div>
+
+            <details class="u-rodape-secao u-rodape-secao--espaco">
+              <summary class="u-cursor-pointer u-bold u-text-md u-text-main">
+                5 Alavancas Práticas para Escalar Assinaturas Mensais (Playbook de Aquisição)
+              </summary>
+              <div class="growth-lever-grid u-mt-12">
+                <div class="growth-lever-card">
+                  <strong>1. Auditoria Noturna "Cliente Oculto" (20h30–22h)</strong>
+                  <p>Mande mensagem para 15 clínicas ou lojas da sua cidade após as 20h30 perguntando preço. No dia seguinte, mostre ao dono quantas horas levou para responderem e envie sua página principal interativa.</p>
+                </div>
+                <div class="growth-lever-card">
+                  <strong>2. Parceria com Gestores de Tráfego Local (20% Recorrente)</strong>
+                  <p>Todo gestor de tráfego sofre quando gera leads e o cliente demora para responder no WhatsApp. Ofereça comissão recorrente para ele indicar o Ienvia aos clientes de tráfego dele.</p>
+                </div>
+                <div class="growth-lever-card">
+                  <strong>3. Vídeo Curto "Tela Dividida" (Voz OGG + Dossiê)</strong>
+                  <p>Grave 35 segundos mostrando um lead mandando áudio de um lado e o Ienvia respondendo com nota de voz de ondas verdes + enviando o Dossiê de 3 Linhas no seu celular pessoal.</p>
+                </div>
+                <div class="growth-lever-card">
+                  <strong>4. Upsell Multi-Chip na Carteira Atual (1 → 2 ou 3 Chips)</strong>
+                  <p>Ofereça aos assinantes de 1 Chip um segundo número exclusivo para prospecção ativa com <strong>Rodízio Inteligente Anti-Ban</strong> por +R$ 100/mês.</p>
+                </div>
+                <div class="growth-lever-card">
+                  <strong>5. Programa "Indique 1 Lojista = 1 Mês Abonado"</strong>
+                  <p>Quando um cliente bater as primeiras vendas pelo painel, ofereça isenção da próxima mensalidade a cada amigo empresário indicado que ativar um plano.</p>
+                </div>
+              </div>
+            </details>
+          </div>
+        </div>
+
+        <div class="treino-painel" data-contas-painel="guia" hidden>
+          <div class="panel">
+            <h2 class="panel-title u-mb-12">Como entregar contas vendidas e operar o Modo Suporte</h2>
+            <div class="u-grade-auto-min-230 u-gap-12 u-text-breve u-text-secondary">
+              <div class="u-painel-caixa">
+                <strong class="u-selo-topo">1. Cadastro + Kit Automático</strong>
+                Clique em <strong>Novo Cliente</strong> acima. O sistema cria o workspace isolado por RLS e gera a mensagem pronta para você colar no WhatsApp do comprador.
+              </div>
+              <div class="u-painel-caixa">
+                <strong class="u-selo-topo">2. Chave IA Própria (Custo R$ 0 p/ você)</strong>
+                Ao entrar, o cliente segue o Checklist guiado para colar a própria chave gratuita do Google AI Studio, preencher o negócio e parear o WhatsApp.
+              </div>
+              <div class="u-painel-caixa">
+                <strong class="u-selo-topo">3. Modo Suporte em 1 Clique</strong>
+                Precisa ajudar na configuração? Clique em <strong>Acessar Painel</strong> no card do cliente para ajustar o treinamento dele sem precisar pedir senha.
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </main>

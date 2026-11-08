@@ -5725,6 +5725,150 @@ label:has(input[type="checkbox"]) {
 }
 
 /* ==========================================================================
+   CONTAS — cartão de cliente sem style= inline
+   ========================================================================== */
+.saas-clientes-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.saas-client-row.impersonando {
+  border-color: rgba(245, 158, 11, 0.7);
+  background: rgba(245, 158, 11, 0.06);
+}
+.saas-cliente-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.saas-cliente-info { min-width: 0; flex: 1 1 240px; }
+.saas-cliente-nome {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.saas-cliente-titulo { font-size: 15px; color: var(--text-main); }
+.saas-cliente-usuario { font-size: 12px; }
+.saas-cliente-metricas {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+}
+.saas-cliente-setup {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.saas-setup-bloco { display: flex; align-items: center; gap: 6px; }
+.saas-setup-num {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.saas-cliente-nota {
+  margin-top: 8px;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 7px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px dashed rgba(245, 158, 11, 0.3);
+  color: var(--text-secondary);
+}
+.saas-cliente-acoes {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.saas-ponto {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.saas-ponto-off { background: var(--text-muted); }
+.saas-passo { font-size: 10.5px; opacity: 0.45; }
+.saas-passo.on { opacity: 1; }
+.tag-ok {
+  background: rgba(16, 185, 129, 0.14);
+  color: var(--accent-bright);
+}
+.tag-erro {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+}
+/* utilidades que nasceram tirando style= de dentro do JS */
+.crm-inbox-avatar.u-avatar-40 { width: 40px; height: 40px; font-size: 13px; flex-shrink: 0; }
+.crm-inbox-avatar.u-avatar-34, .u-avatar-34 { width: 34px; height: 34px; font-size: 12px; flex-shrink: 0; }
+/* os 6 tons de avatar que antes iam inline */
+.avatar-tom-1 { background: rgba(16,185,129,0.14); color: var(--accent-bright); border-color: rgba(16,185,129,0.28); }
+.avatar-tom-2 { background: rgba(59,130,246,0.14); color: #60a5fa; border-color: rgba(59,130,246,0.28); }
+.avatar-tom-3 { background: rgba(168,85,247,0.14); color: #c084fc; border-color: rgba(168,85,247,0.28); }
+.avatar-tom-4 { background: rgba(245,158,11,0.14); color: var(--warning-bright); border-color: rgba(245,158,11,0.28); }
+.avatar-tom-5 { background: rgba(20,184,166,0.14); color: #2dd4bf; border-color: rgba(20,184,166,0.28); }
+.avatar-tom-6 { background: rgba(244,63,94,0.13); color: #fb7185; border-color: rgba(244,63,94,0.26); }
+.u-vazio-central { margin: auto; }
+.u-vazio-coluna {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.motor-banner-linha {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.treino-pack-vazio {
+  background: var(--bg-card-subtle);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.u-ajuda-125 { font-size: 12.5px; color: var(--text-secondary); }
+.u-ajuda-12-2 { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.u-ajuda-12-4 { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.u-ajuda-12-5 { font-size: 12px; color: var(--text-secondary); margin-top: 5px; }
+.u-acoes-8-wrap { display: flex; gap: 8px; flex-wrap: wrap; }
+.u-svg-10 { width: 10px; height: 10px; }
+.btn-mini { min-height: 28px; padding: 4px 10px; font-size: 11px; }
+.visao-tendencia.vazio { visibility: hidden; }
+.kpi-num-accent { color: var(--accent-bright); }
+.kpi-svg { width: 18px; height: 18px; }
+.sales-script-titulo {
+  font-size: 12.5px;
+  color: var(--text-main);
+  display: block;
+  margin-bottom: 6px;
+}
+.sales-script-acoes { display: flex; gap: 6px; flex-wrap: wrap; }
+.tag-master {
+  background: rgba(245, 158, 11, 0.18);
+  color: var(--warning-bright);
+  font-weight: 700;
+}
+
+/* ==========================================================================
    SIMULADOR — chat mandando, atalhos e ajuda recolhidos
    ========================================================================== */
 .sim-grade { align-items: start; }

@@ -2,14 +2,8 @@
 
 const PRESET_CRM_TAGS = ['Quente', 'Lojista', 'Pediu Valor', 'Retorno Autorizado', 'VIP'];
 
-const AVATAR_TINTS = [
-  'background:rgba(16,185,129,0.14); color:var(--accent-bright); border-color:rgba(16,185,129,0.28);',
-  'background:rgba(59,130,246,0.14); color:#60a5fa; border-color:rgba(59,130,246,0.28);',
-  'background:rgba(168,85,247,0.14); color:#c084fc; border-color:rgba(168,85,247,0.28);',
-  'background:rgba(245,158,11,0.14); color:var(--warning-bright); border-color:rgba(245,158,11,0.28);',
-  'background:rgba(20,184,166,0.14); color:#2dd4bf; border-color:rgba(20,184,166,0.28);',
-  'background:rgba(244,63,94,0.13); color:#fb7185; border-color:rgba(244,63,94,0.26);'
-];
+// 6 tons de avatar viram classe no CSS (avatar-tom-1..6) em vez de style inline.
+const AVATAR_TINTS = ['avatar-tom-1', 'avatar-tom-2', 'avatar-tom-3', 'avatar-tom-4', 'avatar-tom-5', 'avatar-tom-6'];
 
 function getSafeInitials(raw, fallback = 'C') {
   const clean = String(raw || '').trim();
@@ -1189,7 +1183,7 @@ function renderSaasOnboardingBox() {
   const uid = state.currentUser?.id || 'local';
   const dismissedKey = `zapia_onb_hide_${uid}`;
   if (localStorage.getItem(dismissedKey) === '1') {
-    box.style.display = 'none';
+    box.classList.add('u-none');
     return;
   }
 
@@ -1257,9 +1251,11 @@ function renderSaasOnboardingBox() {
 
   // Na conta Master já 100% pronta e conectada, não polui o topo (a menos que esteja em Modo Suporte de cliente)
   if (pct === 100 && (state.currentUser?.role === 'master' || state.currentUser?.tenantRole === 'master') && !state.actAsUser?.userId) {
-    box.style.display = 'none';
+    box.classList.add('u-none');
     return;
   }
+
+  box.classList.remove('u-none');
 
   const collapsedKey = `zapia_onb_collapsed_${uid}`;
   const savedCollapse = localStorage.getItem(collapsedKey);
@@ -1274,7 +1270,7 @@ function renderSaasOnboardingBox() {
           <strong style="font-size:14px; color:var(--text-main);">
             ${pct === 100 ? 'Configuração 100% Concluída' : `Ativação Guiada da Conta (${pct}%)`}
           </strong>
-          ${isCollapsed ? '' : `<div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">Complete os passos na ordem para operar 100% no automático.</div>`}
+          ${isCollapsed ? '' : `<div class="u-ajuda-12-2">Complete os passos na ordem para operar 100% no automático.</div>`}
         </div>
         <div style="display:flex; gap:6px; align-items:center;">
           <button type="button" class="btn btn-secondary btn-sm" onclick="toggleSaasOnboardingCollapse()">${isCollapsed ? 'Expandir' : 'Minimizar'}</button>
@@ -1980,8 +1976,7 @@ function renderAll() {
   function pintarTendencia(el, texto, classe) {
     if (!el) return;
     el.textContent = texto || '';
-    el.className = 'visao-tendencia' + (classe ? ' ' + classe : '');
-    el.style.visibility = texto ? 'visible' : 'hidden';
+    el.className = 'visao-tendencia' + (classe ? ' ' + classe : '') + (texto ? '' : ' vazio');
   }
 
   let _campanhasCache = null;
@@ -2516,7 +2511,7 @@ function renderWaState() {
 
   const activeSlot = getSlotUiMeta(state.selectedWaSlotId);
   if (cfgStrip) {
-    cfgStrip.style.display = activeSlot.locked ? 'none' : 'flex';
+    cfgStrip.classList.toggle('u-none', Boolean(activeSlot.locked));
     const lblInp = document.getElementById('waSlotLabelInput');
     if (lblInp && document.activeElement !== lblInp && lblInp.dataset.slotBound !== `${activeSlot.slotId}:${activeSlot.label}`) {
       lblInp.value = activeSlot.label;
@@ -2543,8 +2538,8 @@ function renderWaState() {
   const slSt = activeSlot.status;
   if (slSt === 'connected') {
     const phone = activeSlot.connectedUser?.phone || '';
-    btnConn.style.display = 'none';
-    btnDisc.style.display = 'inline-flex';
+    btnConn.classList.add('u-none');
+    btnDisc.classList.remove('u-none');
     btnDisc.textContent = `Desconectar ${activeSlot.shortLabel}`;
     stage.innerHTML = `
       <div class="stage-connected">
@@ -2564,8 +2559,8 @@ function renderWaState() {
       </div>
     `;
   } else if (slSt === 'qr_ready') {
-    btnConn.style.display = 'none';
-    btnDisc.style.display = 'inline-flex';
+    btnConn.classList.add('u-none');
+    btnDisc.classList.remove('u-none');
     btnDisc.textContent = 'Cancelar Pareamento';
     if (activeSlot.pairingCode) {
       stage.innerHTML = `
@@ -2586,8 +2581,8 @@ function renderWaState() {
       `;
     }
   } else if (slSt === 'connecting') {
-    btnConn.style.display = 'none';
-    btnDisc.style.display = 'inline-flex';
+    btnConn.classList.add('u-none');
+    btnDisc.classList.remove('u-none');
     btnDisc.textContent = 'Cancelar';
     const connStart = activeSlot._connectStart || Date.now();
     activeSlot._connectStart = connStart;
@@ -2601,10 +2596,10 @@ function renderWaState() {
       </div>
     `;
   } else {
-    btnConn.style.display = activeSlot.locked ? 'none' : 'inline-flex';
+    btnConn.classList.toggle('u-none', Boolean(activeSlot.locked));
     const hasSavedSession = Boolean(activeSlot.lastKnownUser?.phone);
     btnConn.innerHTML = hasSavedSession ? `<svg class="icon-svg" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>Reconectar ${activeSlot.shortLabel}` : `<svg class="icon-svg" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3"/><path d="M21 14v.01"/></svg>Gerar QR (${activeSlot.shortLabel})`;
-    btnDisc.style.display = 'none';
+    btnDisc.classList.add('u-none');
     const isCloudWorkerOff = state.runtimeMode === 'vercel_cloud' && !state.waState?.workerOnline;
     const lastKnownPhone = activeSlot.lastKnownUser?.phone || '';
     const evoActive = activeSlot.status === 'qr_ready' || activeSlot.status === 'connecting';
@@ -2664,11 +2659,11 @@ function renderWaState() {
   if (devicesBox) {
     const onlineDevs = (state.waState?.devices || []).filter((d) => d.online);
     if (onlineDevs.length > 0) {
-      devicesBox.style.display = 'flex';
+      devicesBox.classList.remove('u-none');
       devicesBox.innerHTML = `
         <div class="devices-title">
           <span>Aparelhos Online nesta Conta (${onlineDevs.length})</span>
-          ${onlineDevs.length > 1 ? '<span style="color:var(--accent-bright);">Modo Multi-Aparelho Ativo</span>' : '<span>Até 3 Chips no mesmo aparelho</span>'}
+          ${onlineDevs.length > 1 ? '<span class="u-text-accent">Modo Multi-Aparelho Ativo</span>' : '<span>Até 3 Chips no mesmo aparelho</span>'}
         </div>
         ${onlineDevs
           .map((d) => {
@@ -2677,7 +2672,7 @@ function renderWaState() {
               <div class="device-row">
                 <div class="device-info">
                   <div class="device-name">
-                    <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="var(--accent-bright)" stroke-width="3" aria-hidden="true"><circle cx="12" cy="12" r="5"/></svg>
+                    <svg class="u-svg-10" viewBox="0 0 24 24" fill="none" stroke="var(--accent-bright)" stroke-width="3" aria-hidden="true"><circle cx="12" cy="12" r="5"/></svg>
                     ${escapeHtml(d.deviceName || 'Aparelho Online')}
                   </div>
                   <div class="device-status">
@@ -2685,7 +2680,7 @@ function renderWaState() {
                     ${d.appVersion ? ` • v${escapeHtml(d.appVersion)}` : ''}
                   </div>
                 </div>
-                <button type="button" class="btn btn-secondary btn-sm" style="min-height:28px; padding:4px 10px; font-size:11px;" onclick="promptRenameWorkerDevice('${escapeJsArg(d.deviceId)}', '${escapeJsArg(d.deviceName || '')}')">
+                <button type="button" class="btn btn-secondary btn-sm btn-mini" onclick="promptRenameWorkerDevice('${escapeJsArg(d.deviceId)}', '${escapeJsArg(d.deviceName || '')}')">
                   Apelido
                 </button>
               </div>
@@ -2694,7 +2689,7 @@ function renderWaState() {
           .join('')}
       `;
     } else {
-      devicesBox.style.display = 'none';
+      devicesBox.classList.add('u-none');
       devicesBox.innerHTML = '';
     }
   }
@@ -2732,7 +2727,7 @@ function renderMotorDownloadStatus() {
     statusEl.innerHTML = `${site} • ${motor} — <strong>Atualização solicitada.</strong> Aguardando confirmação do motor; os chips podem ficar offline temporariamente.${devices}`;
   } else if (workerOnline && workerVer && (workerVer !== ver || hasDifferentDevice)) {
     statusEl.className = 'motor-status-banner outdated';
-    statusEl.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+    statusEl.innerHTML = `<div class="motor-banner-linha">
         <span>${site} • ${motor} — versões diferentes. ${state.motorUpdateRequestedAt ? 'Não foi possível confirmar a atualização; confira o motor antes de tentar novamente.' : 'Atualize o motor para usar a versão do site.'}${devices}</span>
         <button type="button" id="btnRemoteUpdateMotor" class="btn btn-primary btn-sm" onclick="triggerRemoteMotorUpdate()">🔄 Atualizar Motor</button>
       </div>`;
@@ -3295,17 +3290,17 @@ function renderActivePackStatus(p) {
     const totalSkills = (s.operationalSkillsCount || 0) + (s.humanizationSkillsCount || 0);
     box.innerHTML = `
       <div style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:10px; padding:14px;">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+        <div class="saas-cliente-topo">
           <div>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div class="saas-cliente-nome">
               <strong style="font-size:14px; color:var(--text-main);">${escapeHtml(pack.name)}</strong>
               <span class="tag" style="background:rgba(5,150,105,0.16); color:var(--accent-bright);">Ativo no Cérebro Único</span>
             </div>
-            <div style="font-size:12px; color:var(--text-secondary); margin-top:4px;">
+            <div class="u-ajuda-12-4">
               Fonte: <code>${escapeHtml(pack.originalFilename || pack.id)}</code> • Use o Estúdio Visual logo abaixo para editar M01–M13 ou criar novas Skills!
             </div>
           </div>
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <div class="u-acoes-8-wrap">
             <button type="button" class="btn btn-secondary btn-sm" onclick="inspectTrainingPack('${escapeJsArg(pack.id)}')">Resumo Geral</button>
             <button type="button" class="btn btn-danger btn-sm" onclick="detachTrainingPack()">Desvincular</button>
           </div>
@@ -3326,9 +3321,9 @@ function renderActivePackStatus(p) {
     .join('');
 
   box.innerHTML = `
-    <div style="background:var(--bg-card-subtle); border:1px dashed var(--border); border-radius:10px; padding:12px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-      <span style="font-size:12.5px; color:var(--text-secondary);">Este perfil usa o formulário guiado abaixo (sem pacote .ZIP vinculado).</span>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">${existingOptions}</div>
+    <div class="treino-pack-vazio">
+      <span class="u-ajuda-125">Este perfil usa o formulário guiado abaixo (sem pacote .ZIP vinculado).</span>
+      <div class="u-acoes-8-wrap">${existingOptions}</div>
     </div>
   `;
 }
@@ -3339,11 +3334,11 @@ function renderPackVisualStudio(p) {
   if (!studioPanel || !grid) return;
 
   if (!p?.trainingPackId) {
-    studioPanel.style.display = 'none';
+    studioPanel.classList.add('u-none');
     return;
   }
 
-  studioPanel.style.display = 'block';
+  studioPanel.classList.remove('u-none');
   const full = state.fullPackCache[p.trainingPackId];
   if (!full) {
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Carregando biblioteca do pacote...</div>`;
@@ -3409,7 +3404,7 @@ function renderPackVisualStudio(p) {
               <strong>${escapeHtml(s.id)} · ${escapeHtml(s.name)}</strong>
               <span class="tag">${isHum ? 'Humanização' : 'Operacional'}</span>
             </div>
-            ${triggerText ? `<div style="font-size:12px; color:var(--text-secondary); margin-top:5px;"><strong>Quando:</strong> ${escapeHtml(triggerText)}</div>` : ''}
+            ${triggerText ? `<div class="u-ajuda-12-5"><strong>Quando:</strong> ${escapeHtml(triggerText)}</div>` : ''}
             ${sampleText ? `<div style="font-size:12px; color:var(--text-muted); margin-top:4px; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;">${escapeHtml(sampleText)}</div>` : ''}
           </div>
           <div style="display:flex; gap:6px;">
@@ -3893,7 +3888,7 @@ function renderAiSettings() {
     pill.innerHTML = `<span class="status-dot"></span><span>${botOn ? 'Ativo' : 'Pausado'}</span>`;
   }
   const offGroup = document.getElementById('aiOffReplyGroup');
-  if (offGroup) offGroup.style.display = botOn ? 'none' : 'block';
+  if (offGroup) offGroup.classList.toggle('u-none', botOn);
   const offReply = document.getElementById('aiOffReplyInput');
   if (offReply) offReply.value = state.settings?.iaOffReply || '';
 }
@@ -3932,7 +3927,7 @@ function renderProactiveQueueStatus() {
   box.innerHTML = `
     <div>
       ${statusLabel}
-      <div style="font-size:12px; color:var(--text-secondary); margin-top:2px;">
+      <div class="u-ajuda-12-2">
         Abordagens hoje: <strong>${q.dailySent || 0} / ${q.dailyLimit || 25}</strong> • Enviados nesta sessão: ${q.sentSession || 0}
       </div>
     </div>
@@ -4409,7 +4404,7 @@ function renderCrmInbox(filteredList) {
           <div class="crm-inbox-item ${isSelected ? 'active' : ''} ${unread > 0 ? 'unread' : ''}" role="group" aria-label="Conversa de ${escapeHtml(contactName)}">
             ${selection}
             <button type="button" class="crm-inbox-item-main" aria-label="Abrir conversa com ${escapeHtml(contactName)}" onclick="${state.crmBulkMode ? `toggleBulkChatItem('${encId}', event)` : `selectInboxChat('${encId}')`}">
-              <div class="crm-inbox-avatar" style="${avatarTint}">${renderContactAvatarContent(c)}</div>
+              <div class="crm-inbox-avatar ${avatarTint}">${renderContactAvatarContent(c)}</div>
               <div class="crm-inbox-item-body">
                 <div class="crm-inbox-item-top">
                   <span class="crm-inbox-item-name">${c.pinned ? '<span class="crm-list-mark" title="Fixada">★</span>' : ''}${c.savedContact ? '<span class="crm-list-mark" title="Salvo na agenda">📇</span>' : ''}${escapeHtml(contactName)}</span>
@@ -4474,13 +4469,13 @@ function renderActiveInboxConversation() {
   renderInboxInspector360(c);
 
   if (!c) {
-    emptyEl.style.display = '';
-    paneEl.style.display = 'none';
+    emptyEl.classList.remove('u-none');
+    paneEl.classList.add('u-none');
     return;
   }
 
-  emptyEl.style.display = 'none';
-  paneEl.style.display = 'flex';
+  emptyEl.classList.add('u-none');
+  paneEl.classList.remove('u-none');
 
   document.getElementById('inboxContactName').textContent = getContactDisplayName(c, 'Cliente');
   document.getElementById('inboxContactPhone').textContent = formatContactSubtitle(c);
@@ -4493,13 +4488,13 @@ function renderActiveInboxConversation() {
   }
   const headAvatar = document.getElementById('inboxHeadAvatar');
   if (headAvatar) {
-    headAvatar.setAttribute('style', `width:34px; height:34px; font-size:12px; flex-shrink:0; ${getAvatarTintStyle(c.chatId || c.phone || c.name)}`);
+    headAvatar.className = `crm-inbox-avatar u-avatar-34 ${getAvatarTintStyle(c.chatId || c.phone || c.name)}`;
     headAvatar.innerHTML = renderContactAvatarContent(c);
   }
   const dealHeadBadge = document.getElementById('inboxDealBadge');
   if (dealHeadBadge) {
     if (Number(c.dealValue) > 0 || (c.dealStatus && c.dealStatus !== 'open')) {
-      dealHeadBadge.style.display = 'inline-flex';
+      dealHeadBadge.classList.remove('u-none');
       const stTxt = c.dealStatus === 'won' ? '✅ Ganho' : c.dealStatus === 'lost' ? '❌ Perdido' : '';
       const valTxt = Number(c.dealValue) > 0 ? formatBrlShort(c.dealValue) : '';
       dealHeadBadge.textContent = [valTxt, stTxt].filter(Boolean).join(' • ');
@@ -4567,11 +4562,11 @@ function renderActiveInboxConversation() {
 
   const sentBadge = document.getElementById('inboxSentimentBadge');
   if (c.sentiment?.code && c.sentiment.code !== 'neutral') {
-    sentBadge.style.display = 'inline-flex';
+    sentBadge.classList.remove('u-none');
     sentBadge.className = `sentiment-pill ${c.sentiment.code}`;
     sentBadge.textContent = `${c.sentiment.emoji || ''} ${c.sentiment.label || ''}`.trim();
   } else {
-    sentBadge.style.display = 'none';
+    sentBadge.classList.add('u-none');
   }
 
   // Skill #2: Dossiê Executivo de 3 Linhas + Cópia Rápida em 1 Clique (v5.7.0)
@@ -4705,7 +4700,7 @@ function renderActiveInboxConversation() {
 
     if (!msgs.length) {
       msgBox.innerHTML = `
-        <div class="empty-state" style="margin:auto; display:flex; flex-direction:column; align-items:center; gap:10px;">
+        <div class="empty-state u-vazio-central u-vazio-coluna">
           <span>Nenhuma mensagem carregada ainda no painel para esta conversa.</span>
           ${fetchOlderBtnHtml}
         </div>
@@ -6372,7 +6367,7 @@ window.renderContactsAgendaView = function renderContactsAgendaView() {
     return `
       <div class="contact-book-card">
         <div class="contact-book-card-head">
-          <div class="crm-inbox-avatar" style="width:40px; height:40px; font-size:13px; flex-shrink:0; ${avatarTint}">${renderContactAvatarContent(c)}</div>
+          <div class="crm-inbox-avatar u-avatar-40 ${avatarTint}">${renderContactAvatarContent(c)}</div>
           <div style="min-width:0; flex:1;">
             <div style="display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
               <strong style="font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(getContactDisplayName(c))}</strong>
@@ -7169,7 +7164,7 @@ function bindEvents() {
         pill.innerHTML = `<span class="status-dot"></span><span>${enabled ? 'Ativo' : 'Pausado'}</span>`;
       }
       const offGroup = document.getElementById('aiOffReplyGroup');
-      if (offGroup) offGroup.style.display = enabled ? 'none' : 'block';
+      if (offGroup) offGroup.classList.toggle('u-none', enabled);
       // Sincronizar masterBotToggle no topbar/dashboard
       const masterToggle = document.getElementById('masterBotToggle');
       if (masterToggle) masterToggle.checked = enabled;
@@ -9457,22 +9452,22 @@ function renderManagedUsers() {
 
     kpiBox.innerHTML = `
       <div class="saas-kpi-card">
-        <span class="kpi-icon"><svg class="icon-svg" style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg></span>
+        <span class="kpi-icon"><svg class="icon-svg kpi-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg></span>
         <div class="kpi-num">${clientUsers.length}</div>
         <div class="kpi-lbl">Contas de Clientes (${activeCount} ativas${blockedCount ? ` • ${blockedCount} bloq.` : ''})</div>
       </div>
       <div class="saas-kpi-card">
-        <span class="kpi-icon"><svg class="icon-svg" style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
-        <div class="kpi-num" style="color:var(--accent-bright);">${workersOnline}</div>
+        <span class="kpi-icon"><svg class="icon-svg kpi-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
+        <div class="kpi-num kpi-num-accent">${workersOnline}</div>
         <div class="kpi-lbl">Motores WhatsApp Conectados</div>
       </div>
       <div class="saas-kpi-card">
-        <span class="kpi-icon"><svg class="icon-svg" style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+        <span class="kpi-icon"><svg class="icon-svg kpi-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
         <div class="kpi-num">${readyCount}/${clientUsers.length || 0}</div>
         <div class="kpi-lbl">Clientes com Setup Avançado (3+/4)</div>
       </div>
       <div class="saas-kpi-card">
-        <span class="kpi-icon"><svg class="icon-svg" style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></span>
+        <span class="kpi-icon"><svg class="icon-svg kpi-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></span>
         <div class="kpi-num">${totalLeads}</div>
         <div class="kpi-lbl">Leads Totais Geridos na Plataforma</div>
       </div>
@@ -9501,40 +9496,40 @@ function renderManagedUsers() {
   }
 
   box.innerHTML = `
-    <div style="display:flex; flex-direction:column; gap:12px;">
+    <div class="saas-clientes-lista">
       ${list
         .map((u) => {
           const isMaster = u.role === 'master';
           const isCurrentlyImpersonated = state.actAsUser?.userId === u.userId;
           const lastSeen = u.lastSeenAt ? new Date(u.lastSeenAt).toLocaleString('pt-BR') : 'Ainda não acessou';
           const workerBadge = u.workerOnline
-            ? `<span class="tag" style="background:rgba(16,185,129,0.14); color:var(--accent-bright);"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;margin-right:5px;vertical-align:middle;"></span>Motor Online${u.connectedPhone ? ' (+' + escapeHtml(u.connectedPhone) + ')' : ''}</span>`
-            : `<span class="tag"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--text-muted);margin-right:5px;vertical-align:middle;"></span>Motor Offline</span>`;
+            ? `<span class="tag tag-ok"><span class="saas-ponto"></span>Motor Online${u.connectedPhone ? ' (+' + escapeHtml(u.connectedPhone) + ')' : ''}</span>`
+            : `<span class="tag"><span class="saas-ponto saas-ponto-off"></span>Motor Offline</span>`;
           const statusBadge = u.isActive
-            ? `<span class="tag" style="background:rgba(16,185,129,0.14); color:var(--accent-bright);">Ativa</span>`
-            : `<span class="tag" style="background:rgba(239,68,68,0.15); color:var(--danger);">Bloqueada</span>`;
+            ? `<span class="tag tag-ok">Ativa</span>`
+            : `<span class="tag tag-erro">Bloqueada</span>`;
 
           const score = Math.min(4, Math.max(0, Number(u.setupScore) || 0));
           const steps = u.setupSteps || {};
           const stepBadges = `
-            <span class="tag" style="font-size:10.5px; opacity:${steps.aiKey ? '1' : '0.45'};">${steps.aiKey ? '✓' : '○'} Chave IA</span>
-            <span class="tag" style="font-size:10.5px; opacity:${steps.training ? '1' : '0.45'};">${steps.training ? '✓' : '○'} Cérebro</span>
-            <span class="tag" style="font-size:10.5px; opacity:${steps.whatsapp ? '1' : '0.45'};">${steps.whatsapp ? '✓' : '○'} WhatsApp</span>
+            <span class="tag saas-passo ${steps.aiKey ? 'on' : ''}">${steps.aiKey ? '✓' : '○'} Chave IA</span>
+            <span class="tag saas-passo ${steps.training ? 'on' : ''}">${steps.training ? '✓' : '○'} Cérebro</span>
+            <span class="tag saas-passo ${steps.whatsapp ? 'on' : ''}">${steps.whatsapp ? '✓' : '○'} WhatsApp</span>
           `;
 
           return `
-            <div class="saas-client-row" style="${isCurrentlyImpersonated ? 'border-color:rgba(245,158,11,0.7); background:rgba(245,158,11,0.06);' : ''}">
-              <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
-                <div style="min-width:0; flex:1 1 240px;">
-                  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                    <strong style="font-size:15px; color:var(--text-main);">${escapeHtml(u.displayName)}</strong>
-                    <code style="font-size:12px;">@${escapeHtml(u.username)}</code>
-                    ${isMaster ? `<span class="tag" style="background:rgba(245,158,11,0.18); color:var(--warning-bright); font-weight:700;">Master</span>` : statusBadge}
+            <div class="saas-client-row ${isCurrentlyImpersonated ? 'impersonando' : ''}">
+              <div class="saas-cliente-topo">
+                <div class="saas-cliente-info">
+                  <div class="saas-cliente-nome">
+                    <strong class="saas-cliente-titulo">${escapeHtml(u.displayName)}</strong>
+                    <code class="saas-cliente-usuario">@${escapeHtml(u.username)}</code>
+                    ${isMaster ? `<span class="tag tag-master">Master</span>` : statusBadge}
                     ${workerBadge}
                     ${u.awaitingHumanCount > 0 ? `<span class="tag paused">${u.awaitingHumanCount} aguardando humano</span>` : ''}
                   </div>
 
-                  <div style="font-size:12px; color:var(--text-muted); margin-top:6px; display:flex; gap:12px; flex-wrap:wrap; font-variant-numeric:tabular-nums;">
+                  <div class="saas-cliente-metricas">
                     <span>Plano Chips: <strong>${u.connectedSlotsCount || 0}/${u.maxWaSlots || 1} online</strong></span>
                     ${u.onlineDevicesCount > 0 ? `<span>Aparelhos: <strong>${u.onlineDevicesCount}</strong></span>` : ''}
                     <span>CRM: <strong>${u.contactsCount || 0}</strong></span>
@@ -9543,9 +9538,9 @@ function renderManagedUsers() {
                     <span>Acesso: ${escapeHtml(lastSeen)}</span>
                   </div>
 
-                  <div style="margin-top:8px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                    <div style="display:flex; align-items:center; gap:6px;">
-                      <span style="font-size:11px; font-weight:700; color:var(--text-secondary); font-variant-numeric:tabular-nums;">Setup ${score}/4</span>
+                  <div class="saas-cliente-setup">
+                    <div class="saas-setup-bloco">
+                      <span class="saas-setup-num">Setup ${score}/4</span>
                       <div class="setup-score-bar">
                         ${[1, 2, 3, 4].map((n) => `<span class="${score >= n ? 'on' : ''}"></span>`).join('')}
                       </div>
@@ -9555,12 +9550,12 @@ function renderManagedUsers() {
 
                   ${
                     u.adminNotes
-                      ? `<div style="margin-top:8px; font-size:12px; padding:6px 10px; border-radius:7px; background:rgba(245,158,11,0.08); border:1px dashed rgba(245,158,11,0.3); color:var(--text-secondary);"><strong>Nota Master:</strong> ${escapeHtml(u.adminNotes)}</div>`
+                      ? `<div class="saas-cliente-nota"><strong>Nota Master:</strong> ${escapeHtml(u.adminNotes)}</div>`
                       : ''
                   }
                 </div>
 
-                <div style="display:flex; gap:7px; flex-wrap:wrap; align-items:center;">
+                <div class="saas-cliente-acoes">
                   ${
                     !isMaster
                       ? `
@@ -10187,10 +10182,10 @@ function renderSaasCommercialGrowthHub() {
     return `
       <div class="sales-script-card">
         <div>
-          <strong style="font-size:12.5px; color:var(--text-main); display:block; margin-bottom:6px;">${escapeHtml(s.title)}</strong>
+          <strong class="sales-script-titulo">${escapeHtml(s.title)}</strong>
           <p>${escapeHtml(txt)}</p>
         </div>
-        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <div class="sales-script-acoes">
           <button type="button" class="btn btn-primary btn-sm" onclick="copySalesPlaybookScript('${escapeJsArg(s.key)}')">Copiar Script</button>
           ${s.canProactive ? `<button type="button" class="btn btn-secondary btn-sm" onclick="loadSalesScriptIntoProactive('${escapeJsArg(s.key)}')">Levar p/ Disparador</button>` : ''}
         </div>

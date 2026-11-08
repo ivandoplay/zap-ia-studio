@@ -424,7 +424,9 @@ const HUB_BY_TAB = {
   instancias: 'dashboard',
   conexoes: 'dashboard',
   historico: 'crm',
-  campanhas: 'config',
+  // Campanhas é aba de OPERAÇÃO: apontar para 'config' fazia a barra de Ajustes
+  // (Motor de IA · Segurança) aparecer no topo de uma tela de campanhas.
+  campanhas: 'dashboard',
   contas: 'contas'
 };
 

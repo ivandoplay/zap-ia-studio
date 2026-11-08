@@ -42,7 +42,31 @@ function blocosRender(){
  if(!ctx.blocos.length)container.append(criar('p','Adicione ao menos um bloco.','camp-hint'));
 }
 function blocoParaPlano(b){if(b.tipo==='texto'){if(b.modo==='ia'&&!b.gerada)throw new Error('Gere ou use o texto original antes de salvar.');const textos=['rotacao','ia'].includes(b.modo)?b.texto.split(/\r?\n---\r?\n/).map(x=>x.trim()).filter(Boolean):[b.texto.trim()];if(!textos.length||textos.some(x=>!x)||textos.length>20)throw new Error('Confira os textos: use de 1 a 20 versões não vazias.');return {id:b.id,tipo:'texto',modo:b.modo,textos,...(['rotacao','ia'].includes(b.modo)?{selecao:b.selecao}:{})};}if(!b.pastaId)throw new Error('Selecione uma pasta para cada bloco de mídia.');return {id:b.id,tipo:b.tipo,pastaId:b.pastaId,selecao:b.selecao,...(b.tipo==='audio'?{notaVoz:b.notaVoz}:{})};}
-function listarRender(){const list=$('campLista');limpar(list);if(!ctx.campanhas.length){list.append(criar('div','Nenhuma campanha criada ainda.','camp-empty'));return;}for(const c of ctx.campanhas){const row=botao('',()=>detalhe(c.campanha_id),'camp-card');row.setAttribute('aria-current',String(ctx.selecionada===c.campanha_id));const col=criar('span');col.append(criar('strong',c.nome),criar('small',c.status==='ativa'?'Próxima ação: '+new Date(c.proxima_acao_em).toLocaleString('pt-BR'):'Clique para ver detalhes'));row.append(col,criar('span',tipos[c.status]||c.status,'camp-badge'));list.append(row);}}
+// Pausar/retomar direto no card. Usa o MESMO endpoint do detalhe (/control),
+// para não existir dois caminhos de controle com regras diferentes.
+async function controleRapido(campanhaId,acao){
+ const aviso=acao==='retomar'?'Retomar os próximos envios desta campanha?':'Pausar os envios desta campanha agora?';
+ if(!confirm(aviso))return;
+ await json(`/api/campaigns/${campanhaId}/control`,'POST',{acao});
+ await atualizar();
+ showToast(acao==='retomar'?'Campanha retomada.':'Campanha pausada.');
+}
+function listarRender(){const list=$('campLista');limpar(list);if(!ctx.campanhas.length){list.append(criar('div','Nenhuma campanha criada ainda.','camp-empty'));return;}
+ for(const c of ctx.campanhas){
+  // o card virou <div> com dois botões irmãos: um abre o detalhe, o outro controla
+  const row=criar('div','','camp-card');
+  row.setAttribute('aria-current',String(ctx.selecionada===c.campanha_id));
+  row.dataset.status=c.status;
+  const abrir=botao('',()=>detalhe(c.campanha_id),'camp-card-abrir');
+  abrir.setAttribute('aria-label','Abrir detalhes de '+c.nome);
+  const col=criar('span');
+  col.append(criar('strong',c.nome),criar('small',c.status==='ativa'?'Próxima ação: '+new Date(c.proxima_acao_em).toLocaleString('pt-BR'):'Clique para ver detalhes'));
+  abrir.append(col);
+  row.append(abrir,criar('span',tipos[c.status]||c.status,'camp-badge'));
+  if(c.status==='ativa'){const b=botao('Pausar',()=>controleRapido(c.campanha_id,'pausar'),'btn btn-secondary btn-sm camp-card-acao');b.setAttribute('aria-label','Pausar '+c.nome);row.append(b);}
+  if(c.status==='pausada'){const b=botao('Retomar',()=>controleRapido(c.campanha_id,'retomar'),'btn btn-primary btn-sm camp-card-acao');b.setAttribute('aria-label','Retomar '+c.nome);row.append(b);}
+  list.append(row);
+ }}
 async function atualizar(){if(ctx.carregando)return;ctx.carregando=true;try{const d=await api('/api/campaigns');ctx.campanhas=d.campanhas;listarRender();if(ctx.selecionada)await detalhe(ctx.selecionada);}finally{ctx.carregando=false;}}
 function contador(){for(const x of painel.querySelectorAll('[data-camp-tempo]')){const seconds=Math.max(0,Math.ceil((Number(x.dataset.campTempo)-Date.now())/1000));const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;x.textContent=seconds?`${h?`${h}h `:''}${m}min ${String(s).padStart(2,'0')}s`:'Pronta para a próxima ação';}}
 async function detalhe(campanhaId){

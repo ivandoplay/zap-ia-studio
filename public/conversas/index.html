@@ -284,18 +284,20 @@
           <svg class="icon-svg icon-svg u-icon-15"  viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
           <span>Segurança &amp; Anti-Ban</span>
         </button>
-        <button type="button" class="hub-subnav-btn" data-subtab="campanhas" onclick="switchTab('campanhas')"><span>Campanhas</span></button>
       </nav>
       <section id="tab-campanhas" class="tab-pane" hidden>
   <div class="page-header"><div><h1>Campanhas</h1><p>Organize mensagens e acompanhe cada envio pelos seus chips conectados.</p></div><button type="button" id="campNova" class="btn btn-primary">Nova campanha</button></div>
-  <div class="camp-notice">Envie somente para pessoas que autorizaram o contato. Variações e intervalos não garantem que o WhatsApp não aplique restrições. Se alguém pedir para não receber mais mensagens, remova as próximas etapas manualmente. Nos pedidos identificados como resposta à campanha, a IA dá uma resposta cordial sem bloquear automaticamente; com a IA desligada, não há resposta automática. Contatos já ignorados continuam protegidos.</div>
-  <div class="camp-grid">
+  <details class="camp-notice" open>
+  <summary>Antes de disparar, leia isto uma vez <span class="camp-notice-seta" aria-hidden="true">▾</span></summary>
+  <p>Envie somente para pessoas que autorizaram o contato. Variações e intervalos não garantem que o WhatsApp não aplique restrições. Se alguém pedir para não receber mais mensagens, remova as próximas etapas manualmente. Nos pedidos identificados como resposta à campanha, a IA dá uma resposta cordial sem bloquear automaticamente; com a IA desligada, não há resposta automática. Contatos já ignorados continuam protegidos.</p>
+</details>
+  <div class="camp-grid camp-grid-3">
     <div class="camp-panel"><div class="camp-heading"><div><h2>Suas campanhas</h2><p>Acompanhe o progresso e a próxima ação.</p></div><button type="button" class="btn btn-secondary btn-sm" id="campAtualizar">Atualizar</button></div><div id="campLista" aria-live="polite">Carregando campanhas…</div></div>
     <div class="camp-panel" id="campDetalhe"><div class="camp-empty"><strong>Selecione uma campanha</strong><p>Veja o andamento, os controles e os envios que precisem de conferência.</p></div></div>
-  </div>
-  <div class="camp-panel camp-folders"><div class="camp-heading"><div><h2>Pastas de mídia</h2><p>Em cada bloco, uma imagem ou um áudio é escolhido da pasta para cada pessoa.</p></div></div>
+    <div class="camp-panel camp-folders"><div class="camp-heading"><div><h2>Pastas de mídia</h2><p>Em cada bloco, uma imagem ou um áudio é escolhido da pasta para cada pessoa.</p></div></div>
     <div class="camp-row"><label>Nome da pasta<input id="campPastaNome" maxlength="120" placeholder="Ex.: Áudios de boas-vindas"></label><label>Tipo<select id="campPastaTipo"><option value="imagem">Imagens</option><option value="audio">Áudios</option></select></label><button id="campPastaCriar" type="button" class="btn btn-secondary">Criar pasta</button></div>
-    <div class="camp-row"><label>Pasta<select id="campPastaSelecionada"><option value="">Selecione uma pasta</option></select></label><label>Arquivos<input id="campPastaArquivos" type="file" multiple accept="image/jpeg,image/png,image/webp,audio/ogg,audio/mpeg,audio/mp4,audio/wav,audio/webm"></label><button id="campPastaEnviar" type="button" class="btn btn-secondary">Adicionar arquivos</button></div><p id="campPastaStatus" class="camp-hint" aria-live="polite"></p><div id="campPastaConteudo" class="camp-hint"></div>
+    <div class="camp-row"><label>Pasta<select id="campPastaSelecionada"><option value="">Selecione uma pasta</option></select></label><label class="camp-file-label">Arquivos<input id="campPastaArquivos" type="file" multiple accept="image/jpeg,image/png,image/webp,audio/ogg,audio/mpeg,audio/mp4,audio/wav,audio/webm"></label><button id="campPastaEnviar" type="button" class="btn btn-secondary">Adicionar arquivos</button></div><p id="campPastaStatus" class="camp-hint" aria-live="polite"></p><div id="campPastaConteudo" class="camp-hint"></div>
+  </div>
   </div>
   <div class="camp-panel" id="campEditor" hidden>
     <div class="camp-heading"><div><h2 id="campEditorTitulo">Nova campanha</h2><p>Salve como rascunho para revisar tudo antes de iniciar.</p></div><button type="button" id="campFechar" class="btn btn-secondary btn-sm">Fechar</button></div>

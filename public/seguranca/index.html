@@ -956,8 +956,8 @@
       <section id="tab-ia" class="tab-pane" hidden>
         <div class="page-header">
           <div>
-            <h1>Motor de IA, Pool de Chaves Grátis & Auto-Fallback</h1>
-            <p>Multiplique sua cota gratuita com rotação de chaves Gemini e configure um provedor reserva automático para nunca ficar offline.</p>
+            <h1>Motor de IA</h1>
+            <p>Qual cérebro responde, com quantas chaves e o que acontece se uma delas cair.</p>
           </div>
           <div class="u-acoes-linha-10">
             <button type="button" id="btnTestAi" class="btn btn-secondary">Testar conexão da IA</button>
@@ -1005,7 +1005,7 @@
                   <span class="slider"></span>
                 </label>
                 <div>
-                  <div  id="aiBotEnabledLabel" class="u-ia-titulo">IA Ativa</div>
+                  <div id="aiBotEnabledLabel" class="u-ia-titulo">IA Ativa</div>
                   <div class="u-text-xs u-text-muted">Atendimento automático pelo WhatsApp</div>
                 </div>
               </div>
@@ -1019,93 +1019,103 @@
           </div>
         </div>
 
-        <div class="panel">
-          <h2 class="panel-title u-mb-12">Escolha o Provedor Principal</h2>
-          <div class="provider-grid" id="providerGrid">
-            <button type="button" class="provider-option selected" data-provider="gemini">
-              <h4>Google Gemini (Recomendado)</h4>
-              <p>Chave grátis no Google AI Studio. Escuta áudios e analisa fotos/comprovantes nativamente.</p>
-            </button>
-            <button type="button" class="provider-option" data-provider="openrouter">
-              <h4>OpenRouter (Texto Universal)</h4>
-              <p>Conecte DeepSeek, Claude, Qwen, Mistral ou qualquer modelo com uma única chave. Plano free.</p>
-            </button>
-          </div>
+        <div class="treino-subabas" role="tablist" aria-label="Seções do motor de IA">
+          <button type="button" class="treino-subaba active" data-ia-aba="provedores" role="tab" aria-selected="true">Provedores &amp; chaves</button>
+          <button type="button" class="treino-subaba" data-ia-aba="ajustes" role="tab" aria-selected="false">Ajustes finos</button>
+        </div>
 
-          <!-- Campos Gemini -->
-          <div id="providerBox-gemini" class="provider-config-box">
+        <div class="treino-painel" data-ia-painel="provedores">
+          <div class="panel">
+            <h2 class="panel-title u-mb-12">Escolha o Provedor Principal</h2>
+            <div class="provider-grid" id="providerGrid">
+              <button type="button" class="provider-option selected" data-provider="gemini">
+                <h4>Google Gemini (Recomendado)</h4>
+                <p>Chave grátis no Google AI Studio. Escuta áudios e analisa fotos/comprovantes nativamente.</p>
+              </button>
+              <button type="button" class="provider-option" data-provider="openrouter">
+                <h4>OpenRouter (Texto Universal)</h4>
+                <p>Conecte DeepSeek, Claude, Qwen, Mistral ou qualquer modelo com uma única chave. Plano free.</p>
+              </button>
+            </div>
+
+            <!-- Campos Gemini -->
+            <div id="providerBox-gemini" class="provider-config-box">
+              <div class="grid-equal">
+                <div class="form-group">
+                  <label class="form-label" for="geminiApiKey">Chave Principal do Google Gemini (GEMINI_API_KEY)</label>
+                  <input type="password" id="geminiApiKey" placeholder="AIzaSy..." autocomplete="off" spellcheck="false" autocapitalize="none" autocorrect="off" />
+                  <div class="form-hint">Obtenha gratuitamente em: <strong>aistudio.google.com/apikey</strong></div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="geminiModel">Modelo do Gemini</label>
+                  <select id="geminiModel">
+                    <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Recomendado Chave Grátis — Ultra rápido + Áudio/Visão)</option>
+                    <option value="gemini-flash-lite-latest">gemini-flash-lite-latest (Alias automático gratuito Google AI Studio)</option>
+                    <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Estável e liberado no Free Tier)</option>
+                    <option value="gemini-3.8-flash">gemini-3.8-flash (Plano Pago / Billing ativo — Auto-fallback p/ Lite se sem cota)</option>
+                    <option value="gemini-4-argon">gemini-4-argon (Plano Pago — Raciocínio complexo)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="geminiKeyPool">Pool de Chaves Gemini Extras (Opcional — 1 por linha para multiplicar cota grátis!)</label>
+                <textarea id="geminiKeyPool" rows="3" placeholder="Cole chaves AIzaSy... extras de outras contas Google (1 por linha). O sistema alterna sozinho entre elas!"></textarea>
+                <div class="form-hint">Se uma chave atingir o limite gratuito do minuto/dia, o sistema pula instantaneamente para a próxima chave do pool sem atrasar o cliente.</div>
+              </div>
+            </div>
+
+            <!-- Campos OpenRouter -->
+            <div id="providerBox-openrouter" class="provider-config-box u-none">
+              <div class="grid-equal">
+                <div class="form-group">
+                  <label class="form-label" for="openrouterApiKey">Chave OpenRouter (OPENROUTER_API_KEY)</label>
+                  <input type="password" id="openrouterApiKey" placeholder="sk-or-v1-..." autocomplete="off" spellcheck="false" autocapitalize="none" autocorrect="off" />
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="openrouterModel">Modelo no OpenRouter</label>
+                  <input type="text" id="openrouterModel" value="deepseek/deepseek-chat" placeholder="Ex: deepseek/deepseek-chat" spellcheck="false" autocapitalize="none" autocorrect="off" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="treino-painel" data-ia-painel="ajustes" hidden>
+          <div class="panel">
+            <h2 class="panel-title u-mb-12">Rota, reserva e comportamento</h2>
             <div class="grid-equal">
               <div class="form-group">
-                <label class="form-label" for="geminiApiKey">Chave Principal do Google Gemini (GEMINI_API_KEY)</label>
-                <input type="password" id="geminiApiKey" placeholder="AIzaSy..." autocomplete="off" spellcheck="false" autocapitalize="none" autocorrect="off" />
-                <div class="form-hint">Obtenha gratuitamente em: <strong>aistudio.google.com/apikey</strong></div>
-              </div>
-              <div class="form-group">
-                <label class="form-label" for="geminiModel">Modelo do Gemini</label>
-                <select id="geminiModel">
-                  <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Recomendado Chave Grátis — Ultra rápido + Áudio/Visão)</option>
-                  <option value="gemini-flash-lite-latest">gemini-flash-lite-latest (Alias automático gratuito Google AI Studio)</option>
-                  <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Estável e liberado no Free Tier)</option>
-                  <option value="gemini-3.8-flash">gemini-3.8-flash (Plano Pago / Billing ativo — Auto-fallback p/ Lite se sem cota)</option>
-                  <option value="gemini-4-argon">gemini-4-argon (Plano Pago — Raciocínio complexo)</option>
+                <label class="form-label" for="providerMode">Modo de Rota (Áudio/Texto)</label>
+                <select id="providerMode">
+                  <option value="auto">Auto (Áudio → Gemini, Texto/Imagem → OpenRouter)</option>
+                  <option value="fallback">Fallback (Provedor principal + reserva)</option>
                 </select>
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label" for="geminiKeyPool">Pool de Chaves Gemini Extras (Opcional — 1 por linha para multiplicar cota grátis!)</label>
-              <textarea id="geminiKeyPool" rows="3" placeholder="Cole chaves AIzaSy... extras de outras contas Google (1 por linha). O sistema alterna sozinho entre elas!"></textarea>
-              <div class="form-hint">Se uma chave atingir o limite gratuito do minuto/dia, o sistema pula instantaneamente para a próxima chave do pool sem atrasar o cliente.</div>
-            </div>
-          </div>
-
-          <!-- Campos OpenRouter -->
-          <div id="providerBox-openrouter" class="provider-config-box u-none">
-            <div class="grid-equal">
-              <div class="form-group">
-                <label class="form-label" for="openrouterApiKey">Chave OpenRouter (OPENROUTER_API_KEY)</label>
-                <input type="password" id="openrouterApiKey" placeholder="sk-or-v1-..." autocomplete="off" spellcheck="false" autocapitalize="none" autocorrect="off" />
+                <div class="form-hint">Modo Auto separa a escuta de áudio (Gemini) do texto (OpenRouter). Modo Fallback usa o provedor principal e, se falhar, o reserva.</div>
               </div>
               <div class="form-group">
-                <label class="form-label" for="openrouterModel">Modelo no OpenRouter</label>
-                <input type="text" id="openrouterModel" value="deepseek/deepseek-chat" placeholder="Ex: deepseek/deepseek-chat" spellcheck="false" autocapitalize="none" autocorrect="off" />
+                <label class="form-label" for="autoFallbackProvider">Provedor Reserva Automático (Auto-Fallback Anti-Queda)</label>
+                <select id="autoFallbackProvider">
+                  <option value="gemini">Gemini (Usa sua chave Gemini como reserva)</option>
+                  <option value="openrouter">OpenRouter (Usa sua chave OpenRouter como reserva)</option>
+                  <option value="none">Desativado (Usar apenas o provedor principal)</option>
+                </select>
+                <div class="form-hint">Basta deixar uma chave cadastrada no provedor reserva escolhido acima para ativar a redundância automática.</div>
               </div>
-            </div>
-          </div>
-
-          <!-- Modo de Rota + Provedor Reserva Automático -->
-          <div class="grid-equal u-secao-fio-topo">
-            <div class="form-group">
-              <label class="form-label" for="providerMode">Modo de Rota (Áudio/Texto)</label>
-              <select id="providerMode">
-                <option value="auto">Auto (Áudio → Gemini, Texto/Imagem → OpenRouter)</option>
-                <option value="fallback">Fallback (Provedor principal + reserva)</option>
-              </select>
-              <div class="form-hint">Modo Auto separa a escuta de áudio (Gemini) do texto (OpenRouter). Modo Fallback usa o provedor principal e, se falhar, o reserva.</div>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="autoFallbackProvider">Provedor Reserva Automático (Auto-Fallback Anti-Queda)</label>
-              <select id="autoFallbackProvider">
-                <option value="gemini">Gemini (Usa sua chave Gemini como reserva)</option>
-                <option value="openrouter">OpenRouter (Usa sua chave OpenRouter como reserva)</option>
-                <option value="none">Desativado (Usar apenas o provedor principal)</option>
-              </select>
-              <div class="form-hint">Basta deixar uma chave cadastrada no provedor reserva escolhido acima para ativar a redundância automática.</div>
-            </div>
-
-            <div class="grid-equal u-gap-12">
               <div class="form-group">
                 <label class="form-label" for="aiTemperature">Criatividade (0.1 a 0.8)</label>
                 <input type="number" id="aiTemperature" step="0.05" min="0" max="1" value="0.35" />
+                <div class="form-hint">Baixo = respostas previsíveis e fiéis ao treinamento. Alto = mais soltas.</div>
               </div>
               <div class="form-group">
                 <label class="form-label" for="aiMaxHistory">Memória (mensagens)</label>
                 <input type="number" id="aiMaxHistory" min="4" max="60" value="20" />
+                <div class="form-hint">Quantas mensagens anteriores a IA lê antes de responder.</div>
               </div>
             </div>
-          </div>
 
-          <div id="aiTestResultBox"  class="log-row u-oculto-topo-12"></div>
+            <div id="aiTestResultBox" class="log-row u-oculto-topo-12"></div>
+          </div>
         </div>
       </section>
 

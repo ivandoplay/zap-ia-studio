@@ -1430,6 +1430,27 @@ function renderAll() {
   window.__audioAbrir = abrir;
 })();
 
+// Motor de IA: Provedores & chaves x Ajustes finos. Sem recriar campos.
+(function iaSubabas() {
+  const abas = Array.from(document.querySelectorAll('[data-ia-aba]'));
+  const paineis = Array.from(document.querySelectorAll('[data-ia-painel]'));
+  if (!abas.length || !paineis.length) return;
+
+  function abrir(nome) {
+    abas.forEach((b) => {
+      const on = b.dataset.iaAba === nome;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    paineis.forEach((p) => {
+      p.hidden = p.dataset.iaPainel !== nome;
+    });
+  }
+
+  abas.forEach((b) => b.addEventListener('click', () => abrir(b.dataset.iaAba)));
+  window.__iaAbrir = abrir;
+})();
+
 (function menuMais() {
   const GRUPOS = window.MAIS_GRUPOS;
   function montar() {
@@ -3826,7 +3847,7 @@ function renderAiSettings() {
   });
   ['gemini', 'openrouter'].forEach((prov) => {
     const box = document.getElementById(`providerBox-${prov}`);
-    if (box) box.style.display = prov === activeProv ? 'block' : 'none';
+    if (box) box.classList.toggle('u-none', prov !== activeProv);
   });
 
   document.getElementById('geminiApiKey').value = ai.geminiApiKey || '';
@@ -7828,7 +7849,8 @@ function bindEvents() {
       btn.classList.add('selected');
       const prov = btn.dataset.provider;
       ['gemini', 'openrouter'].forEach((p) => {
-        document.getElementById(`providerBox-${p}`).style.display = p === prov ? 'block' : 'none';
+        const box = document.getElementById(`providerBox-${p}`);
+        if (box) box.classList.toggle('u-none', p !== prov);
       });
     });
   });

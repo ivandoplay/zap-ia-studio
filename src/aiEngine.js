@@ -605,10 +605,12 @@ async function transcribeAudioOpenAICompatible({ endpoint, apiKey, model, audioB
   form.append('model', model);
   form.append('language', 'pt');
 
+  // Sem timeout, um provedor de transcrição lento segurava o worker do WhatsApp.
   const res = await fetch(endpoint, {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}` },
-    body: form
+    body: form,
+    signal: AbortSignal.timeout(20000)
   });
 
   if (!res.ok) {
@@ -661,6 +663,66 @@ async function invokeSingleGeminiModel({ ai, candidateModel, systemPrompt, histo
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Mesma chamada do `callGemini`, mas entregando pedaço por pedaço.
+ * Usado no Simulador para o texto aparecer enquanto a IA ainda está escrevendo.
+ */
+export async function callGeminiStream({ apiKeys, model, systemPrompt, history, userText, temperature, onToken }) {
+  const keys = Array.isArray(apiKeys) && apiKeys.length ? apiKeys : [];
+  if (!keys.length) throw new Error('Nenhuma chave Gemini configurada.');
+  const candidateModels = Array.from(new Set([
+    model || 'gemini-3.5-flash-lite',
+    'gemini-3.5-flash-lite', 'gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-flash-lite-latest'
+  ]));
+  const contents = (Array.isArray(history) ? history : [])
+    .filter((m) => m?.text)
+    .map((m) => ({ role: m.role === 'user' ? 'user' : 'model', parts: [{ text: m.text }] }));
+  contents.push({ role: 'user', parts: [{ text: userText || 'Olá' }] });
+  const startIdx = geminiPoolCursor % keys.length;
+  geminiPoolCursor = (geminiPoolCursor + 1) % 100000;
+  let tentativaParcial = '';
+
+  const result = await executarGeminiLimitado({
+    chaves: keys,
+    modelos: candidateModels,
+    indiceInicial: startIdx,
+    prazoMs: 12000,
+    invocar: async ({ chave, modelo, timeoutMs }) => {
+      if (tentativaParcial && typeof onToken === 'function') onToken('', '', { reset: true });
+      tentativaParcial = '';
+      const ai = new GoogleGenAI({
+        apiKey: chave,
+        httpOptions: { timeout: Math.max(1000, timeoutMs), retryOptions: { attempts: 1 } }
+      });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const stream = await ai.models.generateContentStream({
+          model: modelo,
+          contents,
+          config: {
+            systemInstruction: systemPrompt,
+            temperature: typeof temperature === 'number' ? temperature : 0.35,
+            abortSignal: controller.signal
+          }
+        });
+        let texto = '';
+        for await (const chunk of stream) {
+          const pedaco = chunk.text || '';
+          if (!pedaco) continue;
+          texto += pedaco;
+          tentativaParcial = texto;
+          if (typeof onToken === 'function') onToken(pedaco, texto);
+        }
+        return texto;
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+  });
+  return result.texto;
 }
 
 async function callGeminiWithPool({ apiKeys, model, systemPrompt, history, userText, media, temperature, rawTranscriptionMedia = null }) {
@@ -907,8 +969,15 @@ export function getActiveProviderCredentials(aiSettings = {}) {
   return getProviderCredentialsByName(aiSettings.provider || 'gemini', aiSettings);
 }
 
-async function runProviderCall(creds, { systemPrompt, history, userText, media, temperature }) {
+async function runProviderCall(creds, { systemPrompt, history, userText, media, temperature, onToken }) {
   if (creds.provider === 'gemini') {
+    if (typeof onToken === 'function' && !media) {
+      const rawOutput = await callGeminiStream({
+        apiKeys: creds.apiKeys || (creds.apiKey ? [creds.apiKey] : []),
+        model: creds.model, systemPrompt, history, userText, temperature, onToken
+      });
+      return { rawOutput, providerUsed: 'gemini', modelUsed: creds.model, keyIndexUsed: 1, keyPoolSize: creds.apiKeys?.length || 1 };
+    }
     const gemOut = await callGeminiWithPool({
       apiKeys: creds.apiKeys || (creds.apiKey ? [creds.apiKey] : []),
       model: creds.model,
@@ -1010,7 +1079,8 @@ export async function generateSmartReply({
   media = null,
   contactName = 'Cliente',
   sentVoiceIds = [],
-  allowDemoFallback = false
+  allowDemoFallback = false,
+  onToken = null
 }) {
   const startedAt = Date.now();
   const maxHist = Number(settings.ai?.maxHistoryMessages) || 20;
@@ -1134,7 +1204,8 @@ export async function generateSmartReply({
         history: trimmedHistory,
         userText,
         media,
-        temperature
+        temperature,
+        onToken
       })
     );
   } catch (primaryErr) {
@@ -1148,6 +1219,7 @@ export async function generateSmartReply({
     if (fallbackName !== 'none' && fallbackName !== creds.provider) {
       const backupCreds = getProviderCredentialsByName(fallbackName, settings.ai);
       if (backupCreds.apiKey) {
+        if (typeof onToken === 'function') onToken('', '', { reset: true });
         console.warn(`[Auto-Fallback] Provedor principal (${creds.provider}) falhou; acionando reserva (${fallbackName})...`);
         execOut = await withAiConcurrencyBulkhead(() =>
           runProviderCall(backupCreds, {
@@ -1155,7 +1227,8 @@ export async function generateSmartReply({
             history: trimmedHistory,
             userText,
             media,
-            temperature
+            temperature,
+            onToken
           })
         );
         usedFallback = true;

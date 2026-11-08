@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="/styles.css" />
   <link rel="stylesheet" href="/campanhas.css" />
   <link rel="stylesheet" href="/utilities.css" />
+  <link rel="stylesheet" href="/skeleton.css" />
 </head>
 <body>
   <a href="#mainContentArea" class="skip-link">Pular para o conteúdo principal</a>
@@ -819,7 +820,7 @@
               </div>
             </div>
             <div class="audio-resumo" id="audioResumo"></div>
-            <div id="voiceLibraryGrid" class="voice-grid u-mt-14"></div>
+            <div id="voiceLibraryGrid" class="voice-grid u-mt-14"><div class="skl-card" aria-hidden="true"><span class="skl-linha" data-h="28"></span><span class="skl-linha" data-w="82"></span><span class="skl-linha" data-w="64"></span><span class="skl-linha" data-w="72"></span></div><div class="skl-card" aria-hidden="true"><span class="skl-linha" data-h="28"></span><span class="skl-linha" data-w="82"></span><span class="skl-linha" data-w="64"></span><span class="skl-linha" data-w="72"></span></div><div class="skl-card" aria-hidden="true"><span class="skl-linha" data-h="28"></span><span class="skl-linha" data-w="82"></span><span class="skl-linha" data-w="64"></span><span class="skl-linha" data-w="72"></span></div></div>
           </div>
         </div>
 
@@ -947,7 +948,7 @@
               <button type="button" id="btnOpenNewItemModal" class="btn btn-primary btn-sm">+ Adicionar item / Galeria</button>
             </div>
           </div>
-          <div id="catalogGrid" class="catalog-grid u-mt-14"></div>
+          <div id="catalogGrid" class="catalog-grid u-mt-14"><div class="skl-card" aria-hidden="true"><span class="skl-linha" data-h="64"></span><span class="skl-linha" data-w="78"></span><span class="skl-linha" data-w="58"></span></div><div class="skl-card" aria-hidden="true"><span class="skl-linha" data-h="64"></span><span class="skl-linha" data-w="78"></span><span class="skl-linha" data-w="58"></span></div><div class="skl-card" aria-hidden="true"><span class="skl-linha" data-h="64"></span><span class="skl-linha" data-w="78"></span><span class="skl-linha" data-w="58"></span></div><div class="skl-card" aria-hidden="true"><span class="skl-linha" data-h="64"></span><span class="skl-linha" data-w="78"></span><span class="skl-linha" data-w="58"></span></div><div class="skl-card" aria-hidden="true"><span class="skl-linha" data-h="64"></span><span class="skl-linha" data-w="78"></span><span class="skl-linha" data-w="58"></span></div><div class="skl-card" aria-hidden="true"><span class="skl-linha" data-h="64"></span><span class="skl-linha" data-w="78"></span><span class="skl-linha" data-w="58"></span></div></div>
         </div>
         </div>
       </section>
@@ -2320,7 +2321,7 @@
         </div>
 
         <!-- KPIs EXECUTIVOS DO SEU SAAS -->
-        <div id="saasMasterKpiGrid" class="saas-kpi-grid"></div>
+        <div id="saasMasterKpiGrid" class="saas-kpi-grid"><div class="skl-card" aria-hidden="true"><span class="skl-linha" data-h="28"></span><span class="skl-linha" data-w="78"></span></div><div class="skl-card" aria-hidden="true"><span class="skl-linha" data-h="28"></span><span class="skl-linha" data-w="78"></span></div><div class="skl-card" aria-hidden="true"><span class="skl-linha" data-h="28"></span><span class="skl-linha" data-w="78"></span></div><div class="skl-card" aria-hidden="true"><span class="skl-linha" data-h="28"></span><span class="skl-linha" data-w="78"></span></div></div>
 
         <div class="treino-subabas" role="tablist" aria-label="Seções de contas">
           <button type="button" class="treino-subaba active" data-contas-aba="carteira" role="tab" aria-selected="true">Carteira de clientes</button>
@@ -2346,9 +2347,7 @@
                 </select>
               </div>
             </div>
-            <div id="managedUsersListContainer">
-              <div class="empty-state">Carregando carteira de contas...</div>
-            </div>
+            <div id="managedUsersListContainer"><div class="skl" aria-hidden="true"><span class="skl-linha" data-h="14" data-w="92"></span><span class="skl-linha" data-h="14" data-w="78"></span><span class="skl-linha" data-h="14" data-w="64"></span><span class="skl-linha" data-h="14" data-w="86"></span><span class="skl-linha" data-h="14" data-w="72"></span><span class="skl-linha" data-h="14" data-w="58"></span><span class="skl-linha" data-h="14" data-w="88"></span><span class="skl-linha" data-h="14" data-w="70"></span><span class="skl-linha" data-h="14" data-w="60"></span></div></div>
           </div>
         </div>
 
@@ -3439,9 +3438,11 @@
 
   <div id="toastStack" class="toast-stack" role="status" aria-live="polite" aria-atomic="true"></div>
 
-  <script src="/inbox-realtime.js"></script>
-  <script>window.IENVIA_PAGINA='treinamento';</script>
-  <script src="/app.js"></script>
-  <script src="/campanhas.js"></script>
+  <!-- perf.js primeiro: o app usa dedupe/debounce/skeleton dele -->
+  <script src="/perf.js"></script>
+  <!-- defer: o HTML aparece antes, o painel hidrata em seguida -->
+  <script src="/inbox-realtime.js" defer></script>
+  <script src="/app.js" defer></script>
+  <script src="/campanhas.js" defer></script>
 </body>
 </html>

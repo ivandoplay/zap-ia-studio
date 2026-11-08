@@ -151,6 +151,7 @@ import {
 import { evolutionApiWebhookRouter } from './evolutionApiWebhook.js';
 import { evolutionApiConnectSlot, evolutionApiDisconnectSlot, evolutionApiCloudRouter, getEvolutionApiSlotStatus, getEvolutionApiContacts, getEvolutionApiChats, sendEvolutionApiText, sendEvolutionApiMedia, sendEvolutionApiContact, reactEvolutionApiMessage, editEvolutionApiMessage, deleteEvolutionApiMessage, markEvolutionApiRead, blockEvolutionApiContact, requestEvolutionApiHistory } from './evolutionApiCloud.js';
 import { mergeEvolutionApiHistoryPage } from './evolutionApiHistory.js';
+import { compressionMiddleware, requestTelemetry, createRumRouter, staticCacheHeaders, perfSnapshot, negotiateEncoding, compressWithCache, sendStaticFile } from './shared/perf.js';
 
 export const app = express();
 const APP_VERSION = (() => {
@@ -186,6 +187,12 @@ app.use((_req, res, next) => {
   }
   next();
 });
+
+// Comprimir antes de qualquer rota: estático, HTML e JSON da API saem em Brotli/GZIP.
+// app.js cai de 450KB para 97KB; a telemetria marca toda rota acima de SLOW_REQUEST_MS.
+app.use(compressionMiddleware({ threshold: 1024 }));
+app.use(requestTelemetry());
+
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
@@ -205,6 +212,10 @@ app.get('/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
 // ======================== WEBHOOK EVOLUTION GO ========================
 // Recebe mensagens do Evolution API → IA do Ienvia Motor → resposta.
 // Montado antes de /api de auth: o webhook valida seu segredo próprio, não uma sessão de usuário.
+// Métricas de usuário real: público de propósito — o navegador manda por sendBeacon
+// e não carrega token. Só aceita NDJSON pequeno e nunca escreve dato do tenant.
+app.use('/api', createRumRouter(express));
+
 app.use('/api/evolution-webhook', evolutionApiWebhookRouter);
 
 app.get(['/venda', '/venda.html'], (req, res) => res.redirect(302, `${IS_VERCEL ? '/' : '/vitrine'}${req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : ''}`));
@@ -260,14 +271,20 @@ const rotasSoApelido = Object.keys(PAGINAS_PAINEL)
   .filter(rota => `/${PAGINAS_PAINEL[rota]}` !== rota);
 app.get(rotasSoApelido, v2ParaPainelAntigo);
 
+// Assets próprios: comprime e cacheia usando o mesmo código no Node e na Vercel.
+// Está ANTES do express.static para ele não abrir stream de arquivo sem compressão.
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  const pathname = String(req.path || '/').replace(/^\/+/, '') || 'index.html';
+  if (!/\.(?:js|mjs|css|json|html|svg|txt)$/i.test(pathname)) return next();
+  if (sendStaticFile(req, res, ROOT_DIR, pathname)) return;
+  next();
+});
+
 app.use(
   express.static(path.join(ROOT_DIR, 'public'), {
     etag: true,
-    setHeaders: (res, filePath) => {
-      if (/\.(html|js|css|json)$/i.test(filePath)) {
-        res.setHeader('Cache-Control', 'no-cache');
-      }
-    }
+    setHeaders: staticCacheHeaders
   })
 );
 // Raiz = painel antigo em qualquer ambiente. A vitrine continua em /vitrine.
@@ -1378,7 +1395,7 @@ app.get('/api/bootstrap', async (req, res) => {
   const ffmpegBin = usesCloudBridge(req) ? 'cloud' : await resolveFfmpegPath();
   const waState = await mergeEvolutionApiStatus(req, getEffectiveWaState(req));
   const contacts = sortContactsForInbox(storage.data.contacts);
-  res.json({
+  const payload = {
     appVersion: APP_VERSION,
     runtimeMode: usesCloudBridge(req) ? 'vercel_cloud' : 'local_worker',
     currentUser: getEffectiveCurrentUser(req),
@@ -1394,7 +1411,38 @@ app.get('/api/bootstrap', async (req, res) => {
     stats: storage.data.stats,
     logs: storage.data.logs,
     simulatorHistory: storage.data.simulatorHistory || []
-  });
+  };
+
+  // O painel consulta o bootstrap de novo a cada 15s. Sem esta checagem, cada poll
+  // custa ~1MB de JSON (workspace + contatos + histórico). Com ETag o cliente recebe
+  // 304 sem corpo e o polling fica praticamente de graça.
+  const body = Buffer.from(JSON.stringify(payload));
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  const etag = `W/"${crypto.createHash('sha1').update(body).digest('base64').slice(0, 22)}"`;
+  res.setHeader('ETag', etag);
+  res.setHeader('Cache-Control', 'private, no-cache');
+  if (req.headers['if-none-match'] === etag) return res.status(304).end();
+
+  const encoding = negotiateEncoding(req.headers['accept-encoding']);
+  if (encoding && body.length > 1024) {
+    // A chave do cache inclui o ETag: mudou o workspace, recompressa.
+    const compressed = compressWithCache(body, encoding, `bootstrap:${etag}`);
+    res.setHeader('Content-Encoding', encoding);
+    res.setHeader('Vary', 'Accept-Encoding');
+    return res.status(200).end(compressed);
+  }
+  res.status(200).end(body);
+});
+
+// Painel de diagnóstico de performance (rotas lentas + métricas de usuário real).
+// Serve para achar N+1 e query pesada sem precisar de um coletor OpenTelemetry
+// rodando: as mesmas chaves do semantic-conventions ficam em /api/perf/rotas.
+app.get('/api/perf/rotas', (req, res) => {
+  if (getEffectiveCurrentUser(req)?.role !== 'master') {
+    return res.status(403).json({ ok: false, error: 'Somente o master vê as métricas do servidor.' });
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  res.json(perfSnapshot());
 });
 
 // A agenda da Evolution é carregada só ao abrir essa área, nunca no bootstrap ou no polling.
@@ -4274,8 +4322,133 @@ app.post('/api/crm/funnel-coach', async (_req, res) => {
 
 // ======================== SIMULADOR INTERATIVO + ENSINAR EM 1 CLIQUE ========================
 
+/**
+ * Resposta do simulador em NDJSON: uma linha por token e uma linha final com o
+ * objeto `reply` completo (mesmo formato do modo normal, para o front guardar igual).
+ */
+async function streamSimulatorAnswer(req, res) {
+  const business = storage.getBusiness();
+  const userText = (req.body?.text || '').trim();
+  if (!userText) {
+    return res.status(400).json({ ok: false, error: 'Envie uma mensagem para testar.' });
+  }
+
+  res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Accel-Buffering', 'no');
+  const enviar = (obj) => res.write(`${JSON.stringify(obj)}\n`);
+  const startedAt = Date.now();
+  let filtroTokenBuffer = '';
+  let suprimindoTag = false;
+  const enviarTextoSeguro = (pedaco, _acumulado, meta) => {
+    if (meta?.reset) {
+      filtroTokenBuffer = '';
+      suprimindoTag = false;
+      enviar({ tipo: 'reset' });
+      return;
+    }
+    filtroTokenBuffer += String(pedaco || '');
+    let seguro = '';
+    while (filtroTokenBuffer.length) {
+      if (suprimindoTag) {
+        const fim = filtroTokenBuffer.indexOf(']]');
+        if (fim < 0) return;
+        filtroTokenBuffer = filtroTokenBuffer.slice(fim + 2);
+        suprimindoTag = false;
+        continue;
+      }
+      const inicio = filtroTokenBuffer.indexOf('[');
+      if (inicio < 0) {
+        seguro += filtroTokenBuffer;
+        filtroTokenBuffer = '';
+        break;
+      }
+      if (inicio > 0) seguro += filtroTokenBuffer.slice(0, inicio);
+      filtroTokenBuffer = filtroTokenBuffer.slice(inicio);
+      if (filtroTokenBuffer === '[') return; // possível início de tag dividido entre tokens
+      if (filtroTokenBuffer.startsWith('[[')) {
+        const fim = filtroTokenBuffer.indexOf(']]', 2);
+        if (fim < 0) { suprimindoTag = true; filtroTokenBuffer = ''; return; }
+        filtroTokenBuffer = filtroTokenBuffer.slice(fim + 2);
+      } else {
+        const fim = filtroTokenBuffer.indexOf(']', 1);
+        if (fim < 0) return;
+        filtroTokenBuffer = filtroTokenBuffer.slice(fim + 1);
+      }
+    }
+    if (seguro) enviar({ tipo: 'token', texto: seguro });
+  };
+  storage.data.simulatorHistory = storage.data.simulatorHistory || [];
+  const priorHistory = [...storage.data.simulatorHistory];
+  storage.data.simulatorHistory.push({
+    id: uid('sim'), role: 'user', rawQuestion: userText, text: userText,
+    timestamp: new Date().toISOString()
+  });
+
+  try {
+    // Usa o mesmo caminho de produção: proteção anti-injection, training pack,
+    // rotação/fallback de provedor, validação das tags e telemetria completa.
+    // A única diferença é o callback que transmite tokens ao simulador.
+    const aiResult = await generateSmartReply({
+      profile: business,
+      settings: storage.data.settings,
+      history: priorHistory,
+      userText,
+      contactName: 'Cliente Teste',
+      sentVoiceIds: priorHistory.filter((m) => m.role === 'assistant' && m.sentVoice?.id).map((m) => m.sentVoice.id),
+      allowDemoFallback: true,
+      onToken: enviarTextoSeguro
+    });
+
+    let sentVoice = null;
+    if (aiResult.actions.voiceIds?.length) {
+      const item = storage.getVoiceLibrary().find((v) => v.id === aiResult.actions.voiceIds[0]);
+      if (item) sentVoice = { id: item.id, name: item.name, url: item.url, durationSec: item.durationSec, waveform: item.waveform, transcription: item.transcription };
+    }
+    const attachments = [];
+    for (const itemId of aiResult.actions.itemIds || []) {
+      const item = (business.catalog || []).find((it) => it.id === itemId);
+      if (!item) continue;
+      const files = item.mediaFiles?.length ? item.mediaFiles : (item.mediaFile ? [item.mediaFile] : []);
+      attachments.push({ type: 'catalog_item', name: item.name, price: item.price, description: item.description,
+        mediaFiles: files, mediaUrl: files[0]?.url || null, mimeType: files[0]?.mimeType || null });
+    }
+    let pixCard = null;
+    if (aiResult.actions.sendPix && business.pix?.enabled && business.pix?.key) {
+      const pix = await formatPixMessageWithQr(business.pix, aiResult.actions.pixAmount);
+      if (pix) pixCard = { summaryText: pix.summaryText, brcode: pix.brcode, qrDataUrl: pix.qrDataUrl };
+    }
+
+    const entry = {
+      id: uid('sim'), role: 'assistant', triggerQuestion: userText, text: aiResult.cleanText,
+      providerUsed: aiResult.providerUsed, modelUsed: aiResult.modelUsed, latencyMs: aiResult.latencyMs || Date.now() - startedAt,
+      usedFallback: Boolean(aiResult.usedFallback), shieldTriggered: Boolean(aiResult.shieldTriggered),
+      activatedSkills: aiResult.activatedSkills || [], diagnostics: aiResult.diagnostics || null,
+      sentVoice, attachments, pixCard, handoffReason: aiResult.actions.handoffReason || null,
+      silentPauseReason: aiResult.actions.silentPauseReason || null,
+      closeContactReason: aiResult.actions.closeContactReason || null,
+      optOutReason: aiResult.actions.optOutReason || null,
+      courtesySilence: Boolean(aiResult.actions.courtesySilence), timestamp: new Date().toISOString()
+    };
+    storage.data.simulatorHistory.push(entry);
+    if (storage.data.simulatorHistory.length > 40) storage.data.simulatorHistory = storage.data.simulatorHistory.slice(-40);
+    storage.saveSoon();
+    enviar({ tipo: 'fim', reply: entry, simulatorHistory: storage.data.simulatorHistory, stats: storage.data.stats });
+  } catch (err) {
+    enviar({ tipo: 'erro', error: err.message });
+  } finally {
+    res.end();
+  }
+}
+
 app.post('/api/simulator/send', memUpload.single('media'), async (req, res) => {
   try {
+    // Streaming token a token (opt-in por header): o texto da IA vai aparecendo no
+    // simulador enquanto é gerado, em vez de 6s de tela parada. Áudio/imagem nunca
+    // usam streaming, porque as tags de ação precisam ser validadas antes de exibir.
+    if (String(req.headers['x-stream'] || '') === '1' && !req.file) {
+      return await streamSimulatorAnswer(req, res);
+    }
     const business = storage.getBusiness();
     const userText = (req.body?.text || '').trim();
     const media = req.file

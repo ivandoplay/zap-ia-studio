@@ -266,11 +266,39 @@ async function api(url, options = {}, _retried = false) {
   if (state.actAsUser?.userId && !String(url).startsWith('/api/admin/')) {
     headers['x-zapia-act-as'] = state.actAsUser.userId;
   }
-  const res = await fetch(url, {
-    ...options,
-    headers: { ...headers, ...(options.headers || {}) }
-  });
-  const data = await res.json().catch(() => ({}));
+  // GET repetido em voo compartilha a mesma promise (dedupe do perf.js).
+  // Timeout de 30s: sem isso uma rota travada deixa o painel em "carregando" para sempre.
+  const metodo = String(options.method || 'GET').toUpperCase();
+  const { timeoutMs: timeoutOption, ...fetchOptions } = options;
+  // Timeout automático só em leituras. Em uma mutação de envio, cancelar a espera
+  // não cancela o efeito no servidor e poderia induzir um reenvio duplicado.
+  const timeoutMs = Number.isFinite(Number(timeoutOption)) ? Math.max(0, Number(timeoutOption)) : (metodo === 'GET' ? 30000 : 0);
+  const executar = async () => {
+    const controlador = new AbortController();
+    const timer = timeoutMs ? setTimeout(() => controlador.abort(), timeoutMs) : null;
+    try {
+      const resposta = await fetch(url, {
+        ...fetchOptions,
+        signal: options.signal || (timeoutMs ? controlador.signal : undefined),
+        headers: { ...headers, ...(options.headers || {}) }
+      });
+      // Consome uma vez antes de partilhar a promise: Response.body é stream e não
+      // pode ser lido por dois chamadores concorrentes.
+      const dados = await resposta.json().catch(() => ({}));
+      return { status: resposta.status, ok: resposta.ok, data: dados };
+    } catch (err) {
+      if (err?.name === 'AbortError') {
+        throw new Error('A conexão demorou demais para responder. Tente novamente.');
+      }
+      throw err;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  };
+  const res = typeof window.dedupeRequest === 'function'
+    ? await window.dedupeRequest(url, options, executar)
+    : await executar();
+  const data = res.data || {};
   if (res.status === 401 && data.authRequired) {
     if (!_retried && (await tryRefreshCloudToken())) {
       return api(url, options, true);
@@ -677,6 +705,9 @@ async function loadBootstrap() {
     state.audioEngineReady = data.audioEngineReady !== false;
     state.settings = data.settings;
     state.geminiPoolCount = data.geminiPoolCount || 1;
+    // Os esqueletos do HTML cobrem o tempo do bootstrap. Ao chegar o dado,
+    // sumimos com qualquer esqueleto que sobrou para não ficar "carregando" eterno.
+    document.querySelectorAll('[data-skeleton="on"]').forEach((el) => window.skeletonOff(el));
     state.business = data.business || null;
     state.templates = data.templates || [];
     state.trainingPacks = data.trainingPacks || [];
@@ -3716,7 +3747,7 @@ function renderCatalogAndPix() {
       let thumbHtml = `<span>Sem foto ou PDF anexado</span>`;
       if (firstFile?.url) {
         if (firstFile.mimeType?.startsWith('image/')) {
-          thumbHtml = `<img src="${escapeHtml(firstFile.url)}" alt="${escapeHtml(item.name)}" />`;
+          thumbHtml = `<img src="${escapeHtml(firstFile.url)}" alt="${escapeHtml(item.name)}" loading="lazy" decoding="async" />`;
         } else if (firstFile.mimeType?.startsWith('audio/') || /\.(ogg|opus|mp3|m4a|wav|webm)$/i.test(firstFile.filename || '')) {
           thumbHtml = `<div class="catalog-thumb-txt"><strong>🎤 Nota de Voz (S06)</strong><br/><small>${escapeHtml(firstFile.originalName || 'audio.ogg')}</small></div>`;
         } else {
@@ -3790,7 +3821,7 @@ function renderModalExistingMedia(item) {
     .map((mf) => {
       const isAud = mf.mimeType?.startsWith('audio/') || /\.(ogg|opus|mp3|m4a|wav|webm)$/i.test(mf.filename || '');
       const inner = mf.mimeType?.startsWith('image/')
-        ? `<img src="${escapeHtml(mf.url)}" alt="" />`
+        ? `<img src="${escapeHtml(mf.url)}" alt="" loading="lazy" decoding="async" />`
         : isAud
           ? `<span>🎤 VOZ</span>`
           : `<span>PDF</span>`;
@@ -4335,8 +4366,19 @@ function renderCrmInbox(filteredList) {
   const savedTotalEl = document.getElementById('crmContactsSavedCount');
   if (savedTotalEl) savedTotalEl.textContent = String((state.contacts || []).filter((c) => c.savedContact).length);
 
-  const limit = Math.max(100, Number(state.inboxRenderLimit) || 100);
+  // Renderização progressiva: primeiro 50 cartões, depois outro bloco ao rolar.
+  // Evita montar centenas de nós (e recalcular estilos) no primeiro paint da Inbox.
+  const limit = Math.max(50, Number(state.inboxRenderLimit) || 50);
   const visibleItems = list.slice(0, limit);
+  if (!listEl.dataset.autoMoreBound) {
+    listEl.dataset.autoMoreBound = '1';
+    listEl.addEventListener('scroll', window.throttleRaf(() => {
+      if (listEl.scrollTop + listEl.clientHeight >= listEl.scrollHeight - 180) {
+        const atual = getFilteredCrmContacts();
+        if ((Number(state.inboxRenderLimit) || 50) < atual.length) window.loadMoreInboxItems();
+      }
+    }), { passive: true });
+  }
   const remaining = list.length - visibleItems.length;
   const signature = `${list.length}:${limit}:${remaining}:${state.crmBulkMode ? 1 : 0}:` + visibleItems.map((c) => {
     const last = getLastPublicMessage(c);
@@ -4436,7 +4478,7 @@ function renderCrmInbox(filteredList) {
 }
 
 window.loadMoreInboxItems = function loadMoreInboxItems() {
-  state.inboxRenderLimit = (Number(state.inboxRenderLimit) || 100) + 100;
+  state.inboxRenderLimit = (Number(state.inboxRenderLimit) || 50) + 50;
   renderCrmInbox();
 };
 
@@ -6734,7 +6776,7 @@ function renderSimulator() {
             const files = att.mediaFiles?.length ? att.mediaFiles : (att.mediaUrl ? [{ url: att.mediaUrl, mimeType: att.mimeType }] : []);
             const imgs = files
               .filter((f) => f.mimeType?.startsWith('image/'))
-              .map((f) => `<img class="sim-anexo-img" src="${escapeHtml(f.url)}" alt="${escapeHtml(att.name)}" />`)
+              .map((f) => `<img class="sim-anexo-img" src="${escapeHtml(f.url)}" alt="${escapeHtml(att.name)}" loading="lazy" decoding="async" />`)
               .join('');
             return `
               <div class="sim-caixa sim-caixa-escura">
@@ -6903,6 +6945,81 @@ async function startSimMicRecording() {
   } catch (err) {
     showToast('Permissão de microfone negada ou indisponível neste navegador.', true);
   }
+}
+
+/**
+ * Lê a resposta do simulador em NDJSON e pinta o texto conforme chega.
+ * Devolve a mensagem final (para entrar no histórico) ou null se o servidor
+ * não suportar streaming — aí o chamador cai no POST tradicional.
+ */
+async function streamSimulatorReply(text) {
+  let res;
+  if (state.cloudSession?.expiresAt && state.cloudSession.expiresAt * 1000 - Date.now() < 180_000) {
+    await tryRefreshCloudToken();
+  }
+  const headers = { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Stream': '1' };
+  if (state.sessionPin) headers['x-panel-pin'] = state.sessionPin;
+  if (state.cloudSession?.accessToken) headers.Authorization = `Bearer ${state.cloudSession.accessToken}`;
+  if (state.actAsUser?.userId) headers['x-zapia-act-as'] = state.actAsUser.userId;
+  try {
+    res = await fetch('/api/simulator/send', {
+      method: 'POST',
+      headers,
+      body: new URLSearchParams({ text }),
+      signal: AbortSignal.timeout(45000)
+    });
+  } catch {
+    // Resultado incerto: não repete automaticamente uma chamada que pode ter sido
+    // processada pelo servidor antes de a conexão cair.
+    throw new Error('Não foi possível confirmar a resposta do simulador. Tente atualizar o histórico antes de reenviar.');
+  }
+  if (!res.ok) throw new Error(`Falha no simulador (HTTP ${res.status}).`);
+  const contentType = String(res.headers.get('content-type') || '');
+  if (!contentType.includes('ndjson')) {
+    // Compatibilidade com servidor antigo: aproveita a resposta já concluída,
+    // sem fazer um segundo POST para não duplicar a geração.
+    const legado = await res.json().catch(() => ({}));
+    if (legado.reply) return { reply: legado.reply, simulatorHistory: legado.simulatorHistory, stats: legado.stats };
+    throw new Error('O servidor não confirmou a resposta do simulador. Atualize o histórico antes de reenviar.');
+  }
+  if (!res.body) throw new Error('O navegador não conseguiu ler o streaming do simulador.');
+
+  const bolha = document.createElement('div');
+  bolha.className = 'sim-msg bot sim-msg-stream';
+  bolha.textContent = '';
+  const lista = document.getElementById('simMessages');
+  lista?.appendChild(bolha);
+
+  const leitor = res.body.getReader();
+  const decodificador = new TextDecoder();
+  let buffer = '';
+  let final = null;
+
+  for (;;) {
+    const { done, value } = await leitor.read();
+    if (done) break;
+    buffer += decodificador.decode(value, { stream: true });
+    const linhas = buffer.split('\n');
+    buffer = linhas.pop() || '';
+    for (const linha of linhas) {
+      if (!linha.trim()) continue;
+      let evento;
+      try { evento = JSON.parse(linha); } catch { continue; }
+      if (evento.tipo === 'token') {
+        bolha.textContent += evento.texto;
+        lista?.scrollTo({ top: lista.scrollHeight });
+      } else if (evento.tipo === 'reset') {
+        bolha.textContent = '';
+      } else if (evento.tipo === 'fim') {
+        final = evento;
+      } else if (evento.tipo === 'erro') {
+        bolha.remove();
+        throw new Error(evento.error || 'Falha ao gerar a resposta.');
+      }
+    }
+  }
+  bolha.remove(); // o renderSimulator pinta a versão final com formatação e ações
+  return final;
 }
 
 // ======================== BUSCA RÁPIDA GLOBAL (CTRL+K) ========================
@@ -7085,7 +7202,7 @@ function bindEvents() {
     }
   });
   document.getElementById('btnOpenCmdPalette')?.addEventListener('click', openCommandPalette);
-  document.getElementById('cmdSearchInput')?.addEventListener('input', (e) => renderCommandPaletteResults(e.target.value));
+  document.getElementById('cmdSearchInput')?.addEventListener('input', window.debounce((e) => renderCommandPaletteResults(e.target.value), 100));
 
   // White-Label Brand Modal & Som de Alerta
   document.getElementById('btnOpenBrandModal')?.addEventListener('click', () => {
@@ -7558,9 +7675,9 @@ function bindEvents() {
     });
   });
 
-  document.getElementById('studioSearchInput')?.addEventListener('input', () => {
+  document.getElementById('studioSearchInput')?.addEventListener('input', window.debounce(() => {
     renderPackVisualStudio(getActiveProfile());
-  });
+  }, 180));
 
   document.getElementById('btnNewStudioItem')?.addEventListener('click', () => {
     if (state.activeStudioTab === 'messages') {
@@ -7815,7 +7932,8 @@ function bindEvents() {
     }
   });
 
-  document.getElementById('catalogSearchInput')?.addEventListener('input', renderCatalogAndPix);
+  // debounce: sem isso, cada tecla repinta a grade inteira e reclassifica categorias
+  document.getElementById('catalogSearchInput')?.addEventListener('input', window.debounce(renderCatalogAndPix, 220));
   document.getElementById('catalogCatFilter')?.addEventListener('change', renderCatalogAndPix);
 
   document.getElementById('btnOpenNewItemModal').addEventListener('click', () => {
@@ -8586,7 +8704,7 @@ function bindEvents() {
     }
   });
 
-  document.getElementById('crmSearchInput').addEventListener('input', renderCrmBoard);
+  document.getElementById('crmSearchInput').addEventListener('input', window.debounce(renderCrmBoard, 220));
   document.getElementById('crmFilterSlotSelect')?.addEventListener('change', renderCrmBoard);
   document.getElementById('crmFilterStageSelect')?.addEventListener('change', renderCrmBoard);
   document.getElementById('crmFilterTagSelect')?.addEventListener('change', renderCrmBoard);
@@ -9032,6 +9150,29 @@ function bindEvents() {
     fileEl.value = '';
     document.getElementById('simFileLabel').textContent = 'Anexar';
 
+    // Texto puro ganha streaming: a resposta aparece enquanto a IA escreve.
+    // Com anexo o fluxo é o normal, porque a IA precisa ver o arquivo inteiro.
+    if (!file && typeof fetch === 'function') {
+      try {
+        const resultado = await streamSimulatorReply(text);
+        if (!resultado?.reply) throw new Error('A resposta do simulador veio vazia. Atualize o histórico antes de reenviar.');
+        state.simulatorHistory = Array.isArray(resultado.simulatorHistory)
+          ? resultado.simulatorHistory
+          : [...(state.simulatorHistory || []), resultado.reply];
+        if (resultado.stats) state.stats = resultado.stats;
+        renderSimulator();
+        renderStatsAndLogs();
+        return;
+      } catch (err) {
+        if (txtEl && !txtEl.value) txtEl.value = text;
+        showToast(err.message, true);
+        return;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enviar';
+      }
+    }
+
     try {
       const res = await api('/api/simulator/send', { method: 'POST', body: fd });
       state.simulatorHistory = res.simulatorHistory;
@@ -9058,9 +9199,9 @@ function bindEvents() {
     window.openVoiceModal();
   });
 
-  document.getElementById('voiceSearchInput')?.addEventListener('input', () => {
+  document.getElementById('voiceSearchInput')?.addEventListener('input', window.debounce(() => {
     renderVoiceLibrary();
-  });
+  }, 180));
 
   document.getElementById('voiceModalFileInput')?.addEventListener('change', (e) => {
     const file = e.target.files?.[0];
@@ -9861,9 +10002,9 @@ function bindCloudAuthAndAdminEvents() {
     window.exitClientSupportMode();
   });
 
-  document.getElementById('masterUserSearchInput')?.addEventListener('input', () => {
+  document.getElementById('masterUserSearchInput')?.addEventListener('input', window.debounce(() => {
     renderManagedUsers();
-  });
+  }, 180));
 
   document.getElementById('masterUserFilterSelect')?.addEventListener('change', () => {
     renderManagedUsers();
@@ -10206,7 +10347,7 @@ function initSaasCommercialGrowthHub() {
   } catch {}
 
   for (const id of ['salesPageCloserPhone', 'salesPrice1', 'salesPrice2', 'salesPrice3']) {
-    document.getElementById(id)?.addEventListener('input', () => {
+    document.getElementById(id)?.addEventListener('input', window.debounce(() => {
       try {
         localStorage.setItem(
           'zapia_saas_sales_cfg',
@@ -10219,7 +10360,7 @@ function initSaasCommercialGrowthHub() {
         );
       } catch {}
       renderSaasCommercialGrowthHub();
-    });
+    }, 200));
   }
   renderSaasCommercialGrowthHub();
 }
@@ -10284,6 +10425,17 @@ if (TABS_VALIDAS.includes(initialHash)) {
   switchTab(initialHash);
 } else if (TABS_VALIDAS.includes(paginaInicial)) {
   switchTab(paginaInicial);
+}
+
+// Atributos oninput antigos ficam intactos (contrato de IDs/handlers do painel);
+// as funções públicas de busca são envolvidas uma vez com debounce aqui.
+for (const nome of ['applyInChatSearch', 'handleContactsBookSearch', 'renderForwardContactsList', 'renderSendContactCardList']) {
+  const original = window[nome];
+  if (typeof original === 'function' && !original.__debounced) {
+    const wrapped = window.debounce((...args) => original(...args), 220);
+    wrapped.__debounced = true;
+    window[nome] = wrapped;
+  }
 }
 
 loadBootstrap();

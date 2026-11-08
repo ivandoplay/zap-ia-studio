@@ -390,7 +390,7 @@ export async function signInWithUsernamePassword(usernameInput, password) {
   const authed = createAnonClient(data.session.access_token);
   const { data: profileData, error: profileError } = await authed
     .from('zapia_users')
-    .select('*')
+    .select('user_id, username, display_name, role, max_wa_slots, is_active, customer_phone, admin_notes, created_at, last_seen_at')
     .eq('user_id', data.user.id)
     .maybeSingle();
   const profile = requireActiveRegisteredProfile(profileData, profileError, data.user.id);
@@ -506,7 +506,7 @@ export async function refreshCloudSession(refreshToken) {
   const authed = createAnonClient(data.session.access_token);
   const { data: profileData, error: profileError } = await authed
     .from('zapia_users')
-    .select('*')
+    .select('user_id, username, display_name, role, max_wa_slots, is_active, customer_phone, admin_notes, created_at, last_seen_at')
     .eq('user_id', data.user.id)
     .maybeSingle();
   let profile;
@@ -541,7 +541,7 @@ export async function verifyCloudAccessToken(accessToken) {
   const authed = createAnonClient(accessToken);
   const { data: profileData, error: profileError } = await authed
     .from('zapia_users')
-    .select('*')
+    .select('user_id, username, display_name, role, max_wa_slots, is_active, customer_phone, admin_notes, created_at, last_seen_at')
     .eq('user_id', data.user.id)
     .maybeSingle();
 
@@ -564,7 +564,7 @@ export async function loadTenantContextAsMasterSupport(targetUserId) {
   const admin = getAdminClient();
   const { data: targetProfile, error } = await admin
     .from('zapia_users')
-    .select('*')
+    .select('user_id, username, display_name, role, max_wa_slots, is_active, customer_phone, admin_notes, created_at, last_seen_at')
     .eq('user_id', targetUserId)
     .maybeSingle();
 
@@ -619,13 +619,13 @@ export async function loadTenantContextFromCloud(client, authUser, profile, { sc
   const isMaster = profile?.role === 'master';
 
   const [wsRes, contactsRes, rtRes, slotsRes, devicesRes] = await Promise.all([
-    client.from('zapia_workspaces').select('*').eq('user_id', uid).maybeSingle(),
+    client.from('zapia_workspaces').select('user_id, business, settings, stats, logs, simulator_history, proactive_queue, custom_pack, updated_at').eq('user_id', uid).maybeSingle(),
     (!withContacts
       ? Promise.resolve({ data: [] })
       : (scopedContactId ? fetchScopedCloudContact(client, uid, scopedContactId) : fetchAllCloudContacts(client, uid, { fields: 'chat_id, data' })).then(data => ({ data }))),
-    client.from('zapia_wa_runtime').select('*').eq('user_id', uid).maybeSingle(),
-    client.from('zapia_wa_slots').select('*').eq('user_id', uid),
-    client.from('zapia_worker_devices').select('*').eq('user_id', uid).order('heartbeat_at', { ascending: false })
+    client.from('zapia_wa_runtime').select('user_id, status, qr_data_url, pairing_code, connected_user, last_error, proactive_state, worker_online, worker_heartbeat_at, worker_platform, updated_at').eq('user_id', uid).maybeSingle(),
+    client.from('zapia_wa_slots').select('user_id, slot_id, device_id, device_label, status, qr_data_url, pairing_code, connected_user, last_error, proactive_state, worker_online, worker_heartbeat_at, worker_platform, updated_at').eq('user_id', uid),
+    client.from('zapia_worker_devices').select('user_id, device_id, device_label, platform, version, active_slots, online, heartbeat_at').eq('user_id', uid).order('heartbeat_at', { ascending: false })
   ]);
 
   let ws = wsRes.data;
@@ -951,9 +951,9 @@ export async function ensureLocalMediaCached(filename, remoteUrl = '') {
  */
 export async function dispatchCommandToWorker(client, userId, action, payload = {}, timeoutMs = 8800, opts = {}) {
   const [rtRes, slotsRes, devicesRes, userRes] = await Promise.all([
-    client.from('zapia_wa_runtime').select('*').eq('user_id', userId).maybeSingle(),
-    client.from('zapia_wa_slots').select('*').eq('user_id', userId),
-    client.from('zapia_worker_devices').select('*').eq('user_id', userId),
+    client.from('zapia_wa_runtime').select('user_id, status, qr_data_url, pairing_code, connected_user, last_error, proactive_state, worker_online, worker_heartbeat_at, worker_platform, updated_at').eq('user_id', userId).maybeSingle(),
+    client.from('zapia_wa_slots').select('user_id, slot_id, device_id, device_label, status, qr_data_url, pairing_code, connected_user, last_error, proactive_state, worker_online, worker_heartbeat_at, worker_platform, updated_at').eq('user_id', userId),
+    client.from('zapia_worker_devices').select('user_id, device_id, device_label, platform, version, active_slots, online, heartbeat_at').eq('user_id', userId),
     client.from('zapia_users').select('role, max_wa_slots').eq('user_id', userId).maybeSingle()
   ]);
 
@@ -1054,7 +1054,7 @@ export async function dispatchCommandToWorker(client, userId, action, payload = 
       payload: cmdPayload,
       status: 'pending'
     })
-    .select('*')
+    .select('id')
     .single();
 
   if (insErr || !cmd) {
@@ -1066,7 +1066,7 @@ export async function dispatchCommandToWorker(client, userId, action, payload = 
     await new Promise((r) => setTimeout(r, 280));
     const { data: row } = await client
       .from('zapia_commands')
-      .select('*')
+      .select('id, status, result, error_text')
       .eq('id', cmd.id)
       .maybeSingle();
 
@@ -1082,7 +1082,7 @@ export async function dispatchCommandToWorker(client, userId, action, payload = 
       const targetSlot = resolvedSlotId || 'slot_1';
       const { data: freshSlot } = await client
         .from('zapia_wa_slots')
-        .select('*')
+        .select('user_id, slot_id, device_id, device_label, status, qr_data_url, pairing_code, connected_user, last_error, proactive_state, worker_online, worker_heartbeat_at, worker_platform, updated_at')
         .eq('user_id', userId)
         .eq('slot_id', targetSlot)
         .maybeSingle();
@@ -1111,7 +1111,7 @@ export async function dispatchCommandToWorker(client, userId, action, payload = 
       if (targetSlot === 'slot_1') {
         const { data: freshRt } = await client
           .from('zapia_wa_runtime')
-          .select('*')
+          .select('user_id, status, qr_data_url, pairing_code, connected_user, last_error, proactive_state, worker_online, worker_heartbeat_at, worker_platform, updated_at')
           .eq('user_id', userId)
           .maybeSingle();
         if (freshRt && freshRt.updated_at >= startedAtIso) {
@@ -1143,7 +1143,7 @@ export async function dispatchCommandToWorker(client, userId, action, payload = 
 export async function listManagedUsers() {
   const admin = getAdminClient();
   const [usersRes, rtRes, slotsRes, devicesRes, contactsRes, wsRes] = await Promise.all([
-    admin.from('zapia_users').select('*').order('created_at', { ascending: true }),
+    admin.from('zapia_users').select('user_id, username, display_name, role, max_wa_slots, is_active, customer_phone, admin_notes, created_at, last_seen_at').order('created_at', { ascending: true }),
     admin.from('zapia_wa_runtime').select('user_id, status, connected_user, worker_online, worker_heartbeat_at, worker_platform'),
     admin.from('zapia_wa_slots').select('user_id, slot_id, device_id, device_label, status, connected_user, worker_online, worker_heartbeat_at'),
     admin.from('zapia_worker_devices').select('user_id, device_id, device_label, platform, version, online, heartbeat_at'),
@@ -1388,7 +1388,7 @@ export async function updateManagedUser(
   const admin = getAdminClient();
   const { data: target } = await admin
     .from('zapia_users')
-    .select('*')
+    .select('user_id, username, display_name, role, max_wa_slots, is_active, customer_phone, admin_notes, created_at, last_seen_at')
     .eq('user_id', targetUserId)
     .maybeSingle();
 
@@ -1435,7 +1435,7 @@ export async function deleteManagedUser(targetUserId) {
   const admin = getAdminClient();
   const { data: target } = await admin
     .from('zapia_users')
-    .select('*')
+    .select('user_id, username, display_name, role, max_wa_slots, is_active, customer_phone, admin_notes, created_at, last_seen_at')
     .eq('user_id', targetUserId)
     .maybeSingle();
 
@@ -1767,7 +1767,7 @@ class CloudWorkerBridge {
     await calibrateTrueClock();
     const { data: profile, error: profileError } = await this.client
       .from('zapia_users')
-      .select('*')
+      .select('user_id, is_active')
       .eq('user_id', authUser.id)
       .maybeSingle();
 
@@ -1899,7 +1899,7 @@ class CloudWorkerBridge {
     const contactsQuery = fetchAllCloudContacts(this.client, uid, { since }).then(data => ({ data }));
 
     const [wsRes, contactsRes] = await Promise.all([
-      this.client.from('zapia_workspaces').select('*').eq('user_id', uid).maybeSingle(),
+      this.client.from('zapia_workspaces').select('user_id, business, settings, stats, logs, simulator_history, proactive_queue, custom_pack, updated_at').eq('user_id', uid).maybeSingle(),
       contactsQuery
     ]);
 
@@ -2197,7 +2197,7 @@ class CloudWorkerBridge {
           },
           { onConflict: 'user_id,device_id' }
         ),
-        this.client.from('zapia_wa_slots').select('*').eq('user_id', this.user.id)
+        this.client.from('zapia_wa_slots').select('user_id, slot_id, device_id, device_label, status, qr_data_url, pairing_code, connected_user, last_error, proactive_state, worker_online, worker_heartbeat_at, worker_platform, updated_at').eq('user_id', this.user.id)
       ]);
 
       const remoteSlotsMap = new Map((slotsRes.data || []).map((r) => [normalizeSlotId(r.slot_id), r]));
@@ -2490,7 +2490,7 @@ class CloudWorkerBridge {
     if (!this.client || !this.user?.id) return;
     const { data: rows } = await this.client
       .from('zapia_commands')
-      .select('*')
+      .select('id, user_id, action, slot_id, payload, target_device_id, created_at')
       .eq('user_id', this.user.id)
       .eq('status', 'pending')
       .order('created_at', { ascending: true })

@@ -1,0 +1,91 @@
+/* ==========================================================================
+   SKELETON DE CARREGAMENTO
+   O bloco ocupa a mesma altura do conteúdo real (--skl-h) para não empurrar
+   o layout quando o dado chega: sem salto e sem tela em branco.
+   ========================================================================== */
+.skl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--skl-gap, 10px);
+  width: 100%;
+  padding: var(--skl-pad, 2px 0);
+}
+.skl-linha {
+  display: block;
+  height: var(--altura, 14px);
+  border-radius: 6px;
+  background: linear-gradient(
+    100deg,
+    var(--bg-input) 30%,
+    rgba(148, 163, 184, 0.14) 45%,
+    var(--bg-input) 60%
+  );
+  background-size: 240% 100%;
+  animation: skl-brilho 1.25s ease-in-out infinite;
+}
+.skl-linha[data-h="28"] { --altura: 28px; border-radius: 8px; }
+.skl-linha[data-h="44"] { --altura: 44px; border-radius: 10px; }
+.skl-linha[data-h="64"] { --altura: 64px; border-radius: 12px; }
+/* larguras variáveis: leem o data-w em dezenas de % */
+.skl-linha[data-w="92"] { width: 92%; }
+.skl-linha[data-w="88"] { width: 88%; }
+.skl-linha[data-w="86"] { width: 86%; }
+.skl-linha[data-w="82"] { width: 82%; }
+.skl-linha[data-w="78"] { width: 78%; }
+.skl-linha[data-w="74"] { width: 74%; }
+.skl-linha[data-w="72"] { width: 72%; }
+.skl-linha[data-w="70"] { width: 70%; }
+.skl-linha[data-w="66"] { width: 66%; }
+.skl-linha[data-w="64"] { width: 64%; }
+.skl-linha[data-w="60"] { width: 60%; }
+.skl-linha[data-w="58"] { width: 58%; }
+.skl-linha[data-w="100"] { width: 100%; }
+
+/* Cards do catálogo/áudios enquanto a lista não chega */
+.skl-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--bg-card-subtle);
+}
+.skl-card .skl-linha:first-child { height: 96px; border-radius: 8px; width: 100%; }
+
+@keyframes skl-brilho {
+  0% { background-position: 120% 0; }
+  100% { background-position: -60% 0; }
+}
+
+/* Quem pediu menos animação no sistema não recebe brilho andando */
+@media (prefers-reduced-motion: reduce) {
+  .skl-linha { animation: none; background: var(--bg-input); }
+}
+
+/* Skeleton dentro de grid: herda as colunas da lista real */
+.skl-grade {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+  width: 100%;
+}
+
+/* Bloco que ainda não tem altura reservada (lista vazia): mínimo para não colapsar */
+[data-skeleton="on"].empty-state,
+[data-skeleton="on"].u-vazio-central { min-height: 140px; }
+
+/* Resposta da IA em streaming: cursor piscando no fim do texto que está chegando */
+.sim-msg-stream::after {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -2px;
+  background: currentColor;
+  opacity: 0.55;
+  animation: skl-cursor 1s steps(1) infinite;
+}
+@keyframes skl-cursor { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .sim-msg-stream::after { animation: none; } }

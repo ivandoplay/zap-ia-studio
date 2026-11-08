@@ -793,8 +793,8 @@
       <section id="tab-audios" class="tab-pane active">
         <div class="page-header">
           <div>
-            <h1>Biblioteca de Áudios Estratégicos (Voz Humana Real)</h1>
-            <p>Grave ou envie áudios na sua própria voz. O sistema converte automaticamente qualquer arquivo para <strong>OGG/Opus Mono VoIP + 64 barras reais de onda sonora</strong>, entregando no WhatsApp como <strong>Nota de Voz gravada na hora</strong> (sem etiqueta de encaminhado).</p>
+            <h1>Áudios na Sua Voz</h1>
+            <p>Grave ou suba áudios com a sua voz. O sistema converte para <strong>OGG/Opus</strong> e a IA entrega como <strong>nota de voz gravada na hora</strong>, sem etiqueta de encaminhado.</p>
           </div>
           <div class="u-acoes-linha">
             <span id="voiceEngineBadge" class="tag u-etiqueta-clara">✓ Motor OGG/Opus + Waveform 64b Ativo</span>
@@ -802,38 +802,48 @@
           </div>
         </div>
 
-        <div class="metrics-strip u-grade-min-230 u-mb-18">
-          <div class="metric-box">
-            <div class="metric-head"><span>1. Formato Oficial WhatsApp</span></div>
-            <div class="u-ajuda-12-45 u-mt-4">
-              Converte <code>.mp3</code>, <code>.m4a</code>, <code>.wav</code> ou microfone para <strong>OGG/Opus 16kHz VoIP</strong> no canal nativo <code>/mms/ptt</code> com ondas reais e tempo proporcional de <em>"gravando áudio..."</em>.
+        <div class="treino-subabas" role="tablist" aria-label="Seções de áudios">
+          <button type="button" class="treino-subaba active" data-audio-aba="biblioteca" role="tab" aria-selected="true">Biblioteca</button>
+          <button type="button" class="treino-subaba" data-audio-aba="como-funciona" role="tab" aria-selected="false">Como funciona</button>
+        </div>
+
+        <div class="treino-painel" data-audio-painel="biblioteca">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h2 class="panel-title">Seus Áudios Estratégicos Cadastrados</h2>
+                <p class="panel-desc u-mb-0 u-mt-2">A IA usa os áudios marcados como <strong>Uso pela IA: Ativo</strong> quando encaixam na conversa, e todos ficam a 1 clique no CRM.</p>
+              </div>
+              <div class="u-acoes-8">
+                <input type="text" id="voiceSearchInput" placeholder="Buscar áudio ou transcrição..." aria-label="Buscar áudio ou transcrição na biblioteca de voz" class="u-altura-230" />
+              </div>
             </div>
-          </div>
-          <div class="metric-box">
-            <div class="metric-head"><span>2. Modo Puro ou Híbrido</span></div>
-            <div class="u-ajuda-12-45 u-mt-4">
-              A IA lê a <strong>transcrição</strong>: se o áudio responde tudo, manda só a voz; se faltar um detalhe, escreve 1 frase curta complementar <strong>sem repetir o que sua voz já fala</strong>.
-            </div>
-          </div>
-          <div class="metric-box">
-            <div class="metric-head"><span>3. Trava Anti-Repetição + S06</span></div>
-            <div class="u-ajuda-12-45 u-mt-4">
-              Nunca repete o mesmo áudio para o mesmo cliente no CRM. E se o cliente avisar que não pode ouvir áudio, a IA responde em texto usando sua transcrição.
-            </div>
+            <div class="audio-resumo" id="audioResumo"></div>
+            <div id="voiceLibraryGrid" class="voice-grid u-mt-14"></div>
           </div>
         </div>
 
-        <div class="panel">
-          <div class="panel-header">
-            <div>
-              <h2 class="panel-title">Seus Áudios Estratégicos Cadastrados</h2>
-              <p class="panel-desc u-mb-0 u-mt-2">A IA escolhe automaticamente os áudios marcados como <strong>Uso pela IA: Ativo</strong> quando encaixam na conversa, e todos ficam disponíveis em 1 clique no CRM.</p>
+        <div class="treino-painel" data-audio-painel="como-funciona" hidden>
+          <div class="metrics-strip u-grade-min-230 u-mb-18">
+            <div class="metric-box">
+              <div class="metric-head"><span>1. Formato Oficial WhatsApp</span></div>
+              <div class="u-ajuda-12-45 u-mt-4">
+                Converte <code>.mp3</code>, <code>.m4a</code>, <code>.wav</code> ou microfone para <strong>OGG/Opus 16kHz VoIP</strong> no canal nativo <code>/mms/ptt</code>, com ondas reais e tempo proporcional de <em>"gravando áudio..."</em>.
+              </div>
             </div>
-            <div class="u-acoes-8">
-              <input type="text" id="voiceSearchInput" placeholder="Buscar áudio ou transcrição..."  aria-label="Buscar áudio ou transcrição na biblioteca de voz" class="u-altura-230" />
+            <div class="metric-box">
+              <div class="metric-head"><span>2. Modo Puro ou Híbrido</span></div>
+              <div class="u-ajuda-12-45 u-mt-4">
+                A IA lê a <strong>transcrição</strong>: se o áudio responde tudo, manda só a voz; se faltar um detalhe, escreve 1 frase curta complementar <strong>sem repetir o que sua voz já fala</strong>.
+              </div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-head"><span>3. Trava Anti-Repetição + S06</span></div>
+              <div class="u-ajuda-12-45 u-mt-4">
+                Nunca repete o mesmo áudio para o mesmo cliente no CRM. E se o cliente avisar que não pode ouvir áudio, a IA responde em texto usando sua transcrição.
+              </div>
             </div>
           </div>
-          <div id="voiceLibraryGrid" class="voice-grid u-mt-14"></div>
         </div>
       </section>
 

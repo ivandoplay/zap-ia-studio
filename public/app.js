@@ -1409,6 +1409,27 @@ function renderAll() {
   window.__treinoAbrir = abrir;
 })();
 
+// Áudios: Biblioteca x Como funciona. Só alterna classe/atributo — nenhum campo recriado.
+(function audioSubabas() {
+  const abas = Array.from(document.querySelectorAll('[data-audio-aba]'));
+  const paineis = Array.from(document.querySelectorAll('[data-audio-painel]'));
+  if (!abas.length || !paineis.length) return;
+
+  function abrir(nome) {
+    abas.forEach((b) => {
+      const on = b.dataset.audioAba === nome;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    paineis.forEach((p) => {
+      p.hidden = p.dataset.audioPainel !== nome;
+    });
+  }
+
+  abas.forEach((b) => b.addEventListener('click', () => abrir(b.dataset.audioAba)));
+  window.__audioAbrir = abrir;
+})();
+
 (function menuMais() {
   const GRUPOS = window.MAIS_GRUPOS;
   function montar() {
@@ -9086,15 +9107,16 @@ let voiceModalChunks = [];
 let voiceModalTimer = null;
 let voiceModalStartedAt = 0;
 
+// A altura de cada barra é o único dado que varia: vai em --h e o CSS desenha.
 function renderWaveformBarsHtml(waveform = [], heightPx = 28) {
   const arr = Array.isArray(waveform) && waveform.length === 64 ? waveform : new Array(64).fill(24);
   const bars = arr
     .map((val) => {
       const pct = Math.max(12, Math.min(100, Number(val) || 12));
-      return `<span class="voice-waveform-bar" style="height:${pct}%;"></span>`;
+      return `<span class="voice-waveform-bar" data-nivel="${Math.round(pct / 10)}" aria-hidden="true"></span>`;
     })
     .join('');
-  return `<div class="voice-waveform-bars" style="height:${heightPx}px;" aria-hidden="true">${bars}</div>`;
+  return `<div class="voice-waveform-bars audio-onda-${heightPx}" aria-hidden="true">${bars}</div>`;
 }
 
 function formatDurationClock(sec = 0) {
@@ -9124,6 +9146,24 @@ function renderVoiceLibrary() {
       : 'Modo Nativo OGG/Opus Direto';
   }
 
+  // Resumo curto: quantos áudios existem, quantos a IA pode usar e quanto tempo de voz.
+  const resumoEl = document.getElementById('audioResumo');
+  if (resumoEl) {
+    if (!list.length) {
+      resumoEl.innerHTML = '';
+    } else {
+      const ativos = list.filter((v) => v.aiEnabled !== false).length;
+      const totalSeg = list.reduce((acc, v) => acc + (Number(v.durationSec) || 0), 0);
+      const enviados = list.reduce((acc, v) => acc + (Number(v.sentCount) || 0), 0);
+      resumoEl.innerHTML = `
+        <span class="audio-resumo-item"><strong>${list.length}</strong> ${list.length === 1 ? 'áudio' : 'áudios'}</span>
+        <span class="audio-resumo-item"><strong>${ativos}</strong> na IA automática</span>
+        <span class="audio-resumo-item"><strong>${formatDurationClock(totalSeg)}</strong> de voz gravada</span>
+        <span class="audio-resumo-item"><strong>${enviados}</strong> envios</span>
+      `;
+    }
+  }
+
   const grid = document.getElementById('voiceLibraryGrid');
   if (!grid) return;
 
@@ -9134,10 +9174,10 @@ function renderVoiceLibrary() {
 
   if (!filtered.length) {
     grid.innerHTML = `
-      <div class="empty-state" style="grid-column:1 / -1; padding:32px 18px;">
+      <div class="empty-state audio-vazio">
         <strong>${list.length ? 'Nenhum áudio corresponde à busca.' : 'Nenhum áudio estratégico cadastrado ainda'}</strong>
-        <p style="margin-top:6px; max-width:540px; margin-inline:auto;">
-          Clique em <strong>"+ Gravar / Subir Novo Áudio"</strong> acima para gravar ou subir áudios na sua voz. Eles serão convertidos automaticamente para <strong>OGG/Opus Nativo + Ondas Sonoras Reais</strong> e usados de forma inteligente pela IA e pelo CRM!
+        <p class="audio-vazio-txt">
+          Clique em <strong>"+ Gravar / Subir Novo Áudio"</strong> acima para gravar ou subir áudios na sua voz. Eles são convertidos automaticamente para <strong>OGG/Opus Nativo + Ondas Sonoras Reais</strong> e usados pela IA e pelo CRM.
         </p>
       </div>
     `;
@@ -9150,30 +9190,30 @@ function renderVoiceLibrary() {
       return `
         <div class="voice-card">
           <div class="voice-card-head">
-            <div>
-              <div class="voice-card-title">🎤 ${escapeHtml(v.name)}</div>
-              <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:5px;">
-                <span class="tag" style="background:rgba(37,211,102,0.14); color:var(--accent);">✓ OGG/Opus • ${formatDurationClock(v.durationSec)} (${kb})</span>
+            <div class="voice-card-titulo-bloco">
+              <div class="voice-card-title">${escapeHtml(v.name)}</div>
+              <div class="voice-card-tags">
+                <span class="tag tag-audio-ogg">✓ OGG/Opus • ${formatDurationClock(v.durationSec)} (${kb})</span>
                 ${v.linkedMessageCode ? `<span class="tag">${escapeHtml(v.linkedMessageCode)}</span>` : ''}
                 <span class="tag ${v.aiEnabled !== false ? '' : 'paused'}">${v.aiEnabled !== false ? 'IA Automática: Ativa' : 'Só Envio Manual'}</span>
               </div>
             </div>
           </div>
 
-          ${v.whenToUse ? `<div style="font-size:12px; color:var(--text-secondary);"><strong>Quando usar:</strong> ${escapeHtml(v.whenToUse)}</div>` : ''}
+          ${v.whenToUse ? `<div class="voice-card-quando"><strong>Quando usar:</strong> ${escapeHtml(v.whenToUse)}</div>` : ''}
 
           <div class="voice-waveform-box">
             ${renderWaveformBarsHtml(v.waveform, 28)}
-            <audio controls preload="metadata" src="${escapeHtml(v.url)}" style="width:100%; height:34px;"></audio>
+            <audio class="voice-player" controls preload="metadata" src="${escapeHtml(v.url)}"></audio>
           </div>
 
           <div class="voice-transcript-box" title="${escapeHtml(v.transcription)}">
-            <strong style="color:var(--text-main);">Transcrição:</strong> "${escapeHtml(v.transcription)}"
+            <strong class="voice-transcript-rotulo">Transcrição:</strong> "${escapeHtml(v.transcription)}"
           </div>
 
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:auto; padding-top:4px; flex-wrap:wrap;">
-            <span style="font-size:11.5px; color:var(--text-muted);">Enviado ${v.sentCount || 0}x</span>
-            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <div class="voice-card-rodape">
+            <span class="voice-card-envios">Enviado ${v.sentCount || 0}x</span>
+            <div class="voice-card-acoes">
               <button type="button" class="btn btn-secondary btn-sm" onclick="toggleVoiceItemAi('${escapeJsArg(v.id)}')">
                 ${v.aiEnabled !== false ? 'Pausar na IA' : 'Ativar na IA'}
               </button>

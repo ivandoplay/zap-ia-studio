@@ -5704,6 +5704,70 @@ label:has(input[type="checkbox"]) {
 .motor-dispositivo-txt small { font-size: 10.5px; color: var(--text-muted); }
 
 /* ==========================================================================
+   TREINAMENTO — 4 sub-abas (Identidade · Regras · FAQ · Arquivos)
+   ========================================================================== */
+.treino-subabas {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin: 14px 0 12px;
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  max-width: 100%;
+}
+.treino-subabas::-webkit-scrollbar { display: none; }
+.treino-subaba {
+  flex: 0 0 auto;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.treino-subaba:hover { color: var(--text-main); background: var(--bg-card-subtle); }
+.treino-subaba.active {
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+.treino-subaba:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.treino-painel[hidden] { display: none !important; }
+/* cartão do FAQ (antes era tudo style= inline montado no JS) */
+.faq-card {
+  background: var(--bg-card-subtle);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+.faq-card-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.faq-card-topo strong { font-size: 12.5px; }
+.faq-remover { min-height: 26px; padding: 2px 8px; }
+.faq-card .faq-q-input { margin-bottom: 8px; }
+.faq-card .faq-q-input,
+.faq-card .faq-a-input { width: 100%; }
+/* um painel por vez ocupa a largura toda: texto longo respira */
+.treino-painel > .panel { margin-bottom: 0; }
+.treino-painel .grid-equal { align-items: start; }
+@media (max-width: 900px) {
+  .treino-subaba { padding: 7px 11px; font-size: 12px; }
+}
+
+/* ==========================================================================
    CONVERSAS — densidade e leitura (aba mais usada no dia a dia)
    ========================================================================== */
 

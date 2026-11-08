@@ -1383,6 +1383,32 @@ function renderAll() {
 // ======================== MENU "MAIS" DO CELULAR (todas as 14 abas) ========================
 // A gaveta existia vazia. Ela passa a listar todas as abas do menu lateral, agrupadas,
 // para nenhuma ficar inalcançável no celular (o rodapé só cabe 4 hubs + este botão).
+// Treinamento: 5 blocos longos numa página só viram 4 sub-abas.
+// Só alterna classes/hidden dos painéis que já existem — nenhum campo é recriado,
+// então os valores digitados nunca se perdem ao trocar de aba.
+(function treinoSubabas() {
+  const abasEl = document.querySelectorAll('[data-treino-aba]');
+  const paineis = document.querySelectorAll('[data-treino-painel]');
+  if (!abasEl.length || !paineis.length) return;
+  function abrir(alvo) {
+    abasEl.forEach((b) => {
+      const on = b.dataset.treinoAba === alvo;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', String(on));
+    });
+    paineis.forEach((pane) => {
+      const on = pane.dataset.treinoPainel === alvo;
+      pane.classList.toggle('active', on);
+      pane.hidden = !on;
+    });
+  }
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-treino-aba]');
+    if (b) abrir(b.dataset.treinoAba);
+  });
+  window.__treinoAbrir = abrir;
+})();
+
 (function menuMais() {
   const GRUPOS = window.MAIS_GRUPOS;
   function montar() {
@@ -3476,12 +3502,12 @@ function renderFaqList(faqs) {
   box.innerHTML = faqs
     .map(
       (f, idx) => `
-      <div style="background:var(--bg-card-subtle); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px;">
-        <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:6px;">
-          <strong style="font-size:12.5px;">Pergunta #${idx + 1}</strong>
-          <button type="button" class="btn btn-danger btn-sm" style="min-height:26px; padding:2px 8px;" onclick="removeFaq(${idx})">Remover</button>
+      <div class="faq-card">
+        <div class="faq-card-topo">
+          <strong>Pergunta #${idx + 1}</strong>
+          <button type="button" class="btn btn-danger btn-sm faq-remover" onclick="removeFaq(${idx})">Remover</button>
         </div>
-        <input type="text" class="faq-q-input" data-idx="${idx}" value="${escapeHtml(f.question)}" placeholder="Pergunta do cliente..." style="margin-bottom:8px;" />
+        <input type="text" class="faq-q-input" data-idx="${idx}" value="${escapeHtml(f.question)}" placeholder="Pergunta do cliente..." />
         <textarea class="faq-a-input" data-idx="${idx}" rows="2" placeholder="Resposta ideal da IA...">${escapeHtml(f.answer)}</textarea>
       </div>
     `

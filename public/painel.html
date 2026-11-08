@@ -647,132 +647,144 @@
 
         <!-- Motor de Pacote de Treinamento Turbo (.ZIP / .JSON / .MD + Gerador ChatGPT & Vibe Coding) -->
         <div class="panel u-acento-esquerda">
-          <div class="panel-header">
-            <div>
-              <h2 class="panel-title">Motor de Treinamento IA · ChatGPT & Vibe Coding</h2>
-              <p class="panel-desc u-mb-0 u-mt-4">
-                Gere todo o treinamento em <strong>2 minutos pelo ChatGPT/Claude</strong>, baixe a especificação oficial para <strong>Vibe Coders</strong> ou importe arquivos <strong>.ZIP, .JSON ou .MD</strong>.
-              </p>
-            </div>
-            <div class="u-acoes-8">
-              <button type="button" class="btn btn-primary btn-sm" onclick="openAiTrainingBuilderModal()">🤖 Gerar com ChatGPT / Vibe Coding</button>
-              <label for="zipPackInput" class="btn btn-secondary btn-sm u-cursor-pointer">📂 Importar Arquivo (.ZIP / .JSON / .MD)</label>
-              <input type="file" id="zipPackInput" accept=".zip,.json,.md,.txt,application/zip,application/json,text/markdown,text/plain" class="u-none" />
-            </div>
-          </div>
-          <div id="activePackStatusBox" class="u-mt-12"></div>
+                  <div class="panel-header">
+                    <div>
+                      <h2 class="panel-title">Motor de Treinamento IA · ChatGPT & Vibe Coding</h2>
+                      <p class="panel-desc u-mb-0 u-mt-4">
+                        Gere todo o treinamento em <strong>2 minutos pelo ChatGPT/Claude</strong>, baixe a especificação oficial para <strong>Vibe Coders</strong> ou importe arquivos <strong>.ZIP, .JSON ou .MD</strong>.
+                      </p>
+                    </div>
+                    <div class="u-acoes-8">
+                      <button type="button" class="btn btn-primary btn-sm" onclick="openAiTrainingBuilderModal()">🤖 Gerar com ChatGPT / Vibe Coding</button>
+                      <label for="zipPackInput" class="btn btn-secondary btn-sm u-cursor-pointer">📂 Importar Arquivo (.ZIP / .JSON / .MD)</label>
+                      <input type="file" id="zipPackInput" accept=".zip,.json,.md,.txt,application/zip,application/json,text/markdown,text/plain" class="u-none" />
+                    </div>
+                  </div>
+                  <div id="activePackStatusBox" class="u-mt-12"></div>
 
-          <!-- Estúdio Visual de M01–M13 & Skills (Sxx/Hxx) direto na tela -->
-          <div id="packVisualStudioPanel" class="u-oculto-fio-topo">
-            <div class="panel-header u-mb-12">
-              <div class="studio-subtabs">
-                <button type="button" class="studio-subtab active" data-studiotab="messages">Mensagens Aprovadas (M01–M13)</button>
-                <button type="button" class="studio-subtab" data-studiotab="operational">Skills Operacionais (Sxx)</button>
-                <button type="button" class="studio-subtab" data-studiotab="humanization">Skills de Humanização (Hxx)</button>
-              </div>
-              <div class="u-acoes-8">
-                <input type="text" id="studioSearchInput" placeholder="Filtrar mensagem ou skill..."  aria-label="Filtrar mensagens aprovadas ou skills" class="u-altura-210" />
-                <button type="button" id="btnNewStudioItem" class="btn btn-primary btn-sm">+ Nova Mensagem / Skill</button>
-              </div>
-            </div>
-            <div id="studioItemsGrid" class="studio-grid"></div>
-          </div>
+                  <!-- Estúdio Visual de M01–M13 & Skills (Sxx/Hxx) direto na tela -->
+                  <div id="packVisualStudioPanel" class="u-oculto-fio-topo">
+                    <div class="panel-header u-mb-12">
+                      <div class="studio-subtabs">
+                        <button type="button" class="studio-subtab active" data-studiotab="messages">Mensagens Aprovadas (M01–M13)</button>
+                        <button type="button" class="studio-subtab" data-studiotab="operational">Skills Operacionais (Sxx)</button>
+                        <button type="button" class="studio-subtab" data-studiotab="humanization">Skills de Humanização (Hxx)</button>
+                      </div>
+                      <div class="u-acoes-8">
+                        <input type="text" id="studioSearchInput" placeholder="Filtrar mensagem ou skill..."  aria-label="Filtrar mensagens aprovadas ou skills" class="u-altura-210" />
+                        <button type="button" id="btnNewStudioItem" class="btn btn-primary btn-sm">+ Nova Mensagem / Skill</button>
+                      </div>
+                    </div>
+                    <div id="studioItemsGrid" class="studio-grid"></div>
+                  </div>
+                </div>
+
+                <!-- Formulário Guiado -->
+
+        <!-- Sub-abas: o treinamento era um rolo de 5 blocos numa página só. -->
+        <div class="treino-subabas" role="tablist" aria-label="Seções do treinamento">
+          <button type="button" class="treino-subaba active" data-treino-aba="identidade" role="tab" aria-selected="true">Identidade</button>
+          <button type="button" class="treino-subaba" data-treino-aba="regras" role="tab" aria-selected="false">Regras</button>
+          <button type="button" class="treino-subaba" data-treino-aba="faq" role="tab" aria-selected="false">FAQ</button>
+          <button type="button" class="treino-subaba" data-treino-aba="arquivos" role="tab" aria-selected="false">Arquivos</button>
         </div>
 
-        <!-- Formulário Guiado -->
-        <div class="grid-equal">
+        <div class="treino-painel active" data-treino-painel="identidade" role="tabpanel">
           <div class="panel">
-            <div class="panel-header">
-              <h2 class="panel-title">Identidade de Atendimento</h2>
-            </div>
-            <div class="form-group u-painel-caixa--11">
-              <label class="u-check-grupo--9">
-                <input type="checkbox" id="profSoloIdentityCheck" class="u-mt-3" />
-                <span>
-                  <strong>Atuação Individual em 1ª Pessoa (Sem Empresa / Sem Equipe)</strong><br />
-                  <span class="u-text-sm u-text-secondary">Ative quando o WhatsApp pertence diretamente a você (ex: consultor, corretor, médico, especialista). O atendimento falará sempre como <em>"eu / meu trabalho"</em>, sem citar empresa ou equipe e sem jamais dizer que vai passar para outra pessoa.</span>
-                </span>
-              </label>
-            </div>
-            <div class="form-group">
-              <label class="form-label" id="profNameLabel" for="profName">Nome da Empresa ou Profissional</label>
-              <input type="text" id="profName" placeholder="Ex: Lizandro Celestino (ou Nome da Loja)" />
-            </div>
-            <div class="grid-equal u-gap-12">
-              <div class="form-group">
-                <label class="form-label" for="profNiche">Nicho / Área de Atuação</label>
-                <input type="text" id="profNiche" placeholder="Ex: Estratégia de Vendas para Veículos" />
-              </div>
-              <div class="form-group">
-                <label class="form-label" id="profAssistantLabel" for="profAssistantName">Nome de Quem Atende no WhatsApp</label>
-                <input type="text" id="profAssistantName" placeholder="Ex: Lizandro (ou Clara)" />
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="profTone">Tom de Voz nas Conversas</label>
-              <select id="profTone">
-                <option value="consultivo">Consultivo e Vendedor (Simpático e focado em conversão)</option>
-                <option value="acolhedor">Acolhedor e Humanizado (Ideal p/ clínicas, saúde e estética)</option>
-                <option value="descontraido">Ágil e Descontraído (Ideal p/ delivery, lanchonetes e varejo jovem)</option>
-                <option value="profissional">Técnico e Objetivo (Ideal p/ assistência, oficinas e B2B)</option>
-                <option value="formal">Executivo e Formal (Ideal p/ advocacia, contabilidade e alto padrão)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label" id="profSummaryLabel" for="profSummary">Sobre o Trabalho & Diferenciais</label>
-              <textarea id="profSummary" rows="3" placeholder="Descreva como você trabalha (ou o que sua empresa vende), região e principais diferenciais..."></textarea>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="profDeliveryPayment">Pagamentos, Entrega, Endereço e Horários</label>
-              <textarea id="profDeliveryPayment" rows="3" placeholder="Condições comerciais, horários e políticas..."></textarea>
-            </div>
-          </div>
-
-          <div class="panel">
-            <h2 class="panel-title u-mb-12">Regras de Atendimento & Escudo IA</h2>
-            <div class="form-group">
-              <label class="form-label" for="profRules">Regras de Ouro (O que fazer e o que NUNCA inventar)</label>
-              <textarea id="profRules" rows="7" placeholder="- Nunca invente preços fora do catálogo..."></textarea>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="profExtra">Instruções Extras / Observações Finais</label>
-              <textarea id="profExtra" rows="3" placeholder="Instruções complementares de postura..."></textarea>
-            </div>
-            <div class="form-group u-fio-topo--coluna">
-              <label class="u-check-grupo">
-                <input type="checkbox" id="profLockForeverCheck" class="u-mt-3" />
-                <span><strong>Trava permanente na passagem humana e pausa silenciosa:</strong> um <code>"ok"</code> futuro do contato não reabre a automação sozinho (só volta quando você clicar em <em>Retomar IA</em>).</span>
-              </label>
-              <label class="u-check-grupo">
-                <input type="checkbox" id="profPromptShieldCheck" checked class="u-mt-3" />
-                <span><strong>Escudo Anti-Prompt Injection (OWASP LLM01):</strong> bloqueia curiosos ou concorrentes tentando arrancar regras internas ou manipular o prompt da IA.</span>
-              </label>
-            </div>
-          </div>
+                      <div class="panel-header">
+                        <h2 class="panel-title">Identidade de Atendimento</h2>
+                      </div>
+                      <div class="form-group u-painel-caixa--11">
+                        <label class="u-check-grupo--9">
+                          <input type="checkbox" id="profSoloIdentityCheck" class="u-mt-3" />
+                          <span>
+                            <strong>Atuação Individual em 1ª Pessoa (Sem Empresa / Sem Equipe)</strong><br />
+                            <span class="u-text-sm u-text-secondary">Ative quando o WhatsApp pertence diretamente a você (ex: consultor, corretor, médico, especialista). O atendimento falará sempre como <em>"eu / meu trabalho"</em>, sem citar empresa ou equipe e sem jamais dizer que vai passar para outra pessoa.</span>
+                          </span>
+                        </label>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label" id="profNameLabel" for="profName">Nome da Empresa ou Profissional</label>
+                        <input type="text" id="profName" placeholder="Ex: Lizandro Celestino (ou Nome da Loja)" />
+                      </div>
+                      <div class="grid-equal u-gap-12">
+                        <div class="form-group">
+                          <label class="form-label" for="profNiche">Nicho / Área de Atuação</label>
+                          <input type="text" id="profNiche" placeholder="Ex: Estratégia de Vendas para Veículos" />
+                        </div>
+                        <div class="form-group">
+                          <label class="form-label" id="profAssistantLabel" for="profAssistantName">Nome de Quem Atende no WhatsApp</label>
+                          <input type="text" id="profAssistantName" placeholder="Ex: Lizandro (ou Clara)" />
+                        </div>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label" for="profTone">Tom de Voz nas Conversas</label>
+                        <select id="profTone">
+                          <option value="consultivo">Consultivo e Vendedor (Simpático e focado em conversão)</option>
+                          <option value="acolhedor">Acolhedor e Humanizado (Ideal p/ clínicas, saúde e estética)</option>
+                          <option value="descontraido">Ágil e Descontraído (Ideal p/ delivery, lanchonetes e varejo jovem)</option>
+                          <option value="profissional">Técnico e Objetivo (Ideal p/ assistência, oficinas e B2B)</option>
+                          <option value="formal">Executivo e Formal (Ideal p/ advocacia, contabilidade e alto padrão)</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label" id="profSummaryLabel" for="profSummary">Sobre o Trabalho & Diferenciais</label>
+                        <textarea id="profSummary" rows="3" placeholder="Descreva como você trabalha (ou o que sua empresa vende), região e principais diferenciais..."></textarea>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label" for="profDeliveryPayment">Pagamentos, Entrega, Endereço e Horários</label>
+                        <textarea id="profDeliveryPayment" rows="3" placeholder="Condições comerciais, horários e políticas..."></textarea>
+                      </div>
+                    </div>
         </div>
 
-        <!-- FAQ + Documentos -->
-        <div class="grid-equal">
+        <div class="treino-painel" data-treino-painel="regras" role="tabpanel" hidden>
           <div class="panel">
-            <div class="panel-header">
-              <h2 class="panel-title">Perguntas Frequentes (FAQ)</h2>
-              <button type="button" id="btnAddFaq" class="btn btn-secondary btn-sm">+ Adicionar pergunta</button>
-            </div>
-            <p class="panel-desc">Cadastre respostas exatas para as dúvidas que seus clientes fazem todo dia.</p>
-            <div id="faqListContainer"></div>
-          </div>
+                      <h2 class="panel-title u-mb-12">Regras de Atendimento & Escudo IA</h2>
+                      <div class="form-group">
+                        <label class="form-label" for="profRules">Regras de Ouro (O que fazer e o que NUNCA inventar)</label>
+                        <textarea id="profRules" rows="7" placeholder="- Nunca invente preços fora do catálogo..."></textarea>
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label" for="profExtra">Instruções Extras / Observações Finais</label>
+                        <textarea id="profExtra" rows="3" placeholder="Instruções complementares de postura..."></textarea>
+                      </div>
+                      <div class="form-group u-fio-topo--coluna">
+                        <label class="u-check-grupo">
+                          <input type="checkbox" id="profLockForeverCheck" class="u-mt-3" />
+                          <span><strong>Trava permanente na passagem humana e pausa silenciosa:</strong> um <code>"ok"</code> futuro do contato não reabre a automação sozinho (só volta quando você clicar em <em>Retomar IA</em>).</span>
+                        </label>
+                        <label class="u-check-grupo">
+                          <input type="checkbox" id="profPromptShieldCheck" checked class="u-mt-3" />
+                          <span><strong>Escudo Anti-Prompt Injection (OWASP LLM01):</strong> bloqueia curiosos ou concorrentes tentando arrancar regras internas ou manipular o prompt da IA.</span>
+                        </label>
+                      </div>
+                    </div>
+        </div>
 
+        <div class="treino-painel" data-treino-painel="faq" role="tabpanel" hidden>
           <div class="panel">
-            <div class="panel-header">
-              <h2 class="panel-title">Arquivos de Conhecimento (.TXT, .CSV, .MD)</h2>
-            </div>
-            <p class="panel-desc">Suba tabelas de preços, manuais ou políticas em texto para a IA consultar durante o atendimento.</p>
-            <div class="u-acoes-wrap-fim">
-              <input type="file" id="knowledgeFileInput" accept=".txt,.csv,.md,.json"  aria-label="Selecionar arquivo PDF ou TXT de conhecimento" class="u-flex-1" />
-              <button type="button" id="btnUploadKnowledge" class="btn btn-secondary">Anexar arquivo</button>
-            </div>
-            <div id="knowledgeDocsList"></div>
-          </div>
+                      <div class="panel-header">
+                        <h2 class="panel-title">Perguntas Frequentes (FAQ)</h2>
+                        <button type="button" id="btnAddFaq" class="btn btn-secondary btn-sm">+ Adicionar pergunta</button>
+                      </div>
+                      <p class="panel-desc">Cadastre respostas exatas para as dúvidas que seus clientes fazem todo dia.</p>
+                      <div id="faqListContainer"></div>
+                    </div>
+        </div>
+
+        <div class="treino-painel" data-treino-painel="arquivos" role="tabpanel" hidden>
+          <div class="panel">
+                      <div class="panel-header">
+                        <h2 class="panel-title">Arquivos de Conhecimento (.TXT, .CSV, .MD)</h2>
+                      </div>
+                      <p class="panel-desc">Suba tabelas de preços, manuais ou políticas em texto para a IA consultar durante o atendimento.</p>
+                      <div class="u-acoes-wrap-fim">
+                        <input type="file" id="knowledgeFileInput" accept=".txt,.csv,.md,.json"  aria-label="Selecionar arquivo PDF ou TXT de conhecimento" class="u-flex-1" />
+                        <button type="button" id="btnUploadKnowledge" class="btn btn-secondary">Anexar arquivo</button>
+                      </div>
+                      <div id="knowledgeDocsList"></div>
+                    </div>
         </div>
       </section>
 

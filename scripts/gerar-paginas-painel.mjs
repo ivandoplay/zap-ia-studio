@@ -19,7 +19,7 @@ const MESTRE = path.join(RAIZ, 'public', 'painel.html');
 // aba do painel -> rota pública. A primeira é a "dona" do miolo comum (header, menus, modais).
 export const PAGINAS = [
   { tab: 'dashboard', rota: 'visao-geral', titulo: 'Visão geral' },
-  { tab: 'crm', rota: 'conversas', titulo: 'Atendimento e CRM' },
+  { tab: 'crm', rota: 'inbox', titulo: 'Inbox' },
   { tab: 'historico', rota: 'historico', titulo: 'Histórico por instância' },
   { tab: 'instancias', rota: 'instancias', titulo: 'Instâncias' },
   { tab: 'conexoes', rota: 'conexoes', titulo: 'Conexões e motor' },
@@ -49,6 +49,23 @@ function apontarMenu(html, rotaAtual) {
       return `${m} data-rota="${rota}" onclick="location.href='/${rota}/'"${atual}`;
     });
   }
+  return saida;
+}
+
+// Estados "active" estáticos coerentes com a página gerada (o app.js reforça no switchTab).
+const HUB_POR_TAB = {
+  dashboard: 'dashboard', crm: 'crm', historico: 'crm', campanhas: 'dashboard',
+  instancias: 'dashboard', conexoes: 'dashboard',
+  treinamento: 'cerebro', audios: 'cerebro', catalogo: 'cerebro', simulador: 'cerebro',
+  ia: 'config', seguranca: 'config', configuracoes: 'config', contas: 'contas'
+};
+
+function marcarAtivo(html, tab) {
+  let saida = html.replace(/ class="nav-btn active"/g, ' class="nav-btn"')
+                  .replace(/ class="mob-nav-btn active"/g, ' class="mob-nav-btn"');
+  saida = saida.replace(new RegExp(`(<button[^>]*class="nav-btn)"([^>]*data-tab="${tab}")`), '$1 active"$2');
+  const hub = HUB_POR_TAB[tab] || 'dashboard';
+  saida = saida.replace(new RegExp(`(<button[^>]*class="mob-nav-btn)"([^>]*data-mobhub="${hub}")`), '$1 active"$2');
   return saida;
 }
 
@@ -82,6 +99,7 @@ export function gerarPagina(mestre, { tab, titulo }) {
   if (!abas.includes(tab)) throw new Error(`Aba ausente no mestre: ${tab}`);
   let html = ajustarSecao(mestre, abas, tab);
   html = apontarMenu(html, ROTA_POR_TAB[tab]);
+  html = marcarAtivo(html, tab);
   // <base> mantém os caminhos absolutos (/app.js, /styles.css) válidos em qualquer rota.
   if (!html.includes('<base href="/">')) {
     html = html.replace(/(<head>\s*)/i, `$1<base href="/" />\n  `);
@@ -89,8 +107,8 @@ export function gerarPagina(mestre, { tab, titulo }) {
   // O app.js abre a aba da URL; o título muda por página (aba do navegador).
   html = html.replace(/\?tab=[a-z-]+/g, ''); // limpa marcações antigas
   html = html.replace(
-    /<script src="\/app\.js"><\/script>/,
-    `<script>window.IENVIA_PAGINA='${tab}';</script>\n  <script src="/app.js"></script>`
+    /<script src="\/app\.js"( defer)?><\/script>/,
+    `<script>window.IENVIA_PAGINA='${tab}';</script>\n  <script src="/app.js" defer></script>`
   );
   html = html.replace(/<title>[^<]*<\/title>/, `<title>Ienvia — ${titulo}</title>`);
   return html;

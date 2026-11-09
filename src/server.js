@@ -241,8 +241,9 @@ const PAGINAS_PAINEL = {
   '/audios': 'audios',
   '/treinamento': 'treinamento',
   '/campanhas': 'campanhas',
-  '/conversas': 'conversas',
-  '/historico': 'conversas',
+  '/inbox': 'inbox',
+  '/conversas': 'inbox',
+  '/historico': 'historico',
   '/canais': 'visao-geral',
   '/instancias': 'visao-geral',
   '/conexoes': 'visao-geral'

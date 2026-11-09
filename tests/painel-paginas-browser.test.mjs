@@ -62,7 +62,7 @@ test('o menu troca de página (URL muda), sem recarregar conteúdo perdido', asy
     assert.equal(await p.locator('#tab-campanhas').isVisible(), true);
     await p.locator('.nav-btn[data-tab="conversas-inexistente"]').count();
     await p.locator('.nav-btn[data-tab="crm"]').click();
-    await p.waitForURL(/\/conversas\/$/, { timeout: 15000 });
+    await p.waitForURL(/\/inbox\/$/, { timeout: 15000 });
     await p.waitForSelector('#tab-crm.active', { timeout: 15000 });
     assert.equal(erros.filter(e => !/Failed to fetch|NetworkError/i.test(e)).length, 0, `erros de página: ${erros.join(' | ')}`);
   } finally { await c.close(); }

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0e151f">
+<title>Ienvia — Definir sua senha</title>
+<link rel="icon" href="/icon-v2.svg" type="image/svg+xml">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:24px;background:#0e151f;color:#eef2f6;font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
+  main{width:100%;max-width:400px;background:#141d29;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:32px 28px;box-shadow:0 24px 60px rgba(0,0,0,.45)}
+  .brand{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+  .brand img{width:44px;height:44px;border-radius:10px}
+  .brand-title{font-size:19px;font-weight:700}
+  .brand-sub{font-size:11.5px;color:#8fa3b8;text-transform:uppercase;letter-spacing:.08em}
+  h1{font-size:21px;margin:0 0 6px}
+  p.sub{margin:0 0 20px;color:#8fa3b8;font-size:13px;line-height:1.5}
+  label{display:block;font-size:12px;font-weight:600;color:#c3cedb;margin:0 0 6px}
+  input{width:100%;height:42px;padding:0 12px;border-radius:9px;border:1px solid rgba(255,255,255,.12);background:#0e151f;color:#eef2f6;font-size:14px;outline:none}
+  input:focus-visible{border-color:#2f9e6e;box-shadow:0 0 0 3px rgba(47,158,110,.25)}
+  .campo{margin-bottom:14px}
+  .dica{font-size:11.5px;color:#6d7f93;margin-top:6px}
+  button[type=submit]{width:100%;height:44px;border:0;border-radius:9px;background:#2f9e6e;color:#fff;font-size:14px;font-weight:700;cursor:pointer}
+  button[type=submit]:disabled{opacity:.6;cursor:wait}
+  .aviso{display:none;background:rgba(255,196,0,.08);border:1px solid rgba(255,196,0,.35);color:#ffd666;font-size:12.5px;border-radius:9px;padding:10px 12px;margin-bottom:14px;line-height:1.5}
+  .erro{display:none;background:rgba(224,49,49,.12);border:1px solid rgba(224,49,49,.4);color:#ffb3b3;font-size:12.5px;border-radius:9px;padding:10px 12px;margin-bottom:14px}
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">
+    <img src="/ienvia-icon-v2.png" alt="Ienvia" width="44" height="44">
+    <div>
+      <div class="brand-title">Ienvia</div>
+      <div class="brand-sub">Atendente Universal</div>
+    </div>
+  </div>
+  <h1>Definir sua senha</h1>
+  <p class="sub">Escolha uma senha com pelo menos 8 caracteres para o seu primeiro acesso.</p>
+  <form id="setupForm" novalidate>
+    <div id="erroBox" class="erro" role="alert"></div>
+    <div id="avisoBox" class="aviso" role="status"></div>
+    <div class="campo">
+      <label for="novaSenha">Nova senha</label>
+      <input id="novaSenha" name="newPassword" type="password" autocomplete="new-password" minlength="8" required placeholder="Mínimo de 8 caracteres">
+      <div class="dica">Use letras e números. Não reutilize senhas de outros sites.</div>
+    </div>
+    <div class="campo">
+      <label for="confirmarSenha">Confirmar senha</label>
+      <input id="confirmarSenha" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required placeholder="Repita a senha">
+    </div>
+    <button type="submit" id="btnSalvar">Salvar senha</button>
+  </form>
+</main>
+<script>
+(function () {
+  var form = document.getElementById('setupForm');
+  var erroBox = document.getElementById('erroBox');
+  var avisoBox = document.getElementById('avisoBox');
+  var btn = document.getElementById('btnSalvar');
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    erroBox.style.display = 'none';
+    avisoBox.style.display = 'none';
+    var s1 = document.getElementById('novaSenha').value;
+    var s2 = document.getElementById('confirmarSenha').value;
+    if (s1.length < 8) { erroBox.textContent = 'A senha precisa de pelo menos 8 caracteres.'; erroBox.style.display = 'block'; return; }
+    if (s1 !== s2) { erroBox.textContent = 'As senhas não conferem.'; erroBox.style.display = 'block'; return; }
+    // A geração de convites com token assinado (ex.: Supabase Auth) fica para a implantação oficial;
+    // nenhum convite real é emitido nesta versão. A validação local já funciona.
+    avisoBox.textContent = 'Senha validada. A definição definitiva pelo link de convite será ativada na implantação oficial — assim que o seu link chegar, abra-o novamente e salve a senha por ele.';
+    avisoBox.style.display = 'block';
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0e151f">
+<title>Ienvia — Entrar</title>
+<link rel="icon" href="/icon-v2.svg" type="image/svg+xml">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:24px;background:#0e151f;color:#eef2f6;font-family:system-ui,-apple-system,'Segoe UI',sans-serif}
+  main{width:100%;max-width:400px;background:#141d29;border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:32px 28px;box-shadow:0 24px 60px rgba(0,0,0,.45)}
+  .brand{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+  .brand img{width:44px;height:44px;border-radius:10px}
+  .brand-title{font-size:19px;font-weight:700;letter-spacing:-.01em}
+  .brand-sub{font-size:11.5px;color:#8fa3b8;text-transform:uppercase;letter-spacing:.08em}
+  h1{font-size:21px;margin:0 0 6px}
+  p.sub{margin:0 0 20px;color:#8fa3b8;font-size:13px;line-height:1.5}
+  label{display:block;font-size:12px;font-weight:600;color:#c3cedb;margin:0 0 6px}
+  input{width:100%;height:42px;padding:0 12px;border-radius:9px;border:1px solid rgba(255,255,255,.12);background:#0e151f;color:#eef2f6;font-size:14px;outline:none;transition:border-color .15s}
+  input:focus-visible{border-color:#2f9e6e;box-shadow:0 0 0 3px rgba(47,158,110,.25)}
+  .campo{margin-bottom:14px}
+  button[type=submit]{width:100%;height:44px;border:0;border-radius:9px;background:#2f9e6e;color:#fff;font-size:14px;font-weight:700;cursor:pointer;transition:filter .15s}
+  button[type=submit]:hover{filter:brightness(1.08)}
+  button[type=submit]:disabled{opacity:.6;cursor:wait}
+  .erro{display:none;background:rgba(224,49,49,.12);border:1px solid rgba(224,49,49,.4);color:#ffb3b3;font-size:12.5px;border-radius:9px;padding:10px 12px;margin-bottom:14px;line-height:1.45}
+  .rodape{margin-top:18px;font-size:11.5px;color:#6d7f93;line-height:1.5;text-align:center}
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">
+    <img src="/ienvia-icon-v2.png" alt="Ienvia" width="44" height="44">
+    <div>
+      <div class="brand-title">Ienvia</div>
+      <div class="brand-sub">Atendente Universal</div>
+    </div>
+  </div>
+  <h1>Entrar na sua conta</h1>
+  <p class="sub">Acesse a operação isolada do seu WhatsApp.</p>
+  <form id="loginForm" novalidate>
+    <div id="erroBox" class="erro" role="alert"></div>
+    <div class="campo">
+      <label for="usuario">Usuário</label>
+      <input id="usuario" name="username" type="text" autocomplete="username" autocapitalize="none" required placeholder="seu.usuario">
+    </div>
+    <div class="campo">
+      <label for="senha">Senha</label>
+      <input id="senha" name="password" type="password" autocomplete="current-password" required placeholder="Sua senha">
+    </div>
+    <button type="submit" id="btnEntrar">Entrar na Minha Conta</button>
+  </form>
+  <p class="rodape">Problemas para entrar? Fale com o suporte do seu plano.<br>Você será redirecionado(a) para a Visão geral.</p>
+</main>
+<script>
+(function () {
+  var form = document.getElementById('loginForm');
+  var erroBox = document.getElementById('erroBox');
+  var btn = document.getElementById('btnEntrar');
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    erroBox.style.display = 'none';
+    var usuario = document.getElementById('usuario').value.trim();
+    var senha = document.getElementById('senha').value;
+    if (!usuario || !senha) { erroBox.textContent = 'Preencha usuário e senha.'; erroBox.style.display = 'block'; return; }
+    btn.disabled = true;
+    btn.textContent = 'Entrando...';
+    try {
+      var r = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: usuario, password: senha })
+      });
+      var d = await r.json().catch(function () { return {}; });
+      if (!r.ok || !d.ok) throw new Error(d.error || 'Usuário ou senha inválidos.');
+      localStorage.setItem('zapia_cloud_auth', JSON.stringify(Object.assign({}, d.session, { user: d.user })));
+      location.href = '/visao-geral/';
+    } catch (err) {
+      erroBox.textContent = err.message || 'Não foi possível entrar. Tente novamente.';
+      erroBox.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Entrar na Minha Conta';
+    }
+  });
+})();
+</script>
+</body>
+</html>

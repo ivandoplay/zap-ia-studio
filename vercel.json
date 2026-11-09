@@ -110,6 +110,38 @@
       "destination": "/api/index.js"
     },
     {
+      "source": "/inbox",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/inbox/",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/login",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/login/",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/auth/callback",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/auth/callback/",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/setup-password",
+      "destination": "/api/index.js"
+    },
+    {
+      "source": "/setup-password/",
+      "destination": "/api/index.js"
+    },
+    {
       "source": "/historico",
       "destination": "/api/index.js"
     },
@@ -263,6 +295,41 @@
     },
     {
       "source": "/visao-geral/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },    {
+      "source": "/inbox/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/login/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/setup-password/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/auth/callback/:path*",
       "headers": [
         {
           "key": "Cache-Control",

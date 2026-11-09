@@ -99,90 +99,119 @@
       </button>
     </div>
 
-    <nav class="nav-menu">
-      <div class="nav-group-label">Operação</div>
-      <button type="button" class="nav-btn active" data-tab="dashboard" data-rota="visao-geral" onclick="location.href='/visao-geral/'" title="Visão geral, status da conexão WhatsApp e disparar abordagens" aria-label="Dashboard, painel principal">
+    <nav class="nav-menu" aria-label="Seções do painel">
+      <div class="nav-group-label">Workspace</div>
+      <button type="button" class="nav-btn" data-tab="dashboard" data-rota="visao-geral" onclick="location.href='/visao-geral/'" title="Visão geral, status da conexão WhatsApp e disparar abordagens" aria-label="Dashboard, painel principal">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>
           <span>Visão geral</span>
         </span>
       </button>
-      <button type="button" class="nav-btn" data-tab="crm" data-rota="conversas" onclick="location.href='/conversas/'" title="Conversas do WhatsApp, CRM e caixa de entrada 360º" aria-label="Conversas, CRM">
+      <button type="button" class="nav-btn" data-tab="crm" data-rota="inbox" onclick="location.href='/inbox/'" title="Caixa de entrada do WhatsApp, CRM e Ficha 360º" aria-label="Inbox">
         <span class="nav-btn-left">
           <svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-          <span>Conversas</span>
+          <span>Inbox</span>
         </span>
         <span class="u-etiqueta-conexao" >
           <span id="navUnreadBadge" class="badge-count u-badge-acento" >0</span>
           <span id="navCrmBadge" class="badge-count u-none" >0</span>
         </span>
       </button>
-      <button type="button" class="nav-btn" data-tab="historico" data-rota="historico" onclick="location.href='/historico/'" aria-label="Histórico por instância">
-        <span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg><span>Histórico por instância</span></span>
-      </button>
       <button type="button" class="nav-btn" data-tab="campanhas" data-rota="campanhas" onclick="location.href='/campanhas/'" title="Disparar campanhas de mensagens em lote para múltiplos contatos" aria-label="Campanhas">
         <span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l18-7-4 16-5-6-5 3 1-5z"></path></svg><span>Campanhas</span></span>
       </button>
 
-      <div class="nav-group-label">Conexão</div>
-      <button type="button" class="nav-btn" data-tab="instancias" data-rota="instancias" onclick="location.href='/instancias/'" aria-label="Instâncias de WhatsApp">
-        <span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path></svg><span>Instâncias</span></span>
-      </button>
-      <button type="button" class="nav-btn" data-tab="conexoes" data-rota="conexoes" onclick="location.href='/conexoes/'" aria-label="Conexões e motor">
-        <span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg><span>Conexões / Motor</span></span>
-      </button>
+      <div class="nav-group-label">Atendimento inteligente</div>
+      <details class="nav-section" data-section="ia" open>
+        <summary class="nav-section-toggle">
+          <span class="nav-section-toggle-left">
+            <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.4L12 15l-1.9-4.6L5.5 9l4.6-1.4Z"></path><path d="M19 14l.8 1.9 1.9.8-1.9.8-.8 1.9-.8-1.9-1.9-.8 1.9-.8Z"></path></svg>
+            <span>IA e automação</span>
+          </span>
+          <svg class="icon-svg nav-section-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+        </summary>
+        <div class="nav-section-items">
+          <button type="button" class="nav-btn" data-tab="treinamento" data-rota="treinamento" onclick="location.href='/treinamento/'" title="Treinar o atendente: resumo do negócio, regras, FAQ e mensagens aprovadas" aria-label="Treinamento">
+            <span class="nav-btn-left">
+              <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
+              <span>Treinamento</span>
+            </span>
+          </button>
+          <button type="button" class="nav-btn" data-tab="catalogo" data-rota="catalogo" onclick="location.href='/catalogo/'" title="Catálogo de produtos, mídias e chave PIX" aria-label="Catálogo">
+            <span class="nav-btn-left">
+              <svg class="icon-svg" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+              <span>Catálogo &amp; PIX</span>
+            </span>
+          </button>
+          <button type="button" class="nav-btn" data-tab="audios" data-rota="audios" onclick="location.href='/audios/'" title="Gravar e organizar notas de voz humanas (áudios OGG/Opus)" aria-label="Áudios">
+            <span class="nav-btn-left">
+              <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+              <span>Áudios</span>
+            </span>
+            <span id="navVoiceBadge" class="badge-count u-badge-suave" >0</span>
+          </button>
+          <button type="button" class="nav-btn" data-tab="simulador" data-rota="simulador" onclick="location.href='/simulador/'" title="Testar respostas da IA antes de ir ao vivo" aria-label="Simulador">
+            <span class="nav-btn-left">
+              <svg class="icon-svg" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2v5Z"></path><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"></path></svg>
+              <span>Simulador</span>
+            </span>
+          </button>
+          <button type="button" class="nav-btn" data-tab="ia" data-rota="inteligencia-artificial" onclick="location.href='/inteligencia-artificial/'" title="Configurar o motor de IA: chaves do Gemini e OpenRouter, modelos e fallback" aria-label="Motor de IA">
+            <span class="nav-btn-left">
+              <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2v4"></path><path d="m16.2 7.8 2.9-2.9"></path><path d="M18 12h4"></path><path d="m16.2 16.2 2.9 2.9"></path><path d="M12 18v4"></path><path d="m4.9 19.1 2.9-2.9"></path><path d="M2 12h4"></path><path d="m4.9 4.9 2.9 2.9"></path><circle cx="12" cy="12" r="4"></circle></svg>
+              <span>Motor de IA</span>
+            </span>
+          </button>
+        </div>
+      </details>
+      <details class="nav-section" data-section="canais" open>
+        <summary class="nav-section-toggle">
+          <span class="nav-section-toggle-left">
+            <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16"></path><path d="M4 12h16"></path><path d="M4 18h16"></path><circle cx="8" cy="6" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="16" cy="18" r="1.6"></circle></svg>
+            <span>Canais e instâncias</span>
+          </span>
+          <svg class="icon-svg nav-section-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+        </summary>
+        <div class="nav-section-items">
+          <button type="button" class="nav-btn" data-tab="instancias" data-rota="instancias" onclick="location.href='/instancias/'" aria-label="Instâncias de WhatsApp">
+            <span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"></rect><path d="M11 18h2"></path></svg><span>Instâncias</span></span>
+          </button>
+          <button type="button" class="nav-btn" data-tab="conexoes" data-rota="conexoes" onclick="location.href='/conexoes/'" aria-label="Conexões e motor">
+            <span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg><span>Conexões / Motor</span></span>
+          </button>
+          <button type="button" class="nav-btn" data-tab="historico" data-rota="historico" onclick="location.href='/historico/'" aria-label="Histórico por instância">
+            <span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg><span>Histórico</span></span>
+          </button>
+        </div>
+      </details>
 
-      <div class="nav-group-label">Atendente</div>
-      <button type="button" class="nav-btn" data-tab="treinamento" data-rota="treinamento" onclick="location.href='/treinamento/'" title="Treinar o atendente: resumo do negócio, regras, FAQ e mensagens aprovadas" aria-label="Treinamento">
-        <span class="nav-btn-left">
-          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"></path></svg>
-          <span>Treinamento</span>
-        </span>
-      </button>
-      <button type="button" class="nav-btn" data-tab="catalogo" data-rota="catalogo" onclick="location.href='/catalogo/'" title="Catálogo de produtos, mídias e chave PIX" aria-label="Catálogo">
-        <span class="nav-btn-left">
-          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
-          <span>Catálogo &amp; PIX</span>
-        </span>
-      </button>
-      <button type="button" class="nav-btn" data-tab="audios" data-rota="audios" onclick="location.href='/audios/'" title="Gravar e organizar notas de voz humanas (áudios OGG/Opus)" aria-label="Áudios">
-        <span class="nav-btn-left">
-          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
-          <span>Áudios</span>
-        </span>
-        <span id="navVoiceBadge" class="badge-count u-badge-suave" >0</span>
-      </button>
-      <button type="button" class="nav-btn" data-tab="simulador" data-rota="simulador" onclick="location.href='/simulador/'" title="Testar respostas da IA antes de ir ao vivo" aria-label="Simulador">
-        <span class="nav-btn-left">
-          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4c0-1.1.9-2 2-2h8a2 2 0 0 1 2 2v5Z"></path><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"></path></svg>
-          <span>Simulador</span>
-        </span>
-      </button>
-      <button type="button" class="nav-btn" data-tab="ia" data-rota="inteligencia-artificial" onclick="location.href='/inteligencia-artificial/'" title="Configurar o motor de IA: chaves do Gemini e OpenRouter, modelos e fallback" aria-label="Motor de IA">
-        <span class="nav-btn-left">
-          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 2v4"></path><path d="m16.2 7.8 2.9-2.9"></path><path d="M18 12h4"></path><path d="m16.2 16.2 2.9 2.9"></path><path d="M12 18v4"></path><path d="m4.9 19.1 2.9-2.9"></path><path d="M2 12h4"></path><path d="m4.9 4.9 2.9 2.9"></path><circle cx="12" cy="12" r="4"></circle></svg>
-          <span>Motor de IA</span>
-        </span>
-      </button>
-
-      <div class="nav-group-label">Sistema</div>
-      <button type="button" class="nav-btn" data-tab="seguranca" data-rota="seguranca" onclick="location.href='/seguranca/'" title="Anti-ban, fila segura de abordagem, PIN e proteções" aria-label="Segurança">
-        <span class="nav-btn-left">
-          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-          <span>Segurança</span>
-        </span>
-      </button>
-      <button type="button" class="nav-btn" data-tab="configuracoes" data-rota="configuracoes" onclick="location.href='/configuracoes/'" aria-label="Configurações">
-        <span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"></path></svg><span>Configurações</span></span>
-      </button>
-      <div id="navMasterGroupLabel" class="nav-group-label u-none" >Plataforma</div>
-
-      <button type="button" id="navMasterUsersBtn" class="nav-btn u-none" data-tab="contas" data-rota="contas" onclick="location.href='/contas/'" aria-current="page" >
-        <span class="nav-btn-left">
-          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-          <span>Clientes SaaS</span>
-        </span>
-      </button>
+      <div class="nav-group-label">Gestão</div>
+      <details class="nav-section" data-section="gestao" open>
+        <summary class="nav-section-toggle">
+          <span class="nav-section-toggle-left">
+            <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"></path></svg>
+            <span>Configurações</span>
+          </span>
+          <svg class="icon-svg nav-section-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+        </summary>
+        <div class="nav-section-items">
+          <button type="button" class="nav-btn" data-tab="configuracoes" data-rota="configuracoes" onclick="location.href='/configuracoes/'" aria-label="Configurações gerais">
+            <span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><line x1="4" y1="7" x2="20" y2="7"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="17" x2="20" y2="17"></line><circle cx="9" cy="7" r="1.4"></circle><circle cx="14" cy="12" r="1.4"></circle><circle cx="7" cy="17" r="1.4"></circle></svg><span>Geral</span></span>
+          </button>
+          <button type="button" class="nav-btn" data-tab="seguranca" data-rota="seguranca" onclick="location.href='/seguranca/'" title="Anti-ban, fila segura de abordagem, PIN e proteções" aria-label="Segurança">
+            <span class="nav-btn-left">
+              <svg class="icon-svg" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+              <span>Segurança</span>
+            </span>
+          </button>
+          <button type="button" id="navMasterUsersBtn" class="nav-btn u-none" data-tab="contas" data-rota="contas" onclick="location.href='/contas/'" aria-current="page" >
+            <span class="nav-btn-left">
+              <svg class="icon-svg" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              <span>Clientes SaaS</span>
+            </span>
+          </button>
+        </div>
+      </details>
     </nav>
 
     <div class="sidebar-footer">
@@ -2449,14 +2478,14 @@
 
   <!-- BARRA INFERIOR MOBILE NATIVA (5 HUBS COESOS — ESTILO WHATSAPP / LINEAR MOBILE) -->
   <nav class="mobile-bottom-nav" aria-label="Navegação principal mobile">
-    <button type="button" class="mob-nav-btn active" data-mobhub="dashboard" data-mobtab="dashboard" aria-label="Início, painel principal">
+    <button type="button" class="mob-nav-btn" data-mobhub="dashboard" data-mobtab="dashboard" aria-label="Início, painel principal">
       <svg class="icon-svg" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"></rect><rect x="14" y="3" width="7" height="5" rx="1"></rect><rect x="14" y="12" width="7" height="9" rx="1"></rect><rect x="3" y="16" width="7" height="5" rx="1"></rect></svg>
       <span>Início</span>
     </button>
 
-    <button type="button" class="mob-nav-btn" data-mobhub="crm" data-mobtab="crm" aria-label="Conversas do CRM">
+    <button type="button" class="mob-nav-btn" data-mobhub="crm" data-mobtab="crm" aria-label="Inbox do CRM">
       <svg class="icon-svg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-      <span>Conversas</span>
+      <span>Inbox</span>
       <span id="mobCrmBadge" class="mob-badge u-none">0</span>
     </button>
 
@@ -3442,6 +3471,7 @@
   <script src="/perf.js"></script>
   <!-- defer: o HTML aparece antes, o painel hidrata em seguida -->
   <script src="/inbox-realtime.js" defer></script>
+  <script>window.IENVIA_PAGINA='contas';</script>
   <script src="/app.js" defer></script>
   <script src="/campanhas.js" defer></script>
 </body>

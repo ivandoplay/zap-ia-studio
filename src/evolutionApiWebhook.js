@@ -230,7 +230,7 @@ function applyActiveSecurity(live, active) {
         String(message.text || '') === String(text || fallback) &&
         Math.abs((Date.parse(message.timestamp || '') || 0) - incomingAt) < 120000
       );
-      const isAutomationMessage = sentByAutomation.has(id) || matchesRecentAiReply;
+      const isAutomationMessage = eventKey === 'SEND_MESSAGE' || sentByAutomation.has(id) || matchesRecentAiReply;
       if (!isAutomationMessage && settings.humanHandoff?.pauseOnOwnerReply !== false) {
         const pauseForever = Boolean(tenant.profile?.lockUntilManualResume);
         const pauseMinutes = Math.max(5, Number(settings.humanHandoff?.pauseDurationMinutes) || 60);

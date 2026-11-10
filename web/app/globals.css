@@ -32,3 +32,6 @@
 :root[data-theme="dark"] .error{background:#431f28;color:#ffc9c9;border-color:#6e303a}
 :root[data-theme="dark"] .notice{background:#1a2a40;color:#b3c0d4;border-color:var(--line)}
 :root[data-theme="dark"] .primary{color:white}
+
+.composer-tools{display:flex;gap:8px;padding:10px 13px 0;background:white}.composer-tools .secondary-button{margin:0;cursor:pointer}.note-composer{display:flex;gap:8px;align-items:flex-end;padding:10px 13px;background:#fff}.note-composer textarea{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;padding:9px;font:12px 'DM Sans',sans-serif}.note-composer button{margin:0}
+:root[data-theme="dark"] .composer-tools,:root[data-theme="dark"] .note-composer{background:var(--paper)}

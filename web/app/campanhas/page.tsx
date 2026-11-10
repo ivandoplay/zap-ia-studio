@@ -24,6 +24,11 @@ type Channel = { id: string; name: string; campaignsEnabled?: boolean };
 type Recipient = { telefone: string; nome: string; campos?: Record<string, string> };
 type ImportPreview = { ok: boolean; destinatarios: Recipient[]; problemas?: { linha: number; tipo: string }[] };
 type CampaignEditor = { plano: Record<string, unknown>; opcoes: Record<string, unknown> };
+type MediaFolder = { pasta_id: string; nome: string; tipo: 'audio' | 'imagem' };
+type MediaFile = { arquivo_id: string; nome_original: string; mime: string; tamanho: number; ordem: number };
+type FoldersResponse = { ok: boolean; pastas: MediaFolder[] };
+type FilesResponse = { ok: boolean; arquivos: MediaFile[] };
+type UploadInit = { ok: boolean; arquivoId: string; signedUrl: string };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -84,6 +89,14 @@ export default function CampaignsPage() {
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [mediaFolders, setMediaFolders] = useState<MediaFolder[]>([]);
+  const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
+  const [mediaFolderName, setMediaFolderName] = useState('');
+  const [mediaFolderType, setMediaFolderType] = useState<'imagem' | 'audio'>('imagem');
+  const [selectedMediaFolder, setSelectedMediaFolder] = useState('');
+  const [mediaBusy, setMediaBusy] = useState(false);
+  const [mediaNotice, setMediaNotice] = useState('');
+  const [mediaError, setMediaError] = useState('');
 
   const canEdit = data?.permissions?.canEditDrafts === true;
   const selectedDraft = useMemo(
@@ -104,12 +117,39 @@ export default function CampaignsPage() {
     }
   }
 
+  async function loadMediaFolders() {
+    try {
+      const result = await api<FoldersResponse>('campaigns-v2/folders');
+      const folders = Array.isArray(result.pastas) ? result.pastas : [];
+      setMediaFolders(folders);
+      setSelectedMediaFolder(current => current || folders[0]?.pasta_id || '');
+    } catch (cause) {
+      setMediaError(cause instanceof Error ? cause.message : 'Não foi possível consultar as pastas de mídia.');
+    }
+  }
+
+  async function loadMediaFiles(folderId: string) {
+    try {
+      const result = await api<FilesResponse>('campaigns-v2/folders/' + folderId + '/files?inicio=0');
+      setMediaFiles(Array.isArray(result.arquivos) ? result.arquivos : []);
+    } catch (cause) {
+      setMediaFiles([]);
+      setMediaError(cause instanceof Error ? cause.message : 'Não foi possível consultar os arquivos da pasta.');
+    }
+  }
+
   useEffect(() => {
     void load();
+    void loadMediaFolders();
     api<{ items: Channel[] }>('channels?limit=50&visibility=all')
       .then(result => setChannels((result.items || []).filter(channel => channel.campaignsEnabled === true)))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (selectedMediaFolder) void loadMediaFiles(selectedMediaFolder);
+    else setMediaFiles([]);
+  }, [selectedMediaFolder]);
 
   async function importRecipients(file: File) {
     if (file.size > 4 * 1024 * 1024) {
@@ -180,6 +220,97 @@ export default function CampaignsPage() {
     } finally {
       setCreating(false);
     }
+  }
+
+  async function createMediaFolder() {
+    if (!canEdit || !mediaFolderName.trim() || mediaBusy) return;
+    setMediaBusy(true);
+    setMediaError('');
+    setMediaNotice('');
+    try {
+      const result = await api<{ pasta: MediaFolder }>('campaigns-v2/folders', {
+        method: 'POST',
+        body: JSON.stringify({ nome: mediaFolderName.trim(), tipo: mediaFolderType }),
+      });
+      if (!result.pasta?.pasta_id) throw new Error('O backend não confirmou a pasta criada.');
+      setMediaFolderName('');
+      await loadMediaFolders();
+      setSelectedMediaFolder(result.pasta.pasta_id);
+      setMediaNotice('Pasta privada criada. Ela ainda não foi vinculada a nenhuma campanha.');
+    } catch (cause) {
+      setMediaError(cause instanceof Error ? cause.message : 'Não foi possível criar a pasta.');
+    } finally {
+      setMediaBusy(false);
+    }
+  }
+
+  async function uploadMedia(file: File) {
+    const folder = mediaFolders.find(item => item.pasta_id === selectedMediaFolder);
+    if (!canEdit || !folder || mediaBusy) return;
+    if (file.size < 1 || file.size > 35 * 1024 * 1024) {
+      setMediaError('O arquivo precisa ter entre 1 byte e 35 MB.');
+      return;
+    }
+    setMediaBusy(true);
+    setMediaError('');
+    setMediaNotice('');
+    try {
+      const initialized = await api<UploadInit>('campaigns-v2/folders/' + folder.pasta_id + '/uploads', {
+        method: 'POST',
+        body: JSON.stringify({ tamanho: file.size }),
+      });
+      const signed = new URL(initialized.signedUrl);
+      if (signed.protocol !== 'https:') throw new Error('O backend não retornou uma URL HTTPS de upload.');
+      const uploaded = await fetch(initialized.signedUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+          'x-upsert': 'false',
+        },
+        body: file,
+      });
+      if (!uploaded.ok) {
+        throw new Error('O armazenamento recusou o upload (' + uploaded.status + '). A reserva pode expirar; atualize a pasta antes de tentar novamente.');
+      }
+      await api('campaigns-v2/folders/' + folder.pasta_id + '/uploads/' + initialized.arquivoId + '/finish', {
+        method: 'POST',
+        body: JSON.stringify({ nome: file.name }),
+      });
+      await loadMediaFiles(folder.pasta_id);
+      setMediaNotice('Arquivo enviado, validado por assinatura e registrado na pasta privada.');
+    } catch (cause) {
+      setMediaError(cause instanceof Error ? cause.message : 'Não foi possível concluir o upload.');
+    } finally {
+      setMediaBusy(false);
+    }
+  }
+
+  function insertMediaBlock() {
+    const folder = mediaFolders.find(item => item.pasta_id === selectedMediaFolder);
+    if (!folder || !editorAvailable) return;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(editorJson);
+    } catch {
+      setError('O editor do plano contém JSON inválido.');
+      return;
+    }
+    if (!isRecord(parsed) || !isRecord(parsed.plano) || !Array.isArray(parsed.plano.blocos)) {
+      setError('O plano aberto não contém uma lista de blocos válida.');
+      return;
+    }
+    const block = {
+      id: crypto.randomUUID(),
+      tipo: folder.tipo,
+      pastaId: folder.pasta_id,
+      selecao: 'sequencial',
+      ...(folder.tipo === 'audio' ? { notaVoz: false } : {}),
+    };
+    setEditorJson(JSON.stringify({
+      ...parsed,
+      plano: { ...parsed.plano, blocos: [...parsed.plano.blocos, block] },
+    }, null, 2));
+    setNotice('Bloco de ' + folder.tipo + ' inserido no plano. Salve o rascunho para persistir a revisão.');
   }
 
   async function openDraft(id: string) {
@@ -319,6 +450,73 @@ export default function CampaignsPage() {
               {creating ? 'Criando…' : 'Criar rascunho'}
             </button>
           </div>
+        </section>
+      )}
+
+      {canEdit && (
+        <section className="surface panel campaign-media">
+          <div className="editor-heading">
+            <div>
+              <h2>Biblioteca privada de mídia</h2>
+              <p>Pastas e arquivos isolados por conta. O upload usa URL assinada do armazenamento.</p>
+            </div>
+            <span className="user-chip">{mediaFolders.length} pastas</span>
+          </div>
+          {mediaError && <div className="error" role="alert">{mediaError}</div>}
+          {mediaNotice && <div className="notice" role="status">{mediaNotice}</div>}
+          <div className="crm-fields">
+            <label>Nome da nova pasta
+              <input value={mediaFolderName} onChange={event => setMediaFolderName(event.target.value)} maxLength={120} placeholder="Ex.: Imagens de lançamento" />
+            </label>
+            <label>Tipo da pasta
+              <select value={mediaFolderType} onChange={event => setMediaFolderType(event.target.value as 'imagem' | 'audio')}>
+                <option value="imagem">Imagens</option>
+                <option value="audio">Áudios</option>
+              </select>
+            </label>
+          </div>
+          <button className="secondary-button" disabled={mediaBusy || !mediaFolderName.trim()} onClick={() => void createMediaFolder()}>
+            {mediaBusy ? 'Processando…' : 'Criar pasta'}
+          </button>
+          <div className="crm-fields" style={{ marginTop: 16 }}>
+            <label>Pasta selecionada
+              <select value={selectedMediaFolder} onChange={event => setSelectedMediaFolder(event.target.value)}>
+                <option value="">Selecione uma pasta</option>
+                {mediaFolders.map(folder => <option key={folder.pasta_id} value={folder.pasta_id}>{folder.nome} · {folder.tipo}</option>)}
+              </select>
+            </label>
+            <label>Enviar arquivo (até 35 MB)
+              <input
+                type="file"
+                accept={mediaFolders.find(folder => folder.pasta_id === selectedMediaFolder)?.tipo === 'audio' ? 'audio/*,.ogg,.mp3,.wav,.m4a,.webm,.mp4' : 'image/*,.png,.jpg,.jpeg,.webp'}
+                disabled={mediaBusy || !selectedMediaFolder}
+                onChange={event => {
+                  const file = event.target.files?.[0];
+                  if (file) void uploadMedia(file);
+                  event.currentTarget.value = '';
+                }}
+              />
+            </label>
+          </div>
+          {selectedMediaFolder && (
+            <div className="media-file-list">
+              <div className="editor-heading">
+                <div><h3>Arquivos da pasta</h3><p>{mediaFiles.length} arquivo(s) nesta página</p></div>
+                {editorAvailable && <button className="secondary-button" disabled={mediaBusy} onClick={insertMediaBlock}>Inserir bloco no plano</button>}
+              </div>
+              {mediaFiles.map(file => (
+                <article className="channel-row" key={file.arquivo_id}>
+                  <div>
+                    <strong>{file.nome_original}</strong>
+                    <small>{file.mime} · {(file.tamanho / 1024).toFixed(0)} KB · ordem {file.ordem}</small>
+                    <small>ID: {file.arquivo_id}</small>
+                  </div>
+                  <span className="user-chip">Privado</span>
+                </article>
+              ))}
+              {!mediaFiles.length && <div className="empty-state">Nenhum arquivo nesta pasta.</div>}
+            </div>
+          )}
         </section>
       )}
 

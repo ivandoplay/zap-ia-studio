@@ -1,0 +1,36 @@
+'use client';
+
+import { FormEvent, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { saveAuth } from '@/lib/auth';
+import { api } from '@/lib/api';
+
+type LoginResponse = { ok: boolean; session: { access_token: string; refresh_token: string; expires_at?: number; token_type?: string }; user?: { id?: string; username?: string; displayName?: string; role?: string } };
+
+export default function LoginPage() {
+  const router = useRouter();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault(); setError(''); setBusy(true);
+    try {
+      const result = await api<LoginResponse>('auth/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+      if (!result.session?.access_token || !result.session?.refresh_token) throw new Error('O servidor não retornou uma sessão válida.');
+      saveAuth(result.session, result.user);
+      router.replace('/visao-geral');
+    } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível entrar.'); }
+    finally { setBusy(false); }
+  }
+
+  return <main className="login-wrap"><form className="login-card" onSubmit={submit}>
+    <div className="brand"><span className="brand-mark">✳</span><span>ienvia</span></div>
+    <p className="eyebrow">ATENDIMENTO INTELIGENTE</p><h1>Bem-vindo de volta</h1><p>Entre com as credenciais da sua conta Ienvia.</p>
+    <div className="field"><label htmlFor="username">Usuário</label><input id="username" autoComplete="username" value={username} onChange={e=>setUsername(e.target.value)} required /></div>
+    <div className="field"><label htmlFor="password">Senha</label><input id="password" type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required /></div>
+    {error && <div className="error" role="alert">{error}</div>}
+    <button className="primary" disabled={busy}>{busy?'Entrando…':'Entrar na conta'}</button>
+  </form></main>;
+}

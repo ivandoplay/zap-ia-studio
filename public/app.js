@@ -967,6 +967,20 @@ async function refreshLiveStateOnly() {
         state.appVersion = snap.appVersion;
       }
       state.waState = snap.waState || state.waState;
+      // No modo cloud, o /api/cloud/poll já devolve o estado efetivo após consultar
+      // a Evolution. Espelha esse estado para não manter um "connected" antigo em cache.
+      if (snap.runtimeMode === 'vercel_cloud' && snap.waState?.slots) {
+        state.evolutionCloud.slots = { ...(state.evolutionCloud.slots || {}) };
+        for (const [slotId, slot] of Object.entries(snap.waState.slots)) {
+          if (!slot || typeof slot !== 'object' || !slot.status) continue;
+          state.evolutionCloud.slots[slotId] = {
+            ...(state.evolutionCloud.slots[slotId] || {}),
+            status: slot.status,
+            qrDataUrl: slot.qrDataUrl || null,
+            pairingCode: slot.pairingCode || null
+          };
+        }
+      }
       if (snap.waSlots && state.settings) {
         state.settings.waSlots = snap.waSlots;
       }

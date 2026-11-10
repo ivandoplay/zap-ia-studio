@@ -13,6 +13,8 @@
 - Os 14 destinos encontrados possuem correspondência entre navegação e painel. O destino Contas é sujeito às permissões de administrador.
 - O JavaScript de interface está concentrado em `public/app.js` (arquivo extenso, aproximadamente 466 KB no momento da auditoria).
 - A alternância manual de tema já existe e usa `data-theme="light"` no elemento raiz; a ausência do atributo representa o tema escuro.
+- O dashboard já possui saudação/relógio, faixa de prontidão, KPIs e controles rápidos alimentados pelo estado do painel e pela API de campanhas.
+- A busca rápida global (Ctrl+K) já existe e pesquisa destinos, contatos, mensagens aprovadas e áudios; nesta etapa sua lista de destinos foi ampliada para cobrir todas as abas acessíveis e seu visual foi refinado.
 - A navegação móvel antiga contém elementos e listeners que devem ser mantidos compatíveis até que cada dependência seja migrada e testada.
 
 ### Backend e integrações
@@ -49,6 +51,7 @@
 - Harmonizar tema claro/escuro com a paleta verde/grafite existente.
 - Revisar tabelas, formulários, modais, dropdowns, toasts, skeletons e estados vazios.
 - Melhorar responsividade das telas de maior densidade (Inbox, CRM, campanhas e configurações).
+- Refinar a paleta de comandos existente e disponibilizar todos os destinos autorizados.
 - Verificar que os controles de navegação antiga continuam compatíveis enquanto a migração não estiver concluída.
 
 **Critérios de aceite:** todos os 14 destinos abrem; sidebar funciona por toque e teclado; tema claro/escuro não perde legibilidade; nenhum controle essencial fica coberto pela navegação móvel; sem regressão funcional conhecida.
@@ -151,6 +154,8 @@ Para cada etapa:
 - [x] Identificação da alternância de tema existente.
 - [x] Inventário estático das declarações de rotas Express.
 - [x] Direção visual premium verde/grafite e menu lateral responsivo iniciados na branch de homologação.
+- [x] Busca rápida global atualizada para listar as 14 áreas do painel (Clientes SaaS permanece restrito ao perfil master).
+- [x] Estilo premium aplicado à paleta de comandos existente.
 - [ ] Homologação visual manual em desktop e mobile.
 - [ ] Regressão funcional autenticada.
 - [ ] Testes de integrações reais.

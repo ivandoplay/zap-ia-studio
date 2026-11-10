@@ -226,11 +226,18 @@ function applyActiveSecurity(live, active) {
     if (fromMe) {
       const incomingAt = Date.parse(timestamp) || Date.now();
       const matchesRecentAiReply = (saved.contact?.messages || []).some(message =>
+        message.id !== id &&
         message.role === 'assistant' &&
         String(message.text || '') === String(text || fallback) &&
         Math.abs((Date.parse(message.timestamp || '') || 0) - incomingAt) < 120000
       );
-      const isAutomationMessage = eventKey === 'SEND_MESSAGE' || sentByAutomation.has(id) || matchesRecentAiReply;
+      const matchesPanelOwnerSend = (saved.contact?.messages || []).some(message =>
+        message.id !== id &&
+        message.role === 'owner' &&
+        String(message.text || '') === String(text || fallback) &&
+        Math.abs((Date.parse(message.timestamp || '') || 0) - incomingAt) < 120000
+      );
+      const isAutomationMessage = sentByAutomation.has(id) || matchesRecentAiReply || (eventKey === 'SEND_MESSAGE' && !matchesPanelOwnerSend);
       if (!isAutomationMessage && settings.humanHandoff?.pauseOnOwnerReply !== false) {
         const pauseForever = Boolean(tenant.profile?.lockUntilManualResume);
         const pauseMinutes = Math.max(5, Number(settings.humanHandoff?.pauseDurationMinutes) || 60);

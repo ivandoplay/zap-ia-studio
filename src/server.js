@@ -2519,6 +2519,14 @@ function applyImportedTrainingResult({ packSummary, suggestedProfile }) {
   return storage.data.business;
 }
 
+function currentTrainingImportFingerprint() {
+  const business = storage.getBusiness();
+  const id = business.trainingPackId;
+  const pack = id ? storage.data.customPacks?.[id] || getTrainingPack(id) || null : null;
+  const snapshot = createTrainingDocument(business, pack);
+  return crypto.createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
+}
+
 app.post('/api/training-packs/import-preview', memUpload.single('file'), async (req, res) => {
   try {
     if (!req.file?.buffer) return res.status(400).json({ ok: false, error: 'Selecione um arquivo de treinamento.' });
@@ -2530,6 +2538,7 @@ app.post('/api/training-packs/import-preview', memUpload.single('file'), async (
     let activePack = activeId ? ctx.data.customPacks?.[activeId] || null : null;
     if (activeId && !activePack && ctx.viewer?.role === 'master' && ctx.viewer?.id === ctx.tenant.id) activePack = getTrainingPack(activeId);
     const current = createTrainingDocument(business, activePack);
+    const currentFingerprint = crypto.createHash('sha256').update(JSON.stringify(current)).digest('hex');
     const imported = await previewTrainingImport({
       bytesBase64: req.file.buffer.toString('base64'),
       filename: req.file.originalname,
@@ -2552,6 +2561,7 @@ app.post('/api/training-packs/import-preview', memUpload.single('file'), async (
       ok: true,
       preview: {
         filename: req.file.originalname,
+        currentFingerprint,
         businessName: imported.training.name,
         packName: pack?.name || imported.training.name,
         changedFields,
@@ -2577,6 +2587,9 @@ app.post('/api/training-packs/import-preview', memUpload.single('file'), async (
 
 app.post('/api/training-packs/import-zip', memUpload.single('file'), (req, res) => {
   try {
+    if (req.body?.expectedFingerprint && req.body.expectedFingerprint !== currentTrainingImportFingerprint()) {
+      return res.status(409).json({ ok: false, error: 'O treinamento atual mudou desde a prévia. Gere uma nova prévia antes de aplicar.' });
+    }
     if (!req.file || !req.file.buffer) {
       return res.status(400).json({ ok: false, error: 'Selecione um arquivo .ZIP, .JSON ou .MD válido.' });
     }
@@ -2596,6 +2609,9 @@ app.post('/api/training-packs/import-zip', memUpload.single('file'), (req, res) 
 
 app.post('/api/training-packs/import-text', (req, res) => {
   try {
+    if (req.body?.expectedFingerprint && req.body.expectedFingerprint !== currentTrainingImportFingerprint()) {
+      return res.status(409).json({ ok: false, error: 'O treinamento atual mudou desde a prévia. Gere uma nova prévia antes de aplicar.' });
+    }
     const rawText = String(req.body?.text || '').trim();
     const filename = String(req.body?.filename || 'blueprint-chatgpt.json').trim();
     if (!rawText) {

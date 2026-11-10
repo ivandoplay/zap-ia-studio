@@ -248,7 +248,7 @@ BEGIN
  RETURN jsonb_build_object('ownerId',p_owner,'itens',itens);
 END $$;
 REVOKE ALL ON FUNCTION public.ienvia_campanha_agenda_vencidas(uuid,integer) FROM PUBLIC,anon,authenticated;
-GRANT EXECUTE ON FUNCTION public.ienvia_campanha_agenda_vencidas(uuid,integer) TO authenticated,service_role;
+GRANT EXECUTE ON FUNCTION public.ienvia_campanha_agenda_vencidas(uuid,integer) TO service_role;
 
 CREATE OR REPLACE FUNCTION public.ienvia_campanha_agenda_estado(p_owner uuid,p_id uuid)
  RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$

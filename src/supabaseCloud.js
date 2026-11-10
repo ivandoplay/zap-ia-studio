@@ -302,8 +302,16 @@ export function buildCloudMultiSlotWaState({
     }
   }
 
-  // Se slot_1 veio desconectado de zapia_wa_slots legado do backfill, mas zapia_wa_runtime está online num motor 5.5.9 em transição, prioriza o vivo!
-  if (slots.slot_1.status === 'disconnected' && rtRow) {
+  // Se slot_1 veio desconectado de zapia_wa_slots legado do backfill, mas zapia_wa_runtime está online num motor 5.5.9 em transição, prioriza o vivo —
+  // desde que a conta ainda não tenha atividade explícita multi-slot em zapia_wa_slots (evita ressuscitar slot_1 desconectado quando outro slot está conectado!).
+  const slot1Row = slotRowMap.get('slot_1');
+  const hasAnyMultiSlotActivity = (slotRows || []).some(
+    (r) => Boolean(r?.worker_heartbeat_at) || (r?.status && r.status !== 'disconnected')
+  );
+  const slot1IsExplicitlyModernDisconnected =
+    Boolean(slot1Row) &&
+    (Boolean(slot1Row.worker_heartbeat_at) || hasAnyMultiSlotActivity);
+  if (!slot1IsExplicitlyModernDisconnected && slots.slot_1.status === 'disconnected' && rtRow) {
     const legacyMapped = mapCloudRuntimeToWaState(rtRow, botEnabled);
     if (legacyMapped.workerOnline && legacyMapped.status !== 'disconnected') {
       slots.slot_1 = {

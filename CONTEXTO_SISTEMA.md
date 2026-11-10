@@ -117,8 +117,7 @@ Endpoint `POST /chat/history-sync` com `messageInfo` (âncora: ID, Timestamp, Is
 - Aguardar ~15 segundos para o deploy concluir.
 
 ### Números
-- Número conectado (slot_1): `5586981303979` (novo pareamento)
-- Número antigo (slot_1 anterior): `558681638438`
+- Número conectado (`slot_1`): configurado dinamicamente no painel/Evolution Go (não versionar números reais neste guia).
 - Rate limit (429) dura 15-40 minutos.
 
 ---
@@ -132,7 +131,7 @@ Endpoint `POST /chat/history-sync` com `messageInfo` (âncora: ID, Timestamp, Is
 - `public/app.js` — frontend do painel (CRM, status, connect)
 - `public/painel.html` — HTML do painel
 - `DOCUMENTACAO_CORRECOES.md` — documentação das correções
-- `GUIA_PARA_IA.md` — guia com credenciais e segurança
+- `GUIA_PARA_IA.md` — guia operacional e boas práticas de segurança
 
 ---
 
@@ -143,7 +142,7 @@ Endpoint `POST /chat/history-sync` com `messageInfo` (âncora: ID, Timestamp, Is
 curl http://localhost:3000/api/evolution-cloud/status
 
 # Conversas no CRM (com login)
-curl -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' -d '{"username":"jeffersonivan","password":"Davi32ivan@#"}'
+curl -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' -d '{"username":"<SEU_USUARIO>","password":"<SUA_SENHA>"}'
 # Pegar accessToken e usar no /api/cloud/poll
 
 # Webhook (sem auth)

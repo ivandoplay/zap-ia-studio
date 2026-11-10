@@ -22,6 +22,7 @@ Aplicadas (verificadas por `information_schema` e `pg_proc`, não por comentári
 | `crm_quick_reply_library` (`20261104010000`) | `ienvia_crm_quick_libraries`, `ienvia_crm_quick_changes`, `ienvia_crm_get_quick_replies`, `ienvia_crm_mutate_quick_replies` |
 | `crm_tag_library` (`20261104011000`) | `ienvia_crm_get_tags`, `ienvia_crm_mutate_tags` (cascata agora em `ienvia_crm_contacts`, não em `zapia_contacts`) |
 | `crm_thread_profiles_projection` (`20261104009000`) | `ienvia_list_instance_threads_crm` (threads + ficha salva na mesma página) |
+| `20261110211514 hardening_pag_painel_e_rpcs_servico` | `pag_painel` (`security_invoker=true` + somente `service_role`); `ienvia_finalizar_exclusao_arquivo_campanha_servico`, `ienvia_registrar_arquivo_campanha_servico` e `ienvia_campanha_agenda_vencidas` restritas a `service_role` |
 
 `ienvia_crm_tag_libraries` e `ienvia_crm_tag_changes` já existiam antes desta rodada.
 

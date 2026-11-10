@@ -963,6 +963,142 @@ function getContactDisplayName(contact, fallback = 'Contato') {
   return subtitle.startsWith('+') || subtitle === 'Número não informado pelo WhatsApp' ? subtitle : fallback;
 }
 
+// ======================== PONTE CLOUD → EVOLUTION GO ========================
+// Permite conectar WhatsApp direto da nuvem sem motor local (Termux/PC).
+
+async function checkEvolutionCloud() {
+  try {
+    const res = await api('/api/evolution-cloud/status');
+    if (res?.ok && res.available) {
+      state.evolutionCloud.available = true;
+      state.evolutionCloud.slots = res.slots || {};
+    } else {
+      state.evolutionCloud.available = false;
+    }
+  } catch {
+    state.evolutionCloud.available = false;
+  }
+  return state.evolutionCloud.available;
+}
+window.checkEvolutionCloud = checkEvolutionCloud;
+
+async function evolutionCloudConnect(slotId, pairingPhone) {
+  try {
+    const res = await api('/api/evolution-cloud/connect', {
+      method: 'POST',
+      body: JSON.stringify({ slotId, pairingPhone })
+    });
+    if (res?.ok) {
+      if (!state.evolutionCloud.slots[slotId]) state.evolutionCloud.slots[slotId] = {};
+      state.evolutionCloud.slots[slotId].status = res.status;
+      state.evolutionCloud.slots[slotId].qrDataUrl = res.qrDataUrl;
+      state.evolutionCloud.slots[slotId].pairingCode = res.pairingCode;
+      state.evolutionCloud.slots[slotId].instanceId = res.instanceId;
+      if (!state.waState.slots[slotId]) state.waState.slots[slotId] = {};
+      state.waState.slots[slotId].status = res.status;
+      state.waState.slots[slotId].qrDataUrl = res.qrDataUrl;
+      state.waState.slots[slotId].pairingCode = res.pairingCode;
+      state.waState.slots[slotId].workerOnline = true;
+      renderWaState();
+      clearTimeout(state._evoRefreshTimer);
+      state._evoRefreshTimer = null;
+      if (res.status !== 'connected') {
+        state._evoRefreshTimer = setTimeout(() => {
+          state._evoRefreshTimer = null;
+          evolutionCloudRefreshQr(slotId).catch(() => {});
+        }, 3000);
+      }
+      return res;
+    }
+    throw new Error(res?.error || 'Falha ao conectar via Evolution API');
+  } catch (err) {
+    throw err;
+  }
+}
+
+async function evolutionCloudRefreshQr(slotId) {
+  try {
+    const res = await api('/api/evolution-cloud/refresh-qr', {
+      method: 'POST',
+      body: JSON.stringify({ slotId })
+    });
+    if (res?.ok) {
+      const slot = state.evolutionCloud.slots[slotId] || {};
+      slot.status = res.status;
+      slot.qrDataUrl = res.status === 'connected' ? null : (res.qrDataUrl || slot.qrDataUrl || null);
+      slot.pairingCode = res.status === 'connected' ? null : (res.pairingCode || slot.pairingCode || null);
+      state.evolutionCloud.slots[slotId] = slot;
+      if (state.waState.slots[slotId]) {
+        state.waState.slots[slotId].status = res.status;
+        state.waState.slots[slotId].qrDataUrl = res.status === 'connected' ? null : (res.qrDataUrl || state.waState.slots[slotId].qrDataUrl || null);
+        state.waState.slots[slotId].pairingCode = res.status === 'connected' ? null : (res.pairingCode || state.waState.slots[slotId].pairingCode || null);
+      }
+      renderWaState();
+      if (res.status !== 'connected') {
+        clearTimeout(state._evoRefreshTimer);
+        state._evoRefreshTimer = setTimeout(() => {
+          state._evoRefreshTimer = null;
+          evolutionCloudRefreshQr(slotId).catch(() => {});
+        }, 3000);
+      } else {
+        clearTimeout(state._evoRefreshTimer);
+        state._evoRefreshTimer = null;
+      }
+    } else {
+      const status = state.evolutionCloud.slots[slotId]?.status || state.waState?.slots?.[slotId]?.status;
+      if (status && status !== 'connected' && status !== 'disconnected') {
+        clearTimeout(state._evoRefreshTimer);
+        state._evoRefreshTimer = setTimeout(() => {
+          state._evoRefreshTimer = null;
+          evolutionCloudRefreshQr(slotId).catch(() => {});
+        }, 5000);
+      }
+    }
+  } catch {
+    const status = state.evolutionCloud.slots[slotId]?.status || state.waState?.slots?.[slotId]?.status;
+    if (status && status !== 'connected' && status !== 'disconnected') {
+      clearTimeout(state._evoRefreshTimer);
+      state._evoRefreshTimer = setTimeout(() => {
+        state._evoRefreshTimer = null;
+        evolutionCloudRefreshQr(slotId).catch(() => {});
+      }, 5000);
+    }
+  }
+}
+
+async function evolutionCloudDisconnect(slotId) {
+  try {
+    const res = await api('/api/evolution-cloud/disconnect', {
+      method: 'POST',
+      body: JSON.stringify({ slotId })
+    });
+    if (res?.ok) {
+      clearTimeout(state._evoRefreshTimer);
+      state._evoRefreshTimer = null;
+      const slot = state.evolutionCloud.slots[slotId] || {};
+      slot.status = 'disconnected';
+      slot.qrDataUrl = null;
+      slot.pairingCode = null;
+      state.evolutionCloud.slots[slotId] = slot;
+      if (state.waState.slots[slotId]) {
+        state.waState.slots[slotId].status = 'disconnected';
+        state.waState.slots[slotId].qrDataUrl = null;
+        state.waState.slots[slotId].pairingCode = null;
+      }
+      renderWaState();
+      const selected = (state.contacts || []).find((contact) => contact.chatId === state.selectedInboxChatId);
+      if (selected && getContactSlotId(selected) === slotId) {
+        state.selectedInboxChatId = null;
+        document.getElementById('crmInboxLayout')?.classList.remove('mob-chat-open', 'mob-inspector-open');
+      }
+      renderCrmBoard();
+    }
+    return res;
+  } catch (err) {
+    throw err;
+  }
+}
+
 let liveRefreshQueued = false;
 async function refreshLiveStateOnly() {
   if (liveRefreshInFlight) {
@@ -1037,7 +1173,9 @@ async function refreshLiveStateOnly() {
       renderReadinessAndFunnel();
       renderProactiveQueueStatus();
       renderCrmBoard();
-    } catch {}
+    } catch (err) {
+      console.warn('[Ienvia] Falha no refreshLiveStateOnly:', err?.message || err);
+    }
   })().finally(() => {
     liveRefreshInFlight = null;
     if (liveRefreshQueued) {
@@ -1585,7 +1723,7 @@ function renderAll() {
         numero: n,
         nome: s.label || ('Chip ' + n),
         status: s.status || 'disconnected',
-        phone: s.phone || '',
+        phone: s.phone || s.connectedUser?.phone || '',
         ia: s.aiEnabled !== false,
         existe: Boolean(slots[id])
       });
@@ -1691,6 +1829,15 @@ function renderAll() {
   // ---------- Histórico por instância ----------
   const hist = { chip: '', busca: '', dias: 30, thread: null, threads: [] };
 
+  function histInstanceId(slotOrUuid) {
+    const raw = String(slotOrUuid || '').trim();
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw)) return raw;
+    const match = /^slot_([0-9]+)$/.exec(raw);
+    const n = match ? Number(match[1]) : 1;
+    return '00000000-0000-4000-8000-' + String(n).padStart(12, '0');
+  }
+  window.__histInstanceId = histInstanceId;
+
   async function histCarregarChips() {
     const sel = $i('histChip');
     if (!sel) return;
@@ -1722,7 +1869,7 @@ function renderAll() {
     let falhas = 0;
     for (const c of alvos) {
       try {
-        const r = await api('/api/conversations-v3/instances/' + encodeURIComponent(c.id) + '/threads?limit=50&visibility=all');
+        const r = await api('/api/conversations-v3/instances/' + encodeURIComponent(histInstanceId(c.id)) + '/threads?limit=50&visibility=all');
         for (const t of (r.items || [])) {
           achados.push({ ...t, _chip: c.nome, _chipId: c.id });
         }
@@ -1797,21 +1944,22 @@ function renderAll() {
     if (!box) return;
     document.querySelectorAll('.hist-thread').forEach((b) => b.classList.toggle('ativo', Number(b.dataset.thread) === indice));
     if (!t) { box.innerHTML = '<div class="hist-vazio">Escolha uma conversa à esquerda.</div>'; return; }
-    const nome = t.name || t.title || t.contactName || t.phone || 'Contato';
+    const nome = t.name || t.title || t.contactName || t.phone || t.phoneMasked || 'Contato';
     if (titulo) titulo.textContent = nome;
-    if (sub) sub.textContent = (t._chip || '') + (t.phone ? ' · ' + t.phone : '');
+    if (sub) sub.textContent = (t._chip || '') + ((t.phone || t.phoneMasked) ? ' · ' + (t.phone || t.phoneMasked) : '');
     box.innerHTML = '<div class="hist-vazio">Carregando mensagens...</div>';
     try {
-      const r = await api('/api/conversations-v3/instances/' + encodeURIComponent(t._chipId || hist.chip || 'slot_1')
+      const r = await api('/api/conversations-v3/instances/' + encodeURIComponent(histInstanceId(t._chipId || hist.chip || 'slot_1'))
         + '/threads/' + encodeURIComponent(t.id || t.threadId) + '/messages?limit=100');
       const msgs = r.items || r.messages || [];
       if (!msgs.length) { box.innerHTML = '<div class="hist-vazio">Nenhuma mensagem registrada nesta conversa.</div>'; return; }
       box.innerHTML = msgs.map((m) => {
-        const meu = m.fromMe === true || m.direction === 'out' || m.sender === 'agent';
+        const meu = m.fromMe === true || m.direction === 'out' || m.sender === 'agent' || m.role === 'owner';
         const txt = m.text || m.body || m.content || (m.type && m.type !== 'text' ? '[' + m.type + ']' : '');
+        const when = hora(m.at || m.timestamp || m.createdAt);
         return '<div class="hist-msg ' + (meu ? 'eu' : '') + '">'
           + '<span class="hist-msg-txt">' + esc(txt) + '</span>'
-          + '<span class="hist-msg-hora">' + (meu ? 'enviado' : 'recebido') + (hora(m.timestamp || m.createdAt) ? ' · ' + esc(hora(m.timestamp || m.createdAt)) : '') + '</span>'
+          + '<span class="hist-msg-hora">' + (meu ? 'enviado' : 'recebido') + (when ? ' · ' + esc(when) : '') + '</span>'
           + '</div>';
       }).join('');
     } catch (err) {
@@ -4445,7 +4593,7 @@ function renderCrmBoard() {
   const totalCountEl = document.getElementById('crmInboxTotalCount');
   if (totalCountEl) totalCountEl.textContent = String(allActiveCount);
   const savedTotalEl = document.getElementById('crmContactsSavedCount');
-  if (savedTotalEl) savedTotalEl.textContent = String(allContacts.length);
+  if (savedTotalEl) savedTotalEl.textContent = String((state.contacts || []).filter((c) => c.savedContact).length);
 
   if (activeView === 'kanban') {
     const cols = {
@@ -5691,7 +5839,10 @@ window.toggleTimedPausePopover = function toggleTimedPausePopover(ev) {
   if (ev) ev.stopPropagation();
   const pop = document.getElementById('timedPausePopover');
   if (!pop) return;
-  pop.style.display = pop.style.display === 'none' ? 'block' : 'none';
+  const shouldOpen = window.getComputedStyle(pop).display === 'none';
+  window.closeAllCrmPopovers();
+  pop.style.display = shouldOpen ? 'block' : 'none';
+  if (shouldOpen) positionAnchoredPopover(pop);
 };
 
 window.applyTimedPause = async function applyTimedPause(minutes) {
@@ -6059,13 +6210,28 @@ document.addEventListener('click', (ev) => {
   }
 });
 
+function positionAnchoredPopover(pop) {
+  if (!pop) return;
+  pop.style.left = '';
+  pop.style.right = '';
+  const mainBox = pop.closest('.crm-inbox-main')?.getBoundingClientRect();
+  const anchorBox = pop.parentElement?.getBoundingClientRect();
+  if (!mainBox || !anchorBox) return;
+  const popWidth = Math.max(pop.offsetWidth || 242, 200);
+  if (anchorBox.right - popWidth < mainBox.left + 4) {
+    pop.style.left = '0';
+    pop.style.right = 'auto';
+  }
+}
+
 window.toggleInboxChatMoreMenu = function toggleInboxChatMoreMenu(ev) {
   if (ev) ev.stopPropagation();
   const pop = document.getElementById('inboxChatMorePopover');
   if (!pop) return;
-  const open = pop.style.display !== 'none';
+  const shouldOpen = window.getComputedStyle(pop).display === 'none';
   window.closeAllCrmPopovers();
-  pop.style.display = open ? 'none' : 'block';
+  pop.style.display = shouldOpen ? 'block' : 'none';
+  if (shouldOpen) positionAnchoredPopover(pop);
 };
 
 window.openListRowMenu = function openListRowMenu(encodedChatId, ev) {
@@ -7614,147 +7780,7 @@ function bindEvents() {
     return res;
   }
 
-  // ======================== PONTE CLOUD → EVOLUTION GO ========================
-  // Permite conectar WhatsApp direto da nuvem sem motor local (Termux/PC).
-
-  async function checkEvolutionCloud() {
-    try {
-      const res = await api('/api/evolution-cloud/status');
-      if (res?.ok && res.available) {
-        state.evolutionCloud.available = true;
-        state.evolutionCloud.slots = res.slots || {};
-      } else {
-        state.evolutionCloud.available = false;
-      }
-    } catch {
-      state.evolutionCloud.available = false;
-    }
-    return state.evolutionCloud.available;
-  }
-
-  async function evolutionCloudConnect(slotId, pairingPhone) {
-    try {
-      const res = await api('/api/evolution-cloud/connect', {
-        method: 'POST',
-        body: JSON.stringify({ slotId, pairingPhone })
-      });
-      if (res?.ok) {
-        // Atualiza o slot no state
-        if (!state.evolutionCloud.slots[slotId]) state.evolutionCloud.slots[slotId] = {};
-        state.evolutionCloud.slots[slotId].status = res.status;
-        state.evolutionCloud.slots[slotId].qrDataUrl = res.qrDataUrl;
-        state.evolutionCloud.slots[slotId].pairingCode = res.pairingCode;
-        state.evolutionCloud.slots[slotId].instanceId = res.instanceId;
-        // Merge no waState para o renderWaState ler
-        if (!state.waState.slots[slotId]) state.waState.slots[slotId] = {};
-        state.waState.slots[slotId].status = res.status;
-        state.waState.slots[slotId].qrDataUrl = res.qrDataUrl;
-        state.waState.slots[slotId].pairingCode = res.pairingCode;
-        state.waState.slots[slotId].workerOnline = true;
-        renderWaState();
-        // Poll o estado até conectar: a Evolution retorna base64 e pairingCode em campos distintos.
-        clearTimeout(state._evoRefreshTimer);
-        state._evoRefreshTimer = null;
-        if (res.status !== 'connected') {
-          state._evoRefreshTimer = setTimeout(() => {
-            state._evoRefreshTimer = null;
-            evolutionCloudRefreshQr(slotId).catch(() => {});
-          }, 3000);
-        }
-        return res;
-      }
-      throw new Error(res?.error || 'Falha ao conectar via Evolution API');
-    } catch (err) {
-      throw err;
-    }
-  }
-
-  async function evolutionCloudRefreshQr(slotId) {
-    try {
-      const res = await api('/api/evolution-cloud/refresh-qr', {
-        method: 'POST',
-        body: JSON.stringify({ slotId })
-      });
-      if (res?.ok) {
-        const slot = state.evolutionCloud.slots[slotId] || {};
-        slot.status = res.status;
-        slot.qrDataUrl = res.status === 'connected' ? null : (res.qrDataUrl || slot.qrDataUrl || null);
-        slot.pairingCode = res.status === 'connected' ? null : (res.pairingCode || slot.pairingCode || null);
-        state.evolutionCloud.slots[slotId] = slot;
-        // Merge no waState
-        if (state.waState.slots[slotId]) {
-          state.waState.slots[slotId].status = res.status;
-          state.waState.slots[slotId].qrDataUrl = res.status === 'connected' ? null : (res.qrDataUrl || state.waState.slots[slotId].qrDataUrl || null);
-          state.waState.slots[slotId].pairingCode = res.status === 'connected' ? null : (res.pairingCode || state.waState.slots[slotId].pairingCode || null);
-        }
-        renderWaState();
-        // Continua consultando também após mostrar QR/código, até confirmar conexão.
-        if (res.status !== 'connected') {
-          clearTimeout(state._evoRefreshTimer);
-          state._evoRefreshTimer = setTimeout(() => {
-            state._evoRefreshTimer = null;
-            evolutionCloudRefreshQr(slotId).catch(() => {});
-          }, 3000);
-        } else {
-          clearTimeout(state._evoRefreshTimer);
-          state._evoRefreshTimer = null;
-        }
-      } else {
-        const status = state.evolutionCloud.slots[slotId]?.status || state.waState?.slots?.[slotId]?.status;
-        if (status && status !== 'connected' && status !== 'disconnected') {
-          clearTimeout(state._evoRefreshTimer);
-          state._evoRefreshTimer = setTimeout(() => {
-            state._evoRefreshTimer = null;
-            evolutionCloudRefreshQr(slotId).catch(() => {});
-          }, 5000);
-        }
-      }
-    } catch {
-      const status = state.evolutionCloud.slots[slotId]?.status || state.waState?.slots?.[slotId]?.status;
-      if (status && status !== 'connected' && status !== 'disconnected') {
-        clearTimeout(state._evoRefreshTimer);
-        state._evoRefreshTimer = setTimeout(() => {
-          state._evoRefreshTimer = null;
-          evolutionCloudRefreshQr(slotId).catch(() => {});
-        }, 5000);
-      }
-    }
-  }
-
-  async function evolutionCloudDisconnect(slotId) {
-    try {
-      const res = await api('/api/evolution-cloud/disconnect', {
-        method: 'POST',
-        body: JSON.stringify({ slotId })
-      });
-      if (res?.ok) {
-        clearTimeout(state._evoRefreshTimer);
-        state._evoRefreshTimer = null;
-        const slot = state.evolutionCloud.slots[slotId] || {};
-        slot.status = 'disconnected';
-        slot.qrDataUrl = null;
-        slot.pairingCode = null;
-        state.evolutionCloud.slots[slotId] = slot;
-        if (state.waState.slots[slotId]) {
-          state.waState.slots[slotId].status = 'disconnected';
-          state.waState.slots[slotId].qrDataUrl = null;
-          state.waState.slots[slotId].pairingCode = null;
-        }
-        renderWaState();
-        const selected = (state.contacts || []).find((contact) => contact.chatId === state.selectedInboxChatId);
-        if (selected && getContactSlotId(selected) === slotId) {
-          state.selectedInboxChatId = null;
-          document.getElementById('crmInboxLayout')?.classList.remove('mob-chat-open', 'mob-inspector-open');
-        }
-        renderCrmBoard();
-      }
-      return res;
-    } catch (err) {
-      throw err;
-    }
-  }
-
-  // Verifica a disponibilidade da Evolution API na nuvem periodicamente
+  // Verifica a disponibilidade da Evolution API na nuvem periodicamente (funções declaradas no topo do arquivo).
   if (!state._evoCheckInterval) {
     state._evoCheckInterval = setInterval(() => {
       if (state.runtimeMode === 'vercel_cloud') {

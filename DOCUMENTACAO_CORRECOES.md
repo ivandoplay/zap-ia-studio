@@ -2,7 +2,7 @@
 
 ## Situação Atual (2026-10-31)
 
-- **Número conectado:** `558681638438` na instância `slot_1` (Evolution Go na nuvem)
+- **Número conectado:** configurado no painel na instância `slot_1` (Evolution Go na nuvem)
 - **Status:** Conectado ✅
 - **CRM:** 2307 contatos sincronizados via `/user/contacts`
 - **Produção:** `https://zap-ia-studio.vercel.app`
@@ -131,9 +131,7 @@ A abordagem correta (concordada com o usuário):
 
 ---
 
-## Números
+## Acesso e Configuração
 
-- Número conectado: `558681638438` (slot_1)
-- Número que estava sendo pareado: `5586981303979` (em rate limit 429, dura 15-40 min)
-- Usuário painel: `jeffersonivan`
-- Senha: `Davi32ivan@#`
+- **Instância principal:** `slot_1` (configure o número pelo painel ou variável de ambiente; não versionar telefones reais nem senhas em documentação).
+- **Credenciais do painel:** utilizar usuário e senha armazenados em cofre seguro / variáveis locais (credenciais anteriores removidas por segurança; recomenda-se rotacionar a senha antiga caso ainda esteja em uso).

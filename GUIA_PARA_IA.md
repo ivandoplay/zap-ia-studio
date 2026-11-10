@@ -86,7 +86,7 @@ npm start
 ### Testar endpoints locais
 ```bash
 curl http://localhost:3000/api/evolution-cloud/status
-curl -X POST http://localhost:3000/api/evolution-cloud/connect -H 'Content-Type: application/json' -d '{"slotId":"slot_1","pairingPhone":"5586981303979"}'
+curl -X POST http://localhost:3000/api/evolution-cloud/connect -H 'Content-Type: application/json' -d '{"slotId":"slot_1","pairingPhone":"5511999990000"}'
 ```
 
 ### Testar na produção
@@ -96,7 +96,7 @@ curl https://zap-ia-studio.vercel.app/api/evolution-cloud/status
 
 ### Testar login
 ```bash
-curl -X POST https://zap-ia-studio.vercel.app/api/auth/login -H 'Content-Type: application/json' -d '{"username":"jeffersonivan","password":"Davi32ivan@#"}'
+curl -X POST https://zap-ia-studio.vercel.app/api/auth/login -H 'Content-Type: application/json' -d '{"username":"<SEU_USUARIO>","password":"<SUA_SENHA>"}'
 ```
 
 ### Testar webhook (sem auth, como a Evolution API envia)

@@ -2470,12 +2470,22 @@ app.post('/api/business/system-prompt/preview', (req, res) => {
         typeof faq.answer !== 'string' || faq.answer.length > 8000)) {
     return res.status(400).json({ ok: false, error: 'Revise os campos do treinamento antes de gerar a prévia.' });
   }
+  const normalizeFaqList = (list) => (Array.isArray(list) ? list : [])
+    .map((faq) => ({
+      question: String(faq?.question || '').trim(),
+      answer: String(faq?.answer || '').trim()
+    }))
+    .filter((faq) => faq.question || faq.answer);
+  const hasUnsavedDiff =
+    textFields.some((key) => String(current[key] ?? '').trim() !== draft[key].trim()) ||
+    ['soloIdentity', 'lockUntilManualResume', 'promptShieldEnabled'].some((key) => Boolean(current[key]) !== draft[key]) ||
+    JSON.stringify(normalizeFaqList(current.faqs)) !== JSON.stringify(normalizeFaqList(draft.faqs));
   const profile = { ...current, ...draft };
   const prompt = buildSystemPrompt(profile, storage.data.settings, 'Lojista Exemplo', {
     userText: 'É só tráfego pago ou vocês fazem conteúdo também?',
     history: []
   });
-  res.json({ ok: true, prompt, source: 'unsaved_form_snapshot' });
+  res.json({ ok: true, prompt, source: hasUnsavedDiff ? 'unsaved_form_snapshot' : 'saved' });
 });
 
 // ======================== PACOTES DE TREINAMENTO TURBO (.ZIP) + EDITOR VISUAL ========================
@@ -2563,7 +2573,21 @@ function applyImportedTrainingResult({ packSummary, suggestedProfile }) {
 }
 
 function currentTrainingImportFingerprint() {
-  const business = storage.getBusiness();
+  const rawBiz = storage.data?.business && typeof storage.data.business === 'object' ? storage.data.business : {};
+  const normalized = storage.getBusiness();
+  // Evita que fallbacks voláteis (new Date().toISOString()) gerados em leitura mudem o hash entre preview e apply.
+  const business = {
+    ...normalized,
+    updatedAt: typeof rawBiz.updatedAt === 'string' ? rawBiz.updatedAt : '',
+    voiceLibrary: (normalized.voiceLibrary || []).map((v, idx) => {
+      const rawV = Array.isArray(rawBiz.voiceLibrary) ? rawBiz.voiceLibrary[idx] : null;
+      return {
+        ...v,
+        createdAt: typeof rawV?.createdAt === 'string' ? rawV.createdAt : '',
+        updatedAt: typeof rawV?.updatedAt === 'string' ? rawV.updatedAt : ''
+      };
+    })
+  };
   const id = business.trainingPackId;
   const pack = id ? storage.data.customPacks?.[id] || null : null;
   return crypto.createHash('sha256').update(JSON.stringify({ business, pack })).digest('hex');
@@ -2580,7 +2604,7 @@ app.post('/api/training-packs/import-preview', memUpload.single('file'), async (
     const activeId = business.trainingPackId;
     const activePack = activeId ? storage.data.customPacks?.[activeId] || null : null;
     const current = createTrainingDocument(business, activePack);
-    const currentFingerprint = crypto.createHash('sha256').update(JSON.stringify({ business, pack: activePack })).digest('hex');
+    const currentFingerprint = currentTrainingImportFingerprint();
     const imported = await previewTrainingImport({
       bytesBase64: req.file.buffer.toString('base64'),
       filename: req.file.originalname,

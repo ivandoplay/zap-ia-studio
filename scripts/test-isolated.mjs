@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 // A suíte cresceu; ajuste explícito só do prazo do harness, nunca das asserções.
-const testTimeout=Number(process.env.ZAPIA_TEST_TIMEOUT_MS||240000);
+const testTimeout=Number(process.env.ZAPIA_TEST_TIMEOUT_MS||480000);
 if(!Number.isSafeInteger(testTimeout)||testTimeout<1000||testTimeout>900000)throw new Error('ZAPIA_TEST_TIMEOUT_MS deve estar entre 1000 e 900000.');
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),'ienvia-tests-')),copy=path.join(temp,'project');
 const filter=process.argv[2] ? new RegExp(process.argv[2]) : null;

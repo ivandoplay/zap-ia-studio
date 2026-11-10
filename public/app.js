@@ -741,11 +741,15 @@ async function loadBootstrap() {
 async function ensureFullPackLoaded(packId, force = false) {
   if (!packId) return null;
   if (!force && state.fullPackCache[packId]) return state.fullPackCache[packId];
+  state.fullPackErrors = state.fullPackErrors || {};
+  delete state.fullPackErrors[packId];
   try {
     const res = await api(`/api/training-packs/${encodeURIComponent(packId)}/full`);
     state.fullPackCache[packId] = res.pack;
+    delete state.fullPackErrors[packId];
     return res.pack;
-  } catch {
+  } catch (err) {
+    state.fullPackErrors[packId] = err?.message || 'Não foi possível carregar a biblioteca.';
     return null;
   }
 }
@@ -3411,8 +3415,11 @@ function renderPackVisualStudio(p) {
   studioPanel.classList.remove('u-none');
   const full = state.fullPackCache[p.trainingPackId];
   if (!full) {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Carregando biblioteca do pacote...</div>`;
-    ensureFullPackLoaded(p.trainingPackId).then(() => renderPackVisualStudio(p));
+    const error = state.fullPackErrors?.[p.trainingPackId];
+    grid.innerHTML = error
+      ? `<div class="empty-state" style="grid-column:1/-1;"><strong>Não foi possível carregar o treinamento.</strong><p>${escapeHtml(error)}</p><button type="button" class="btn btn-secondary btn-sm" onclick="retryPackLibraryLoad()">Tentar novamente</button></div>`
+      : `<div class="empty-state" style="grid-column:1/-1;">Carregando biblioteca do pacote...</div>`;
+    if (!error) ensureFullPackLoaded(p.trainingPackId).then(() => renderPackVisualStudio(p));
     return;
   }
 
@@ -3455,7 +3462,7 @@ function renderPackVisualStudio(p) {
   const isHum = state.activeStudioTab === 'humanization';
   const rawSkills = isHum ? (full.humanizationSkills || []) : (full.operationalSkills || []);
   const filtered = rawSkills.filter((s) =>
-    !q || `${s.id} ${s.name} ${s.when || s.trigger || ''} ${s.example_response || s.better_response || ''}`.toLowerCase().includes(q)
+    !q || Object.values(s).filter((value) => typeof value === 'string').join(' ').toLowerCase().includes(q)
   );
 
   if (!filtered.length) {
@@ -3502,11 +3509,25 @@ window.useMessageInProactive = function useMessageInProactive(msgId) {
   showToast(`${found.id} carregada no Disparador de Abordagem Ativa!`);
 };
 
+function nextTrainingStudioId(list, prefix) {
+  const used = new Set((list || []).map((item) => String(item?.id || '').toUpperCase()));
+  let number = 1;
+  while (used.has(`${prefix}${String(number).padStart(2, '0')}`)) number += 1;
+  return `${prefix}${String(number).padStart(2, '0')}`;
+}
+
+window.retryPackLibraryLoad = async function retryPackLibraryLoad() {
+  const p = getActiveProfile();
+  if (!p?.trainingPackId) return;
+  await ensureFullPackLoaded(p.trainingPackId, true);
+  renderPackVisualStudio(p);
+};
+
 window.openEditPackMsgModal = function openEditPackMsgModal(msgId = null) {
   const p = getActiveProfile();
   const full = p?.trainingPackId ? state.fullPackCache[p.trainingPackId] : null;
   const existing = msgId ? (full?.approvedMessages || []).find((m) => m.id === msgId) : null;
-  const nextNum = String((full?.approvedMessages?.length || 13) + 1).padStart(2, '0');
+  const nextNum = nextTrainingStudioId(full?.approvedMessages, 'M');
 
   document.getElementById('editPackMsgTitle').textContent = existing ? `Editar ${existing.id}` : 'Nova Mensagem Aprovada';
   document.getElementById('packMsgId').value = existing ? existing.id : `M${nextNum}`;
@@ -3537,7 +3558,7 @@ window.openEditPackSkillModal = function openEditPackSkillModal(skillId = null, 
   const list = skillType === 'humanization' ? (full?.humanizationSkills || []) : (full?.operationalSkills || []);
   const existing = skillId ? list.find((s) => s.id === skillId) : null;
   const prefix = skillType === 'humanization' ? 'H' : 'S';
-  const nextId = `${prefix}${String(list.length + 1).padStart(2, '0')}`;
+  const nextId = nextTrainingStudioId(list, prefix);
 
   document.getElementById('editPackSkillTitle').textContent = existing ? `Editar Skill ${existing.id}` : 'Criar Nova Skill no Pacote';
   document.getElementById('packSkillType').value = skillType;
@@ -3545,8 +3566,17 @@ window.openEditPackSkillModal = function openEditPackSkillModal(skillId = null, 
   document.getElementById('packSkillName').value = existing ? existing.name : '';
   document.getElementById('packSkillWhen').value = existing ? (existing.when || existing.trigger || '') : '';
   document.getElementById('packSkillExample').value = existing
-    ? (existing.bodyMd || existing.example_response || existing.better_response || existing.goal || '')
+    ? (existing.bodyMd || existing.example_response || '')
     : '';
+  document.getElementById('packSkillGoal').value = existing?.goal || '';
+  document.getElementById('packSkillAvoid').value = existing?.avoid || '';
+  document.getElementById('packSkillBadResponse').value = existing?.bad_response || '';
+  document.getElementById('packSkillBetterResponse').value = existing?.better_response || '';
+  document.querySelectorAll('[data-humanization-field]').forEach((field) => {
+    field.hidden = skillType !== 'humanization';
+  });
+  const exampleField = document.getElementById('packSkillExample')?.closest('.form-group');
+  if (exampleField) exampleField.hidden = skillType === 'humanization';
   document.getElementById('editPackSkillModal').classList.add('open');
 };
 
@@ -3652,6 +3682,7 @@ window.removeFaq = function removeFaq(idx) {
   if (!p) return;
   syncFaqsFromDom(p);
   p.faqs.splice(idx, 1);
+  p.faqs = p.faqs.filter((faq) => faq.question || faq.answer);
   renderFaqList(p.faqs);
 };
 
@@ -3662,9 +3693,7 @@ function syncFaqsFromDom(p) {
   qs.forEach((qEl, i) => {
     const q = qEl.value.trim();
     const a = as[i]?.value?.trim() || '';
-    if (q || a) {
-      updated.push({ id: p.faqs?.[i]?.id || `faq_${Date.now()}_${i}`, question: q, answer: a });
-    }
+    updated.push({ id: p.faqs?.[i]?.id || `faq_${Date.now()}_${i}`, question: q, answer: a });
   });
   p.faqs = updated;
 }
@@ -7817,8 +7846,11 @@ function bindEvents() {
           when: document.getElementById('packSkillWhen').value.trim(),
           trigger: document.getElementById('packSkillWhen').value.trim(),
           example_response: document.getElementById('packSkillExample').value.trim(),
-          better_response: document.getElementById('packSkillExample').value.trim(),
-          bodyMd: type === 'operational' ? document.getElementById('packSkillExample').value.trim() : ''
+          goal: type === 'humanization' ? document.getElementById('packSkillGoal').value.trim() : undefined,
+          avoid: type === 'humanization' ? document.getElementById('packSkillAvoid').value.trim() : undefined,
+          bad_response: type === 'humanization' ? document.getElementById('packSkillBadResponse').value.trim() : undefined,
+          better_response: type === 'humanization' ? document.getElementById('packSkillBetterResponse').value.trim() : document.getElementById('packSkillExample').value.trim(),
+          bodyMd: type === 'operational' ? document.getElementById('packSkillExample').value.trim() : undefined
         })
       });
       state.fullPackCache[p.trainingPackId] = res.pack;

@@ -1,0 +1,7 @@
+'use client';
+import{useEffect,useState}from'react';import{api}from'@/lib/api';
+type Data={document:{voiceLibrary?:unknown[]};capabilities:{writable:boolean;canTranscribe:boolean}};
+export default function AudioLibraryPage(){const[data,setData]=useState<Data|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(true);
+useEffect(()=>{let active=true;api<Data>('resources-v2').then(d=>{if(active)setData(d)}).catch(e=>{if(active)setError(e instanceof Error?e.message:'Não foi possível consultar a biblioteca de áudio.');}).finally(()=>{if(active)setLoading(false)});return()=>{active=false};},[]);
+return <div><div className="heading"><div><p className="eyebrow">MÍDIA E VOZ</p><h1>Biblioteca de áudios</h1><p className="description">Arquivos de voz preservados nos recursos da conta.</p></div></div>{error&&<div className="error">{error}</div>}{loading?<div className="surface loading">Consultando áudios…</div>:data&&<section className="surface panel"><h2>Áudios cadastrados</h2><p>{data.document.voiceLibrary?.length??0} registros encontrados na origem.</p><pre className="validation-output">{JSON.stringify(data.document.voiceLibrary||[],null,2)}</pre><div className="notice">Esta tela é somente leitura. A conversão e transcrição dependem das capacidades efetivamente habilitadas pelo backend.</div><p className="metric-note">Pode transcrever: {data.capabilities.canTranscribe?'Sim':'Não'} · Pode editar recursos: {data.capabilities.writable?'Sim':'Não'}</p></section>}</div>;
+}

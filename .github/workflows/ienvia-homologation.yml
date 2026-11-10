@@ -1,0 +1,36 @@
+name: Ienvia homologation
+
+on:
+  push:
+    branches:
+      - feat/modernizacao-painel-oficial
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    name: Node 24 · regressions and static routes
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Verify generated panel routes
+        run: node scripts/gerar-paginas-painel.mjs --check
+      - name: Run focused regression suite
+        run: node scripts/test-isolated.mjs "training-import-preview|evolution-webhook-safety|evolution-api-webhook|evolution-api-history-ui|painel-paginas|painel-fluxos-playwright|campanha-painel-playwright"
+      - name: Run SQL safety suite
+        run: npm run test:sql

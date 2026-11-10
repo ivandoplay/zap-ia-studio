@@ -4569,7 +4569,14 @@ function renderCrmInbox(filteredList) {
   if (lblEl) lblEl.textContent = `${list.length} conversa${list.length === 1 ? '' : 's'}`;
 
   const selectedContact = (state.contacts || []).find((c) => c.chatId === state.selectedInboxChatId);
-  if ((!selectedContact || !isContactInstanceConnected(selectedContact)) && list.length > 0) {
+  if (selectedContact && !isContactInstanceConnected(selectedContact)) {
+    // A conversa da instância desconectada deve fechar; não trocar silenciosamente
+    // para outro cliente, especialmente no layout mobile de tela única.
+    state.selectedInboxChatId = null;
+    const layout = document.getElementById('crmInboxLayout');
+    layout?.classList.remove('mob-chat-open', 'mob-inspector-open');
+  } else if (!selectedContact && list.length > 0) {
+    // Seleção inicial ou conversa removida: mantém o comportamento de fallback.
     state.selectedInboxChatId = list[0].chatId;
   }
 

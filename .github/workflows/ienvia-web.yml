@@ -1,0 +1,30 @@
+name: Ienvia Web CI
+
+on:
+  push:
+    branches: [feat/modernizacao-frontend-next]
+    paths:
+      - 'web/**'
+      - '.github/workflows/ienvia-web.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/ienvia-web.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run build
+        env:
+          IENVIA_BACKEND_URL: https://example.invalid

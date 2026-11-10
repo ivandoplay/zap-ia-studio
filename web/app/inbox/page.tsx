@@ -2,7 +2,7 @@
 import{useEffect,useState}from'react';
 import{api}from'@/lib/api';import{startInboxRealtime}from'@/lib/realtime';
 type Instance={id:string;slotId:string;name:string;connection:string;threads:number;unread:number};
-type Thread={id:string;chatId:string;name:string;preview:string;unread:number;pinned:boolean;archived:boolean;aiEnabled:boolean;needsHuman:boolean;paused:string|null;hot:boolean;stage:string|null;lastMessageAt:string|null;phoneMasked:string|null;company:string;city:string;email:string;stage:string|null};
+type Thread={id:string;chatId:string;name:string;preview:string;unread:number;pinned:boolean;archived:boolean;aiEnabled:boolean;needsHuman:boolean;paused:string|null;hot:boolean;stage:string|null;lastMessageAt:string|null;phoneMasked:string|null;company:string;city:string;email:string};
 type Message={id:string;role:'owner'|'user'|'system';text:string;at:string|null;delivery:string|null;media:{name?:string|null}|null;internal:boolean;deleted:boolean};
 type Page<T>={ok:boolean;items:T[];total:number;hasMore:boolean};
 type Messages={ok:boolean;messages:Message[]};

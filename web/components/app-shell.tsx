@@ -4,12 +4,13 @@ import {usePathname,useRouter} from 'next/navigation';
 import {useEffect,useState} from 'react';
 import {clearAuth,readAuth} from '@/lib/auth';
 import {api} from '@/lib/api';
-const groups=[
+type NavItem=readonly [string,string,string];
+const groups:{label:string;items:NavItem[]}[]=[
 {label:'Workspace',items:[['/visao-geral','Visão geral','◫'],['/inbox','Inbox','▤'],['/contatos','Contatos','♙'],['/campanhas','Campanhas','➤']]},
 {label:'Atendimento inteligente',items:[['/inteligencia-artificial','Inteligência artificial','✳'],['/treinamento','Treinamento','⌘'],['/simulador','Simulador','▷']]},
 {label:'Operação',items:[['/conexoes','Conexões','⌁'],['/instancias','Instâncias','▣'],['/canais','Canais','◈'],['/catalogo','Catálogo','▦'],['/audios','Áudios','♫'],['/historico','Histórico','◷']]},
 {label:'Gestão',items:[['/relatorios','Relatórios','▥'],['/contas','Contas','♧'],['/seguranca','Segurança','◇'],['/configuracoes','Configurações','⚙']]}
-] as const;
+];
 export function AppShell({children}:{children:React.ReactNode}){
 const pathname=usePathname(),router=useRouter();const[open,setOpen]=useState(false),[name,setName]=useState('Sua conta'),[ready,setReady]=useState(false);
 const current=groups.flatMap(g=>g.items).find(x=>x[0]===pathname)?.[1]??'Ienvia';

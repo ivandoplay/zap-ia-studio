@@ -4236,7 +4236,9 @@ function getTagClass(tag = '') {
 }
 
 function updateInboxFilterCounters() {
-  const allContacts = state.contacts || [];
+  // Os contadores precisam refletir a mesma população visível da Inbox.
+  // Contatos de canais desconectados não devem continuar inflando filtros/badges.
+  const allContacts = (state.contacts || []).filter(isInboxContactVisible);
   let activeCnt = 0;
   let unreadCnt = 0;
   let humanCnt = 0;

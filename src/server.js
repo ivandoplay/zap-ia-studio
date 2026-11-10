@@ -391,9 +391,6 @@ function extractBearerToken(req) {
   if (authHeader.toLowerCase().startsWith('bearer ')) {
     return authHeader.slice(7).trim();
   }
-  if (req.query?.token) {
-    return String(req.query.token).trim();
-  }
   return '';
 }
 
@@ -595,8 +592,8 @@ function attachAtomicCloudFlush(res, tenantStore) {
 
 // Rotas do dashboard que também precisam do workspace do tenant (contatos vivos).
 const CONVERSATIONS_WORKSPACE_ROUTE = /^\/conversations-v3(?:\/|$)/;
-const WORKSPACE_ONLY_ROUTE = /^\/(?:training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/;
-const isDashboardRequest = (req) => /^\/(?:channels|conversations-v3|crm-v2|campaigns-v2|training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/.test(req.path)&&!CRON_PATH.test(req.path)||/^(?:\/dashboard\/(?:summary|appearance|parity)|\/connections\/(?:summary|configuration|pairing))\/?$/.test(req.path);
+const WORKSPACE_ONLY_ROUTE = /^\/(?:training-packs|training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/;
+const isDashboardRequest = (req) => /^\/(?:channels|conversations-v3|crm-v2|campaigns-v2|training-packs|training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/.test(req.path)&&!CRON_PATH.test(req.path)||/^(?:\/dashboard\/(?:summary|appearance|parity)|\/connections\/(?:summary|configuration|pairing))\/?$/.test(req.path);
 // O disparo do relógio de campanhas é autenticado por segredo próprio do cron, não por
 // sessão de navegador: ele não pode entrar no fluxo de contexto por usuário.
 // Dentro de `app.use('/api')` o Express entrega `req.path` já sem o prefixo "/api".
@@ -753,7 +750,7 @@ app.use('/api', async (req, res, next) => {
 
   const configuredPin = String(storage.data.settings.securityPin || '').trim();
   if (configuredPin) {
-    const headerPin = String(req.headers['x-panel-pin'] || req.query?.pin || '').trim();
+    const headerPin = String(req.headers['x-panel-pin'] || '').trim();
     if (!safeComparePin(configuredPin, headerPin)) {
       return res.status(401).json({ ok: false, pinRequired: true, error: 'Painel protegido por PIN.' });
     }
@@ -814,10 +811,19 @@ const workspaceReadDependencies = {
       const auth = req?.cloudAuth;
       if (!auth?.client || !auth?.authUser) return null;
       if (req._workspaceLazy) return req._workspaceLazy;
-      req._workspaceLazy = loadTenantContextFromCloud(auth.client, auth.authUser, auth.profile || {}, {withContacts: false})
+      req._workspaceLazy = Promise.resolve(auth.tenantStore || null)
+        .then(existing => existing || loadTenantContextFromCloud(auth.client, auth.authUser, auth.profile || {}, {withContacts: false}))
         .then(store => {
           req.cloudAuth = {...auth, tenantStore: store};
-          return {...req.dashboardContext, mode: 'vercel_cloud', data: store.data, runtime: store.waRuntime || req.dashboardContext?.runtime, store, storage: store};
+          return {
+            ...req.dashboardContext,
+            mode: 'vercel_cloud',
+            tenant: { id: auth.authUser.id, displayName: auth.profile?.display_name || auth.profile?.username || 'Minha conta' },
+            data: store.data,
+            runtime: store.waRuntime || req.dashboardContext?.runtime,
+            store,
+            storage: store
+          };
         })
         .catch(() => null);
       return req._workspaceLazy;
@@ -828,7 +834,7 @@ const workspaceReadDependencies = {
     const slots = Object.fromEntries(Object.entries(runtime.slots || {}).map(([id, value]) => [id, { ...value, workerOnline: true, workerHeartbeatAt: now }]));
     return { mode: 'local_worker', viewerClient: worker.user?.id ? cloudWorker.client : null,
       viewer: { id: worker.user?.id || null, displayName: worker.user?.displayName || worker.user?.username || 'Painel local', role: worker.user?.role || null },
-      tenant: { id: worker.user?.id || null, displayName: worker.user?.displayName || 'Este motor local', maxWaSlots },
+      tenant: { id: worker.user?.id || 'local-workspace', displayName: worker.user?.displayName || 'Este motor local', maxWaSlots },
       permissions: { master: (worker.user?.role || 'master') === 'master' }, data: storage.data, runtime: { ...runtime, slots, maxWaSlots } };
   }
 };
@@ -2544,12 +2550,6 @@ app.post('/api/training-packs/import-preview', memUpload.single('file'), async (
       document: current,
       ctx
     });
-    if (imported.schema === 'ienvia-training-draft-v1') {
-      return res.status(409).json({
-        ok: false,
-        error: 'Este arquivo é um rascunho do training-v2. A ativação desse formato ainda não foi homologada; use um Blueprint JSON, Markdown ou ZIP do importador atual.'
-      });
-    }
     const labels = {
       name: 'Nome do negócio/profissional', niche: 'Segmento', assistantName: 'Nome do atendente',
       soloIdentity: 'Atendimento individual', tone: 'Tom de voz', companySummary: 'Descrição do negócio',
@@ -2592,7 +2592,10 @@ app.post('/api/training-packs/import-preview', memUpload.single('file'), async (
 
 app.post('/api/training-packs/import-zip', memUpload.single('file'), (req, res) => {
   try {
-    if (req.body?.expectedFingerprint && req.body.expectedFingerprint !== currentTrainingImportFingerprint()) {
+    if (!/^[a-f0-9]{64}$/i.test(String(req.body?.expectedFingerprint || ''))) {
+      return res.status(400).json({ ok: false, error: 'Gere uma prévia antes de confirmar a importação.' });
+    }
+    if (req.body.expectedFingerprint !== currentTrainingImportFingerprint()) {
       return res.status(409).json({ ok: false, error: 'O treinamento atual mudou desde a prévia. Gere uma nova prévia antes de aplicar.' });
     }
     if (!req.file || !req.file.buffer) {
@@ -2614,7 +2617,10 @@ app.post('/api/training-packs/import-zip', memUpload.single('file'), (req, res) 
 
 app.post('/api/training-packs/import-text', (req, res) => {
   try {
-    if (req.body?.expectedFingerprint && req.body.expectedFingerprint !== currentTrainingImportFingerprint()) {
+    if (!/^[a-f0-9]{64}$/i.test(String(req.body?.expectedFingerprint || ''))) {
+      return res.status(400).json({ ok: false, error: 'Gere uma prévia antes de confirmar a importação.' });
+    }
+    if (req.body.expectedFingerprint !== currentTrainingImportFingerprint()) {
       return res.status(409).json({ ok: false, error: 'O treinamento atual mudou desde a prévia. Gere uma nova prévia antes de aplicar.' });
     }
     const rawText = String(req.body?.text || '').trim();
@@ -2642,8 +2648,19 @@ app.post('/api/business/knowledge-upload', memUpload.single('file'), (req, res) 
   let content = req.body?.content || '';
 
   if (req.file) {
-    title = title || req.file.originalname;
-    content = req.file.buffer.toString('utf-8');
+    const extension = path.extname(req.file.originalname || '').toLowerCase();
+    if (!['.txt', '.md', '.json', '.csv'].includes(extension)) {
+      return res.status(415).json({ ok: false, error: 'Formato não suportado. Envie TXT, MD, JSON ou CSV.' });
+    }
+    if (req.file.buffer.includes(0)) {
+      return res.status(415).json({ ok: false, error: 'O arquivo contém dados binários. Envie um documento de texto.' });
+    }
+    try {
+      content = new TextDecoder('utf-8', { fatal: true }).decode(req.file.buffer);
+    } catch {
+      return res.status(415).json({ ok: false, error: 'O arquivo não contém texto UTF-8 válido.' });
+    }
+    title = title || path.basename(req.file.originalname || 'Documento de Treinamento');
   }
 
   if (content.length > 30000) {

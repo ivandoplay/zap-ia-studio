@@ -2522,7 +2522,7 @@ function applyImportedTrainingResult({ packSummary, suggestedProfile }) {
 function currentTrainingImportFingerprint() {
   const business = storage.getBusiness();
   const id = business.trainingPackId;
-  const pack = id ? storage.data.customPacks?.[id] || getTrainingPack(id) || null : null;
+  const pack = id ? storage.data.customPacks?.[id] || null : null;
   return crypto.createHash('sha256').update(JSON.stringify({ business, pack })).digest('hex');
 }
 
@@ -2534,8 +2534,7 @@ app.post('/api/training-packs/import-preview', memUpload.single('file'), async (
     if (!ctx?.tenant?.id || !ctx?.data?.business) return res.status(401).json({ ok: false, error: 'Não foi possível carregar o treinamento desta conta.' });
     const business = ctx.data.business;
     const activeId = business.trainingPackId;
-    let activePack = activeId ? ctx.data.customPacks?.[activeId] || null : null;
-    if (activeId && !activePack && ctx.viewer?.role === 'master' && ctx.viewer?.id === ctx.tenant.id) activePack = getTrainingPack(activeId);
+    const activePack = activeId ? ctx.data.customPacks?.[activeId] || null : null;
     const current = createTrainingDocument(business, activePack);
     const currentFingerprint = crypto.createHash('sha256').update(JSON.stringify({ business, pack: activePack })).digest('hex');
     const imported = await previewTrainingImport({

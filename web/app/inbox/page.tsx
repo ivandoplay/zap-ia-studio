@@ -1,5 +1,5 @@
 'use client';
-import{useEffect,useMemo,useState}from'react';
+import{useEffect,useState}from'react';
 import{api}from'@/lib/api';
 type Instance={id:string;slotId:string;name:string;connection:string;threads:number;unread:number};
 type Thread={id:string;chatId:string;name:string;preview:string;unread:number;pinned:boolean;archived:boolean;aiEnabled:boolean;needsHuman:boolean;paused:string|null;hot:boolean;stage:string|null;lastMessageAt:string|null;phoneMasked:string|null};
@@ -12,7 +12,6 @@ export default function InboxPage(){
  const[threads,setThreads]=useState<Thread[]>([]),[selected,setSelected]=useState<Thread|null>(null),[messages,setMessages]=useState<Message[]>([]);
  const[search,setSearch]=useState(''),[visibility,setVisibility]=useState('inbox'),[filter,setFilter]=useState('');
  const[draft,setDraft]=useState(''),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const current=useMemo(()=>instances.find(i=>i.id===instanceId),[instances,instanceId]);
  useEffect(()=>{let active=true;api<{items:Instance[]}>('conversations-v3/instances').then(r=>{if(!active)return;setInstances(r.items||[]);setInstanceId(v=>v||r.items?.[0]?.id||'');}).catch(e=>{if(active)setError(e instanceof Error?e.message:'Não foi possível carregar a Inbox.');}).finally(()=>{if(active)setLoading(false);});return()=>{active=false};},[]);
  useEffect(()=>{let active=true;if(!instanceId)return;const q=new URLSearchParams({limit:'50',offset:'0',visibility,pill:filter,q:search});api<Page<Thread>>('conversations-v3/instances/'+instanceId+'/threads?'+q.toString()).then(r=>{if(active){setThreads(r.items||[]);setSelected(old=>old?(r.items||[]).find(x=>x.id===old.id)||null:old);}}).catch(e=>{if(active)setError(e instanceof Error?e.message:'Falha ao carregar conversas.');});return()=>{active=false};},[instanceId,visibility,filter,search]);
  useEffect(()=>{if(!selected||!instanceId){setMessages([]);return;}let active=true;api<Messages>('conversations-v3/instances/'+instanceId+'/threads/'+selected.id+'/messages?limit=100').then(r=>{if(active)setMessages(r.messages||[]);}).catch(e=>{if(active)setError(e instanceof Error?e.message:'Falha ao carregar mensagens.');});return()=>{active=false};},[instanceId,selected?.id]);

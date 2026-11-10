@@ -646,7 +646,21 @@ app.use('/api', async (req, res, next) => {
         // Abas sem conversa (Treinamento, Catálogo, IA, Segurança, Contas, Simulador) leem
         // business/settings reais: carregamos o workspace do tenant sem os contatos. O chat
         // continua carregando o workspace completo, com contatos, no bloco abaixo.
-        if (WORKSPACE_ONLY_ROUTE.test(req.path) && !(actAsUserId && actAsUserId !== verified.authUser.id)) {
+        if (WORKSPACE_ONLY_ROUTE.test(req.path) && actAsUserId && actAsUserId !== verified.authUser.id) {
+          if (!UUID_RE.test(actAsUserId)) throw Object.assign(new Error('Identificador de cliente inválido.'), { statusCode: 400 });
+          const supportCtx = await loadTenantContextAsMasterSupport(actAsUserId);
+          req.cloudAuth = {
+            client: supportCtx.adminClient,
+            authUser: supportCtx.targetAuthUser,
+            profile: supportCtx.targetProfile,
+            tenantStore: supportCtx.tenantStore,
+            isRemoteImpersonation: true,
+            impersonatedBy: { id: verified.authUser.id, username: verified.profile.username, displayName: verified.profile.display_name || verified.profile.username }
+          };
+          attachAtomicCloudFlush(res, supportCtx.tenantStore);
+          return tenantStorageContext.run(supportCtx.tenantStore, () => next());
+        }
+        if (WORKSPACE_ONLY_ROUTE.test(req.path)) {
           const store = await loadTenantContextFromCloud(verified.client, verified.authUser, verified.profile, {withContacts: false});
           // Os routers das abas leem `req.dashboardContext.data`; o contexto do dashboard
           // sozinho não traz workspace, então anexamos aqui o dado real do tenant.
@@ -763,6 +777,23 @@ app.use('/api', async (req, res, next) => {
     try {
       if (!cloudWorker.client || !workerSt.user?.id) return res.status(403).json({ ok: false, error: 'Entre como master para usar suporte.' });
       req.dashboardContext = await makeDashboardContext({ client: cloudWorker.client, authUser: workerSt.user, profile: workerSt.user }, actAsUserId);
+      if (WORKSPACE_ONLY_ROUTE.test(req.path)) {
+        const supportCtx = await loadTenantContextAsMasterSupport(actAsUserId);
+        req.cloudAuth = {
+          client: supportCtx.adminClient,
+          authUser: supportCtx.targetAuthUser,
+          profile: supportCtx.targetProfile,
+          tenantStore: supportCtx.tenantStore,
+          isRemoteImpersonation: true,
+          impersonatedBy: {
+            id: workerSt.user.id,
+            username: workerSt.user.username,
+            displayName: workerSt.user.displayName || workerSt.user.username
+          }
+        };
+        attachAtomicCloudFlush(res, supportCtx.tenantStore);
+        return tenantStorageContext.run(supportCtx.tenantStore, () => next());
+      }
       return next();
     } catch (error) { return res.status(error.statusCode || 503).json({ ok: false, error: error.message }); }
   }

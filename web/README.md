@@ -24,6 +24,8 @@ O frontend usa a rota same-origin `/api/backend/*` como BFF. Ela encaminha apena
 
 ## Estado da migração
 
+Consulte o [status detalhado e os critérios para 100%](../docs/modernizacao-frontend/STATUS-MIGRACAO.md).
+
 - Shell responsivo e navegação: fundação inicial.
 - Login: ligado a `POST /api/auth/login`.
 - Visão Geral: ligada a `GET /api/dashboard/parity`; indicadores indisponíveis aparecem como indisponíveis, não como zero.

@@ -1,6 +1,6 @@
 import{NextRequest,NextResponse}from'next/server';
 export const runtime='nodejs';export const dynamic='force-dynamic';
-const METHODS=new Set(['GET','HEAD','POST','PUT','PATCH','DELETE']);const HEADERS=['accept','content-type','authorization','x-panel-pin','x-zapia-act-as'];
+const METHODS=new Set(['GET','HEAD','POST','PUT','PATCH','DELETE']);const HEADERS=['accept','content-type','authorization','x-panel-pin'];
 function validOrigin(req:NextRequest){const origin=req.headers.get('origin');if(!origin)return req.headers.get('sec-fetch-site')!=='cross-site';try{return new URL(origin).origin===req.nextUrl.origin;}catch{return false;}}
 const hasControl=(value:string)=>Array.from(value).some(char=>char.charCodeAt(0)<32||char.charCodeAt(0)===127);
 function validSegment(value:string){if(!value||value==='.'||value==='..'||value.includes('/')||value.includes('\\')||hasControl(value))return false;try{const decoded=decodeURIComponent(value);return decoded!=='.'&&decoded!=='..'&&!decoded.includes('/')&&!decoded.includes('\\')&&!hasControl(decoded)&&decoded.length<=512;}catch{return false;}}

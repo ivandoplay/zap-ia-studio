@@ -132,3 +132,10 @@ A tabela preliminar de rotas no documento de decisões era uma hipótese de orga
 3. Definir autenticação server-side, proxy same-origin e estratégia de tempo real.
 4. Só então adicionar a aplicação Next.js isolada e migrar o shell/Visão Geral.
 5. Validar build e testes existentes antes de ampliar o escopo.
+
+
+## 7. Atualização posterior do inventário
+
+Este arquivo é o retrato estrutural inicial de 2026-11-09. Depois dele, o frontend Next foi implementado em `web/`, com rotas para os módulos listados no documento de status, BFF same-origin, sessão inicial compatível com o painel principal, shell responsivo, tema claro/escuro e CI. A sequência original da seção 6 foi executada parcialmente e não deve ser lida como o estado atual do projeto.
+
+Consulte `STATUS-MIGRACAO.md` para o estado atualizado, os commits/CI e as pendências reais. A implementação continua em branch e não substitui o painel legado publicado.

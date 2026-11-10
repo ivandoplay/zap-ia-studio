@@ -68,3 +68,25 @@ A implementação deve escolher por ambiente e preservar atualização de conver
 ## Limites desta decisão
 
 Esta é a arquitetura recomendada com base nos arquivos inspecionados; ainda não foi implementada nem testada em deployment. O desenho final do BFF depende da inspeção completa do fluxo de login/refresh e da matriz de cabeçalhos/rotas do Express.
+
+
+## Implementação realizada em 2026-11-10
+
+A arquitetura descrita acima foi implementada parcialmente no frontend Next isolado:
+
+- O BFF está em `web/app/api/backend/[...path]/route.ts`.
+- Ele valida origem same-origin e o cabeçalho anti-CSRF `X-Ienvia-Request`, restringe prefixos e segmentos, usa apenas `IENVIA_BACKEND_URL` server-side, limita métodos e cabeçalhos e define timeout.
+- Em produção exige backend HTTPS; não encaminha a Origin do navegador ao Express.
+- O limite local do BFF foi fixado em 4.500.000 bytes para request e response, abaixo do teto de 4,5 MB das Vercel Functions.
+- A biblioteca privada de mídia de campanhas usa reserva no backend, URL assinada para upload direto no storage e finalização server-side com validação de tipo, tamanho e SHA.
+- O shell, as páginas Next e a integração inicial de sessão já existem; o CI de typecheck/build está verde.
+
+Esses itens comprovam implementação e compilação, não homologação. Ainda faltam deployment separado, teste de CORS do storage, login/refresh/logout com conta real, isolamento de tenant e regressão. O token do usuário ainda segue o formato inicial do painel legado; a migração para cookie HttpOnly permanece uma etapa futura.
+
+### Limite de payload da hospedagem
+
+A documentação oficial da Vercel estabelece limite de 4,5 MB para request e response de Function. O BFF falha de forma controlada quando ultrapassa seu limite de 4.500.000 bytes. Uploads de campanha já usam URL assinada direta; uploads grandes da Inbox, treinamento e áudio ainda precisam de fluxo direto ou fragmentado antes da homologação.
+
+### Deployment
+
+O `vercel.json` da raiz e o projeto atual permanecem intactos. A nova aplicação requer projeto/deployment separado com Root Directory `web` e variável `IENVIA_BACKEND_URL`. No momento, os checks da Vercel estão bloqueados por `build-rate-limit` na conta; o GitHub Actions continua aprovando typecheck e build.

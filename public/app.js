@@ -7968,11 +7968,13 @@ function bindEvents() {
     const p = getActiveProfile();
     if (!p) return showToast('Treinamento ativo indisponível para prévia.', true);
     syncFaqsFromDom(p);
+    const soloIdentity = Boolean(document.getElementById('profSoloIdentityCheck')?.checked);
+    const profileName = document.getElementById('profName').value.trim() || 'Meu Negócio';
     const business = {
-      name: document.getElementById('profName').value.trim() || 'Meu Negócio',
+      name: profileName,
       niche: document.getElementById('profNiche').value.trim(),
-      assistantName: document.getElementById('profAssistantName').value.trim() || 'Atendente',
-      soloIdentity: Boolean(document.getElementById('profSoloIdentityCheck')?.checked),
+      assistantName: document.getElementById('profAssistantName').value.trim() || (soloIdentity ? (profileName.split(/\\s+/)[0] || 'Eu') : 'Atendente'),
+      soloIdentity,
       tone: document.getElementById('profTone').value,
       companySummary: document.getElementById('profSummary').value.trim(),
       deliveryAndPayment: document.getElementById('profDeliveryPayment').value.trim(),

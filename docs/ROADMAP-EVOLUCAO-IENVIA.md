@@ -214,9 +214,9 @@ Para cada etapa:
 
 ### Pendências que exigem integração e homologação
 
-- [ ] Prévia do prompt deve receber um snapshot do formulário ainda não salvo; a rota legada atual monta o prompt apenas com os dados persistidos.
+- [x] Prévia do prompt agora recebe um snapshot validado dos campos atuais do formulário e monta a resposta sem persistir alterações. A rota mantém allow-list de campos, valida tipos/limites e usa os dados de catálogo, PIX, áudios e pacote já carregados no contexto.
 - [ ] Importação de pacote ainda usa a rota legada que aplica o treinamento diretamente. A prévia do módulo training-v2 existe, mas a interface não foi migrada e a origem remota precisa ser homologada antes de conectá-la. Não ativar a rota v2 como substituição sem validar persistência e compatibilidade.
-- [ ] Rever a fronteira de confiança dos documentos de conhecimento no prompt para tratar o conteúdo importado como dado não confiável, sem permitir que instruções nele contidas substituam as regras do sistema.
+- [x] Documentos da base de conhecimento são serializados separadamente e rotulados no prompt como dados de referência não confiáveis; instruções encontradas neles não devem substituir as regras do sistema.
 - [ ] Validar visualmente os campos do editor e os estados de erro/retry em desktop e mobile.
 - [ ] Executar a suíte isolada completa, adicionar regressões automatizadas para edição parcial de Skills, IDs com lacunas, FAQ com linha vazia e limite de upload.
 - [ ] Testar persistência real em ambiente autenticado e confirmar que os pacotes existentes continuam intactos.

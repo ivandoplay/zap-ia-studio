@@ -2404,6 +2404,35 @@ app.get('/api/business/system-prompt', (req, res) => {
   res.json({ ok: true, prompt });
 });
 
+app.post('/api/business/system-prompt/preview', (req, res) => {
+  const current = storage.getBusiness();
+  const draft = req.body?.business;
+  const allowed = new Set([
+    'name', 'niche', 'assistantName', 'soloIdentity', 'tone', 'companySummary',
+    'deliveryAndPayment', 'goldenRules', 'extraInstructions',
+    'lockUntilManualResume', 'promptShieldEnabled', 'faqs'
+  ]);
+  if (!draft || typeof draft !== 'object' || Array.isArray(draft) ||
+      Object.keys(draft).some((key) => !allowed.has(key))) {
+    return res.status(400).json({ ok: false, error: 'Dados da prévia inválidos.' });
+  }
+  const textFields = ['name', 'niche', 'assistantName', 'tone', 'companySummary', 'deliveryAndPayment', 'goldenRules', 'extraInstructions'];
+  if (textFields.some((key) => typeof draft[key] !== 'string' || draft[key].length > 32000) ||
+      ['soloIdentity', 'lockUntilManualResume', 'promptShieldEnabled'].some((key) => typeof draft[key] !== 'boolean') ||
+      !Array.isArray(draft.faqs) || draft.faqs.length > 200 ||
+      draft.faqs.some((faq) => !faq || typeof faq !== 'object' ||
+        typeof faq.question !== 'string' || faq.question.length > 2000 ||
+        typeof faq.answer !== 'string' || faq.answer.length > 8000)) {
+    return res.status(400).json({ ok: false, error: 'Revise os campos do treinamento antes de gerar a prévia.' });
+  }
+  const profile = { ...current, ...draft };
+  const prompt = buildSystemPrompt(profile, storage.data.settings, 'Lojista Exemplo', {
+    userText: 'É só tráfego pago ou vocês fazem conteúdo também?',
+    history: []
+  });
+  res.json({ ok: true, prompt, source: 'unsaved_form_snapshot' });
+});
+
 // ======================== PACOTES DE TREINAMENTO TURBO (.ZIP) + EDITOR VISUAL ========================
 
 app.get('/api/training-packs/:packId', (req, res) => {

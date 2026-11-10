@@ -35,3 +35,17 @@ test('training import preview rejects malformed base64 before compiling', async 
     /Arquivo inválido/
   );
 });
+
+test('training import preview rejects an actual training-v2 draft with HTTP 409 semantics', async () => {
+  const current = createTrainingDocument({name:'Perfil atual',tone:'consultivo'});
+  const draft = createTrainingDocument({name:'Rascunho v2',tone:'acolhedor'});
+  await assert.rejects(
+    previewTrainingImport({
+      bytesBase64:Buffer.from(JSON.stringify(draft)).toString('base64'),
+      filename:'rascunho.json',
+      document:current,
+      ctx:context
+    }),
+    error => error?.status === 409 && /training-v2/.test(error.message)
+  );
+});

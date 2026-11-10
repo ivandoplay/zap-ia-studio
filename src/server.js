@@ -273,6 +273,12 @@ const rotasSoApelido = Object.keys(PAGINAS_PAINEL)
   .filter(rota => `/${PAGINAS_PAINEL[rota]}` !== rota);
 app.get(rotasSoApelido, v2ParaPainelAntigo);
 
+// A página de histórico contém a área de trabalho de conversas e deve evitar cache compartilhado.
+app.get('/historico/', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, private');
+  res.sendFile(path.join(ROOT_DIR, 'public', 'historico', 'index.html'));
+});
+
 // Assets próprios: comprime e cacheia usando o mesmo código no Node e na Vercel.
 // Está ANTES do express.static para ele não abrir stream de arquivo sem compressão.
 app.use((req, res, next) => {

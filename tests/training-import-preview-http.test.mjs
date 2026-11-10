@@ -78,7 +78,7 @@ test('HTTP import confirmation requires a current preview fingerprint', async ()
   const response = await fetch(`${base}/api/training-packs/import-text`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ filename: 'treinamento.json', content: JSON.stringify(blueprint) })
+    body: JSON.stringify({ filename: 'treinamento.json', text: JSON.stringify(blueprint) })
   });
   assert.equal(response.status, 400);
   const body = await response.json();
@@ -96,7 +96,7 @@ test('HTTP import confirmation rejects a stale preview fingerprint without overw
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       filename: 'treinamento.json',
-      content: JSON.stringify(blueprint),
+      text: JSON.stringify(blueprint),
       expectedFingerprint: previewBody.preview.currentFingerprint
     })
   });
@@ -120,7 +120,7 @@ test('HTTP import confirmation applies a fresh preview and knowledge upload reje
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       filename: 'treinamento.json',
-      content: JSON.stringify(blueprint),
+      text: JSON.stringify(blueprint),
       expectedFingerprint: previewBody.preview.currentFingerprint
     })
   });

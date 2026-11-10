@@ -267,15 +267,15 @@ details.pro-accordion, .conf-previa, .camp-panel, .camp-notice { border-radius: 
 
 /* Keep legacy mobile navigation nodes for compatibility; visually replace them with the drawer. */
 .sidebar-drawer-backdrop { display: none; }
-@media (min-width: 821px) {
+@media (min-width: 901px) {
   .sidebar-toggle-btn { display: none !important; }
   .sidebar { position: relative; transform: none; }
 }
-@media (max-width: 1100px) and (min-width: 821px) {
+@media (max-width: 1100px) and (min-width: 901px) {
   .sidebar { width: 238px; flex-basis: 238px; }
   .content-area { padding-inline: 22px; }
 }
-@media (max-width: 820px) {
+@media (max-width: 900px) {
   body { flex-direction: column; overflow: hidden; }
   .sidebar {
     display: flex !important;

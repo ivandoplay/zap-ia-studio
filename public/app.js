@@ -2174,7 +2174,8 @@ function renderAll() {
     const div = $v('visaoChaveDividir');
     const pau = $v('visaoChavePausar');
     const hor = $v('visaoChaveHorario');
-    if (ia) ia.checked = (state.waState?.botEnabled !== false) && (state.settings?.botEnabled !== false);
+    const botEnabled = typeof state.settings?.botEnabled === 'boolean' ? state.settings.botEnabled : state.waState?.botEnabled !== false;
+    if (ia) ia.checked = botEnabled;
     if (dig) dig.checked = ab.simulateTyping !== false;
     if (div) div.checked = ab.splitLongMessages !== false;
     if (pau) pau.checked = hh.pauseOnOwnerReply !== false;
@@ -2186,7 +2187,7 @@ function renderAll() {
         : 'Das ' + (sc.startHour || '08:00') + ' às ' + (sc.endHour || '18:00');
     }
     const iaSub = $v('visaoChaveIaSub');
-    if (iaSub) iaSub.textContent = state.waState?.botEnabled === false ? 'Pausada — responda manualmente' : 'Atendimento automático';
+    if (iaSub) iaSub.textContent = !botEnabled ? 'Pausada — responda manualmente' : 'Atendimento automático';
     const pausarSub = $v('visaoChavePausarSub');
     if (pausarSub) pausarSub.textContent = pau && pau.checked ? 'Você assume a conversa' : 'A IA continua mesmo se você responder';
   }
@@ -2198,52 +2199,71 @@ function renderAll() {
 
   // Salva pela MESMA rota que as abas originais usam.
   window.visaoSalvarChave = async function visaoSalvarChave(chave, valor) {
+    const inputIds = { ia: 'visaoChaveIa', digitando: 'visaoChaveDigitando', dividir: 'visaoChaveDividir', pausar: 'visaoChavePausar', horario: 'visaoChaveHorario' };
+    const input = $v(inputIds[chave]);
+    if (!input || input.disabled) return;
+    if (!Object.prototype.hasOwnProperty.call(inputIds, chave) || typeof valor !== 'boolean') {
+      lerChaves();
+      showToast('Controle rápido inválido. Atualize o painel e tente novamente.', true);
+      return;
+    }
+    const previous = chave === 'ia'
+      ? (typeof state.settings?.botEnabled === 'boolean' ? state.settings.botEnabled : state.waState?.botEnabled !== false)
+      : chave === 'digitando' ? state.settings?.antiBan?.simulateTyping !== false
+      : chave === 'dividir' ? state.settings?.antiBan?.splitLongMessages !== false
+      : chave === 'pausar' ? state.settings?.humanHandoff?.pauseOnOwnerReply !== false
+      : (state.settings?.schedule?.mode || 'always') !== 'always';
+    input.disabled = true;
+    input.setAttribute('aria-busy', 'true');
     try {
       if (chave === 'ia') {
-        await api('/api/wa/toggle-bot', { method: 'POST', body: JSON.stringify({ enabled: valor }) });
-        state.waState.botEnabled = valor;
-        state.settings = { ...(state.settings || {}), botEnabled: valor };
-        // mantém os interruptores das outras abas em sincronia
+        const res = await api('/api/wa/toggle-bot', { method: 'POST', body: JSON.stringify({ enabled: valor }) });
+        if (res?.ok !== true || typeof res.botEnabled !== 'boolean') throw new Error(res?.error || 'O servidor não confirmou a alteração da IA.');
+        state.waState = { ...(state.waState || {}), botEnabled: res.botEnabled };
+        state.settings = { ...(state.settings || {}), botEnabled: res.botEnabled };
         const master = $v('masterBotToggle');
-        if (master) master.checked = valor;
+        if (master) master.checked = res.botEnabled;
         const iaToggle = $v('aiBotEnabledToggle');
-        if (iaToggle) iaToggle.checked = valor;
-        showToast(valor ? 'IA ativada — o atendente está no ar.' : 'IA pausada — você atende manualmente.');
+        if (iaToggle) iaToggle.checked = res.botEnabled;
+        showToast(res.botEnabled ? 'IA ativada — o atendente está no ar.' : 'IA pausada — você atende manualmente.');
       } else if (chave === 'horario') {
         const sc = { ...(state.settings?.schedule || {}) };
         sc.mode = valor ? 'business_hours_only' : 'always';
         if (valor && (!sc.startHour || !sc.endHour)) { sc.startHour = '08:00'; sc.endHour = '18:00'; }
         const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ schedule: sc }) });
-        state.settings = res.settings || { ...(state.settings || {}), schedule: sc };
+        if (res?.ok !== true || !res.settings?.schedule) throw new Error(res?.error || 'O servidor não confirmou o horário de atendimento.');
+        state.settings = res.settings;
         const sel = $v('scheduleMode');
         if (sel) sel.value = sc.mode;
         showToast(valor ? 'Horário de atendimento ligado.' : 'Atendendo 24 horas.');
+      } else if (chave === 'pausar') {
+        const hh = { ...(state.settings?.humanHandoff || {}), pauseOnOwnerReply: valor };
+        const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ humanHandoff: hh }) });
+        if (res?.ok !== true || !res.settings?.humanHandoff) throw new Error(res?.error || 'O servidor não confirmou a preferência de atendimento humano.');
+        state.settings = res.settings;
+        const chk = $v('pauseOnOwnerReplyCheck');
+        if (chk) chk.checked = valor;
+        showToast('Preferência de atendimento humano salva.');
       } else {
-        const campo = chave === 'digitando' ? 'simulateTyping'
-          : chave === 'dividir' ? 'splitLongMessages'
-          : 'pauseOnOwnerReply';
-        if (chave === 'pausar') {
-          const hh = { ...(state.settings?.humanHandoff || {}), pauseOnOwnerReply: valor, notifyOwnerOnHandoff: true };
-          const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ humanHandoff: hh }) });
-          state.settings = res.settings || { ...(state.settings || {}), humanHandoff: hh };
-          const chk = $v('pauseOnOwnerReplyCheck');
-          if (chk) chk.checked = valor;
-        } else {
-          const ab = { ...(state.settings?.antiBan || {}), [campo]: valor };
-          const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ antiBan: ab }) });
-          state.settings = res.settings || { ...(state.settings || {}), antiBan: ab };
-          const chk = $v(chave === 'digitando' ? 'simulateTypingCheck' : 'splitLongMessagesCheck');
-          if (chk) chk.checked = valor;
-        }
+        const campo = chave === 'digitando' ? 'simulateTyping' : 'splitLongMessages';
+        const ab = { ...(state.settings?.antiBan || {}), [campo]: valor };
+        const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ antiBan: ab }) });
+        if (res?.ok !== true || !res.settings?.antiBan) throw new Error(res?.error || 'O servidor não confirmou a preferência de envio.');
+        state.settings = res.settings;
+        const chk = $v(chave === 'digitando' ? 'simulateTypingCheck' : 'splitLongMessagesCheck');
+        if (chk) chk.checked = valor;
         showToast('Preferência salva.');
       }
+      lerChaves();
       renderVisaoGeral();
     } catch (err) {
+      input.checked = previous;
       showToast(err.message || 'Não foi possível salvar.', true);
-      lerChaves(); // devolve o interruptor ao estado real
+    } finally {
+      input.disabled = false;
+      input.removeAttribute('aria-busy');
     }
   };
-
   // ---------- saudação e relógio ----------
   function renderOla() {
     const agora = new Date();

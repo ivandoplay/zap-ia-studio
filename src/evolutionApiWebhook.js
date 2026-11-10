@@ -137,14 +137,54 @@ function applyActiveSecurity(live, active) {
     Object.assign(contact, patch); memory.set(scope, contact);
     return { inserted, contact };
   }
-  async function send(instanceName, number, text) {
-    const response = await fetcher(`${String(env.EVOLUTION_API_URL || 'https://pool-evolution-api-067.cloud2.pageup.dev.br').replace(/\/+$/, '')}/message/sendText/${encodeURIComponent(instanceName)}`, {
+  const evolutionBaseUrl = () => String(env.EVOLUTION_API_URL || 'https://pool-evolution-api-067.cloud2.pageup.dev.br').replace(/\/+$/, '');
+  async function send(instanceName, number, text, settings = {}) {
+    const antiBan = settings.antiBan || {};
+    if (antiBan.simulateTyping !== false) {
+      const minMs = Number(antiBan.minTypingMs) || 1500;
+      const maxMs = Number(antiBan.maxTypingMs) || 5000;
+      const delay = Math.min(maxMs, Math.max(minMs, String(text).length * 24));
+      try {
+        await fetcher(evolutionBaseUrl() + '/chat/sendPresence/' + encodeURIComponent(instanceName), {
+          method: 'POST', redirect: 'error', signal: AbortSignal.timeout(8000),
+          headers: { apikey: env.EVOLUTION_API_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ number, delay, presence: 'composing' })
+        });
+      } catch { /* Presença é auxiliar; não bloquear o envio por falha no indicador. */ }
+    }
+    const response = await fetcher(evolutionBaseUrl() + '/message/sendText/' + encodeURIComponent(instanceName), {
       method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20000),
-      headers: { apikey: env.EVOLUTION_API_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ number, text }),
+      headers: { apikey: env.EVOLUTION_API_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ number, text: String(text) })
     });
     if (!response.ok) throw new Error('provider_rejected');
     const result = requireEvolutionMessageId(JSON.parse(await response.text()));
     return result.key?.id || result.data?.key?.id || result.data?.id || result.id;
+  }
+  function splitReplyText(text, settings = {}) {
+    const fullText = String(text || '').trim();
+    if (settings.antiBan?.splitLongMessages === false || fullText.length <= 260 || !fullText.includes('\n\n')) return [fullText];
+    const parts = fullText.split(/\n{2,}/).map(part => part.trim()).filter(Boolean);
+    if (parts.length <= 1) return [fullText];
+    if (parts.length <= 3) return parts;
+    return [parts[0], parts.slice(1, -1).join('\n\n'), parts[parts.length - 1]];
+  }
+  function isWithinBusinessSchedule(schedule = {}, now = new Date()) {
+    if (!schedule || schedule.mode === 'always') return { active: true, sendOffHoursNotice: false };
+    let day, minutes;
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', { timeZone: schedule.timezone || 'America/Fortaleza', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(now);
+      const map = Object.fromEntries(parts.map(part => [part.type, part.value]));
+      day = ({ Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 })[map.weekday];
+      minutes = Number(map.hour) * 60 + Number(map.minute);
+    } catch { day = now.getDay(); minutes = now.getHours() * 60 + now.getMinutes(); }
+    const [sh, sm] = String(schedule.startHour || '08:00').split(':').map(Number);
+    const [eh, em] = String(schedule.endHour || '18:00').split(':').map(Number);
+    const start = sh * 60 + (sm || 0), end = eh * 60 + (em || 0);
+    const workDays = Array.isArray(schedule.workDays) ? schedule.workDays : [1, 2, 3, 4, 5, 6];
+    const inside = workDays.includes(day) && minutes >= start && minutes <= end;
+    if (schedule.mode === 'business_hours_only') return { active: inside, sendOffHoursNotice: !inside };
+    if (schedule.mode === 'outside_hours_only') return { active: !inside, sendOffHoursNotice: false };
+    return { active: true, sendOffHoursNotice: false };
   }
   async function processRecord(identity, tenant, data, eventKey, historical = false) {
     const info = data.Info || data.info || {}, key = data.key || info.Key || {};
@@ -176,10 +216,20 @@ function applyActiveSecurity(live, active) {
     // O ingresso fica durável ANTES da chamada de IA. Repetição não autoriza uma segunda resposta.
     const saved = await merge(identity, chatId, [turn], { name: String(data.pushName || jid.split('@')[0]), event: `message:${id}` });
     if (historical) return { historical: true, saved: 1 };
-    if (fromMe) return { persisted: true, role: 'owner' };
+    const settings = tenant.settings || {};
+    if (fromMe) {
+      if (settings.humanHandoff?.pauseOnOwnerReply !== false) {
+        const pauseForever = Boolean(tenant.profile?.lockUntilManualResume);
+        const pauseMinutes = Math.max(5, Number(settings.humanHandoff?.pauseDurationMinutes) || 60);
+        await merge(identity, chatId, [], { patch: {
+          pausedUntil: pauseForever ? 'forever' : new Date(Date.now() + pauseMinutes * 60000).toISOString(),
+          pauseReason: 'Você respondeu manualmente pelo WhatsApp'
+        } });
+      }
+      return { persisted: true, role: 'owner' };
+    }
     if (!saved.inserted) return { duplicate: true };
-    const contact = saved.contact, settings = tenant.settings;
-    const phone = jid.endsWith('@s.whatsapp.net') ? jid.split('@')[0].split(':')[0] : '';
+    const contact = saved.contact;
     const ignored = contact.aiIgnored || (settings.ignoredContacts || []).some(x => String(x.phone || '').replace(/\D/g, '') === phone);
     const paused = contact.pausedUntil === 'forever' || Date.parse(contact.pausedUntil || '') > Date.now();
     if (pedidoExplicitoParada(text)) {
@@ -187,28 +237,42 @@ function applyActiveSecurity(live, active) {
       return { persisted: true, optOut: true };
     }
     const iaEnabled = settings.botEnabled !== false && tenant.slotEnabled && !ignored && !paused;
-    // Sem base64 não fingir compreender um áudio vazio. Não baixar URLs arbitrárias do evento.
-    if (!iaEnabled || !env.EVOLUTION_API_KEY || !phone || (!text && !media)) return { persisted: true, iaEnabled: false };
-    let pending;
+    const schedule = isWithinBusinessSchedule(settings.schedule || {});
+    if (!schedule.active) {
+      const offHoursText = String(settings.schedule?.offHoursReplyMessage || '').trim();
+      const lastNotice = Date.parse(contact.offHoursNotifiedAt || '') || 0;
+      if (schedule.sendOffHoursNotice && offHoursText && phone && env.EVOLUTION_API_KEY && Date.now() - lastNotice >= 6 * 60 * 60 * 1000) {
+        const notice = { id: 'evo-hours-' + randomUUID(), role: 'assistant', text: offHoursText, timestamp: trueNowIso(), deliveryStatus: 'uncertain' };
+        try {
+          await merge(identity, chatId, [notice]);
+          const sentId = await send(identity.instanceName, phone, offHoursText, settings);
+          await merge(identity, chatId, [{ ...notice, waMsgId: sentId, deliveryStatus: 'accepted' }], { patch: { offHoursNotifiedAt: trueNowIso() } });
+        } catch { console.warn('[EvolutionWebhook] Aviso fora do horário não confirmado.'); }
+      }
+      return { persisted: true, iaEnabled: false, outsideBusinessHours: true };
+    }
+    if (!iaEnabled || !env.EVOLUTION_API_KEY || !phone || (!text && !media)) return { persisted: true, iaEnabled };
+    let pending = [];
     try {
       const reply = await replyGenerator({ profile: tenant.profile, settings, history: contact.messages.filter(x => x.id !== id && x.role !== 'internal_note').slice(-60), userText: text, media, contactName: contact.name || phone, allowDemoFallback: false });
       if (!reply?.cleanText || reply.actions?.optOutReason || reply.actions?.courtesySilence || reply.actions?.silentPauseReason) {
         if (reply?.actions?.optOutReason) await merge(identity, chatId, [], { patch: { aiIgnored: true, pausedUntil: 'forever', pauseReason: 'Opt-out detectado.' } });
         return { persisted: true, iaEnabled };
       }
-      // Revalidar switches/pausa depois da latência de IA e antes de qualquer efeito externo.
       const fresh = await tenantFor(identity), current = await merge(identity, chatId);
-      if (fresh.settings.botEnabled === false || !fresh.slotEnabled || current.contact.aiIgnored || current.contact.pausedUntil === 'forever' || Date.parse(current.contact.pausedUntil || '') > Date.now()) return { persisted: true, iaEnabled: false };
-      pending = { id: `evo-ai-${randomUUID()}`, role: 'assistant', text: reply.cleanText, timestamp: trueNowIso(), deliveryStatus: 'uncertain' };
-      await merge(identity, chatId, [pending]);
-      const sentId = await send(identity.instanceName, phone, reply.cleanText);
-      await merge(identity, chatId, [{ ...pending, waMsgId: sentId, deliveryStatus: 'accepted' }]);
-      return { persisted: true, accepted: true, iaEnabled };
+      const freshSchedule = isWithinBusinessSchedule(fresh.settings?.schedule || {});
+      if (fresh.settings.botEnabled === false || !fresh.slotEnabled || !freshSchedule.active || current.contact.aiIgnored || current.contact.pausedUntil === 'forever' || Date.parse(current.contact.pausedUntil || '') > Date.now()) return { persisted: true, iaEnabled: false };
+      const chunks = splitReplyText(reply.cleanText, fresh.settings);
+      pending = chunks.map(text => ({ id: 'evo-ai-' + randomUUID(), role: 'assistant', text, timestamp: trueNowIso(), deliveryStatus: 'uncertain' }));
+      await merge(identity, chatId, pending);
+      for (const item of pending) {
+        const sentId = await send(identity.instanceName, phone, item.text, fresh.settings);
+        await merge(identity, chatId, [{ ...item, waMsgId: sentId, deliveryStatus: 'accepted' }]);
+      }
+      return { persisted: true, accepted: true, chunks: pending.length, iaEnabled };
     } catch {
-      // Entrada já salva: não pedir retry cego ao provedor após possível envio.
-      // A resposta incerta permanece visível para reconciliação manual, sem repetir.
       console.warn('[EvolutionWebhook] Falha de resposta; entrada preservada, sem reenvio automático.');
-      return { persisted: true, replyUncertain: Boolean(pending), replyFailed: true };
+      return { persisted: true, replyUncertain: Boolean(pending.length), replyFailed: true };
     }
   }
 

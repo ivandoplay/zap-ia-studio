@@ -35,27 +35,27 @@ Atualizado: 2026-11-10
 - Supabase Realtime como sinal de mudança na Inbox, com polling de contingência.
 - Shell responsivo e tema claro/escuro.
 - CI GitHub Actions para typecheck e build.
-- Raiz do Turbopack explicitamente fixada em `process.cwd()`, que corresponde a `web/` no CI e no projeto Vercel com Root Directory `web`.
+- Raiz do Turbopack fixada em `process.cwd()`, correspondente a `web/` no CI e no projeto Vercel com Root Directory `web`.
 
 ## Validação observada
-- Commit `a0fb6bac8f3d34cb97aacccb9e5a16319e3f5295`: GitHub Actions run `42736604491` concluído com sucesso. `npm run typecheck` e `npm run build` passaram e o build gerou as 21 rotas.
-- Após fixar a raiz Turbopack, a nova execução `42737003781` foi iniciada; resultado ainda pendente nesta atualização.
+- Run `42736604491`, no commit `a0fb6bac8f3d34cb97aacccb9e5a16319e3f5295`: typecheck e build aprovados.
+- Run `42737003781`, após o ajuste do Turbopack: typecheck e build aprovados. O log não apresentou o aviso anterior de múltiplos lockfiles.
+- O build gerou as 21 rotas previstas.
 - Os dois checks Vercel reportaram falha com destino `upgradeToPro=build-rate-limit`. A publicação/homologação pela Vercel está bloqueada pelo limite de builds da conta.
 - Build verde comprova compilação, não integração ponta a ponta com uma conta real.
 
 ## Pendências para conclusão real
-1. Confirmar CI verde após o ajuste da raiz Turbopack.
-2. Criar deployment Vercel separado com Root Directory `web`, configurar `IENVIA_BACKEND_URL` HTTPS e validar domínio/headers. O limite atual de builds precisa ser resolvido na conta Vercel.
-3. Homologar BFF com backend real: login, refresh, logout, 401/403/409/429/5xx, uploads e isolamento entre contas.
-4. Testar Inbox em conta de teste com Evolution, mídia, notas, perfil e Realtime/RLS.
-5. Completar edição avançada de campanhas (blocos, mídia, importação, revisão e conflitos); manter envio/agendamento bloqueados até homologação.
-6. Completar CRUD operacional de canais e pareamento/QR Code após homologar comandos de dispositivo.
-7. Validar biblioteca de áudio e upload no ambiente hospedado, considerando limites de payload da plataforma.
-8. Validar importação/ativação de Treinamento e ativação de Recursos com revisão e confirmação.
-9. Implementar e testar ações administrativas de contas com autorização, confirmação e auditoria.
-10. Homologar alterações de políticas de segurança e PIN.
-11. Fazer auditoria visual/mobile, acessibilidade, desempenho, smoke tests e regressão de todas as ações do painel legado.
-12. Revisar a PR e planejar publicação gradual e rollback.
+1. Criar deployment Vercel separado com Root Directory `web`, configurar `IENVIA_BACKEND_URL` HTTPS e validar domínio/headers. O limite atual de builds precisa ser resolvido na conta Vercel.
+2. Homologar BFF com backend real: login, refresh, logout, 401/403/409/429/5xx, uploads e isolamento entre contas.
+3. Testar Inbox em conta de teste com Evolution, mídia, notas, perfil e Realtime/RLS.
+4. Completar edição avançada de campanhas (blocos, mídia, importação, revisão e conflitos); manter envio/agendamento bloqueados até homologação.
+5. Completar CRUD operacional de canais e pareamento/QR Code após homologar comandos de dispositivo.
+6. Validar biblioteca de áudio e upload no ambiente hospedado, considerando limites de payload da plataforma.
+7. Validar importação/ativação de Treinamento e ativação de Recursos com revisão e confirmação.
+8. Implementar e testar ações administrativas de contas com autorização, confirmação e auditoria.
+9. Homologar alterações de políticas de segurança e PIN.
+10. Fazer auditoria visual/mobile, acessibilidade, desempenho, smoke tests e regressão de todas as ações do painel legado.
+11. Revisar a PR e planejar publicação gradual e rollback.
 
 ## Critério de conclusão
 A modernização só poderá ser declarada 100% após CI verde no commit final, deployment separado funcional, testes end-to-end com backend/conta reais, homologação das operações e confirmação de paridade funcional. Até lá, a PR permanece Draft e o painel legado continua sendo a interface de produção.

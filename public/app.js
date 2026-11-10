@@ -4360,19 +4360,35 @@ function renderCrmBoard() {
 }
 
 window.switchCrmSubView = function switchCrmSubView(viewName) {
-  state.activeCrmSubView = viewName;
-  document.querySelectorAll('.crm-subtab-btn').forEach((b) => {
-    const active = b.dataset.crmview === viewName;
-    b.classList.toggle('active', active);
-    b.setAttribute('aria-pressed', String(active));
+  const allowedViews = ['inbox', 'contacts', 'kanban', 'coach'];
+  const nextView = allowedViews.includes(viewName) ? viewName : 'inbox';
+  state.activeCrmSubView = nextView;
+
+  document.querySelectorAll('.crm-subtab-btn').forEach((button) => {
+    const active = button.dataset.crmview === nextView;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
   });
-  ['inbox', 'contacts', 'kanban', 'coach'].forEach((v) => {
-    const el = document.getElementById(`crmSubView-${v}`);
-    if (el) el.style.display = v === viewName ? '' : 'none';
+
+  // As subvisões começam com a classe utilitária u-none. Alterar somente
+  // style.display não vence o display:none!important da utilitária, deixando
+  // Contatos, Kanban e Coach IA permanentemente invisíveis.
+  allowedViews.forEach((view) => {
+    const panel = document.getElementById(`crmSubView-${view}`);
+    if (!panel) return;
+    const active = view === nextView;
+    panel.classList.toggle('active', active);
+    panel.classList.toggle('u-none', !active);
+    panel.hidden = !active;
+    panel.style.display = active ? '' : 'none';
   });
+
   const filterBar = document.getElementById('crmFilterBar');
-  if (filterBar) filterBar.style.display = (viewName === 'coach' || viewName === 'contacts') ? 'none' : '';
-  if (viewName === 'inbox' || viewName === 'kanban' || viewName === 'contacts') renderCrmBoard();
+  if (filterBar) filterBar.style.display = (nextView === 'coach' || nextView === 'contacts') ? 'none' : '';
+
+  if (nextView === 'inbox' || nextView === 'kanban' || nextView === 'contacts') {
+    renderCrmBoard();
+  }
 };
 
 function renderCrmInbox(filteredList) {
@@ -7547,6 +7563,11 @@ function bindEvents() {
           state.waState.slots[slotId].pairingCode = null;
         }
         renderWaState();
+        const selected = (state.contacts || []).find((contact) => contact.chatId === state.selectedInboxChatId);
+        if (selected && getContactSlotId(selected) === slotId) {
+          state.selectedInboxChatId = null;
+          document.getElementById('crmInboxLayout')?.classList.remove('mob-chat-open', 'mob-inspector-open');
+        }
         renderCrmBoard();
       }
       return res;
@@ -7652,6 +7673,11 @@ function bindEvents() {
           body: JSON.stringify({ clearSession: true, slotId: slotMeta.slotId })
         });
         state.waState = res.waState;
+        const selected = (state.contacts || []).find((contact) => contact.chatId === state.selectedInboxChatId);
+        if (selected && getContactSlotId(selected) === slotMeta.slotId) {
+          state.selectedInboxChatId = null;
+          document.getElementById('crmInboxLayout')?.classList.remove('mob-chat-open', 'mob-inspector-open');
+        }
         renderWaState();
         renderCrmBoard();
         showToast(`${slotMeta.label} desconectado.`);

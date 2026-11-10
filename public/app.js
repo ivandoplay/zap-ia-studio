@@ -208,19 +208,34 @@ function playHandoffChime() {
   }
 }
 
-function buildDownloadQuery() {
-  const params = new URLSearchParams();
-  if (state.cloudSession?.accessToken) {
-    params.set('token', state.cloudSession.accessToken);
+async function downloadAuthenticated(url, fallbackFilename = 'download') {
+  if (state.cloudSession?.expiresAt && state.cloudSession.expiresAt * 1000 - Date.now() < 180_000) await tryRefreshCloudToken();
+  const headers = {};
+  if (state.sessionPin) headers['x-panel-pin'] = state.sessionPin;
+  if (state.cloudSession?.accessToken) headers.Authorization = `Bearer ${state.cloudSession.accessToken}`;
+  if (state.actAsUser?.userId) headers['x-zapia-act-as'] = state.actAsUser.userId;
+  const response = await fetch(url, { method: 'GET', headers, credentials: 'same-origin', cache: 'no-store' });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `Não foi possível baixar o arquivo (HTTP ${response.status}).`);
   }
-  if (state.sessionPin) {
-    params.set('pin', state.sessionPin);
+  const blob = await response.blob();
+  const disposition = response.headers.get('content-disposition') || '';
+  const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+  let filename = fallbackFilename;
+  if (match?.[1]) {
+    try { filename = decodeURIComponent(match[1].replace(/^"|"$/g, '')); }
+    catch { filename = match[1].replace(/^"|"$/g, ''); }
   }
-  if (state.actAsUser?.userId) {
-    params.set('actAs', state.actAsUser.userId);
-  }
-  const qs = params.toString();
-  return qs ? `?${qs}` : '';
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
 async function tryRefreshCloudToken() {
@@ -3496,7 +3511,8 @@ function renderPackVisualStudio(p) {
     return;
   }
 
-  studioPanel.classList.remove('u-none');
+  studioPanel.classList.remove('u-none', 'u-oculto-fio-topo');
+  studioPanel.style.display = '';
   const full = state.fullPackCache[p.trainingPackId];
   if (!full) {
     const error = state.fullPackErrors?.[p.trainingPackId];
@@ -7956,9 +7972,9 @@ function bindEvents() {
     }
   });
 
-  document.getElementById('btnExportProfileZip')?.addEventListener('click', () => {
-    window.location.href = `/api/business/export.zip${buildDownloadQuery()}`;
-    showToast('Gerando backup .ZIP completo do seu treinamento...');
+  document.getElementById('btnExportProfileZip')?.addEventListener('click', async () => {
+    try { await downloadAuthenticated('/api/business/export.zip', 'treinamento.zip'); showToast('Backup do treinamento baixado.'); }
+    catch (err) { showToast(err.message, true); }
   });
 
   document.getElementById('btnToggleTemplates')?.addEventListener('click', () => {
@@ -8063,6 +8079,21 @@ function bindEvents() {
         body: JSON.stringify({ business })
       });
       document.getElementById('promptPreviewText').textContent = res.prompt;
+      const previewText = document.getElementById('promptPreviewText');
+      let sourceNotice = document.getElementById('promptPreviewSourceNotice');
+      if (!sourceNotice) {
+        sourceNotice = document.createElement('div');
+        sourceNotice.id = 'promptPreviewSourceNotice';
+        sourceNotice.setAttribute('role', 'status');
+        sourceNotice.style.cssText = 'margin:0 0 12px;padding:10px 12px;border-radius:9px;font-size:12px;font-weight:600;';
+        previewText.parentNode.insertBefore(sourceNotice, previewText);
+      }
+      const hasUnsavedDraft = res.source === 'unsaved_form_snapshot';
+      sourceNotice.textContent = hasUnsavedDraft
+        ? 'Prévia de rascunho: inclui alterações ainda não salvas. Elas não estão ativas até você salvar o treinamento.'
+        : 'Prévia baseada nos dados salvos.';
+      sourceNotice.style.background = hasUnsavedDraft ? 'rgba(217,119,6,.12)' : 'var(--bg-card-subtle)';
+      sourceNotice.style.color = 'var(--text-main)';
       document.getElementById('promptPreviewModal').classList.add('open');
     } catch (err) {
       showToast(err.message, true);
@@ -9254,17 +9285,15 @@ function bindEvents() {
   });
 
   // Backup Geral (.JSON) & Restauração Geral de Clientes + Configurações
-  document.getElementById('btnExportFullBackup')?.addEventListener('click', () => {
-    window.location.href = `/api/system/backup.json${buildDownloadQuery()}`;
-    showToast('Baixando Backup Geral (CRM + Conversas + Configurações)...');
+  document.getElementById('btnExportFullBackup')?.addEventListener('click', async () => {
+    try { await downloadAuthenticated('/api/system/backup.json', 'backup-ienvia.json'); showToast('Backup geral baixado.'); }
+    catch (err) { showToast(err.message, true); }
   });
 
-  document.getElementById('btnExportCrmCsv')?.addEventListener('click', (e) => {
-    const qs = buildDownloadQuery();
-    if (qs) {
-      e.preventDefault();
-      window.location.href = `/api/crm/export.csv${qs}`;
-    }
+  document.getElementById('btnExportCrmCsv')?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    try { await downloadAuthenticated('/api/crm/export.csv', 'contatos-ienvia.csv'); showToast('CSV de contatos baixado.'); }
+    catch (err) { showToast(err.message, true); }
   });
 
   document.getElementById('restoreFullBackupInput')?.addEventListener('change', async (e) => {

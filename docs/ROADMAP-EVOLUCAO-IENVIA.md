@@ -182,3 +182,17 @@ Para cada etapa:
 - [ ] Executar suíte automatizada e revisar logs de Preview.
 
 **Nota de integridade dos dados:** a regra atual é de visibilidade na Inbox/CRM. O histórico e os contatos continuam armazenados; a desconexão não executa exclusão irreversível no banco.
+
+
+## 8. Controles rápidos do dashboard — homologação
+
+- [x] Os cinco controles rápidos agora validam a confirmação da API, ficam temporariamente desabilitados durante o salvamento e restauram o valor anterior em caso de falha.
+- [x] A alternância global da IA atualiza o estado local e sincroniza os interruptores equivalentes das abas antigas.
+- [x] As preferências de digitação, divisão de mensagens, pausa por resposta humana e horário são preservadas sem sobrescrever configurações vizinhas.
+- [x] O webhook da Evolution agora aplica o mesmo comportamento operacional: presença de digitação (best-effort), divisão de respostas longas, janela de atendimento e pausa após resposta manual do dono.
+- [x] Eventos de envio originados pela própria API e respostas recentes da IA não são tratados como resposta manual do dono para evitar pausar o atendimento indevidamente.
+- [x] Adicionados testes unitários para divisão de mensagens e cálculo da janela de atendimento no fuso configurado.
+- [ ] Executar a suíte `npm test` na cópia isolada e validar manualmente os cinco interruptores nos motores local e Evolution.
+- [ ] Validar envio real de presença e mensagens pela instância Evolution conectada; o indicador de digitação é auxiliar e sua falha não bloqueia o envio do texto.
+
+**Limite de validação:** as alterações foram verificadas por leitura do código e análise sintática; ainda não foram executadas contra uma sessão real de WhatsApp nem homologadas em Preview.

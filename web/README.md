@@ -1,6 +1,6 @@
 # Ienvia Web — frontend em modernização
 
-Frontend Next.js isolado em relação ao painel legado.
+Frontend Next.js isolado em relação ao painel legado, dentro do repositório principal `zap-ia-studio`.
 
 ## Desenvolvimento
 
@@ -9,7 +9,7 @@ Requisitos: Node.js 20 ou superior.
 ```bash
 cd web
 cp .env.example .env.local
-# Edite IENVIA_BACKEND_URL com a origem real do backend Express
+# Edite IENVIA_BACKEND_URL com a origem HTTPS real do backend Express
 npm install
 npm run dev
 ```
@@ -18,23 +18,22 @@ Abra `http://localhost:3000`.
 
 ## Variável obrigatória
 
-- `IENVIA_BACKEND_URL`: origem HTTPS do backend Express. É uma variável exclusivamente server-side; não use prefixo `NEXT_PUBLIC_`. Não inclua caminho `/api`, credenciais, query ou fragmento.
+- `IENVIA_BACKEND_URL`: origem do backend Express. É exclusivamente server-side; não use prefixo `NEXT_PUBLIC_`. Não inclua caminho `/api`, credenciais, query ou fragmento. Em produção, somente HTTPS é aceito.
 
-O frontend usa a rota same-origin `/api/backend/*` como BFF. Ela encaminha apenas métodos, cabeçalhos e caminhos definidos, exige Origin same-origin e o marcador de requisição do cliente. O backend continua responsável por autenticação Bearer, tenant, permissões e regras de negócio.
+O frontend usa a rota same-origin `/api/backend/*` como BFF. Ela restringe origem, caminhos, métodos, cabeçalhos, tamanho do payload e timeout. O backend continua responsável por autenticação, tenant, permissões e regras de negócio.
 
-## Estado da migração
+## Módulos
+
+As rotas incluem login, visão geral, Inbox, contatos, campanhas, inteligência artificial, treinamento, simulador, conexões, instâncias, canais, catálogo, áudios, histórico, relatórios, contas, segurança e configurações.
+
+As operações disponíveis variam conforme as capacidades e permissões retornadas pelo backend. Ações operacionais de risco — como disparo/agendamento de campanhas, pareamento de dispositivos, ativação de políticas e mutações administrativas — permanecem bloqueadas até homologação específica.
 
 Consulte o [status detalhado e os critérios para 100%](../docs/modernizacao-frontend/STATUS-MIGRACAO.md).
 
-- Shell responsivo e navegação: fundação inicial.
-- Login: ligado a `POST /api/auth/login`.
-- Visão Geral: ligada a `GET /api/dashboard/parity`; indicadores indisponíveis aparecem como indisponíveis, não como zero.
-- Conexões: consulta somente leitura ligada a `GET /api/connections/summary` e `GET /api/connections/configuration`.
-- Demais módulos: rotas de transição informativas, ainda sem operações conectadas.
-- Painel legado: permanece no diretório `public/` e segue como interface de produção.
-
 ## Publicação de homologação
 
-Configure um projeto Vercel separado apontando Root Directory para `web`. Defina `IENVIA_BACKEND_URL` nas variáveis server-side de Preview e Production. Não altere o projeto Vercel atual nem o `vercel.json` da raiz durante a homologação.
+Configure um projeto Vercel separado apontando Root Directory para `web`. Defina `IENVIA_BACKEND_URL` como variável server-side em Preview e Production. Não altere o projeto Vercel atual nem o `vercel.json` da raiz durante a homologação.
 
-Antes de expor a homologação, validar login, refresh, logout, respostas 401/403/429/5xx, uploads, isolamento de tenant e headers de segurança. A sessão inicial mantém o formato da chave `zapia_cloud_auth` usado pelo painel legado. A migração para cookie HttpOnly fica fora desta primeira fundação e exige projeto e testes próprios.
+Antes de expor a homologação, valide login, refresh, logout, respostas 401/403/409/429/5xx, uploads, isolamento de tenant e headers de segurança. A sessão inicial mantém o formato da chave `zapia_cloud_auth` usado pelo painel legado. A migração para cookie HttpOnly exige uma etapa e testes próprios.
+
+O painel legado em `public/` permanece como interface de produção até a aprovação e publicação gradual da nova interface.

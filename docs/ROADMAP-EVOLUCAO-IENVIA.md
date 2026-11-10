@@ -196,3 +196,29 @@ Para cada etapa:
 - [ ] Validar envio real de presença e mensagens pela instância Evolution conectada; o indicador de digitação é auxiliar e sua falha não bloqueia o envio do texto.
 
 **Limite de validação:** as alterações foram verificadas por leitura do código e análise sintática; ainda não foram executadas contra uma sessão real de WhatsApp nem homologadas em Preview.
+
+
+## 9. Auditoria e correções da aba Treinamento — homologação
+
+### Correções implementadas na branch
+
+- [x] Editor de Skills de Humanização agora apresenta os campos próprios: objetivo, o que evitar, exemplo inadequado e exemplo adequado.
+- [x] O formulário envia esses campos separadamente; o campo de orientação operacional deixa de ser confundido com os campos de humanização.
+- [x] O backend preserva os campos antigos de uma Skill de Humanização quando uma atualização parcial não os envia. Campos explicitamente enviados vazios continuam podendo ser limpos pelo usuário.
+- [x] Busca do Estúdio Visual considera todos os campos textuais da Skill, incluindo objetivo, restrições, exemplos e corpo Markdown.
+- [x] Geração de IDs para mensagens e Skills procura o próximo código livre, evitando colisões causadas por lacunas na numeração.
+- [x] Remoção de FAQ sincroniza os campos sem compactar a lista antes de aplicar o índice selecionado; linhas vazias são removidas ao excluir e não são persistidas no salvamento do perfil.
+- [x] Estúdio Visual diferencia carregamento de falha e oferece tentativa manual de recarga.
+- [x] Upload da base de conhecimento deixou de cortar silenciosamente documentos acima de 30 mil caracteres: a API rejeita o documento com erro explícito e orienta dividir o conteúdo.
+- [x] Texto e rótulo de upload alinhados aos formatos aceitos pela interface (.txt, .csv, .md e .json).
+
+### Pendências que exigem integração e homologação
+
+- [ ] Prévia do prompt deve receber um snapshot do formulário ainda não salvo; a rota legada atual monta o prompt apenas com os dados persistidos.
+- [ ] Importação de pacote ainda usa a rota legada que aplica o treinamento diretamente. A prévia do módulo training-v2 existe, mas a interface não foi migrada e a origem remota precisa ser homologada antes de conectá-la. Não ativar a rota v2 como substituição sem validar persistência e compatibilidade.
+- [ ] Rever a fronteira de confiança dos documentos de conhecimento no prompt para tratar o conteúdo importado como dado não confiável, sem permitir que instruções nele contidas substituam as regras do sistema.
+- [ ] Validar visualmente os campos do editor e os estados de erro/retry em desktop e mobile.
+- [ ] Executar a suíte isolada completa, adicionar regressões automatizadas para edição parcial de Skills, IDs com lacunas, FAQ com linha vazia e limite de upload.
+- [ ] Testar persistência real em ambiente autenticado e confirmar que os pacotes existentes continuam intactos.
+
+**Limite de validação desta etapa:** as alterações foram gravadas na branch de homologação por commits GitHub. Ainda não houve execução local da suíte, validação no navegador, teste autenticado de persistência, Preview Vercel ou deploy. A produção permanece intocada.

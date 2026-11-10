@@ -17,6 +17,7 @@ import {createCampaignRunner} from './campaigns/runner.js';
 import {createAccountPlan} from './shared/contracts/accounts-domain.js';
 import {previewTrainingRuntime} from './training/runtimePreview.js';
 import {previewTrainingImport} from './training/importPreview.js';
+import {createTrainingDocument, TRAINING_FIELDS} from './shared/contracts/training-domain.js';
 import { composeConnectionState } from './dashboard/connections.js';
 import { createDashboardRouter } from './dashboard/router.js';
 import { createConnectionsRouter } from './connections/router.js';
@@ -2517,6 +2518,62 @@ function applyImportedTrainingResult({ packSummary, suggestedProfile }) {
   );
   return storage.data.business;
 }
+
+app.post('/api/training-packs/import-preview', memUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file?.buffer) return res.status(400).json({ ok: false, error: 'Selecione um arquivo de treinamento.' });
+    if (req.file.size > 4 * 1024 * 1024) return res.status(413).json({ ok: false, error: 'O arquivo de prévia pode ter no máximo 4 MB.' });
+    const ctx = await workspaceReadDependencies.getLocalContext(req);
+    if (!ctx?.tenant?.id || !ctx?.data?.business) return res.status(401).json({ ok: false, error: 'Não foi possível carregar o treinamento desta conta.' });
+    const business = ctx.data.business;
+    const activeId = business.trainingPackId;
+    let activePack = activeId ? ctx.data.customPacks?.[activeId] || null : null;
+    if (activeId && !activePack && ctx.viewer?.role === 'master' && ctx.viewer?.id === ctx.tenant.id) activePack = getTrainingPack(activeId);
+    const current = createTrainingDocument(business, activePack);
+    const imported = await previewTrainingImport({
+      bytesBase64: req.file.buffer.toString('base64'),
+      filename: req.file.originalname,
+      document: current,
+      ctx
+    });
+    const labels = {
+      name: 'Nome do negócio/profissional', niche: 'Segmento', assistantName: 'Nome do atendente',
+      soloIdentity: 'Atendimento individual', tone: 'Tom de voz', companySummary: 'Descrição do negócio',
+      deliveryAndPayment: 'Entrega e pagamento', goldenRules: 'Regras principais',
+      extraInstructions: 'Instruções complementares', lockUntilManualResume: 'Pausa até retomada manual',
+      promptShieldEnabled: 'Proteção do prompt', faqs: 'Perguntas frequentes', knowledgeDocs: 'Documentos de conhecimento'
+    };
+    const changedFields = TRAINING_FIELDS.filter((key) =>
+      JSON.stringify(current.training[key]) !== JSON.stringify(imported.training[key])
+    ).map((key) => labels[key] || key);
+    const pack = imported.pack;
+    res.setHeader('Cache-Control', 'no-store, private');
+    return res.json({
+      ok: true,
+      preview: {
+        filename: req.file.originalname,
+        businessName: imported.training.name,
+        packName: pack?.name || imported.training.name,
+        changedFields,
+        counts: {
+          faqs: imported.training.faqs.length,
+          knowledgeDocs: imported.training.knowledgeDocs.length,
+          messages: pack?.canonicalCore?.approvedMessages?.length || 0,
+          operationalSkills: pack?.operationalSkills?.length || 0,
+          humanizationSkills: pack?.humanizationSkills?.length || 0,
+          attachments: imported.attachments.length
+        },
+        preserved: {
+          catalogItems: Array.isArray(business.catalog) ? business.catalog.length : 0,
+          pixConfigured: Boolean(business.pix?.key),
+          voiceItems: Array.isArray(business.voiceLibrary) ? business.voiceLibrary.length : 0
+        }
+      }
+    });
+  } catch (err) {
+    return res.status(err.status || 400).json({ ok: false, error: `Falha ao gerar prévia: ${err.message}` });
+  }
+});
 
 app.post('/api/training-packs/import-zip', memUpload.single('file'), (req, res) => {
   try {

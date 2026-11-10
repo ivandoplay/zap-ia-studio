@@ -83,7 +83,7 @@
   </div>
 
   <!-- Navegação Lateral Desktop (SaaS Pro 5 Hubs) -->
-  <aside class="sidebar" aria-label="Menu principal">
+  <aside id="mainSidebar" class="sidebar" aria-label="Menu principal">
     <div class="brand">
       <div class="brand-left">
         <div class="brand-mark" aria-hidden="true">
@@ -221,6 +221,7 @@
       </div>
     </div>
   </aside>
+  <div id="sidebarDrawerBackdrop" class="sidebar-drawer-backdrop" aria-hidden="true"></div>
 
   <!-- Área Principal -->
   <div class="main-wrapper">
@@ -241,6 +242,9 @@
     <!-- BARRA SUPERIOR ÚNICA (56PX DESKTOP / 52PX MOBILE — ZERO QUEBRA DE LINHA) -->
     <header class="topbar">
       <div class="topbar-left">
+        <button type="button" id="btnSidebarToggle" class="sidebar-toggle-btn" aria-label="Abrir menu de navegação" aria-controls="mainSidebar" aria-expanded="false" title="Abrir menu">
+          <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+        </button>
         <div class="mob-topbar-brand">
           <div class="brand-mark u-marca-28"  aria-hidden="true">
             <img src="/ienvia-icon-v2.png" alt="" class="u-simbolo-img" />
@@ -3473,5 +3477,38 @@
   <script src="/inbox-realtime.js" defer></script>
   <script src="/app.js" defer></script>
   <script src="/campanhas.js" defer></script>
+
+<script>
+(() => {
+  const sidebar = document.getElementById('mainSidebar');
+  const toggle = document.getElementById('btnSidebarToggle');
+  const backdrop = document.getElementById('sidebarDrawerBackdrop');
+  if (!sidebar || !toggle || !backdrop) return;
+  const mobile = () => window.matchMedia('(max-width: 820px)').matches;
+  const close = () => {
+    sidebar.classList.remove('drawer-open');
+    backdrop.classList.remove('visible');
+    document.body.classList.remove('sidebar-drawer-open');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-label', 'Abrir menu de navegação');
+  };
+  const open = () => {
+    if (!mobile()) return;
+    sidebar.classList.add('drawer-open');
+    backdrop.classList.add('visible');
+    document.body.classList.add('sidebar-drawer-open');
+    toggle.setAttribute('aria-expanded', 'true');
+    toggle.setAttribute('aria-label', 'Fechar menu de navegação');
+  };
+  toggle.addEventListener('click', () => sidebar.classList.contains('drawer-open') ? close() : open());
+  backdrop.addEventListener('click', close);
+  sidebar.querySelectorAll('.nav-btn[data-tab]').forEach((button) => button.addEventListener('click', close));
+  sidebar.querySelectorAll('.nav-section-toggle').forEach((summary) => summary.addEventListener('click', () => {
+    if (mobile()) requestAnimationFrame(() => sidebar.scrollTo({ top: summary.offsetTop - 100, behavior: 'smooth' }));
+  }));
+  window.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });
+  window.addEventListener('resize', () => { if (!mobile()) close(); });
+})();
+</script>
 </body>
 </html>

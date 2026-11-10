@@ -149,6 +149,14 @@ Para cada etapa:
 7. Atualizar este documento com entregue, pendente, risco e evidência.
 8. Não fazer merge ou promover para produção sem autorização explícita.
 
+### Correção operacional — conversas por instância
+- A Inbox/CRM passa a ocultar conversas vinculadas a uma instância cujo estado efetivo não seja `connected`.
+- O filtro é aplicado por slot: a desconexão de um chip não afeta conversas de outros chips.
+- A conversa selecionada é fechada quando sua instância fica desconectada.
+- Desconexões manuais pelo motor local e pela Evolution redesenham a Inbox imediatamente; desconexões detectadas pelo polling também são refletidas na renderização.
+- O histórico permanece armazenado. Esta mudança altera a visibilidade na interface, não executa exclusão de contatos ou mensagens.
+- **Validação pendente:** executar suíte automatizada, conferir Preview e testar desconexão/reconexão real nos dois provedores.
+
 ## 6. Status inicial
 
 - [x] Inventário estático dos 14 destinos de navegação.

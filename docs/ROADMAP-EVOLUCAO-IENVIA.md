@@ -231,3 +231,21 @@ Para cada etapa:
 - [ ] Confirmar em sessão autenticada que os pacotes existentes continuam intactos.
 
 **Limite de validação desta etapa:** as alterações foram gravadas na branch de homologação por commits GitHub. Ainda não houve execução local da suíte, validação no navegador, teste autenticado de persistência, Preview Vercel ou deploy. A produção permanece intocada.
+
+
+### Homologação técnica — correções do relatório de 10/11/2026
+
+- [x] Corrigido o contexto de tenant da rota de prévia de treinamento: rotas legadas `/training-packs` passam pelo middleware de workspace; o contexto cloud inclui tenant autenticado e o modo local usa identificador estável do workspace.
+- [x] Corrigida a detecção de rascunhos training-v2: a rejeição HTTP 409 ocorre somente quando o schema de rascunho está no conteúdo bruto recebido, não no documento canônico produzido pela prévia.
+- [x] A confirmação de importação ZIP/texto exige fingerprint SHA-256 válido e rejeita ausência ou divergência antes de gravar.
+- [x] Estúdio Visual deixa de carregar uma classe CSS que o mantinha permanentemente oculto.
+- [x] As 14 páginas estáticas do painel foram regeneradas a partir de `public/painel.html`.
+- [x] Exportações de ZIP, backup JSON e CSV passaram a enviar autenticação por headers e baixar via Blob; JWT e PIN deixaram de ser aceitos em query string.
+- [x] Upload da base de conhecimento valida extensão permitida, bytes binários e UTF-8 estrito; PDF/binários não processados são rejeitados com HTTP 415.
+- [x] Prévia do prompt informa explicitamente quando contém alterações ainda não salvas.
+- [x] Navegação inferior mobile restaurada; breakpoints do shell alinhados a 900px e espaço inferior reservado para a barra.
+- [x] Testes ajustados para contabilizar presença `composing` separadamente de envio de texto, corrigir delimitador de parágrafos e simular slot conectado no teste de histórico.
+- [x] Adicionado teste de regressão para rejeição explícita de rascunho training-v2.
+- [x] Adicionado workflow de homologação em Node 24 para testes de regressão, páginas estáticas e SQL.
+
+**Validação pendente:** os commits foram gravados na branch de homologação. A execução da suíte Node 24 e dos testes de navegador ainda precisa ser confirmada pelos checks do GitHub Actions. Os checks Vercel continuam sujeitos ao limite externo de build. Não houve merge nem deploy de produção.

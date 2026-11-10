@@ -3021,36 +3021,110 @@ window.downloadSampleBlueprintJson = function downloadSampleBlueprintJson() {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 };
 
+let pendingTrainingImport = null;
+
+function renderTrainingImportPreview(preview) {
+  const host = document.getElementById('trainingImportPreviewBody');
+  if (!host) return;
+  const counts = preview.counts || {};
+  const fields = (preview.changedFields || []).length
+    ? preview.changedFields.map((field) => `<li>${escapeHtml(field)}</li>`).join('')
+    : '<li>Nenhuma alteração de perfil detectada; o pacote de mensagens e Skills será importado.</li>';
+  host.innerHTML = `
+    <div class="u-aviso-suave u-aviso-suave--info">
+      <strong>Esta etapa ainda não altera seu treinamento.</strong>
+      Confira o conteúdo abaixo. Só haverá aplicação depois de clicar em confirmar.
+    </div>
+    <div class="u-painel-caixa u-mt-12">
+      <div><span class="u-text-secondary u-text-sm">Arquivo</span><br><strong>${escapeHtml(preview.filename || 'Treinamento')}</strong></div>
+      <div class="u-mt-8"><span class="u-text-secondary u-text-sm">Negócio</span><br><strong>${escapeHtml(preview.businessName || 'Sem nome')}</strong></div>
+      <div class="u-mt-8"><span class="u-text-secondary u-text-sm">Pacote</span><br><strong>${escapeHtml(preview.packName || 'Pacote importado')}</strong></div>
+      <div class="grid-equal u-gap-8 u-mt-12">
+        <div><strong>${Number(counts.messages)||0}</strong><div class="u-text-secondary u-text-sm">Mensagens</div></div>
+        <div><strong>${Number(counts.operationalSkills)||0}</strong><div class="u-text-secondary u-text-sm">Skills operacionais</div></div>
+        <div><strong>${Number(counts.humanizationSkills)||0}</strong><div class="u-text-secondary u-text-sm">Skills humanização</div></div>
+        <div><strong>${Number(counts.faqs)||0}</strong><div class="u-text-secondary u-text-sm">FAQs</div></div>
+      </div>
+      <div class="u-mt-12"><strong>Campos de perfil que serão alterados</strong><ul class="u-lista-rolagem">${fields}</ul></div>
+    </div>
+    <div class="u-aviso-suave u-aviso-suave--ok u-mt-10">
+      O importador atual mantém catálogo, PIX e biblioteca de voz existentes. Documentos de conhecimento só serão substituídos se o pacote trouxer novos documentos.
+    </div>
+    <p class="panel-desc u-mt-10">Ao confirmar, o pacote será aplicado ao Cérebro Único e passará a ser o treinamento ativo. Esta ação não possui desfazer automático.</p>
+  `;
+  document.getElementById('trainingImportPreviewModal')?.classList.add('open');
+}
+
+async function requestTrainingImportPreview(file, source, rawText = '') {
+  if (!file) throw new Error('Arquivo de treinamento indisponível.');
+  if (file.size > 4 * 1024 * 1024) throw new Error('O arquivo deve ter no máximo 4 MB para gerar a prévia.');
+  const form = new FormData();
+  form.append('file', file);
+  const response = await api('/api/training-packs/import-preview', { method: 'POST', body: form });
+  pendingTrainingImport = { file, source, rawText, filename: file.name, preview: response.preview };
+  renderTrainingImportPreview(response.preview);
+}
+
+window.cancelTrainingImportPreview = function cancelTrainingImportPreview() {
+  pendingTrainingImport = null;
+  document.getElementById('trainingImportPreviewModal')?.classList.remove('open');
+  const input = document.getElementById('zipPackInput');
+  if (input) input.value = '';
+};
+
+window.confirmTrainingImport = async function confirmTrainingImport() {
+  const pending = pendingTrainingImport;
+  const button = document.getElementById('btnConfirmTrainingImport');
+  if (!pending) return showToast('A prévia expirou. Gere uma nova prévia.', true);
+  if (button) { button.disabled = true; button.textContent = 'Aplicando treinamento...'; }
+  try {
+    let result;
+    if (pending.source === 'text') {
+      result = await api('/api/training-packs/import-text', {
+        method: 'POST',
+        body: JSON.stringify({ text: pending.rawText, filename: pending.filename })
+      });
+    } else {
+      const form = new FormData();
+      form.append('file', pending.file);
+      result = await api('/api/training-packs/import-zip', { method: 'POST', body: form });
+    }
+    state.business = result.business;
+    state.trainingPacks = result.trainingPacks || state.trainingPacks;
+    await ensureFullPackLoaded(result.packSummary.id, true);
+    const pasted = pending.source === 'text';
+    pendingTrainingImport = null;
+    document.getElementById('trainingImportPreviewModal')?.classList.remove('open');
+    if (pasted) {
+      const area = document.getElementById('aiBlueprintPasteArea');
+      if (area) area.value = '';
+      closeModal('aiTrainingBuilderModal');
+    }
+    const input = document.getElementById('zipPackInput');
+    if (input) input.value = '';
+    renderAll();
+    showToast(`Treinamento "${result.packSummary.name}" aplicado com ${result.packSummary.stats.operationalSkillsCount + result.packSummary.stats.humanizationSkillsCount} Skills e ${result.packSummary.stats.approvedMessagesCount || 0} mensagens.`);
+  } catch (err) {
+    showToast(err.message, true);
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Confirmar e aplicar treinamento'; }
+  }
+};
+
 window.applyPastedAiTraining = async function applyPastedAiTraining() {
   const area = document.getElementById('aiBlueprintPasteArea');
   const btn = document.getElementById('btnApplyPastedBlueprint');
   const raw = area?.value?.trim() || '';
-  if (!raw) {
-    return showToast('Cole primeiro o código JSON ou Markdown gerado pelo ChatGPT/IA!', true);
-  }
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = '⏳ Compilando e aplicando...';
-  }
+  if (!raw) return showToast('Cole primeiro o código JSON ou Markdown gerado pela IA.', true);
+  if (btn) { btn.disabled = true; btn.textContent = 'Gerando prévia...'; }
   try {
-    const res = await api('/api/training-packs/import-text', {
-      method: 'POST',
-      body: JSON.stringify({ text: raw, filename: 'blueprint-chatgpt.json' })
-    });
-    state.business = res.business;
-    state.trainingPacks = res.trainingPacks || state.trainingPacks;
-    await ensureFullPackLoaded(res.packSummary.id, true);
-    if (area) area.value = '';
-    closeModal('aiTrainingBuilderModal');
-    renderAll();
-    showToast(`🎉 Treinamento "${res.packSummary.name}" aplicado (${res.packSummary.stats.operationalSkillsCount + res.packSummary.stats.humanizationSkillsCount} skills + ${res.packSummary.stats.approvedMessagesCount || 0} mensagens)!`);
+    const filename = raw.startsWith('{') ? 'blueprint-chatgpt.json' : 'blueprint-chatgpt.md';
+    const file = new File([raw], filename, { type: filename.endsWith('.json') ? 'application/json' : 'text/markdown' });
+    await requestTrainingImportPreview(file, 'text', raw);
   } catch (err) {
     showToast(err.message, true);
   } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = '⚡ 2. Aplicar Treinamento Completo';
-    }
+    if (btn) { btn.disabled = false; btn.textContent = '🔎 Gerar prévia antes de aplicar'; }
   }
 };
 
@@ -7943,20 +8017,9 @@ function bindEvents() {
     zipPackInput.addEventListener('change', async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      const fd = new FormData();
-      fd.append('file', file);
       try {
-        showToast(`Importando "${file.name}" para o Cérebro Único...`);
-        const res = await api('/api/training-packs/import-zip', {
-          method: 'POST',
-          body: fd
-        });
-        state.business = res.business;
-        state.trainingPacks = res.trainingPacks || state.trainingPacks;
-        await ensureFullPackLoaded(res.packSummary.id, true);
-        zipPackInput.value = '';
-        renderAll();
-        showToast(`✅ Treinamento "${res.packSummary.name}" ativado com sucesso!`);
+        showToast(`Analisando "${file.name}" sem alterar o treinamento atual...`);
+        await requestTrainingImportPreview(file, 'file');
       } catch (err) {
         zipPackInput.value = '';
         showToast(err.message, true);

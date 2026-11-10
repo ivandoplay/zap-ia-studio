@@ -282,12 +282,12 @@ export default function SecurityPage() {
           {data.capabilities.canActivate && (
             <section className="surface panel">
               <h2>Ativação das políticas</h2>
-              <p>Ativar aplica o rascunho aprovado ao atendimento. A mudança exige confirmação explícita.</p>
+              <p>Ativar aplica o rascunho aprovado ao atendimento. A mudança exige confirmação explícita e uma revisão salva.</p>
               <label className="crm-toggles">
                 <input type="checkbox" checked={confirmActivation} onChange={event => setConfirmActivation(event.target.checked)} />
                 Confirmo que revisei a política e quero {data.active ? 'desativá-la' : 'ativá-la'}.
               </label>
-              <button className="primary" style={{ maxWidth: 240 }} disabled={busy || !confirmActivation || data.sourceChanged} onClick={() => void toggleActivation()}>
+              <button className="primary" style={{ maxWidth: 240 }} disabled={busy || !confirmActivation || data.sourceChanged || data.revision < 1} onClick={() => void toggleActivation()}>
                 {data.active ? 'Desativar políticas' : 'Ativar políticas'}
               </button>
             </section>

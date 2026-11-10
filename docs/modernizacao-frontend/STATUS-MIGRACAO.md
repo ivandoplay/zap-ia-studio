@@ -14,18 +14,18 @@ Atualizado: 2026-11-10
 - `/visao-geral`: indicadores do dashboard.
 - `/inbox`: lista, histórico, envio de texto e mídia, notas internas, leitura, fixação, arquivamento, IA e ficha.
 - `/contatos`: busca, filtros, ficha, etiquetas, tarefas e follow-up.
-- `/campanhas`: listar e criar rascunhos, consultar destinatários e progresso; envio/agendamento desabilitados.
+- `/campanhas`: listar/criar rascunhos, editar plano e opções com revisão, importar prévia CSV/TXT/XLSX, consultar destinatários e progresso. Envio/agendamento continuam bloqueados.
 - `/inteligencia-artificial`: configurações não secretas, rascunho e validação.
 - `/treinamento`: importação prévia, edição de documento, rascunho e prévia.
 - `/simulador`: simulação local, histórico e reset.
 - `/conexoes` e `/instancias`: diagnóstico somente leitura.
-- `/canais`: consulta, cadastro e edição de metadados/políticas; pareamento e QR Code não liberados.
+- `/canais`: consulta, cadastro e edição de metadados/políticas; pareamento com confirmação explícita somente quando `capabilities.canPair` for liberado pelo backend.
 - `/catalogo`: catálogo, recursos, rascunho e prévia PIX.
 - `/audios`: preparação OGG/Opus, transcrição quando habilitada e inclusão no rascunho.
 - `/historico`: conversas arquivadas.
 - `/relatorios`: resumo e série temporal.
 - `/contas`: consulta administrativa e auditoria; mutações administrativas não liberadas.
-- `/seguranca`: políticas, PIN mascarado, fila e mensagens aprovadas em modo leitura.
+- `/seguranca`: edição e validação de rascunho, PIN condicionado a permissão e ativação condicionada a capacidade do backend; fila permanece somente leitura.
 - `/configuracoes`: preferências de aparência.
 
 ## Infraestrutura
@@ -38,22 +38,23 @@ Atualizado: 2026-11-10
 - Raiz do Turbopack fixada em `process.cwd()`, correspondente a `web/` no CI e no projeto Vercel com Root Directory `web`.
 
 ## Validação observada
-- Run `42736604491`, no commit `a0fb6bac8f3d34cb97aacccb9e5a16319e3f5295`: typecheck e build aprovados.
-- Run `42737003781`, após o ajuste do Turbopack: typecheck e build aprovados. O log não apresentou o aviso anterior de múltiplos lockfiles.
-- O build gerou as 21 rotas previstas.
-- Os dois checks Vercel reportaram falha com destino `upgradeToPro=build-rate-limit`. A publicação/homologação pela Vercel está bloqueada pelo limite de builds da conta.
+- Run `42736604491`: typecheck e build aprovados.
+- Run `42737003781`: typecheck e build aprovados após fixar a raiz Turbopack; o aviso de múltiplos lockfiles deixou de aparecer.
+- Run `42737399777`: typecheck e build aprovados após edição de rascunhos e prévia de importação de destinatários.
+- Run `42737684763`: typecheck e build aprovados após as melhorias em Segurança e Canais; o build gerou as 21 rotas e não apresentou o aviso anterior de múltiplos lockfiles.
+- Os checks Vercel reportaram falha com destino `upgradeToPro=build-rate-limit`. A publicação/homologação pela Vercel está bloqueada pelo limite de builds da conta.
 - Build verde comprova compilação, não integração ponta a ponta com uma conta real.
 
 ## Pendências para conclusão real
 1. Criar deployment Vercel separado com Root Directory `web`, configurar `IENVIA_BACKEND_URL` HTTPS e validar domínio/headers. O limite atual de builds precisa ser resolvido na conta Vercel.
 2. Homologar BFF com backend real: login, refresh, logout, 401/403/409/429/5xx, uploads e isolamento entre contas.
 3. Testar Inbox em conta de teste com Evolution, mídia, notas, perfil e Realtime/RLS.
-4. Completar edição avançada de campanhas (blocos, mídia, importação, revisão e conflitos); manter envio/agendamento bloqueados até homologação.
-5. Completar CRUD operacional de canais e pareamento/QR Code após homologar comandos de dispositivo.
-6. Validar biblioteca de áudio e upload no ambiente hospedado, considerando limites de payload da plataforma.
+4. Completar campanhas com biblioteca de mídia/pastas, blocos de áudio/imagem, revisão de conflitos e testes de importação; manter envio/agendamento bloqueados até homologação.
+5. Completar executor de canais, pareamento/QR Code e atualização de QR quando o backend liberar essas operações; testar em dispositivo real.
+6. Validar biblioteca de áudio e uploads no ambiente hospedado, considerando limites de payload da plataforma.
 7. Validar importação/ativação de Treinamento e ativação de Recursos com revisão e confirmação.
 8. Implementar e testar ações administrativas de contas com autorização, confirmação e auditoria.
-9. Homologar alterações de políticas de segurança e PIN.
+9. Homologar alterações de políticas de segurança/PIN e operações da fila de abordagem.
 10. Fazer auditoria visual/mobile, acessibilidade, desempenho, smoke tests e regressão de todas as ações do painel legado.
 11. Revisar a PR e planejar publicação gradual e rollback.
 

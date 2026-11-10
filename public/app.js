@@ -3048,7 +3048,7 @@ function renderTrainingImportPreview(preview) {
       <div class="u-mt-12"><strong>Campos de perfil que serão alterados</strong><ul class="u-lista-rolagem">${fields}</ul></div>
     </div>
     <div class="u-aviso-suave u-aviso-suave--ok u-mt-10">
-      O importador atual mantém catálogo, PIX e biblioteca de voz existentes. Documentos de conhecimento só serão substituídos se o pacote trouxer novos documentos.
+      A biblioteca de voz atual é preservada. Catálogo e PIX só são atualizados se o arquivo trouxer novos dados; caso contrário, os valores atuais continuam. Documentos de conhecimento só são substituídos se o pacote trouxer novos documentos.
     </div>
     <p class="panel-desc u-mt-10">Ao confirmar, o pacote será aplicado ao Cérebro Único e passará a ser o treinamento ativo. Esta ação não possui desfazer automático.</p>
   `;

@@ -110,3 +110,41 @@ test.after(async () => {
   clearInterval(whatsappManager.followUpTimer);
   if (store.saveTimer) clearTimeout(store.saveTimer);
 });
+
+test('HTTP import confirmation applies a fresh preview and knowledge upload rejects binary formats', async () => {
+  const previewResponse = await preview(blueprint);
+  const previewBody = await previewResponse.json();
+  assert.equal(previewResponse.status, 200);
+  const confirmation = await fetch(`${base}/api/training-packs/import-text`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      filename: 'treinamento.json',
+      content: JSON.stringify(blueprint),
+      expectedFingerprint: previewBody.preview.currentFingerprint
+    })
+  });
+  const confirmationBody = await confirmation.json();
+  assert.equal(confirmation.status, 200, JSON.stringify(confirmationBody));
+  assert.equal(store.getBusiness().name, 'Empresa de Homologação');
+
+  const docsBefore = structuredClone(store.getBusiness().knowledgeDocs || []);
+  const pdf = new FormData();
+  pdf.append('file', new Blob([Buffer.from('%PDF-1.4\\n\\x00\\xff', 'binary')], { type: 'application/pdf' }), 'manual.pdf');
+  const pdfResponse = await fetch(`${base}/api/business/knowledge-upload`, { method: 'POST', body: pdf });
+  assert.equal(pdfResponse.status, 415);
+  assert.deepEqual(store.getBusiness().knowledgeDocs || [], docsBefore);
+
+  const binary = new FormData();
+  binary.append('file', new Blob([new Uint8Array([0x41, 0x00, 0xff])], { type: 'text/plain' }), 'manual.txt');
+  const binaryResponse = await fetch(`${base}/api/business/knowledge-upload`, { method: 'POST', body: binary });
+  assert.equal(binaryResponse.status, 415);
+  assert.deepEqual(store.getBusiness().knowledgeDocs || [], docsBefore);
+
+  const text = new FormData();
+  text.append('file', new Blob(['Documento sintético íntegro.'], { type: 'text/plain' }), 'manual.txt');
+  const textResponse = await fetch(`${base}/api/business/knowledge-upload`, { method: 'POST', body: text });
+  const textBody = await textResponse.json();
+  assert.equal(textResponse.status, 200, JSON.stringify(textBody));
+  assert.equal(textBody.doc.content, 'Documento sintético íntegro.');
+});

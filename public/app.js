@@ -7919,7 +7919,7 @@ function bindEvents() {
       extraInstructions: document.getElementById('profExtra').value.trim(),
       lockUntilManualResume: Boolean(document.getElementById('profLockForeverCheck')?.checked),
       promptShieldEnabled: Boolean(document.getElementById('profPromptShieldCheck')?.checked),
-      faqs: p.faqs
+      faqs: (p.faqs || []).filter((faq) => faq.question || faq.answer)
     };
     try {
       const res = await api('/api/business', {
@@ -7978,7 +7978,7 @@ function bindEvents() {
     const p = getActiveProfile();
     const fileInput = document.getElementById('knowledgeFileInput');
     if (!p || !fileInput.files.length) {
-      return showToast('Selecione um arquivo .txt, .csv ou .md primeiro.', true);
+      return showToast('Selecione um arquivo .txt, .csv, .md ou .json primeiro.', true);
     }
     const fd = new FormData();
     fd.append('file', fileInput.files[0]);

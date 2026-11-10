@@ -3530,7 +3530,7 @@ window.openEditPackMsgModal = function openEditPackMsgModal(msgId = null) {
   const nextNum = nextTrainingStudioId(full?.approvedMessages, 'M');
 
   document.getElementById('editPackMsgTitle').textContent = existing ? `Editar ${existing.id}` : 'Nova Mensagem Aprovada';
-  document.getElementById('packMsgId').value = existing ? existing.id : `M${nextNum}`;
+  document.getElementById('packMsgId').value = existing ? existing.id : nextNum;
   document.getElementById('packMsgTitle').value = existing ? existing.title : '';
   document.getElementById('packMsgText').value = existing ? existing.text : '';
   document.getElementById('editPackMessageModal').classList.add('open');
@@ -3552,6 +3552,18 @@ window.removePackMsg = async function removePackMsg(msgId) {
   }
 };
 
+function syncPackSkillEditorFields(skillType) {
+  const humanization = skillType === 'humanization';
+  document.querySelectorAll('[data-humanization-field]').forEach((field) => {
+    field.hidden = !humanization;
+    field.querySelectorAll('textarea,input').forEach((input) => { input.required = false; });
+  });
+  const exampleField = document.getElementById('packSkillExample')?.closest('.form-group');
+  if (exampleField) exampleField.hidden = humanization;
+  const example = document.getElementById('packSkillExample');
+  if (example) example.required = !humanization;
+}
+
 window.openEditPackSkillModal = function openEditPackSkillModal(skillId = null, skillType = 'operational') {
   const p = getActiveProfile();
   const full = p?.trainingPackId ? state.fullPackCache[p.trainingPackId] : null;
@@ -3572,11 +3584,8 @@ window.openEditPackSkillModal = function openEditPackSkillModal(skillId = null, 
   document.getElementById('packSkillAvoid').value = existing?.avoid || '';
   document.getElementById('packSkillBadResponse').value = existing?.bad_response || '';
   document.getElementById('packSkillBetterResponse').value = existing?.better_response || '';
-  document.querySelectorAll('[data-humanization-field]').forEach((field) => {
-    field.hidden = skillType !== 'humanization';
-  });
-  const exampleField = document.getElementById('packSkillExample')?.closest('.form-group');
-  if (exampleField) exampleField.hidden = skillType === 'humanization';
+  syncPackSkillEditorFields(skillType);
+  document.getElementById('packSkillType').onchange = (event) => syncPackSkillEditorFields(event.target.value);
   document.getElementById('editPackSkillModal').classList.add('open');
 };
 

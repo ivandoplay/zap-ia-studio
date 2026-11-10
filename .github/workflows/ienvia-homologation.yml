@@ -36,6 +36,8 @@ jobs:
         run: node scripts/gerar-paginas-painel.mjs --check
       - name: Run focused regression suite
         run: node scripts/test-isolated.mjs "training-import-preview|security-download-auth|evolution-webhook-safety|evolution-api-webhook|evolution-api-history-ui|painel-paginas|painel-fluxos-playwright|campanha-painel-playwright"
+      - name: Run Evolution API regression suite
+        run: npm run test:evolution
       - name: Run SQL safety suite
         run: npm run test:sql
       - name: Run full suite diagnostic

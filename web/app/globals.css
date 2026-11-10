@@ -35,3 +35,7 @@
 
 .composer-tools{display:flex;gap:8px;padding:10px 13px 0;background:white}.composer-tools .secondary-button{margin:0;cursor:pointer}.note-composer{display:flex;gap:8px;align-items:flex-end;padding:10px 13px;background:#fff}.note-composer textarea{flex:1;min-width:0;border:1px solid var(--line);border-radius:8px;padding:9px;font:12px 'DM Sans',sans-serif}.note-composer button{margin:0}
 :root[data-theme="dark"] .composer-tools,:root[data-theme="dark"] .note-composer{background:var(--paper)}
+
+.profile-editor{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;padding:13px 16px;border-bottom:1px solid var(--line);background:#fbfcfd}.profile-editor label{display:grid;gap:4px;color:#65728a;font-size:10px;font-weight:700}.profile-editor input,.profile-editor select{height:34px;min-width:0;border:1px solid var(--line);border-radius:7px;padding:0 8px;background:white;color:var(--ink);font:11px 'DM Sans',sans-serif}.profile-editor button{align-self:end;margin:0}
+:root[data-theme="dark"] .profile-editor{background:var(--paper);border-color:var(--line)}:root[data-theme="dark"] .profile-editor input,:root[data-theme="dark"] .profile-editor select{background:#121f34;color:var(--ink);border-color:var(--line)}
+@media(max-width:600px){.profile-editor{grid-template-columns:1fr}}

@@ -14,6 +14,7 @@
 - O JavaScript de interface está concentrado em `public/app.js` (arquivo extenso, aproximadamente 466 KB no momento da auditoria).
 - A alternância manual de tema já existe e usa `data-theme="light"` no elemento raiz; a ausência do atributo representa o tema escuro.
 - O dashboard já possui saudação/relógio, faixa de prontidão, KPIs e controles rápidos alimentados pelo estado do painel e pela API de campanhas.
+- Os atalhos dos KPIs de conexões e mensagens foram alinhados às áreas de Instâncias e Histórico, evitando encaminhar usuários comuns para Clientes SaaS (área administrativa).
 - A busca rápida global (Ctrl+K) já existe e pesquisa destinos, contatos, mensagens aprovadas e áudios; nesta etapa sua lista de destinos foi ampliada para cobrir todas as abas acessíveis e seu visual foi refinado.
 - A navegação móvel antiga contém elementos e listeners que devem ser mantidos compatíveis até que cada dependência seja migrada e testada.
 
@@ -49,6 +50,7 @@
 - Finalizar sidebar agrupada e drawer móvel.
 - Revisar estados ativo, hover, foco, carregamento, vazio, erro e desabilitado.
 - Harmonizar tema claro/escuro com a paleta verde/grafite existente.
+- Refinar hierarquia do dashboard, cabeçalho operacional, cartões KPI e ações em telas pequenas.
 - Revisar tabelas, formulários, modais, dropdowns, toasts, skeletons e estados vazios.
 - Melhorar responsividade das telas de maior densidade (Inbox, CRM, campanhas e configurações).
 - Refinar a paleta de comandos existente e disponibilizar todos os destinos autorizados.

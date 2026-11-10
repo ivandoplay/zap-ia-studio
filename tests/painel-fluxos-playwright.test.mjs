@@ -19,13 +19,16 @@ try{browser=await chromium.launch({headless:true});
  assert.equal(await page.locator('#crmInboxList .crm-inbox-item').count(),2,'duas conversas sintéticas');await page.locator('#btnToggleAdvancedCrmFilters').click();assert.equal(await page.locator('#btnToggleAdvancedCrmFilters').getAttribute('aria-expanded'),'true');await page.locator('#crmFilterSlotSelect').selectOption('slot_2');assert.equal(await page.locator('#crmInboxList .crm-inbox-item').count(),1);assert.match(await page.locator('#crmInboxList').innerText(),/Bruno Sintético/);await page.locator('#crmFilterSlotSelect').selectOption('');
  await page.locator('#crmSearchInput').fill('Alice Sintética');await page.waitForFunction(()=>document.querySelectorAll('#crmInboxList .crm-inbox-item').length===1);await page.locator('#crmSearchInput').fill('');await page.waitForFunction(()=>document.querySelectorAll('#crmInboxList .crm-inbox-item').length===2);
  await page.locator('#crmInboxList .crm-inbox-item').filter({hasText:'Bruno Sintético'}).click();const initialMessages=await page.locator('#crmInboxMessages').innerText();assert.ok(initialMessages.includes('Mensagem do chip dois'),'mensagem do chip dois deve abrir no fio');
- // Desconexão do motor local: oculta somente o slot afetado e troca a conversa selecionada.
+  // Desconexão local: fecha a conversa afetada, sem trocar silenciosamente para outro contato.
  await page.evaluate(()=>{state.waState.slots.slot_2.status='disconnected';window.switchCrmSubView('inbox');});
  await page.waitForFunction(()=>document.querySelectorAll('#crmInboxList .crm-inbox-item').length===1);
  assert.match(await page.locator('#crmInboxList').innerText(),/Alice Sintética/);assert.doesNotMatch(await page.locator('#crmInboxList').innerText(),/Bruno Sintético/);
- assert.equal(await page.evaluate(()=>state.selectedInboxChatId),'111111111111@s.whatsapp.net');
+  assert.equal(await page.evaluate(()=>state.selectedInboxChatId),null,'conversa da Evolution também deve fechar');
+  assert.equal(await page.evaluate(()=>state.selectedInboxChatId),null,'conversa do chip desconectado deve fechar');
+  assert.equal(await page.locator('#crmInboxLayout').evaluate(e=>e.classList.contains('mob-chat-open')),false,'layout mobile deve voltar à lista');
  await page.evaluate(()=>{state.waState.slots.slot_2.status='connected';window.switchCrmSubView('inbox');});
  await page.waitForFunction(()=>document.querySelectorAll('#crmInboxList .crm-inbox-item').length===2);
+  await page.locator('#crmInboxList .crm-inbox-item').filter({hasText:'Bruno Sintético'}).click();
  // Modo Cloud: o estado da Evolution prevalece sobre o estado local antigo.
  await page.evaluate(()=>{state.runtimeMode='vercel_cloud';state.evolutionCloud={...(state.evolutionCloud||{}),slots:{...(state.evolutionCloud?.slots||{}),slot_2:{status:'disconnected'}}};window.switchCrmSubView('inbox');});
  await page.waitForFunction(()=>document.querySelectorAll('#crmInboxList .crm-inbox-item').length===1);

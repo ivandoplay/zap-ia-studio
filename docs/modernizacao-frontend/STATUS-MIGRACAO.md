@@ -14,7 +14,7 @@ Atualizado: 2026-11-10
 - `/visao-geral`: indicadores do dashboard.
 - `/inbox`: lista, histórico, envio de texto e mídia, notas internas, leitura, fixação, arquivamento, IA e ficha.
 - `/contatos`: busca, filtros, ficha, etiquetas, tarefas e follow-up.
-- `/campanhas`: listar/criar rascunhos, editar plano e opções com revisão, importar prévia CSV/TXT/XLSX, consultar destinatários e progresso. Envio/agendamento continuam bloqueados.
+- `/campanhas`: listar/criar rascunhos, editar plano e opções com revisão, prévia CSV/TXT/XLSX, biblioteca privada de pastas e mídia por URL assinada, inserir blocos de imagem/áudio e consultar destinatários/progresso. Envio/agendamento continuam bloqueados.
 - `/inteligencia-artificial`: configurações não secretas, rascunho e validação.
 - `/treinamento`: importação prévia, edição de documento, rascunho e prévia.
 - `/simulador`: simulação local, histórico e reset.
@@ -25,14 +25,15 @@ Atualizado: 2026-11-10
 - `/historico`: conversas arquivadas.
 - `/relatorios`: resumo e série temporal.
 - `/contas`: consulta administrativa e auditoria; mutações administrativas não liberadas.
-- `/seguranca`: edição e validação de rascunho, PIN condicionado a permissão e ativação condicionada a capacidade do backend; fila permanece somente leitura.
+- `/seguranca`: edição e validação de rascunho, PIN condicionado a permissão e ativação condicionada à capacidade do backend; fila permanece somente leitura.
 - `/configuracoes`: preferências de aparência.
 
 ## Infraestrutura
 - Next.js 16, React 19 e TypeScript isolados em `web/`.
-- BFF same-origin em `/api/backend/*`, com validação de origem, allow-list de caminhos/métodos/cabeçalhos, limite de payload e timeout.
+- BFF same-origin em `/api/backend/*`, com validação de origem, allow-list de caminhos/métodos/cabeçalhos, timeout e limite explícito de 4.500.000 bytes para request/response.
 - Sessão no formato camelCase do painel legado (`zapia_cloud_auth`), refresh serializado e atualização do JWT do Supabase Realtime.
 - Supabase Realtime como sinal de mudança na Inbox, com polling de contingência.
+- Upload de mídia de campanhas usa URL assinada diretamente do armazenamento privado, sem trafegar o arquivo grande pelo BFF.
 - Shell responsivo e tema claro/escuro.
 - CI GitHub Actions para typecheck e build.
 - Raiz do Turbopack fixada em `process.cwd()`, correspondente a `web/` no CI e no projeto Vercel com Root Directory `web`.
@@ -41,22 +42,24 @@ Atualizado: 2026-11-10
 - Run `42736604491`: typecheck e build aprovados.
 - Run `42737003781`: typecheck e build aprovados após fixar a raiz Turbopack; o aviso de múltiplos lockfiles deixou de aparecer.
 - Run `42737399777`: typecheck e build aprovados após edição de rascunhos e prévia de importação de destinatários.
-- Run `42737684763`: typecheck e build aprovados após as melhorias em Segurança e Canais; o build gerou as 21 rotas e não apresentou o aviso anterior de múltiplos lockfiles.
+- Run `42737684763`: typecheck e build aprovados após melhorias em Segurança e Canais.
+- Run `42738113212`: typecheck e build aprovados após biblioteca privada de mídia e limite de payload no BFF. O build gerou as 21 rotas e não apresentou o aviso anterior de múltiplos lockfiles.
 - Os checks Vercel reportaram falha com destino `upgradeToPro=build-rate-limit`. A publicação/homologação pela Vercel está bloqueada pelo limite de builds da conta.
-- Build verde comprova compilação, não integração ponta a ponta com uma conta real.
+- CI verde comprova compilação, não integração ponta a ponta com uma conta real ou validação de CORS do armazenamento.
 
 ## Pendências para conclusão real
-1. Criar deployment Vercel separado com Root Directory `web`, configurar `IENVIA_BACKEND_URL` HTTPS e validar domínio/headers. O limite atual de builds precisa ser resolvido na conta Vercel.
-2. Homologar BFF com backend real: login, refresh, logout, 401/403/409/429/5xx, uploads e isolamento entre contas.
-3. Testar Inbox em conta de teste com Evolution, mídia, notas, perfil e Realtime/RLS.
-4. Completar campanhas com biblioteca de mídia/pastas, blocos de áudio/imagem, revisão de conflitos e testes de importação; manter envio/agendamento bloqueados até homologação.
-5. Completar executor de canais, pareamento/QR Code e atualização de QR quando o backend liberar essas operações; testar em dispositivo real.
-6. Validar biblioteca de áudio e uploads no ambiente hospedado, considerando limites de payload da plataforma.
-7. Validar importação/ativação de Treinamento e ativação de Recursos com revisão e confirmação.
-8. Implementar e testar ações administrativas de contas com autorização, confirmação e auditoria.
-9. Homologar alterações de políticas de segurança/PIN e operações da fila de abordagem.
-10. Fazer auditoria visual/mobile, acessibilidade, desempenho, smoke tests e regressão de todas as ações do painel legado.
-11. Revisar a PR e planejar publicação gradual e rollback.
+1. Resolver o limite de builds na conta Vercel e criar deployment separado com Root Directory `web`, variável server-side `IENVIA_BACKEND_URL` HTTPS e domínio/headers validados.
+2. Homologar BFF com backend real: login, refresh, logout, 401/403/409/429/5xx e isolamento entre contas.
+3. Testar Inbox em conta de teste com Evolution, mídia, notas, perfil e Realtime/RLS. Migrar uploads/downloads grandes da Inbox para URLs assinadas; o limite de payload das Functions é 4,5 MB.
+4. Testar biblioteca privada de campanhas em armazenamento real: CORS de PUT assinado, validação de bytes, finalização, leitura e isolamento de tenant.
+5. Completar revisão de conflitos, pastas/blocos e testes de campanhas; manter envio/agendamento bloqueados até homologação.
+6. Completar executor de canais, pareamento/QR Code e atualização de QR quando o backend liberar essas operações; testar em dispositivo real.
+7. Validar biblioteca de áudio e uploads no ambiente hospedado; migrar payloads maiores para upload direto.
+8. Validar importação/ativação de Treinamento e ativação de Recursos com revisão e confirmação.
+9. Implementar e testar ações administrativas de contas com autorização, confirmação e auditoria.
+10. Homologar alterações de políticas de segurança/PIN e operações da fila de abordagem.
+11. Fazer auditoria visual/mobile, acessibilidade, desempenho, smoke tests e regressão de todas as ações do painel legado.
+12. Revisar a PR e planejar publicação gradual e rollback.
 
 ## Critério de conclusão
-A modernização só poderá ser declarada 100% após CI verde no commit final, deployment separado funcional, testes end-to-end com backend/conta reais, homologação das operações e confirmação de paridade funcional. Até lá, a PR permanece Draft e o painel legado continua sendo a interface de produção.
+A modernização só poderá ser declarada 100% após CI verde no commit final, deployment separado funcional, testes end-to-end com backend/conta reais, homologação de armazenamento e operações, e confirmação de paridade funcional. Até lá, a PR permanece Draft e o painel legado continua sendo a interface de produção.

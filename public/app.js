@@ -7037,17 +7037,24 @@ function renderCommandPaletteResults(query = '') {
   const q = query.toLowerCase().trim();
   const items = [];
 
+  // Lista centralizada dos destinos reais do painel. A busca continua respeitando
+  // o controle de acesso de Clientes SaaS para o perfil master.
   const tabs = [
-    { id: 'dashboard', title: 'Ir para: Conexão & Painel (Aba 1)', sub: 'QR Code, Disparador M01 e Funil' },
-    { id: 'simulador', title: 'Ir para: Simulador de Áudio & Raio-X (Aba 2)', sub: 'Testar voz e ensinar respostas' },
-    { id: 'treinamento', title: 'Ir para: Treinamento & Studio de Skills (Aba 3)', sub: 'Editar M01–M13, Skills e .ZIP' },
-    { id: 'audios', title: 'Ir para: Biblioteca de Áudios Estratégicos (Voz Real)', sub: 'Gravar/subir áudios OGG/Opus + transcrição IA' },
-    { id: 'catalogo', title: 'Ir para: Catálogo Multi-Fotos & PIX QR (Aba 4)', sub: 'Até 5 mídias por item + QR Code PIX' },
-    { id: 'ia', title: 'Ir para: Motor de IA', sub: 'Rotação de chaves grátis e reserva' },
-    { id: 'seguranca', title: 'Ir para: Segurança & Anti-Ban', sub: 'Prospecção cadenciada e bloqueio' },
-    { id: 'crm', title: 'Ir para: Conversas', sub: 'Inbox 360º, Kanban, etiquetas e retorno S19' },
+    { id: 'dashboard', title: 'Abrir: Visão geral', sub: 'Painel de controle, indicadores e status das conexões' },
+    { id: 'crm', title: 'Abrir: Inbox e CRM', sub: 'Conversas, contatos, Kanban, etiquetas e tarefas' },
+    { id: 'campanhas', title: 'Abrir: Campanhas', sub: 'Campanhas, destinatários, filas e histórico de execução' },
+    { id: 'treinamento', title: 'Abrir: Treinamento', sub: 'Base de conhecimento, mensagens e skills da IA' },
+    { id: 'catalogo', title: 'Abrir: Catálogo e PIX', sub: 'Produtos, mídias e informações de pagamento' },
+    { id: 'audios', title: 'Abrir: Biblioteca de áudios', sub: 'Áudios estratégicos, gravações e transcrições' },
+    { id: 'simulador', title: 'Abrir: Simulador de IA', sub: 'Testar conversas e avaliar respostas antes de usar' },
+    { id: 'ia', title: 'Abrir: Motor de IA', sub: 'Configurações e comportamento do atendimento automático' },
+    { id: 'instancias', title: 'Abrir: Instâncias', sub: 'Gerenciar instâncias e sessões de WhatsApp' },
+    { id: 'conexoes', title: 'Abrir: Conexões', sub: 'Integrações, serviços conectados e configuração de canais' },
+    { id: 'historico', title: 'Abrir: Histórico', sub: 'Consultar registros e atividades disponíveis' },
+    { id: 'configuracoes', title: 'Abrir: Configurações', sub: 'Preferências e configurações do workspace' },
+    { id: 'seguranca', title: 'Abrir: Segurança', sub: 'Controles de segurança e proteção operacional' },
     ...(state.currentUser?.role === 'master'
-      ? [{ id: 'contas', title: 'Ir para: Clientes SaaS (Torre Master)', sub: 'Criar contas, Modo Suporte em 1 clique e Kit Boas-Vindas' }]
+      ? [{ id: 'contas', title: 'Abrir: Clientes SaaS', sub: 'Administração de contas e suporte master' }]
       : [])
   ];
 

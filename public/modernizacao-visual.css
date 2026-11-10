@@ -501,3 +501,36 @@ details.pro-accordion, .conf-previa, .camp-panel, .camp-notice { border-radius: 
   .visao-topo .u-acoes-8 { grid-template-columns: minmax(0, 1fr); }
   .visao-kpi { min-height: 116px; }
 }
+
+
+/* Tablet CRM: keep all four view tabs separate from the search/action row. */
+@media (min-width: 821px) and (max-width: 900px) {
+  .crm-hub-topbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .crm-subtabs {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .crm-subtab-btn {
+    min-width: 0;
+    justify-content: center;
+    gap: 4px;
+    padding-inline: 6px;
+    font-size: 11px;
+  }
+  .crm-hub-actions {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+    justify-content: stretch;
+  }
+  .crm-search-wrap {
+    min-width: 0;
+    max-width: none;
+    flex: 1 1 auto;
+  }
+}

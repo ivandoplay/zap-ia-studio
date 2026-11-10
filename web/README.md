@@ -27,6 +27,7 @@ O frontend usa a rota same-origin `/api/backend/*` como BFF. Ela encaminha apena
 - Shell responsivo e navegação: fundação inicial.
 - Login: ligado a `POST /api/auth/login`.
 - Visão Geral: ligada a `GET /api/dashboard/parity`; indicadores indisponíveis aparecem como indisponíveis, não como zero.
+- Conexões: consulta somente leitura ligada a `GET /api/connections/summary` e `GET /api/connections/configuration`.
 - Demais módulos: rotas de transição informativas, ainda sem operações conectadas.
 - Painel legado: permanece no diretório `public/` e segue como interface de produção.
 

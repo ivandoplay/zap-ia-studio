@@ -41,7 +41,7 @@ Atualizado: 2026-11-10
 - CI GitHub Actions executando TypeScript e build.
 
 ## Validação observada
-- GitHub Actions: TypeScript e build Next.js aprovados no commit `d8eaf9f3ab7efa6ed920ad34c31cc188c16bfce8`.
+- GitHub Actions: TypeScript e build Next.js aprovados no commit atual `19a7265ef3867f184bf38c6dfed3e109380d1d00`.
 - Isso valida compilação; não equivale a teste end-to-end contra uma conta real nem homologação do deploy.
 - O workflow continua executando em cada atualização da branch.
 

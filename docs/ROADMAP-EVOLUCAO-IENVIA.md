@@ -175,6 +175,7 @@ Para cada etapa:
 
 - [x] Corrigida a alternância entre as subvisões Conversas, Contatos, Kanban e Coach IA: a troca agora sincroniza as classes `active`, `u-none` e o atributo `hidden`. Antes, apenas `style.display` era alterado, sem remover a classe utilitária que mantinha as três subvisões ocultas.
 - [x] Na desconexão manual pelo motor local ou pela Evolution, a conversa selecionada daquele slot é desmarcada e a visualização do CRM é atualizada imediatamente.
+- [x] A leitura do status agora prioriza o motor efetivamente ativo (`local_worker` ou `vercel_cloud`), evitando que um status antigo em cache de outro motor mantenha conversas visíveis indevidamente.
 - [x] Mantido o filtro por slot: a desconexão de uma instância não deve esconder conversas de outras instâncias.
 - [ ] Validar em Preview com sessão autenticada: abrir as quatro subvisões, testar agenda/paginação, mover cartões no Kanban e executar o Coach IA.
 - [ ] Testar desconexão real e reconexão dos motores local e Evolution; confirmar que somente as conversas do slot desconectado somem e que reaparecem conforme o estado de conexão voltar.

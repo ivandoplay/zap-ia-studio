@@ -328,9 +328,9 @@ details.pro-accordion, .conf-previa, .camp-panel, .camp-notice { border-radius: 
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 19px 14px calc(24px + env(safe-area-inset-bottom, 0px));
+    padding: 19px 14px calc(82px + env(safe-area-inset-bottom, 0px));
   }
-  .hub-subnav, .mobile-bottom-nav, #mobileMoreSheet { display: none !important; }
+  .hub-subnav, #mobileMoreSheet { display: none !important; }
   .page-header, .page-head { gap: 11px; margin-bottom: 17px; }
   .metric-box { min-height: 98px; padding: 13px; }
   .metric-val { font-size: 25px; }

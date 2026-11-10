@@ -3044,7 +3044,10 @@ function renderTrainingImportPreview(preview) {
         <div><strong>${Number(counts.operationalSkills)||0}</strong><div class="u-text-secondary u-text-sm">Skills operacionais</div></div>
         <div><strong>${Number(counts.humanizationSkills)||0}</strong><div class="u-text-secondary u-text-sm">Skills humanização</div></div>
         <div><strong>${Number(counts.faqs)||0}</strong><div class="u-text-secondary u-text-sm">FAQs</div></div>
+        <div><strong>${Number(counts.knowledgeDocs)||0}</strong><div class="u-text-secondary u-text-sm">Documentos</div></div>
+        <div><strong>${Number(counts.attachments)||0}</strong><div class="u-text-secondary u-text-sm">Anexos</div></div>
       </div>
+      <div class="u-text-secondary u-text-sm u-mt-10">Ativos atuais: ${Number(preview.preserved?.catalogItems)||0} itens de catálogo · ${preview.preserved?.pixConfigured ? 'PIX configurado' : 'PIX não configurado'} · ${Number(preview.preserved?.voiceItems)||0} áudios.</div>
       <div class="u-mt-12"><strong>Campos de perfil que serão alterados</strong><ul class="u-lista-rolagem">${fields}</ul></div>
     </div>
     <div class="u-aviso-suave u-aviso-suave--ok u-mt-10">
@@ -3106,6 +3109,12 @@ window.confirmTrainingImport = async function confirmTrainingImport() {
     renderAll();
     showToast(`Treinamento "${result.packSummary.name}" aplicado com ${result.packSummary.stats.operationalSkillsCount + result.packSummary.stats.humanizationSkillsCount} Skills e ${result.packSummary.stats.approvedMessagesCount || 0} mensagens.`);
   } catch (err) {
+    if (String(err.message || '').includes('mudou desde a prévia')) {
+      pendingTrainingImport = null;
+      document.getElementById('trainingImportPreviewModal')?.classList.remove('open');
+      const input = document.getElementById('zipPackInput');
+      if (input) input.value = '';
+    }
     showToast(err.message, true);
   } finally {
     if (button) { button.disabled = false; button.textContent = 'Confirmar e aplicar treinamento'; }

@@ -34,3 +34,6 @@ jobs:
         run: node scripts/test-isolated.mjs "training-import-preview|evolution-webhook-safety|evolution-api-webhook|evolution-api-history-ui|painel-paginas|painel-fluxos-playwright|campanha-painel-playwright"
       - name: Run SQL safety suite
         run: npm run test:sql
+      - name: Run full suite diagnostic
+        run: npm test
+        continue-on-error: true

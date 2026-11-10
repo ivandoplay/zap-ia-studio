@@ -2418,6 +2418,7 @@ app.post('/api/business/system-prompt/preview', (req, res) => {
   }
   const textFields = ['name', 'niche', 'assistantName', 'tone', 'companySummary', 'deliveryAndPayment', 'goldenRules', 'extraInstructions'];
   if (textFields.some((key) => typeof draft[key] !== 'string' || draft[key].length > 32000) ||
+      !draft.name.trim() || !['consultivo', 'acolhedor', 'descontraido', 'profissional', 'formal'].includes(draft.tone) ||
       ['soloIdentity', 'lockUntilManualResume', 'promptShieldEnabled'].some((key) => typeof draft[key] !== 'boolean') ||
       !Array.isArray(draft.faqs) || draft.faqs.length > 200 ||
       draft.faqs.some((faq) => !faq || typeof faq !== 'object' ||

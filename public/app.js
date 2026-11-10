@@ -2307,6 +2307,11 @@ function getSlotUiMeta(slotId = 'slot_1') {
   const defaultTitle = num === 1 ? 'Chip 1 · Principal' : `Chip ${num}`;
   const label = String(cfg.label || rtSlot.label || defaultTitle).trim() || defaultTitle;
   const aiEnabled = cfg.aiEnabled !== undefined ? cfg.aiEnabled !== false : rtSlot.aiEnabled !== false;
+  // A fonte de status depende do motor ativo. Um status antigo da Evolution
+  // não pode mascarar a desconexão do worker local (nem o inverso).
+  const connectionStatus = state.runtimeMode === 'vercel_cloud'
+    ? (evoSlot.status || rtSlot.status || 'disconnected')
+    : (rtSlot.status || evoSlot.status || 'disconnected');
   return {
     slotId: cleanId,
     slotNum: num,
@@ -2314,7 +2319,7 @@ function getSlotUiMeta(slotId = 'slot_1') {
     label,
     shortLabel: label.length > 18 ? `${label.slice(0, 17)}…` : label,
     aiEnabled,
-    status: evoSlot.status || rtSlot.status || 'disconnected',
+    status: connectionStatus,
     qrDataUrl: evoSlot.qrDataUrl || rtSlot.qrDataUrl || null,
     pairingCode: evoSlot.pairingCode || rtSlot.pairingCode || null,
     connectedUser: rtSlot.connectedUser || null,

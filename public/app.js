@@ -208,13 +208,17 @@ function playHandoffChime() {
   }
 }
 
-async function downloadAuthenticated(url, fallbackFilename = 'download') {
-  if (state.cloudSession?.expiresAt && state.cloudSession.expiresAt * 1000 - Date.now() < 180_000) await tryRefreshCloudToken();
+async function downloadAuthenticated(url, fallbackFilename = 'download', _retried = false) {
+  if (state.cloudSession?.expiresAt && state.cloudSession.expiresAt * 1000 - Date.now() < 180_000 && !_retried) await tryRefreshCloudToken();
   const headers = {};
   if (state.sessionPin) headers['x-panel-pin'] = state.sessionPin;
   if (state.cloudSession?.accessToken) headers.Authorization = `Bearer ${state.cloudSession.accessToken}`;
   if (state.actAsUser?.userId) headers['x-zapia-act-as'] = state.actAsUser.userId;
   const response = await fetch(url, { method: 'GET', headers, credentials: 'same-origin', cache: 'no-store' });
+  if (response.status === 401 && !_retried && state.cloudSession?.refreshToken) {
+    const refreshed = await tryRefreshCloudToken();
+    if (refreshed) return downloadAuthenticated(url, fallbackFilename, true);
+  }
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw new Error(data.error || `Não foi possível baixar o arquivo (HTTP ${response.status}).`);

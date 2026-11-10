@@ -9,8 +9,8 @@ async function refreshSession():Promise<boolean>{
   try{
    const response=await fetch('/api/backend/auth/refresh',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json','X-Ienvia-Request':'1'},body:JSON.stringify({refreshToken:current.session.refreshToken}),cache:'no-store'});
    const data=await response.json().catch(()=>({}));
-   if(response.status===503&&data?.retrySession?.accessToken&&data?.retrySession?.refreshToken){saveAuth(data.retrySession,current.user);temporaryRefreshFailure=true;return false;}
-   if(response.ok&&data?.ok&&data?.session?.accessToken&&data?.session?.refreshToken){saveAuth(data.session,data.user||current.user);return true;}
+   if(response.status===503&&data?.retrySession?.accessToken&&data?.retrySession?.refreshToken){saveAuth(data.retrySession,current.user);window.dispatchEvent(new Event('ienvia:token-updated'));temporaryRefreshFailure=true;return false;}
+   if(response.ok&&data?.ok&&data?.session?.accessToken&&data?.session?.refreshToken){saveAuth(data.session,data.user||current.user);window.dispatchEvent(new Event('ienvia:token-updated'));return true;}
    if(response.status===401){clearAuth();window.dispatchEvent(new Event('ienvia:unauthorized'));}
    return false;
   }catch{return false;}

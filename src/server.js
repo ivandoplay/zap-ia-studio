@@ -2544,6 +2544,12 @@ app.post('/api/training-packs/import-preview', memUpload.single('file'), async (
       document: current,
       ctx
     });
+    if (imported.schema === 'ienvia-training-draft-v1') {
+      return res.status(409).json({
+        ok: false,
+        error: 'Este arquivo é um rascunho do training-v2. A ativação desse formato ainda não foi homologada; use um Blueprint JSON, Markdown ou ZIP do importador atual.'
+      });
+    }
     const labels = {
       name: 'Nome do negócio/profissional', niche: 'Segmento', assistantName: 'Nome do atendente',
       soloIdentity: 'Atendimento individual', tone: 'Tom de voz', companySummary: 'Descrição do negócio',

@@ -2535,7 +2535,11 @@ app.post('/api/business/knowledge-upload', memUpload.single('file'), (req, res) 
 
   if (req.file) {
     title = title || req.file.originalname;
-    content = req.file.buffer.toString('utf-8').slice(0, 30000);
+    content = req.file.buffer.toString('utf-8');
+  }
+
+  if (content.length > 30000) {
+    return res.status(413).json({ ok: false, error: 'O documento excede o limite de 30 mil caracteres. Divida o arquivo em partes menores; nenhum conteúdo foi cortado ou salvo.' });
   }
 
   if (!content.trim()) {

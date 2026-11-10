@@ -713,12 +713,14 @@ export function savePackSkill(packId, payload = {}) {
       id: cleanId,
       name: String(payload.name || 'nova-skill-humanizacao').trim(),
       trigger: String(payload.trigger || payload.when || '').trim(),
-      goal: String(payload.goal || '').trim(),
-      avoid: String(payload.avoid || '').trim(),
-      bad_response: String(payload.bad_response || '').trim(),
-      better_response: String(payload.better_response || payload.example_response || '').trim()
+      goal: Object.hasOwn(payload, 'goal') ? String(payload.goal || '').trim() : String(pack.humanizationSkills.find((h) => h.id === cleanId)?.goal || ''),
+      avoid: Object.hasOwn(payload, 'avoid') ? String(payload.avoid || '').trim() : String(pack.humanizationSkills.find((h) => h.id === cleanId)?.avoid || ''),
+      bad_response: Object.hasOwn(payload, 'bad_response') ? String(payload.bad_response || '').trim() : String(pack.humanizationSkills.find((h) => h.id === cleanId)?.bad_response || ''),
+      better_response: Object.hasOwn(payload, 'better_response') || Object.hasOwn(payload, 'example_response')
+        ? String(payload.better_response || payload.example_response || '').trim()
+        : String(pack.humanizationSkills.find((h) => h.id === cleanId)?.better_response || '')
     };
-    item.searchBlob = foldPt(`${item.id} ${item.name} ${item.trigger} ${item.goal} ${item.avoid} ${item.better_response}`);
+    item.searchBlob = foldPt(`${item.id} ${item.name} ${item.trigger} ${item.goal} ${item.avoid} ${item.bad_response} ${item.better_response}`);
     const idx = pack.humanizationSkills.findIndex((h) => h.id === cleanId);
     if (idx >= 0) pack.humanizationSkills[idx] = { ...pack.humanizationSkills[idx], ...item };
     else pack.humanizationSkills.push(item);

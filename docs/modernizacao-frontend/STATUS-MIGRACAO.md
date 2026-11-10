@@ -15,17 +15,17 @@ Atualizado: 2026-11-10
 |---|---|---|
 | `/login` | Login conectado ao backend | `POST /api/auth/login` |
 | `/visao-geral` | Indicadores reais | `GET /api/dashboard/parity` |
-| `/inbox` | Lista, histórico, envio de texto/mídia, notas, lida/não lida, fixar, arquivar, pausar/retomar IA e ficha | `/api/conversations-v3` |
+| `/inbox` | Lista, histórico, envio de texto/mídia, notas, lida/não lida, fixar, arquivar, pausar/retomar IA, ficha e Realtime com polling de contingência | `/api/conversations-v3` |
 | `/contatos` | Lista, filtros, ficha, etiquetas, tarefas e follow-up | `/api/crm-v2/contacts` |
-| `/campanhas` | Criar/listar rascunhos, consultar destinatários e progresso | `/api/campaigns-v2/drafts` |
+| `/campanhas` | Criar/listar rascunhos, consultar destinatários e progresso; sem execução | `/api/campaigns-v2/drafts` |
 | `/inteligencia-artificial` | Configuração não secreta, rascunho e validação | `/api/ai-settings-v2` |
-| `/treinamento` | Documento, rascunho e prévia | `/api/training-v2` |
+| `/treinamento` | Documento, importação prévia, rascunho e prévia | `/api/training-v2` |
 | `/simulador` | Simulação local, histórico e reset | `/api/simulator-v2` |
 | `/conexoes` | Diagnóstico somente leitura | `/api/connections/summary` |
 | `/instancias` | Diagnóstico de chips e dispositivos, somente leitura | `/api/connections/summary` |
 | `/canais` | Lista de canais, vínculo e capacidades | `/api/channels` |
-| `/catalogo` | Documento de recursos, rascunho e prévia PIX | `/api/resources-v2` |
-| `/audios` | Biblioteca de áudio, somente leitura | `/api/resources-v2` |
+| `/catalogo` | Documento de recursos, cadastro simples de itens, rascunho e prévia PIX | `/api/resources-v2` |
+| `/audios` | Biblioteca de áudio, preparação OGG/Opus, transcrição quando habilitada, reprodução e inclusão no rascunho | `/api/resources-v2` |
 | `/historico` | Conversas arquivadas | `/api/conversations-v3` |
 | `/relatorios` | Resumo e série de sete dias | `/api/dashboard/summary` |
 | `/contas` | Consulta administrativa e auditoria, conforme permissões | `/api/accounts-v2` |

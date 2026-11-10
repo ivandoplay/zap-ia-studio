@@ -353,3 +353,56 @@ details.pro-accordion, .conf-previa, .camp-panel, .camp-notice { border-radius: 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* Command palette — quick navigation and contextual search */
+#cmdPaletteModal .modal-dialog {
+  border: 1px solid var(--border-strong);
+  border-radius: 19px;
+  background: var(--bg-sidebar);
+  box-shadow: 0 30px 90px rgba(0,0,0,.4);
+  overflow: hidden;
+}
+#cmdPaletteModal .modal-head {
+  padding: 17px 19px;
+  border-bottom: 1px solid var(--border);
+}
+#cmdPaletteModal .modal-body { padding: 14px; }
+#cmdSearchInput {
+  min-height: 48px;
+  padding-inline: 15px;
+  border-radius: 12px;
+  background: var(--bg-input);
+  font-size: 14px;
+}
+#cmdResultsList { max-height: min(56vh, 520px); overflow-y: auto; padding: 7px 2px 2px; }
+#cmdResultsList .cmd-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 12px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: var(--text-main);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background .16s ease, border-color .16s ease, transform .16s ease;
+}
+#cmdResultsList .cmd-item:hover,
+#cmdResultsList .cmd-item:focus-visible {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  outline: none;
+}
+#cmdResultsList .cmd-item .tag {
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 4px 7px;
+  color: var(--accent-bright);
+  background: var(--bg-card);
+  font-size: 10px;
+}
+#cmdResultsList .empty-state { padding: 24px 12px; color: var(--text-secondary); text-align: center; }

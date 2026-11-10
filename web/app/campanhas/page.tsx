@@ -1,11 +1,403 @@
 'use client';
-import{useEffect,useState}from'react';import{api}from'@/lib/api';
-type Draft={campanha_id:string;nome?:string;status:string;revisao?:number;criada_em?:string;atualizada_em?:string;total_destinatarios?:number};
-type List={ok:boolean;items:Draft[];hasMore:boolean;nextCursor:string|null;permissions?:{canEditDrafts:boolean};features?:Record<string,unknown>};
-export default function CampaignsPage(){const[data,setData]=useState<List|null>(null),[channels,setChannels]=useState<{id:string;name:string;campaignsEnabled?:boolean}[]>([]),[showCreate,setShowCreate]=useState(false),[campaignName,setCampaignName]=useState(''),[channelId,setChannelId]=useState(''),[message,setMessage]=useState(''),[recipientText,setRecipientText]=useState(''),[creating,setCreating]=useState(false),[selected,setSelected]=useState<string|null>(null),[detail,setDetail]=useState<unknown>(null),[recipients,setRecipients]=useState<unknown>(null),[progress,setProgress]=useState<unknown>(null),[loading,setLoading]=useState(true),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
-async function load(){setLoading(true);setError('');try{const r=await api<List>('campaigns-v2/drafts?limit=50');setData(r);}catch(e){setError(e instanceof Error?e.message:'Não foi possível consultar os rascunhos.');}finally{setLoading(false);}}
-useEffect(()=>{load();api<{items:{id:string;name:string;campaignsEnabled?:boolean}[]}>('channels?limit=50&visibility=all').then(r=>setChannels((r.items||[]).filter(c=>c.campaignsEnabled===true))).catch(()=>{});},[]);
-async function createDraft(){if(creating)return;const recipients=recipientText.split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>{const parts=line.split(';');return{telefone:parts[0].trim(),nome:(parts[1]||'').trim(),campos:{}};});if(!campaignName.trim()||!channelId||!message.trim()||!recipients.length){setError('Informe nome, canal, mensagem e ao menos um destinatário.');return;}setCreating(true);setError('');try{await api('campaigns-v2/drafts',{method:'POST',body:JSON.stringify({requestId:crypto.randomUUID(),plano:{nome:campaignName.trim(),instanceIds:[channelId],distribution:'fixo',retomada:'manual',blocos:[{id:crypto.randomUUID(),tipo:'texto',modo:'fixo',textos:[message]}]},opcoes:{intervalo_min_ms:20000,intervalo_max_ms:40000,lote_min:8,lote_max:12,pausa_lote_min_ms:300000,pausa_lote_max_ms:600000,intervalo_etapas_ms:0,restricao_horaria:false,fuso:'America/Fortaleza',dias:[0,1,2,3,4,5,6],inicio:'09:00',fim:'18:00'},destinatarios:recipients})});setShowCreate(false);setCampaignName('');setMessage('');setRecipientText('');setNotice('Rascunho criado. Nenhuma mensagem foi enviada.');await load();}catch(e){setError(e instanceof Error?e.message:'Não foi possível criar o rascunho.');}finally{setCreating(false);}}
-async function open(id:string){setSelected(id);setDetail(null);setRecipients(null);setProgress(null);setBusy(true);setError('');try{const [d,r,p]=await Promise.all([api<unknown>('campaigns-v2/drafts/'+id),api<unknown>('campaigns-v2/drafts/'+id+'/recipients?inicio=0'),api<unknown>('campaigns-v2/drafts/'+id+'/progress')]);setDetail(d);setRecipients(r);setProgress(p);}catch(e){setError(e instanceof Error?e.message:'Não foi possível consultar a campanha.');}finally{setBusy(false);}}
-return <div><div className="heading"><div><p className="eyebrow">COMUNICAÇÃO E RELACIONAMENTO</p><h1>Campanhas</h1><p className="description">Consulte rascunhos, destinatários e progresso sem disparar mensagens.</p></div><div className="heading-actions"><button className="secondary-button" onClick={load}>Atualizar</button>{data?.permissions?.canEditDrafts&&<button className="primary" onClick={()=>setShowCreate(v=>!v)}>Novo rascunho</button>}</div></div>{error&&<div className="error">{error}</div>}{showCreate&&<section className="surface panel campaign-create"><div className="editor-heading"><div><h2>Novo rascunho</h2><p>Cria apenas o documento. Não agenda nem envia.</p></div><button className="secondary-button" onClick={()=>setShowCreate(false)}>Fechar</button></div><div className="crm-fields"><label>Nome da campanha<input value={campaignName} onChange={e=>setCampaignName(e.target.value)} maxLength={120}/></label><label>Canal<select value={channelId} onChange={e=>setChannelId(e.target.value)}><option value="">Selecione um canal</option>{channels.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><label className="wide">Mensagem<textarea rows={4} value={message} onChange={e=>setMessage(e.target.value)} maxLength={5000} placeholder="Use {{nome}} para personalizar…"/></label><label className="wide">Destinatários (um por linha: telefone;nome)<textarea rows={6} value={recipientText} onChange={e=>setRecipientText(e.target.value)} placeholder="+5511999999999;Maria"/></label></div><button className="primary crm-save" disabled={creating} onClick={createDraft}>{creating?'Criando…':'Criar rascunho'}</button></section>}{loading?<div className="surface loading">Consultando campanhas…</div>:<section className="surface panel"><div className="editor-heading"><div><h2>Rascunhos de campanha</h2><p>Somente campanhas em estado de rascunho são listadas por este contrato.</p></div><span className="user-chip">{data?.items?.length||0} rascunhos</span></div>{!data?.items?.length?<div className="empty-state">Nenhum rascunho encontrado ou integração indisponível.</div>:<div className="crm-table">{data.items.map(c=><button className={'crm-row '+(selected===c.campanha_id?'active':'')} key={c.campanha_id} onClick={()=>open(c.campanha_id)}><div><strong>{c.nome||'Campanha sem nome'}</strong><small>{c.campanha_id}</small></div><span>Revisão {c.revisao??'—'}</span><span>{c.status}</span></button>)}</div>}</section>}{selected&&<section className="surface panel"><div className="editor-heading"><div><h2>Detalhes do rascunho</h2><p>{selected}</p></div><button className="secondary-button" onClick={()=>setSelected(null)}>Fechar</button></div>{busy?<div className="loading">Consultando detalhes…</div>:<><div className="settings-actions"><span className="user-chip">Progresso e destinatários em modo leitura</span></div><h3 className="json-title">Campanha</h3><pre className="validation-output">{JSON.stringify(detail,null,2)}</pre><h3 className="json-title">Destinatários</h3><pre className="validation-output">{JSON.stringify(recipients,null,2)}</pre><h3 className="json-title">Progresso</h3><pre className="validation-output">{JSON.stringify(progress,null,2)}</pre></>}</section>}<div className="notice">{data?.permissions?.canEditDrafts?'Você pode preparar rascunhos.':'A criação de rascunhos está desabilitada para esta conta até a homologação da migração.'} A execução, o agendamento e o envio em massa não foram liberados nesta tela. Antes de ativar campanhas, será necessário validar destinatários, limites, consentimento, janela de envio e estado do provedor.</div></div>;
+
+import { useEffect, useMemo, useState } from 'react';
+import { api } from '@/lib/api';
+
+type Draft = {
+  campanha_id: string;
+  nome?: string;
+  status: string;
+  revisao?: number;
+  criada_em?: string;
+  atualizada_em?: string;
+  total_destinatarios?: number;
+};
+type List = {
+  ok: boolean;
+  items: Draft[];
+  hasMore: boolean;
+  nextCursor: string | null;
+  permissions?: { canEditDrafts: boolean };
+  features?: Record<string, unknown>;
+};
+type Channel = { id: string; name: string; campaignsEnabled?: boolean };
+type Recipient = { telefone: string; nome: string; campos?: Record<string, string> };
+type ImportPreview = { ok: boolean; destinatarios: Recipient[]; problemas?: { linha: number; tipo: string }[] };
+type CampaignEditor = { plano: Record<string, unknown>; opcoes: Record<string, unknown> };
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function editorFrom(value: unknown): CampaignEditor | null {
+  if (!isRecord(value)) return null;
+  const document = isRecord(value.document) ? value.document : value;
+  const plano = document.plano ?? document.plan;
+  const opcoes = document.opcoes ?? document.options;
+  return isRecord(plano) && isRecord(opcoes) ? { plano, opcoes } : null;
+}
+
+function parseManualRecipients(value: string): Recipient[] {
+  return value
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean)
+    .map(line => {
+      const [telefone, ...rest] = line.split(';');
+      return { telefone: telefone.trim(), nome: rest.join(';').trim(), campos: {} };
+    });
+}
+
+const defaultOptions = {
+  intervalo_min_ms: 20000,
+  intervalo_max_ms: 40000,
+  lote_min: 8,
+  lote_max: 12,
+  pausa_lote_min_ms: 300000,
+  pausa_lote_max_ms: 600000,
+  intervalo_etapas_ms: 0,
+  restricao_horaria: false,
+  fuso: 'America/Fortaleza',
+  dias: [0, 1, 2, 3, 4, 5, 6],
+  inicio: '09:00',
+  fim: '18:00',
+};
+
+export default function CampaignsPage() {
+  const [data, setData] = useState<List | null>(null);
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [campaignName, setCampaignName] = useState('');
+  const [channelId, setChannelId] = useState('');
+  const [message, setMessage] = useState('');
+  const [recipientText, setRecipientText] = useState('');
+  const [importedRecipients, setImportedRecipients] = useState<Recipient[] | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [detail, setDetail] = useState<unknown>(null);
+  const [recipients, setRecipients] = useState<unknown>(null);
+  const [progress, setProgress] = useState<unknown>(null);
+  const [editorJson, setEditorJson] = useState('');
+  const [editorAvailable, setEditorAvailable] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+
+  const canEdit = data?.permissions?.canEditDrafts === true;
+  const selectedDraft = useMemo(
+    () => data?.items.find(item => item.campanha_id === selected) ?? null,
+    [data, selected],
+  );
+
+  async function load() {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await api<List>('campaigns-v2/drafts?limit=50');
+      setData(result);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível consultar os rascunhos.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+    api<{ items: Channel[] }>('channels?limit=50&visibility=all')
+      .then(result => setChannels((result.items || []).filter(channel => channel.campaignsEnabled === true)))
+      .catch(() => {});
+  }, []);
+
+  async function importRecipients(file: File) {
+    if (file.size > 4 * 1024 * 1024) {
+      setError('O arquivo precisa ter até 4 MB.');
+      return;
+    }
+    setImporting(true);
+    setError('');
+    setNotice('');
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const result = await api<ImportPreview>('campaigns-v2/import-preview', {
+        method: 'POST',
+        body: form,
+      });
+      if (!Array.isArray(result.destinatarios)) {
+        throw new Error('A prévia não retornou uma lista válida de destinatários.');
+      }
+      setImportedRecipients(result.destinatarios);
+      setRecipientText(result.destinatarios.map(item => [item.telefone, item.nome].filter(Boolean).join(';')).join('\n'));
+      const rejected = result.problemas?.length ?? 0;
+      setNotice(
+        `Prévia concluída: ${result.destinatarios.length} destinatários válidos e ${rejected} linha(s) com problema. Nada foi salvo ou enviado.`,
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível importar a lista.');
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function createDraft() {
+    if (creating) return;
+    const destinationList = importedRecipients ?? parseManualRecipients(recipientText);
+    if (!campaignName.trim() || !channelId || !message.trim() || !destinationList.length) {
+      setError('Informe nome, canal, mensagem e ao menos um destinatário válido.');
+      return;
+    }
+    setCreating(true);
+    setError('');
+    setNotice('');
+    try {
+      await api('campaigns-v2/drafts', {
+        method: 'POST',
+        body: JSON.stringify({
+          requestId: crypto.randomUUID(),
+          plano: {
+            nome: campaignName.trim(),
+            instanceIds: [channelId],
+            distribution: 'fixo',
+            retomada: 'manual',
+            blocos: [{ id: crypto.randomUUID(), tipo: 'texto', modo: 'fixo', textos: [message] }],
+          },
+          opcoes: defaultOptions,
+          destinatarios: destinationList,
+        }),
+      });
+      setShowCreate(false);
+      setCampaignName('');
+      setMessage('');
+      setRecipientText('');
+      setImportedRecipients(null);
+      setNotice('Rascunho criado. Nenhuma mensagem foi enviada.');
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível criar o rascunho.');
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function openDraft(id: string) {
+    setSelected(id);
+    setDetail(null);
+    setRecipients(null);
+    setProgress(null);
+    setEditorJson('');
+    setEditorAvailable(false);
+    setBusy(true);
+    setError('');
+    try {
+      const [draft, destinationList, currentProgress] = await Promise.all([
+        api<unknown>('campaigns-v2/drafts/' + id),
+        api<unknown>('campaigns-v2/drafts/' + id + '/recipients?inicio=0'),
+        api<unknown>('campaigns-v2/drafts/' + id + '/progress'),
+      ]);
+      setDetail(draft);
+      setRecipients(destinationList);
+      setProgress(currentProgress);
+      const editor = editorFrom(draft);
+      if (editor) {
+        setEditorJson(JSON.stringify(editor, null, 2));
+        setEditorAvailable(true);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível consultar a campanha.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveDraft() {
+    if (!canEdit || !selected || !selectedDraft || !editorAvailable || busy) return;
+    if (!Number.isSafeInteger(selectedDraft.revisao) || (selectedDraft.revisao ?? 0) < 1) {
+      setError('A revisão atual do rascunho não permite edição segura. Atualize a lista antes de tentar novamente.');
+      return;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(editorJson);
+    } catch {
+      setError('O editor contém JSON inválido.');
+      return;
+    }
+    if (!isRecord(parsed) || !isRecord(parsed.plano) || !isRecord(parsed.opcoes)) {
+      setError('O editor precisa conter os objetos plano e opcoes.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await api('campaigns-v2/drafts/' + selected, {
+        method: 'PUT',
+        body: JSON.stringify({
+          expectedRevision: selectedDraft.revisao,
+          plano: parsed.plano,
+          opcoes: parsed.opcoes,
+        }),
+      });
+      setNotice('Rascunho atualizado com controle de revisão. Nenhuma mensagem foi enviada.');
+      await load();
+      await openDraft(selected);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível salvar o rascunho.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="heading">
+        <div>
+          <p className="eyebrow">COMUNICAÇÃO E RELACIONAMENTO</p>
+          <h1>Campanhas</h1>
+          <p className="description">Prepare e revise campanhas sem disparar mensagens.</p>
+        </div>
+        <div className="heading-actions">
+          <button className="secondary-button" onClick={() => void load()}>Atualizar</button>
+          {canEdit && <button className="primary" onClick={() => setShowCreate(value => !value)}>Novo rascunho</button>}
+        </div>
+      </div>
+
+      {error && <div className="error" role="alert">{error}</div>}
+      {notice && <div className="notice" role="status">{notice}</div>}
+
+      {showCreate && (
+        <section className="surface panel campaign-create">
+          <div className="editor-heading">
+            <div>
+              <h2>Novo rascunho</h2>
+              <p>Cria apenas o documento. Não agenda nem envia.</p>
+            </div>
+            <button className="secondary-button" onClick={() => setShowCreate(false)}>Fechar</button>
+          </div>
+          <div className="crm-fields">
+            <label>Nome da campanha
+              <input value={campaignName} onChange={event => setCampaignName(event.target.value)} maxLength={120} />
+            </label>
+            <label>Canal
+              <select value={channelId} onChange={event => setChannelId(event.target.value)}>
+                <option value="">Selecione um canal</option>
+                {channels.map(channel => <option key={channel.id} value={channel.id}>{channel.name}</option>)}
+              </select>
+            </label>
+            <label className="wide">Mensagem
+              <textarea rows={4} value={message} onChange={event => setMessage(event.target.value)} maxLength={5000} placeholder="Use {{nome}} para personalizar…" />
+            </label>
+            <label className="wide">Destinatários (um por linha: telefone;nome)
+              <textarea
+                rows={6}
+                value={recipientText}
+                onChange={event => { setRecipientText(event.target.value); setImportedRecipients(null); }}
+                placeholder="+5511999999999;Maria"
+              />
+            </label>
+          </div>
+          <div className="settings-actions">
+            <label className="secondary-button">
+              {importing ? 'Importando…' : 'Importar CSV, TXT ou XLSX'}
+              <input
+                type="file"
+                hidden
+                accept=".csv,.txt,.xlsx"
+                disabled={importing || creating}
+                onChange={event => {
+                  const file = event.target.files?.[0];
+                  if (file) void importRecipients(file);
+                  event.currentTarget.value = '';
+                }}
+              />
+            </label>
+            {importedRecipients && <span className="user-chip">{importedRecipients.length} destinatários validados</span>}
+            <button className="primary" disabled={creating || importing} onClick={() => void createDraft()}>
+              {creating ? 'Criando…' : 'Criar rascunho'}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {loading ? (
+        <div className="surface loading">Consultando campanhas…</div>
+      ) : (
+        <section className="surface panel">
+          <div className="editor-heading">
+            <div>
+              <h2>Rascunhos de campanha</h2>
+              <p>Somente documentos em estado de rascunho são listados por este contrato.</p>
+            </div>
+            <span className="user-chip">{data?.items?.length ?? 0} rascunhos</span>
+          </div>
+          {!data?.items?.length ? (
+            <div className="empty-state">Nenhum rascunho encontrado ou integração indisponível.</div>
+          ) : (
+            <div className="crm-table">
+              {data.items.map(draft => (
+                <button
+                  className={'crm-row ' + (selected === draft.campanha_id ? 'active' : '')}
+                  key={draft.campanha_id}
+                  onClick={() => void openDraft(draft.campanha_id)}
+                >
+                  <div>
+                    <strong>{draft.nome || 'Campanha sem nome'}</strong>
+                    <small>{draft.campanha_id}</small>
+                  </div>
+                  <span>Revisão {draft.revisao ?? '—'}</span>
+                  <span>{draft.status}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {selected && (
+        <section className="surface panel">
+          <div className="editor-heading">
+            <div>
+              <h2>Detalhes do rascunho</h2>
+              <p>{selected} · revisão {selectedDraft?.revisao ?? '—'}</p>
+            </div>
+            <button className="secondary-button" onClick={() => setSelected(null)}>Fechar</button>
+          </div>
+          {busy ? (
+            <div className="loading">Consultando detalhes…</div>
+          ) : (
+            <>
+              {canEdit && editorAvailable && (
+                <div className="campaign-editor">
+                  <div className="editor-heading">
+                    <div>
+                      <h3>Plano e opções</h3>
+                      <p>O servidor valida estrutura, limites e revisão antes de salvar.</p>
+                    </div>
+                    <button className="primary" disabled={busy} onClick={() => void saveDraft()}>Salvar rascunho</button>
+                  </div>
+                  <textarea className="json-editor" rows={16} spellCheck={false} value={editorJson} onChange={event => setEditorJson(event.target.value)} />
+                </div>
+              )}
+              {!editorAvailable && <div className="notice">O backend não retornou plano e opções editáveis nesta resposta. Os dados abaixo permanecem em modo leitura.</div>}
+              <div className="settings-actions"><span className="user-chip">Destinatários e progresso em modo leitura</span></div>
+              <h3 className="json-title">Campanha</h3>
+              <pre className="validation-output">{JSON.stringify(detail, null, 2)}</pre>
+              <h3 className="json-title">Destinatários</h3>
+              <pre className="validation-output">{JSON.stringify(recipients, null, 2)}</pre>
+              <h3 className="json-title">Progresso</h3>
+              <pre className="validation-output">{JSON.stringify(progress, null, 2)}</pre>
+            </>
+          )}
+        </section>
+      )}
+
+      <div className="notice">
+        {canEdit ? 'Você pode preparar e revisar rascunhos.' : 'A criação e edição de rascunhos estão desabilitadas para esta conta.'}
+        {' '}Execução, agendamento e envio em massa permanecem bloqueados nesta tela até homologação.
+      </div>
+    </div>
+  );
 }

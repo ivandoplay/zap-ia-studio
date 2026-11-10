@@ -2532,9 +2532,10 @@ app.post('/api/training-packs/import-preview', memUpload.single('file'), async (
     if (req.file.size > 4 * 1024 * 1024) return res.status(413).json({ ok: false, error: 'O arquivo de prévia pode ter no máximo 4 MB.' });
     const ctx = await workspaceReadDependencies.getLocalContext(req);
     if (!ctx?.tenant?.id || !ctx?.data?.business) return res.status(401).json({ ok: false, error: 'Não foi possível carregar o treinamento desta conta.' });
-    const business = ctx.data.business;
+    // Use the same tenant-scoped storage context as the legacy confirmation routes.
+    const business = storage.getBusiness();
     const activeId = business.trainingPackId;
-    const activePack = activeId ? ctx.data.customPacks?.[activeId] || null : null;
+    const activePack = activeId ? storage.data.customPacks?.[activeId] || null : null;
     const current = createTrainingDocument(business, activePack);
     const currentFingerprint = crypto.createHash('sha256').update(JSON.stringify({ business, pack: activePack })).digest('hex');
     const imported = await previewTrainingImport({

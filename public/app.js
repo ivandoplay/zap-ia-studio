@@ -3082,11 +3082,12 @@ window.confirmTrainingImport = async function confirmTrainingImport() {
     if (pending.source === 'text') {
       result = await api('/api/training-packs/import-text', {
         method: 'POST',
-        body: JSON.stringify({ text: pending.rawText, filename: pending.filename })
+        body: JSON.stringify({ text: pending.rawText, filename: pending.filename, expectedFingerprint: pending.preview.currentFingerprint })
       });
     } else {
       const form = new FormData();
       form.append('file', pending.file);
+      form.append('expectedFingerprint', pending.preview.currentFingerprint);
       result = await api('/api/training-packs/import-zip', { method: 'POST', body: form });
     }
     state.business = result.business;
@@ -3118,7 +3119,7 @@ window.applyPastedAiTraining = async function applyPastedAiTraining() {
   if (!raw) return showToast('Cole primeiro o código JSON ou Markdown gerado pela IA.', true);
   if (btn) { btn.disabled = true; btn.textContent = 'Gerando prévia...'; }
   try {
-    const filename = raw.startsWith('{') ? 'blueprint-chatgpt.json' : 'blueprint-chatgpt.md';
+    const filename = 'blueprint-chatgpt.md';
     const file = new File([raw], filename, { type: filename.endsWith('.json') ? 'application/json' : 'text/markdown' });
     await requestTrainingImportPreview(file, 'text', raw);
   } catch (err) {
@@ -8036,7 +8037,7 @@ function bindEvents() {
     const business = {
       name: profileName,
       niche: document.getElementById('profNiche').value.trim(),
-      assistantName: document.getElementById('profAssistantName').value.trim() || (soloIdentity ? (profileName.split(/\\s+/)[0] || 'Eu') : 'Atendente'),
+      assistantName: document.getElementById('profAssistantName').value.trim() || (soloIdentity ? (profileName.split(/\s+/)[0] || 'Eu') : 'Atendente'),
       soloIdentity,
       tone: document.getElementById('profTone').value,
       companySummary: document.getElementById('profSummary').value.trim(),

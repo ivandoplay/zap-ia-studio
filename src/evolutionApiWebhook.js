@@ -21,6 +21,33 @@ function secureEquals(a, b) {
   return x.length > 0 && x.length === y.length && timingSafeEqual(x, y);
 }
 
+export function splitReplyText(text, settings = {}) {
+  const fullText = String(text || '').trim();
+  if (settings.antiBan?.splitLongMessages === false || fullText.length <= 260 || !fullText.includes('\n\n')) return [fullText];
+  const parts = fullText.split(/\n{2,}/).map(part => part.trim()).filter(Boolean);
+  if (parts.length <= 1) return [fullText];
+  if (parts.length <= 3) return parts;
+  return [parts[0], parts.slice(1, -1).join('\n\n'), parts[parts.length - 1]];
+}
+export function isWithinBusinessSchedule(schedule = {}, now = new Date()) {
+  if (!schedule || schedule.mode === 'always') return { active: true, sendOffHoursNotice: false };
+  let day, minutes;
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: schedule.timezone || 'America/Fortaleza', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(now);
+    const map = Object.fromEntries(parts.map(part => [part.type, part.value]));
+    day = ({ Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 })[map.weekday];
+    minutes = Number(map.hour) * 60 + Number(map.minute);
+  } catch { day = now.getDay(); minutes = now.getHours() * 60 + now.getMinutes(); }
+  const [sh, sm] = String(schedule.startHour || '08:00').split(':').map(Number);
+  const [eh, em] = String(schedule.endHour || '18:00').split(':').map(Number);
+  const start = sh * 60 + (sm || 0), end = eh * 60 + (em || 0);
+  const workDays = Array.isArray(schedule.workDays) ? schedule.workDays : [1, 2, 3, 4, 5, 6];
+  const inside = workDays.includes(day) && minutes >= start && minutes <= end;
+  if (schedule.mode === 'business_hours_only') return { active: inside, sendOffHoursNotice: !inside };
+  if (schedule.mode === 'outside_hours_only') return { active: !inside, sendOffHoursNotice: false };
+  return { active: true, sendOffHoursNotice: false };
+}
+
 // Factory permite testar o mesmo router com Supabase/IA/transporte sintéticos, sem abrir WhatsApp.
 export function createEvolutionWebhookRouter({ env = process.env, adminClient = getAdminClient, replyGenerator = generateSmartReply, fetcher = globalThis.fetch } = {}) {
   const router = Router(), memory = new Map(), seen = new Set(), receipts = new Map(), sentByAutomation = new Set();
@@ -164,32 +191,6 @@ function applyActiveSecurity(live, active) {
       if (sentByAutomation.size > 1000) sentByAutomation.delete(sentByAutomation.values().next().value);
     }
     return sentId;
-  }
-  function splitReplyText(text, settings = {}) {
-    const fullText = String(text || '').trim();
-    if (settings.antiBan?.splitLongMessages === false || fullText.length <= 260 || !fullText.includes('\n\n')) return [fullText];
-    const parts = fullText.split(/\n{2,}/).map(part => part.trim()).filter(Boolean);
-    if (parts.length <= 1) return [fullText];
-    if (parts.length <= 3) return parts;
-    return [parts[0], parts.slice(1, -1).join('\n\n'), parts[parts.length - 1]];
-  }
-  function isWithinBusinessSchedule(schedule = {}, now = new Date()) {
-    if (!schedule || schedule.mode === 'always') return { active: true, sendOffHoursNotice: false };
-    let day, minutes;
-    try {
-      const parts = new Intl.DateTimeFormat('en-US', { timeZone: schedule.timezone || 'America/Fortaleza', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(now);
-      const map = Object.fromEntries(parts.map(part => [part.type, part.value]));
-      day = ({ Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 })[map.weekday];
-      minutes = Number(map.hour) * 60 + Number(map.minute);
-    } catch { day = now.getDay(); minutes = now.getHours() * 60 + now.getMinutes(); }
-    const [sh, sm] = String(schedule.startHour || '08:00').split(':').map(Number);
-    const [eh, em] = String(schedule.endHour || '18:00').split(':').map(Number);
-    const start = sh * 60 + (sm || 0), end = eh * 60 + (em || 0);
-    const workDays = Array.isArray(schedule.workDays) ? schedule.workDays : [1, 2, 3, 4, 5, 6];
-    const inside = workDays.includes(day) && minutes >= start && minutes <= end;
-    if (schedule.mode === 'business_hours_only') return { active: inside, sendOffHoursNotice: !inside };
-    if (schedule.mode === 'outside_hours_only') return { active: !inside, sendOffHoursNotice: false };
-    return { active: true, sendOffHoursNotice: false };
   }
   async function processRecord(identity, tenant, data, eventKey, historical = false) {
     const info = data.Info || data.info || {}, key = data.key || info.Key || {};

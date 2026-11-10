@@ -4094,8 +4094,20 @@ function updateInboxFilterCounters() {
   }
 }
 
+function isContactInstanceConnected(contact) {
+  if (!contact) return false;
+  const slotId = getContactSlotId(contact);
+  return getSlotUiMeta(slotId).status === 'connected';
+}
+
 function isInboxContactVisible(contact) {
-  if (!contact?.directoryImport) return true;
+  if (!contact) return false;
+  const hasConversation = !contact.directoryImport ||
+    (Array.isArray(contact.messages) && contact.messages.length > 0) ||
+    Boolean(contact.lastMessageAt) ||
+    contact.chatId === state.selectedInboxChatId;
+  if (hasConversation && !isContactInstanceConnected(contact)) return false;
+  if (!contact.directoryImport) return true;
   if (contact.savedContact === true || (Array.isArray(contact.messages) && contact.messages.length > 0)) return true;
   return contact.chatId === state.selectedInboxChatId;
 }
@@ -4354,7 +4366,8 @@ function renderCrmInbox(filteredList) {
 
   if (lblEl) lblEl.textContent = `${list.length} conversa${list.length === 1 ? '' : 's'}`;
 
-  if ((!state.selectedInboxChatId || !state.contacts.some((c) => c.chatId === state.selectedInboxChatId)) && list.length > 0) {
+  const selectedContact = (state.contacts || []).find((c) => c.chatId === state.selectedInboxChatId);
+  if ((!selectedContact || !isContactInstanceConnected(selectedContact)) && list.length > 0) {
     state.selectedInboxChatId = list[0].chatId;
   }
 
@@ -4502,7 +4515,9 @@ function renderActiveInboxConversation() {
   const paneEl = document.getElementById('crmInboxActivePane');
   if (!emptyEl || !paneEl) return;
 
-  const c = (state.contacts || []).find((x) => x.chatId === state.selectedInboxChatId);
+  const foundContact = (state.contacts || []).find((x) => x.chatId === state.selectedInboxChatId);
+  const c = foundContact && isContactInstanceConnected(foundContact) ? foundContact : null;
+  if (foundContact && !c) state.selectedInboxChatId = null;
   const msgBox = document.getElementById('crmInboxMessages');
   const chatChanged = Boolean(c && msgBox && msgBox.dataset.renderedChatId !== c.chatId);
   if (c && (chatChanged || state.inboxMessageWindow?.chatId !== c.chatId)) {
@@ -7515,6 +7530,7 @@ function bindEvents() {
           state.waState.slots[slotId].pairingCode = null;
         }
         renderWaState();
+        renderCrmBoard();
       }
       return res;
     } catch (err) {
@@ -7620,6 +7636,7 @@ function bindEvents() {
         });
         state.waState = res.waState;
         renderWaState();
+        renderCrmBoard();
         showToast(`${slotMeta.label} desconectado.`);
       }
     } catch (err) {

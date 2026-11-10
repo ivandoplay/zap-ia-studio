@@ -28,7 +28,7 @@ type MediaFolder = { pasta_id: string; nome: string; tipo: 'audio' | 'imagem' };
 type MediaFile = { arquivo_id: string; nome_original: string; mime: string; tamanho: number; ordem: number };
 type FoldersResponse = { ok: boolean; pastas: MediaFolder[] };
 type FilesResponse = { ok: boolean; arquivos: MediaFile[] };
-type UploadInit = { ok: boolean; arquivoId: string; signedUrl: string };
+type UploadInit = { ok: boolean; arquivoId: string; signedUrl: string; storageOrigin?: string | null };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -260,7 +260,7 @@ export default function CampaignsPage() {
         body: JSON.stringify({ tamanho: file.size }),
       });
       const signed = new URL(initialized.signedUrl);
-      if (signed.protocol !== 'https:') throw new Error('O backend não retornou uma URL HTTPS de upload.');
+      if (signed.protocol !== 'https:' || !initialized.storageOrigin || signed.origin !== initialized.storageOrigin) throw new Error('A URL assinada não corresponde à origem de armazenamento autorizada pelo backend.');
       const uploaded = await fetch(initialized.signedUrl, {
         method: 'PUT',
         headers: {

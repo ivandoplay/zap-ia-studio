@@ -2523,8 +2523,7 @@ function currentTrainingImportFingerprint() {
   const business = storage.getBusiness();
   const id = business.trainingPackId;
   const pack = id ? storage.data.customPacks?.[id] || getTrainingPack(id) || null : null;
-  const snapshot = createTrainingDocument(business, pack);
-  return crypto.createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
+  return crypto.createHash('sha256').update(JSON.stringify({ business, pack })).digest('hex');
 }
 
 app.post('/api/training-packs/import-preview', memUpload.single('file'), async (req, res) => {
@@ -2538,7 +2537,7 @@ app.post('/api/training-packs/import-preview', memUpload.single('file'), async (
     let activePack = activeId ? ctx.data.customPacks?.[activeId] || null : null;
     if (activeId && !activePack && ctx.viewer?.role === 'master' && ctx.viewer?.id === ctx.tenant.id) activePack = getTrainingPack(activeId);
     const current = createTrainingDocument(business, activePack);
-    const currentFingerprint = crypto.createHash('sha256').update(JSON.stringify(current)).digest('hex');
+    const currentFingerprint = crypto.createHash('sha256').update(JSON.stringify({ business, pack: activePack })).digest('hex');
     const imported = await previewTrainingImport({
       bytesBase64: req.file.buffer.toString('base64'),
       filename: req.file.originalname,

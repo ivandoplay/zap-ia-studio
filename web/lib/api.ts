@@ -1,38 +1,4 @@
-import {clearAuth,readAuth,saveAuth,IenviaSession} from './auth';
-
-let refreshInFlight:Promise<boolean>|null=null;
-async function refreshSession():Promise<boolean>{
-  if(refreshInFlight)return refreshInFlight;
-  refreshInFlight=(async()=>{
-    const current=readAuth();if(!current?.session.refreshToken)return false;
-    try{
-      const response=await fetch('/api/backend/auth/refresh',{method:'POST',headers:{'Accept':'application/json','Content-Type':'application/json','X-Ienvia-Request':'1'},body:JSON.stringify({refreshToken:current.session.refreshToken}),cache:'no-store'});
-      const data=await response.json().catch(()=>({}));
-      if(response.status===503&&data?.retrySession?.accessToken&&data?.retrySession?.refreshToken){saveAuth(data.retrySession,current.user);return false;}
-      if(response.ok&&data?.ok&&data?.session?.accessToken&&data?.session?.refreshToken){saveAuth(data.session,data.user||current.user);return true;}
-      if(response.status===401){clearAuth();window.dispatchEvent(new Event('ienvia:unauthorized'));}
-      return false;
-    }catch{return false;}
-  })().finally(()=>{refreshInFlight=null;});
-  return refreshInFlight;
-}
-
-export async function api<T>(path:string,init:RequestInit={},retried=false):Promise<T>{
-  const auth=readAuth();
-  if(path!=='auth/refresh'&&auth?.session.expiresAt&&auth.session.expiresAt*1000-Date.now()<180000&&!retried)await refreshSession();
-  const latest=readAuth();
-  const headers=new Headers(init.headers);
-  headers.set('Accept','application/json');headers.set('X-Ienvia-Request','1');
-  if(latest?.session.accessToken)headers.set('Authorization',`Bearer ${latest.session.accessToken}`);
-  if(init.body&&!(init.body instanceof FormData)&&!headers.has('Content-Type'))headers.set('Content-Type','application/json');
-  const response=await fetch(`/api/backend/${path.replace(/^\\/+/, '')}`,{...init,headers,cache:'no-store'});
-  const data=await response.json().catch(()=>({}));
-  if(!response.ok){
-    if(response.status===401&&path!=='auth/login'&&path!=='auth/refresh'&&!retried){
-      if(await refreshSession())return api<T>(path,init,true);
-      clearAuth();if(typeof window!=='undefined')window.dispatchEvent(new Event('ienvia:unauthorized'));
-    }
-    throw new Error(typeof data?.error==='string'?data.error:`Falha na API (${response.status}).`);
-  }
-  return data as T;
-}
+import{clearAuth,readAuth,saveAuth}from'./auth';
+let refreshInFlight:Promise<boolean>|null=null;let temporaryRefreshFailure=false;
+async function refreshSession():Promise<boolean>{if(refreshInFlight)return refreshInFlight;refreshTemporaryFailure=false;refreshInFlight=(async()=>{const current=readAuth();if(!current?.session.refreshToken)return false;try{const response=await fetch('/api/backend/auth/refresh',{method:'POST',headers:{Accept:'application/json','Content-Type':'application/json','X-Ienvia-Request':'1'},body:JSON.stringify({refreshToken:current.session.refreshToken}),cache:'no-store'});const data=await response.json().catch(()=>({}));if(response.status===503&&data?.retrySession?.accessToken&&data?.retrySession?.refreshToken){saveAuth(data.retrySession,current.user);temporaryRefreshFailure=true;return false;}if(response.ok&&data?.ok&&data?.session?.accessToken&&data?.session?.refreshToken){saveAuth(data.session,data.user||current.user);return true;}if(response.status===401){clearAuth();window.dispatchEvent(new Event('ienvia:unauthorized'));}return false;}catch{return false;}})().finally(()=>{refreshInFlight=null;});return refreshInFlight;}
+export async function api<T>(path:string,init:RequestInit={},retried=false):Promise<T>{const auth=readAuth();if(path!=='auth/refresh'&&auth?.session.expiresAt&&auth.session.expiresAt*1000-Date.now()<180000&&!retried)await refreshSession();const latest=readAuth();const headers=new Headers(init.headers);headers.set('Accept','application/json');headers.set('X-Ienvia-Request','1');if(latest?.session.accessToken)headers.set('Authorization',`Bearer ${latest.session.accessToken}`);if(init.body&&!(init.body instanceof FormData)&&!headers.has('Content-Type'))headers.set('Content-Type','application/json');const response=await fetch(`/api/backend/${path.replace(/^\\/+/, '')}`,{...init,headers,cache:'no-store'});const data=await response.json().catch(()=>({}));if(!response.ok){if(response.status===401&&path!=='auth/login'&&path!=='auth/refresh'&&!retried){const refreshed=await refreshSession();if(refreshed)return api<T>(path,init,true);if(!temporaryRefreshFailure){clearAuth();if(typeof window!=='undefined')window.dispatchEvent(new Event('ienvia:unauthorized'));}}throw new Error(typeof data?.error==='string'?data.error:`Falha na API (${response.status}).`);}return data as T;}

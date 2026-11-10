@@ -23,7 +23,7 @@ function secureEquals(a, b) {
 
 // Factory permite testar o mesmo router com Supabase/IA/transporte sintéticos, sem abrir WhatsApp.
 export function createEvolutionWebhookRouter({ env = process.env, adminClient = getAdminClient, replyGenerator = generateSmartReply, fetcher = globalThis.fetch } = {}) {
-  const router = Router(), memory = new Map(), seen = new Set(), receipts = new Map();
+  const router = Router(), memory = new Map(), seen = new Set(), receipts = new Map(), sentByAutomation = new Set();
   const cloud = Boolean(env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY);
   router.use(express.json({ limit: '10mb' }));
   router.get('/health', (_req, res) => res.json({ ok: true }));
@@ -158,7 +158,12 @@ function applyActiveSecurity(live, active) {
     });
     if (!response.ok) throw new Error('provider_rejected');
     const result = requireEvolutionMessageId(JSON.parse(await response.text()));
-    return result.key?.id || result.data?.key?.id || result.data?.id || result.id;
+    const sentId = result.key?.id || result.data?.key?.id || result.data?.id || result.id;
+    if (sentId) {
+      sentByAutomation.add(String(sentId));
+      if (sentByAutomation.size > 1000) sentByAutomation.delete(sentByAutomation.values().next().value);
+    }
+    return sentId;
   }
   function splitReplyText(text, settings = {}) {
     const fullText = String(text || '').trim();
@@ -218,7 +223,14 @@ function applyActiveSecurity(live, active) {
     if (historical) return { historical: true, saved: 1 };
     const settings = tenant.settings || {};
     if (fromMe) {
-      if (settings.humanHandoff?.pauseOnOwnerReply !== false) {
+      const incomingAt = Date.parse(timestamp) || Date.now();
+      const matchesRecentAiReply = (saved.contact?.messages || []).some(message =>
+        message.role === 'assistant' &&
+        String(message.text || '') === String(text || fallback) &&
+        Math.abs((Date.parse(message.timestamp || '') || 0) - incomingAt) < 120000
+      );
+      const isAutomationMessage = sentByAutomation.has(id) || matchesRecentAiReply;
+      if (!isAutomationMessage && settings.humanHandoff?.pauseOnOwnerReply !== false) {
         const pauseForever = Boolean(tenant.profile?.lockUntilManualResume);
         const pauseMinutes = Math.max(5, Number(settings.humanHandoff?.pauseDurationMinutes) || 60);
         await merge(identity, chatId, [], { patch: {
@@ -230,6 +242,7 @@ function applyActiveSecurity(live, active) {
     }
     if (!saved.inserted) return { duplicate: true };
     const contact = saved.contact;
+    const phone = jid.endsWith('@s.whatsapp.net') ? jid.split('@')[0].split(':')[0] : '';
     const ignored = contact.aiIgnored || (settings.ignoredContacts || []).some(x => String(x.phone || '').replace(/\D/g, '') === phone);
     const paused = contact.pausedUntil === 'forever' || Date.parse(contact.pausedUntil || '') > Date.now();
     if (pedidoExplicitoParada(text)) {
@@ -237,6 +250,7 @@ function applyActiveSecurity(live, active) {
       return { persisted: true, optOut: true };
     }
     const iaEnabled = settings.botEnabled !== false && tenant.slotEnabled && !ignored && !paused;
+    if (!iaEnabled || !env.EVOLUTION_API_KEY || !phone || (!text && !media)) return { persisted: true, iaEnabled };
     const schedule = isWithinBusinessSchedule(settings.schedule || {});
     if (!schedule.active) {
       const offHoursText = String(settings.schedule?.offHoursReplyMessage || '').trim();
@@ -251,7 +265,6 @@ function applyActiveSecurity(live, active) {
       }
       return { persisted: true, iaEnabled: false, outsideBusinessHours: true };
     }
-    if (!iaEnabled || !env.EVOLUTION_API_KEY || !phone || (!text && !media)) return { persisted: true, iaEnabled };
     let pending = [];
     try {
       const reply = await replyGenerator({ profile: tenant.profile, settings, history: contact.messages.filter(x => x.id !== id && x.role !== 'internal_note').slice(-60), userText: text, media, contactName: contact.name || phone, allowDemoFallback: false });

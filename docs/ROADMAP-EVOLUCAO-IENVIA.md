@@ -215,10 +215,19 @@ Para cada etapa:
 ### Pendências que exigem integração e homologação
 
 - [x] Prévia do prompt agora recebe um snapshot validado dos campos atuais do formulário e monta a resposta sem persistir alterações. A rota mantém allow-list de campos, valida tipos/limites e usa os dados de catálogo, PIX, áudios e pacote já carregados no contexto.
-- [ ] Importação de pacote ainda usa a rota legada que aplica o treinamento diretamente. A prévia do módulo training-v2 existe, mas a interface não foi migrada e a origem remota precisa ser homologada antes de conectá-la. Não ativar a rota v2 como substituição sem validar persistência e compatibilidade.
+### Importação segura — etapa intermediária implementada
+- [x] Criada rota legada de prévia isolada: compila o arquivo em armazenamento temporário e devolve apenas resumo, contagens e campos de perfil alterados; não grava nem ativa o pacote.
+- [x] Arquivos ZIP/JSON/MD/TXT e conteúdo colado agora passam primeiro pela prévia. A interface só chama o importador legado depois da confirmação explícita.
+- [x] A confirmação envia fingerprint do estado completo do negócio e pacote ativo; se o treinamento mudar entre prévia e confirmação, a API recusa a aplicação e exige nova prévia.
+- [x] Mantido o importador legado como executor final, preservando compatibilidade com o motor atual e com o fluxo de persistência existente.
+- [x] Adicionados testes isolados para compilação da prévia sem mutar o documento de origem e rejeição de Base64 inválido.
+
+- [ ] Homologar integração remota de training-v2 e persistência antes de considerar qualquer ativação/migração para esse novo motor.
 - [x] Documentos da base de conhecimento são serializados separadamente e rotulados no prompt como dados de referência não confiáveis; instruções encontradas neles não devem substituir as regras do sistema.
 - [ ] Validar visualmente os campos do editor e os estados de erro/retry em desktop e mobile.
-- [ ] Executar a suíte isolada completa, adicionar regressões automatizadas para edição parcial de Skills, IDs com lacunas, FAQ com linha vazia e limite de upload.
-- [ ] Testar persistência real em ambiente autenticado e confirmar que os pacotes existentes continuam intactos.
+- [ ] Executar a suíte isolada completa e corrigir eventuais regressões encontradas.
+- [ ] Validar importação de arquivo e conteúdo colado em sessão autenticada, incluindo bloqueio de prévia desatualizada.
+- [ ] Validar visualmente o fluxo de prévia/confirmação em desktop e mobile.
+- [ ] Confirmar em sessão autenticada que os pacotes existentes continuam intactos.
 
 **Limite de validação desta etapa:** as alterações foram gravadas na branch de homologação por commits GitHub. Ainda não houve execução local da suíte, validação no navegador, teste autenticado de persistência, Preview Vercel ou deploy. A produção permanece intocada.

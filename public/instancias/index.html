@@ -3517,7 +3517,7 @@
   const toggle = document.getElementById('btnSidebarToggle');
   const backdrop = document.getElementById('sidebarDrawerBackdrop');
   if (!sidebar || !toggle || !backdrop) return;
-  const mobile = () => window.matchMedia('(max-width: 820px)').matches;
+  const mobile = () => window.matchMedia('(max-width: 900px)').matches;
   const close = () => {
     sidebar.classList.remove('drawer-open');
     backdrop.classList.remove('visible');

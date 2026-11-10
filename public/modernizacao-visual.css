@@ -406,3 +406,98 @@ details.pro-accordion, .conf-previa, .camp-panel, .camp-notice { border-radius: 
   font-size: 10px;
 }
 #cmdResultsList .empty-state { padding: 24px 12px; color: var(--text-secondary); text-align: center; }
+
+
+/* Dashboard command center — clearer hierarchy without changing its data contracts */
+.visao-topo {
+  position: relative;
+  isolation: isolate;
+  align-items: center;
+  gap: 20px;
+  padding: clamp(18px, 2.3vw, 28px);
+  margin-bottom: 17px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background:
+    radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--accent) 17%, transparent), transparent 55%),
+    linear-gradient(125deg, var(--bg-card), var(--bg-sidebar));
+  box-shadow: var(--shadow-sm);
+}
+.visao-topo::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: auto 8% -1px 8%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-border), transparent);
+}
+.visao-ola-titulo {
+  color: var(--text-main);
+  font-size: clamp(25px, 3vw, 34px);
+  font-weight: 820;
+  letter-spacing: -.055em;
+}
+.visao-relogio {
+  border-color: var(--accent-border);
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+  font-size: 12px;
+  padding: 5px 10px;
+}
+.visao-ola-sub { max-width: 540px; font-size: 13px; line-height: 1.65; }
+.visao-topo .u-acoes-8 { gap: 8px; }
+.visao-kpis { gap: 11px; }
+.visao-kpi {
+  position: relative;
+  min-height: 132px;
+  padding: 14px 15px 13px;
+  border-radius: 15px;
+  overflow: hidden;
+}
+.visao-kpi::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 2px;
+  opacity: .55;
+  background: linear-gradient(90deg, transparent, var(--accent-border), transparent);
+}
+.visao-kpi:focus-visible {
+  outline: 2px solid var(--accent-bright);
+  outline-offset: 3px;
+}
+.visao-kpi-num { letter-spacing: -.055em; }
+.visao-kpi-rotulo { color: var(--text-main); font-weight: 690; }
+.visao-kpi-pe { line-height: 1.45; }
+.visao-atencao { gap: 10px; }
+.visao-alerta { min-height: 62px; border-radius: 13px; }
+.visao-grade { gap: 15px; }
+.visao-col { gap: 15px; }
+.visao-grade .panel { border-radius: 16px; }
+.visao-grade .panel-header { align-items: flex-start; }
+#readinessStrip { padding: 2px 1px 5px; }
+#readinessStrip .ready-pill { min-height: 30px; padding-inline: 10px; }
+@media (min-width: 1501px) {
+  .visao-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+@media (max-width: 1100px) {
+  .visao-topo { align-items: flex-start; }
+  .visao-topo .u-acoes-8 { justify-content: flex-start; }
+}
+@media (max-width: 700px) {
+  .visao-topo { padding: 17px 15px; border-radius: 16px; }
+  .visao-ola-linha { gap: 8px; }
+  .visao-ola-titulo { font-size: 25px; }
+  .visao-topo .u-acoes-8 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .visao-topo .u-acoes-8 .btn { width: 100%; justify-content: center; min-height: 40px; padding-inline: 9px; font-size: 11px; }
+  .visao-kpis { gap: 8px; }
+  .visao-kpi { min-height: 124px; padding: 11px; }
+  .visao-kpi-num { font-size: 25px; }
+  .visao-kpi-rotulo { font-size: 11px; }
+  .visao-kpi-pe { font-size: 10px; }
+  .visao-atencao { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 380px) {
+  .visao-topo .u-acoes-8 { grid-template-columns: minmax(0, 1fr); }
+  .visao-kpi { min-height: 116px; }
+}

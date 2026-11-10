@@ -23,7 +23,7 @@ A view permite `SELECT` para `anon` e `authenticated`, não tem a opção `secur
 
 Views PostgreSQL usam por padrão os privilégios do owner; portanto, neste desenho, a view pode contornar as proteções RLS das tabelas-base. A definição não contém filtro por sessão, proprietário ou segredo.
 
-**Próximo passo seguro:** mapear consumidores externos da view antes de retirar grants ou mudar para `security_invoker = true`. Não foi encontrado consumidor no código indexado do repositório, mas isso não prova que não exista consumidor externo. Por isso, nenhuma alteração à view foi incluída na proposta executável.
+**Próximo passo seguro:** mapear consumidores externos da view antes de retirar grants ou mudar para `security_invoker = true`. `service_role` também tem SELECT na view. Não foi encontrado consumidor no código indexado do repositório, mas isso não prova que não exista consumidor externo. Por isso, nenhuma alteração à view foi incluída na proposta executável.
 
 ### 3. Classificação das 12 funções `SECURITY DEFINER` executáveis por `anon`
 
@@ -32,7 +32,7 @@ A leitura dos catálogos identificou:
 - `handle_new_zapia_user()`: função de trigger de criação de usuário; não deve ser removida em lote.
 - `ienvia_legacy_import_guard(uuid)`: verifica `auth.uid()`, igualdade com o owner e conta ativa.
 - As duas RPCs internas de campanha descritas no item 1: exposição não intencional a corrigir.
-- Oito funções `pag_*`: recebem segredo como parâmetro e fazem parte do fluxo de integração de página. Devem ser revisadas individualmente como endpoints autenticados por segredo, não revogadas indiscriminadamente.
+- Oito funções `pag_*`: recebem segredo como parâmetro e fazem parte do fluxo de integração de página. A função `pag_sessao_id(text)` foi inspecionada: exige segredo com pelo menos 16 caracteres e procura a sessão pelo SHA-256 (`pag_hash`), sem retornar a sessão quando não encontra correspondência. Devem ser revisadas individualmente como endpoints autenticados por segredo, não revogadas indiscriminadamente.
 
 O total de funções `SECURITY DEFINER` em `public` foi 139; 12 eram executáveis por `anon` e 72 por `authenticated`. A contagem não significa que todas sejam vulneráveis.
 

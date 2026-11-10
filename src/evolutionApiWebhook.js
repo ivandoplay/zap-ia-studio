@@ -223,6 +223,7 @@ function applyActiveSecurity(live, active) {
     const saved = await merge(identity, chatId, [turn], { name: String(data.pushName || jid.split('@')[0]), event: `message:${id}` });
     if (historical) return { historical: true, saved: 1 };
     const settings = tenant.settings || {};
+    if (!saved.inserted) return { duplicate: true };
     if (fromMe) {
       const incomingAt = Date.parse(timestamp) || Date.now();
       const matchesRecentAiReply = (saved.contact?.messages || []).some(message =>
@@ -248,7 +249,6 @@ function applyActiveSecurity(live, active) {
       }
       return { persisted: true, role: 'owner' };
     }
-    if (!saved.inserted) return { duplicate: true };
     const contact = saved.contact;
     const phone = jid.endsWith('@s.whatsapp.net') ? jid.split('@')[0].split(':')[0] : '';
     const ignored = contact.aiIgnored || (settings.ignoredContacts || []).some(x => String(x.phone || '').replace(/\D/g, '') === phone);

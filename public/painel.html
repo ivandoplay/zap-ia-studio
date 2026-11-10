@@ -2829,6 +2829,22 @@
           <label class="form-label" for="packSkillExample">Orientação completa / Exemplo de resposta ideal</label>
           <textarea id="packSkillExample" rows="5" required placeholder="Descreva a conduta e um exemplo natural de resposta..."></textarea>
         </div>
+        <div class="form-group" data-humanization-field hidden>
+          <label class="form-label" for="packSkillGoal">Objetivo da humanização</label>
+          <textarea id="packSkillGoal" rows="2" placeholder="Qual comportamento humano a skill deve produzir?"></textarea>
+        </div>
+        <div class="form-group" data-humanization-field hidden>
+          <label class="form-label" for="packSkillAvoid">O que evitar</label>
+          <textarea id="packSkillAvoid" rows="2" placeholder="Atitudes, palavras ou abordagens que devem ser evitadas..."></textarea>
+        </div>
+        <div class="form-group" data-humanization-field hidden>
+          <label class="form-label" for="packSkillBadResponse">Exemplo de resposta inadequada</label>
+          <textarea id="packSkillBadResponse" rows="2" placeholder="Exemplo do que a IA não deve responder..."></textarea>
+        </div>
+        <div class="form-group" data-humanization-field hidden>
+          <label class="form-label" for="packSkillBetterResponse">Exemplo de resposta adequada</label>
+          <textarea id="packSkillBetterResponse" rows="3" placeholder="Exemplo de resposta humanizada e adequada..."></textarea>
+        </div>
         <div class="u-acoes-topo">
           <button type="button" class="btn btn-secondary" onclick="closeModal('editPackSkillModal')">Cancelar</button>
           <button type="submit" class="btn btn-primary">Salvar Skill no Pacote</button>

@@ -59,7 +59,7 @@ test('disables unauthenticated maintenance routes', async () => {
 
 test('applies the long-message quick control to Evolution replies', () => {
   const paragraph = 'Esta é uma parte da resposta automática com conteúdo suficiente para compor uma mensagem longa.';
-  const longText = [paragraph, paragraph + ' Segunda parte.', paragraph + ' Terceira parte.', paragraph + ' Quarta parte.'].join('\\n\\n');
+  const longText = [paragraph, paragraph + ' Segunda parte.', paragraph + ' Terceira parte.', paragraph + ' Quarta parte.'].join('\n\n');
   const split = splitReplyText(longText, { antiBan: { splitLongMessages: true } });
   assert.equal(split.length, 3);
   assert.equal(split[0], paragraph);

@@ -46,3 +46,5 @@
 .crm-tasks{display:grid;gap:9px;margin:16px 0;padding:14px;border:1px solid var(--line);border-radius:10px}.crm-tasks>strong{font-size:12px}.crm-tasks>label{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)}.crm-tasks>div{display:flex;gap:8px}.crm-tasks>div input{flex:1;min-width:0;height:35px;border:1px solid var(--line);border-radius:7px;padding:0 9px}.crm-tasks .secondary-button{margin:0}
 
 .audio-upload{display:inline-flex;align-items:center;gap:10px;border:1px dashed #a8b7c8;border-radius:9px;padding:12px 15px;color:var(--ink);font-size:11px;font-weight:700;cursor:pointer}.audio-upload input{max-width:220px;font-size:10px}.audio-transcription{font-size:11px;color:var(--muted);white-space:pre-wrap;max-width:720px}.channel-row audio{display:block;width:min(100%,340px);height:36px;margin-top:10px}
+
+.channel-row-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}.channel-row-actions .secondary-button{margin:0}

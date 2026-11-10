@@ -7965,8 +7965,28 @@ function bindEvents() {
   }
 
   document.getElementById('btnPreviewPrompt').addEventListener('click', async () => {
+    const p = getActiveProfile();
+    if (!p) return showToast('Treinamento ativo indisponível para prévia.', true);
+    syncFaqsFromDom(p);
+    const business = {
+      name: document.getElementById('profName').value.trim() || 'Meu Negócio',
+      niche: document.getElementById('profNiche').value.trim(),
+      assistantName: document.getElementById('profAssistantName').value.trim() || 'Atendente',
+      soloIdentity: Boolean(document.getElementById('profSoloIdentityCheck')?.checked),
+      tone: document.getElementById('profTone').value,
+      companySummary: document.getElementById('profSummary').value.trim(),
+      deliveryAndPayment: document.getElementById('profDeliveryPayment').value.trim(),
+      goldenRules: document.getElementById('profRules').value.trim(),
+      extraInstructions: document.getElementById('profExtra').value.trim(),
+      lockUntilManualResume: Boolean(document.getElementById('profLockForeverCheck')?.checked),
+      promptShieldEnabled: Boolean(document.getElementById('profPromptShieldCheck')?.checked),
+      faqs: (p.faqs || []).filter((faq) => faq.question || faq.answer)
+    };
     try {
-      const res = await api('/api/business/system-prompt');
+      const res = await api('/api/business/system-prompt/preview', {
+        method: 'POST',
+        body: JSON.stringify({ business })
+      });
       document.getElementById('promptPreviewText').textContent = res.prompt;
       document.getElementById('promptPreviewModal').classList.add('open');
     } catch (err) {

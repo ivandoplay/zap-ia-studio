@@ -35,15 +35,16 @@ Atualizado: 2026-11-10
 - Supabase Realtime como sinal de mudança na Inbox, com polling de contingência.
 - Shell responsivo e tema claro/escuro.
 - CI GitHub Actions para typecheck e build.
+- Raiz do Turbopack explicitamente fixada em `process.cwd()`, que corresponde a `web/` no CI e no projeto Vercel com Root Directory `web`.
 
 ## Validação observada
-- Commit de código `a0fb6bac8f3d34cb97aacccb9e5a16319e3f5295`: GitHub Actions run `42736604491` concluído com sucesso. Os passos `npm run typecheck` e `npm run build` passaram.
-- O build gerou as 21 rotas previstas. Isso comprova compilação, não integração ponta a ponta com uma conta real.
-- Os dois checks Vercel reportaram falha com destino de erro `upgradeToPro=build-rate-limit`. A publicação/homologação pela Vercel está bloqueada pelo limite de builds da conta.
-- O log de build apontou aviso de detecção ambígua da raiz Turbopack devido aos lockfiles da raiz e de `web/`; a configuração será ajustada para fixar a raiz do app em `web/` e a CI será executada novamente.
+- Commit `a0fb6bac8f3d34cb97aacccb9e5a16319e3f5295`: GitHub Actions run `42736604491` concluído com sucesso. `npm run typecheck` e `npm run build` passaram e o build gerou as 21 rotas.
+- Após fixar a raiz Turbopack, a nova execução `42737003781` foi iniciada; resultado ainda pendente nesta atualização.
+- Os dois checks Vercel reportaram falha com destino `upgradeToPro=build-rate-limit`. A publicação/homologação pela Vercel está bloqueada pelo limite de builds da conta.
+- Build verde comprova compilação, não integração ponta a ponta com uma conta real.
 
 ## Pendências para conclusão real
-1. Executar CI novamente após o ajuste da raiz Turbopack.
+1. Confirmar CI verde após o ajuste da raiz Turbopack.
 2. Criar deployment Vercel separado com Root Directory `web`, configurar `IENVIA_BACKEND_URL` HTTPS e validar domínio/headers. O limite atual de builds precisa ser resolvido na conta Vercel.
 3. Homologar BFF com backend real: login, refresh, logout, 401/403/409/429/5xx, uploads e isolamento entre contas.
 4. Testar Inbox em conta de teste com Evolution, mídia, notas, perfil e Realtime/RLS.

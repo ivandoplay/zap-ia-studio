@@ -23,6 +23,10 @@ cloudWorker.getStatus = () => ({ configured: false, loggedIn: false });
 cloudWorker.tryRestoreSavedLogin = async () => false;
 cloudWorker.promptTerminalLoginIfInteractive = async () => {};
 whatsappManager.autoRestoreIfSessionExists = async () => {};
+// O cenário exercita a leitura do histórico com um slot de homologação conectado.
+// A regra de produto de ocultar conversas ao desconectar continua intacta.
+whatsappManager.slots.slot_1.status = 'connected';
+whatsappManager.slots.slot_1.sock = {};
 
 const chatId = '5586999998888@s.whatsapp.net';
 store.upsertContact(chatId, { name: 'Cliente Histórico Sintético', phone: '5586999998888' }, { deferSave: true });

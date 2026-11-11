@@ -154,8 +154,8 @@ export function normalizeVoiceLibraryItem(v = {}) {
     waveform,
     sizeBytes: Number(v.sizeBytes) || 0,
     sentCount: Number(v.sentCount) || 0,
-    createdAt: v.createdAt || new Date().toISOString(),
-    updatedAt: v.updatedAt || new Date().toISOString()
+    createdAt: typeof v.createdAt === 'string' ? v.createdAt : '',
+    updatedAt: typeof v.updatedAt === 'string' ? v.updatedAt : ''
   };
 }
 
@@ -301,7 +301,7 @@ function normalizeBusinessObject(raw = {}, fallback = createBusinessFromTemplate
       ? raw.customTags.filter(Boolean).map(normalizeCustomTagItem)
       : (fallback.customTags || createDefaultCustomTags()),
     catalog: Array.isArray(raw.catalog) ? raw.catalog.map(normalizeCatalogItem) : fallback.catalog,
-    updatedAt: raw.updatedAt || new Date().toISOString()
+    updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : ''
   };
 }
 

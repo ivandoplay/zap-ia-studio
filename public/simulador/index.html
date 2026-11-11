@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="/campanhas.css" />
   <link rel="stylesheet" href="/utilities.css" />
   <link rel="stylesheet" href="/skeleton.css" />
+  <link rel="stylesheet" href="/modernizacao-visual.css" />
 </head>
 <body>
   <a href="#mainContentArea" class="skip-link">Pular para o conteúdo principal</a>
@@ -83,7 +84,7 @@
   </div>
 
   <!-- Navegação Lateral Desktop (SaaS Pro 5 Hubs) -->
-  <aside class="sidebar" aria-label="Menu principal">
+  <aside id="mainSidebar" class="sidebar" aria-label="Menu principal">
     <div class="brand">
       <div class="brand-left">
         <div class="brand-mark" aria-hidden="true">
@@ -121,7 +122,7 @@
         <span class="nav-btn-left"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l18-7-4 16-5-6-5 3 1-5z"></path></svg><span>Campanhas</span></span>
       </button>
 
-      <div class="nav-group-label">Atendimento inteligente</div>
+      <div class="nav-group-label">Inteligência artificial</div>
       <details class="nav-section" data-section="ia" open>
         <summary class="nav-section-toggle">
           <span class="nav-section-toggle-left">
@@ -168,7 +169,7 @@
         <summary class="nav-section-toggle">
           <span class="nav-section-toggle-left">
             <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16"></path><path d="M4 12h16"></path><path d="M4 18h16"></path><circle cx="8" cy="6" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="16" cy="18" r="1.6"></circle></svg>
-            <span>Canais e instâncias</span>
+            <span>Canais e conexões</span>
           </span>
           <svg class="icon-svg nav-section-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
         </summary>
@@ -185,7 +186,7 @@
         </div>
       </details>
 
-      <div class="nav-group-label">Gestão</div>
+      <div class="nav-group-label">Administração</div>
       <details class="nav-section" data-section="gestao" open>
         <summary class="nav-section-toggle">
           <span class="nav-section-toggle-left">
@@ -221,6 +222,7 @@
       </div>
     </div>
   </aside>
+  <div id="sidebarDrawerBackdrop" class="sidebar-drawer-backdrop" aria-hidden="true"></div>
 
   <!-- Área Principal -->
   <div class="main-wrapper">
@@ -241,6 +243,9 @@
     <!-- BARRA SUPERIOR ÚNICA (56PX DESKTOP / 52PX MOBILE — ZERO QUEBRA DE LINHA) -->
     <header class="topbar">
       <div class="topbar-left">
+        <button type="button" id="btnSidebarToggle" class="sidebar-toggle-btn" aria-label="Abrir menu de navegação" aria-controls="mainSidebar" aria-expanded="false" title="Abrir menu">
+          <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"></path></svg>
+        </button>
         <div class="mob-topbar-brand">
           <div class="brand-mark u-marca-28"  aria-hidden="true">
             <img src="/ienvia-icon-v2.png" alt="" class="u-simbolo-img" />
@@ -400,7 +405,7 @@
             <span class="visao-kpi-rotulo">Campanhas ativas</span>
             <span class="visao-kpi-pe" id="visaoKpiCampanhasPe">nenhuma rodando</span>
           </button>
-          <button type="button" class="visao-kpi" onclick="switchTab('dashboard')" title="Chips conectados">
+          <button type="button" class="visao-kpi" onclick="switchTab('instancias')" title="Chips conectados — abrir gerenciamento de instâncias">
             <span class="visao-kpi-topo">
               <span class="visao-kpi-icone conexao"><svg class="icon-svg u-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg></span>
               <span id="visaoTendenciaChips" class="visao-tendencia"></span>
@@ -409,7 +414,7 @@
             <span class="visao-kpi-rotulo">Chips online</span>
             <span class="visao-kpi-pe" id="visaoKpiChipsPe">de 0 conectáveis</span>
           </button>
-          <button type="button" class="visao-kpi" onclick="switchTab('contas')" title="Mensagens recebidas e respondidas">
+          <button type="button" class="visao-kpi" onclick="switchTab('historico')" title="Mensagens recebidas e respondidas — abrir histórico">
             <span class="visao-kpi-topo">
               <span class="visao-kpi-icone mensagem"><svg class="icon-svg u-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
               <span id="visaoTendenciaMensagens" class="visao-tendencia"></span>
@@ -694,7 +699,7 @@
                   <div id="activePackStatusBox" class="u-mt-12"></div>
 
                   <!-- Estúdio Visual de M01–M13 & Skills (Sxx/Hxx) direto na tela -->
-                  <div id="packVisualStudioPanel" class="u-oculto-fio-topo">
+                  <div id="packVisualStudioPanel" class="u-none">
                     <div class="panel-header u-mb-12">
                       <div class="studio-subtabs">
                         <button type="button" class="studio-subtab active" data-studiotab="messages">Mensagens Aprovadas (M01–M13)</button>
@@ -807,11 +812,11 @@
         <div class="treino-painel" data-treino-painel="arquivos" role="tabpanel" hidden>
           <div class="panel">
                       <div class="panel-header">
-                        <h2 class="panel-title">Arquivos de Conhecimento (.TXT, .CSV, .MD)</h2>
+                        <h2 class="panel-title">Arquivos de Conhecimento (.TXT, .CSV, .MD, .JSON)</h2>
                       </div>
                       <p class="panel-desc">Suba tabelas de preços, manuais ou políticas em texto para a IA consultar durante o atendimento.</p>
                       <div class="u-acoes-wrap-fim">
-                        <input type="file" id="knowledgeFileInput" accept=".txt,.csv,.md,.json"  aria-label="Selecionar arquivo PDF ou TXT de conhecimento" class="u-flex-1" />
+                        <input type="file" id="knowledgeFileInput" accept=".txt,.csv,.md,.json" aria-label="Selecionar arquivo de texto ou JSON para a base de conhecimento" class="u-flex-1" />
                         <button type="button" id="btnUploadKnowledge" class="btn btn-secondary">Anexar arquivo</button>
                       </div>
                       <div id="knowledgeDocsList"></div>
@@ -2825,6 +2830,22 @@
           <label class="form-label" for="packSkillExample">Orientação completa / Exemplo de resposta ideal</label>
           <textarea id="packSkillExample" rows="5" required placeholder="Descreva a conduta e um exemplo natural de resposta..."></textarea>
         </div>
+        <div class="form-group" data-humanization-field hidden>
+          <label class="form-label" for="packSkillGoal">Objetivo da humanização</label>
+          <textarea id="packSkillGoal" rows="2" placeholder="Qual comportamento humano a skill deve produzir?"></textarea>
+        </div>
+        <div class="form-group" data-humanization-field hidden>
+          <label class="form-label" for="packSkillAvoid">O que evitar</label>
+          <textarea id="packSkillAvoid" rows="2" placeholder="Atitudes, palavras ou abordagens que devem ser evitadas..."></textarea>
+        </div>
+        <div class="form-group" data-humanization-field hidden>
+          <label class="form-label" for="packSkillBadResponse">Exemplo de resposta inadequada</label>
+          <textarea id="packSkillBadResponse" rows="2" placeholder="Exemplo do que a IA não deve responder..."></textarea>
+        </div>
+        <div class="form-group" data-humanization-field hidden>
+          <label class="form-label" for="packSkillBetterResponse">Exemplo de resposta adequada</label>
+          <textarea id="packSkillBetterResponse" rows="3" placeholder="Exemplo de resposta humanizada e adequada..."></textarea>
+        </div>
         <div class="u-acoes-topo">
           <button type="button" class="btn btn-secondary" onclick="closeModal('editPackSkillModal')">Cancelar</button>
           <button type="submit" class="btn btn-primary">Salvar Skill no Pacote</button>
@@ -3045,6 +3066,21 @@
       <div class="modal-body">
         <p class="panel-desc">Este é o conjunto exato de instruções compiladas dinamicamente (incluindo blindagem OWASP LLM01 e seleção de skills):</p>
         <pre id="promptPreviewText" class="u-pre-caixa-alto u-text-breve u-rolagem-440"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: PRÉVIA E CONFIRMAÇÃO DA IMPORTAÇÃO DE TREINAMENTO -->
+  <div id="trainingImportPreviewModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="trainingImportPreviewTitle">
+    <div class="modal-dialog u-max-620">
+      <div class="modal-head">
+        <h3 id="trainingImportPreviewTitle" class="panel-title">Revisar treinamento antes de aplicar</h3>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="cancelTrainingImportPreview()">Cancelar</button>
+      </div>
+      <div id="trainingImportPreviewBody" class="modal-body"></div>
+      <div class="modal-body u-acoes-fim-8">
+        <button type="button" class="btn btn-secondary" onclick="cancelTrainingImportPreview()">Voltar</button>
+        <button type="button" id="btnConfirmTrainingImport" class="btn btn-primary" onclick="confirmTrainingImport()">Confirmar e aplicar treinamento</button>
       </div>
     </div>
   </div>
@@ -3393,9 +3429,9 @@
         <!-- ABA 1: CHATGPT / CLAUDE RÁPIDO -->
         <div id="aiBuilderPaneChatgpt" class="u-dir-col u-gap-12">
           <div class="u-aviso-suave u-aviso-suave--ok">
-            <strong>Como funciona em 2 passos simples:</strong><br/>
+            <strong>Como funciona:</strong><br/>
             1️⃣ Clique em <strong>Copiar Super-Prompt</strong> abaixo e cole no ChatGPT, Claude ou Gemini (lá você conta por texto ou áudio sobre a empresa).<br/>
-            2️⃣ Copie a resposta gerada pela IA, cole na caixa abaixo e clique em <strong>Aplicar Treinamento Completo</strong> — ele já preenche Identidade, Regras, FAQs, Mensagens Aprovadas (M01..) e Skills (S01../H01..) sozinho!
+            2️⃣ Cole a resposta gerada pela IA e clique em <strong>Gerar prévia</strong>. Revise os dados e só então confirme a aplicação do treinamento.
           </div>
 
           <div class="form-group u-mb-0">
@@ -3413,7 +3449,7 @@
             <textarea id="aiBlueprintPasteArea" rows="6" spellcheck="false" placeholder="Cole aqui o código JSON (ou Markdown) gerado pelo ChatGPT e clique em Aplicar abaixo..."></textarea>
             <div class="u-acoes-entre-wrap">
               <label for="zipPackInput" class="btn btn-secondary btn-sm u-cursor-pointer"  onclick="closeModal('aiTrainingBuilderModal')">📂 Ou enviar arquivo (.JSON / .MD / .ZIP)</label>
-              <button type="button" id="btnApplyPastedBlueprint" class="btn btn-primary" onclick="applyPastedAiTraining()">⚡ 2. Aplicar Treinamento Completo</button>
+              <button type="button" id="btnApplyPastedBlueprint" class="btn btn-primary" onclick="applyPastedAiTraining()">🔎 Gerar prévia antes de aplicar</button>
             </div>
           </div>
         </div>
@@ -3474,5 +3510,38 @@
   <script>window.IENVIA_PAGINA='simulador';</script>
   <script src="/app.js" defer></script>
   <script src="/campanhas.js" defer></script>
+
+<script>
+(() => {
+  const sidebar = document.getElementById('mainSidebar');
+  const toggle = document.getElementById('btnSidebarToggle');
+  const backdrop = document.getElementById('sidebarDrawerBackdrop');
+  if (!sidebar || !toggle || !backdrop) return;
+  const mobile = () => window.matchMedia('(max-width: 900px)').matches;
+  const close = () => {
+    sidebar.classList.remove('drawer-open');
+    backdrop.classList.remove('visible');
+    document.body.classList.remove('sidebar-drawer-open');
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-label', 'Abrir menu de navegação');
+  };
+  const open = () => {
+    if (!mobile()) return;
+    sidebar.classList.add('drawer-open');
+    backdrop.classList.add('visible');
+    document.body.classList.add('sidebar-drawer-open');
+    toggle.setAttribute('aria-expanded', 'true');
+    toggle.setAttribute('aria-label', 'Fechar menu de navegação');
+  };
+  toggle.addEventListener('click', () => sidebar.classList.contains('drawer-open') ? close() : open());
+  backdrop.addEventListener('click', close);
+  sidebar.querySelectorAll('.nav-btn[data-tab]').forEach((button) => button.addEventListener('click', close));
+  sidebar.querySelectorAll('.nav-section-toggle').forEach((summary) => summary.addEventListener('click', () => {
+    if (mobile()) requestAnimationFrame(() => sidebar.scrollTo({ top: summary.offsetTop - 100, behavior: 'smooth' }));
+  }));
+  window.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });
+  window.addEventListener('resize', () => { if (!mobile()) close(); });
+})();
+</script>
 </body>
 </html>

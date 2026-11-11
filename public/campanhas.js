@@ -67,7 +67,25 @@ function listarRender(){const list=$('campLista');limpar(list);if(!ctx.campanhas
   if(c.status==='pausada'){const b=botao('Retomar',()=>controleRapido(c.campanha_id,'retomar'),'btn btn-primary btn-sm camp-card-acao');b.setAttribute('aria-label','Retomar '+c.nome);row.append(b);}
   list.append(row);
  }}
-async function atualizar(){if(ctx.carregando)return;ctx.carregando=true;try{const d=await api('/api/campaigns');ctx.campanhas=d.campanhas;listarRender();if(ctx.selecionada)await detalhe(ctx.selecionada);}finally{ctx.carregando=false;}}
+async function atualizar(){
+ if(ctx.carregando)return;
+ ctx.carregando=true;
+ try{
+  const d=await api('/api/campaigns');
+  ctx.campanhas=d.campanhas;
+  listarRender();
+  if(ctx.selecionada)await detalhe(ctx.selecionada);
+ }catch(err){
+  const list=$('campLista');
+  if(list&&(!Array.isArray(ctx.campanhas)||!ctx.campanhas.length)){
+   limpar(list);
+   list.append(criar('div',err?.message||'Não foi possível carregar as campanhas agora.','camp-empty'));
+  }
+  throw err;
+ }finally{
+  ctx.carregando=false;
+ }
+}
 function contador(){for(const x of painel.querySelectorAll('[data-camp-tempo]')){const seconds=Math.max(0,Math.ceil((Number(x.dataset.campTempo)-Date.now())/1000));const h=Math.floor(seconds/3600),m=Math.floor(seconds%3600/60),s=seconds%60;x.textContent=seconds?`${h?`${h}h `:''}${m}min ${String(s).padStart(2,'0')}s`:'Pronta para a próxima ação';}}
 async function detalhe(campanhaId){
  const d=await api(`/api/campaigns/${encodeURIComponent(campanhaId)}`);if(ctx.selecionada!==campanhaId){ctx.listando=false;ctx.pagina=0;}ctx.selecionada=campanhaId;listarRender();const area=$('campDetalhe');limpar(area);const c=d.campanha,r=d.resumo;

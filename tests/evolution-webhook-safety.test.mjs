@@ -8,7 +8,7 @@ import { ingestEvolutionWebhook } from '../src/crmV2/eventIngress.js';
 import { requireEvolutionMessageId } from '../src/evolutionApiResponse.js';
 const owner='11111111-1111-4111-8111-111111111111',secret='segredo-sintetico-apenas-testes';
 const env={EVOLUTION_WEBHOOK_SECRET:secret,EVOLUTION_API_KEY:'synthetic-key',EVOLUTION_DEFAULT_USER_ID:owner,SUPABASE_URL:'https://db.test',SUPABASE_SERVICE_ROLE_KEY:'synthetic-service'};
-let contacts=new Map(),events=new Set(),sends=0,aiCalls=0,failRead=false,failSave=false,failSend=false,slotEnabled=true,botEnabled=true;
+let contacts=new Map(),events=new Set(),sends=0,presenceCalls=0,aiCalls=0,failRead=false,failSave=false,failSend=false,failPresence=false,slotEnabled=true,botEnabled=true;
 const admin={from(table){return {select(){return this},eq(){return this},async maybeSingle(){if(failRead)return {error:{message:'synthetic'}};return {data:table==='zapia_users'?{is_active:true,max_wa_slots:3}:table==='zapia_workspaces'?{business:{},settings:{botEnabled,ignoredContacts:[]}}:{ai_enabled:slotEnabled}}}}},async rpc(name,args){
  assert.equal(name,'ienvia_merge_evolution_contact');if(failSave)return {error:{message:'synthetic'}};
  const scope=`${args.p_owner}:${args.p_chat}`,k=`${scope}:${args.p_event}`,inserted=!args.p_event||!events.has(k);
@@ -16,12 +16,12 @@ const admin={from(table){return {select(){return this},eq(){return this},async m
  for(const m of args.p_messages){const old=contact.messages.find(x=>x.id===m.id||x.waMsgId===m.waMsgId);if(old)Object.assign(old,m);else contact.messages.push({...m});}
  Object.assign(contact,args.p_patch);contacts.set(scope,contact);return {data:{inserted,contact},error:null};
 }};
-const app=express();app.use(createEvolutionWebhookRouter({env,adminClient:()=>admin,replyGenerator:async()=>{aiCalls++;return {cleanText:'Resposta sintética',actions:{}}},fetcher:async(_url,options)=>{sends++;assert.ok(options.signal);assert.equal(options.redirect,'error');if(failSend)throw new Error('timeout');return {ok:true,text:async()=>JSON.stringify({key:{id:`out-${sends}`}})}}}));
+const app=express();app.use(createEvolutionWebhookRouter({env,adminClient:()=>admin,replyGenerator:async()=>{aiCalls++;return {cleanText:'Resposta sintética',actions:{}}},fetcher:async(url,options)=>{assert.ok(options.signal);assert.equal(options.redirect,'error');if(String(url).includes('/chat/sendPresence/')){presenceCalls++;if(failPresence)throw new Error('presence offline');return {ok:true,text:async()=>JSON.stringify({ok:true})};}sends++;if(failSend)throw new Error('timeout');return {ok:true,text:async()=>JSON.stringify({key:{id:`out-${sends}`}})}}}));
 const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));test.after(()=>new Promise(r=>server.close(r)));
 const base=`http://127.0.0.1:${server.address().port}`;
 function payload(id='in-1',extra={}){return {event:'messages.upsert',instance:'zap-ia-slot_1',data:{key:{remoteJid:'558600000001@s.whatsapp.net',id,fromMe:false},message:{conversation:'Olá teste'},messageTimestamp:1793707200,...extra}};}
 async function post(body,token=secret){const r=await fetch(base+'/webhook',{method:'POST',headers:{'content-type':'application/json',...(token?{'x-ienvia-webhook-secret':token}:{})},body:JSON.stringify(body)});return {status:r.status,body:await r.json()};}
-test.beforeEach(()=>{contacts=new Map();events=new Set();sends=aiCalls=0;failRead=failSave=failSend=false;slotEnabled=botEnabled=true});
+test.beforeEach(()=>{contacts=new Map();events=new Set();sends=presenceCalls=aiCalls=0;failRead=failSave=failSend=failPresence=false;slotEnabled=botEnabled=true});
 test('webhook rejeita segredo ausente/incorreto e instância desconhecida sem chamar banco/IA/envio',async()=>{
  assert.equal((await post(payload(),null)).status,401);assert.equal((await post(payload(),'errado')).status,401);
  assert.equal((await post({...payload(),instance:'desconhecida'})).status,403);assert.equal(sends,0);assert.equal(aiCalls,0);assert.equal(contacts.size,0);
@@ -37,6 +37,10 @@ test('string false representa mensagem recebida e wrappers efêmeros são interp
 });
 test('falha do Supabase antes da persistência retorna 503 e não envia',async()=>{
  failSave=true;assert.equal((await post(payload())).status,503);assert.equal(sends,0);failSave=false;failRead=true;assert.equal((await post(payload())).status,503);assert.equal(sends,0);
+});
+test('falha na presença de digitação não bloqueia o envio da mensagem',async()=>{
+ failPresence=true;const r=await post(payload());assert.equal(r.status,200);assert.equal(r.body.accepted,true);
+ assert.equal(presenceCalls,1,'presença deve ser contabilizada separadamente');assert.equal(sends,1,'a mensagem de texto deve ser enviada mesmo sem presença');assert.equal(aiCalls,1);
 });
 test('timeout após gravação preserva entrada/saída incerta e não repete o envio',async()=>{
  failSend=true;const a=await post(payload());assert.equal(a.status,200);assert.equal(a.body.replyUncertain,true);

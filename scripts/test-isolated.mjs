@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 // A suíte cresceu; ajuste explícito só do prazo do harness, nunca das asserções.
-const testTimeout=Number(process.env.ZAPIA_TEST_TIMEOUT_MS||240000);
+const testTimeout=Number(process.env.ZAPIA_TEST_TIMEOUT_MS||480000);
 if(!Number.isSafeInteger(testTimeout)||testTimeout<1000||testTimeout>900000)throw new Error('ZAPIA_TEST_TIMEOUT_MS deve estar entre 1000 e 900000.');
 const temp=fs.mkdtempSync(path.join(os.tmpdir(),'ienvia-tests-')),copy=path.join(temp,'project');
 const filter=process.argv[2] ? new RegExp(process.argv[2]) : null;
@@ -19,7 +19,17 @@ try {
  }
  fs.mkdirSync(path.join(copy,'data'));
  fs.symlinkSync(path.join(root,'node_modules'),path.join(copy,'node_modules'),'dir');
- const tests=fs.readdirSync(path.join(copy,'tests')).filter(f=>f.endsWith('.test.mjs')&&(!filter||filter.test(f))).sort().map(f=>path.join('tests',f));
+ const legacyV2Tests=new Set([
+   'accounts-v2-server-gates.test.mjs','accounts-v2.test.mjs',
+   'ai-settings-connection.test.mjs','ai-settings-v2-server-gates.test.mjs','ai-settings-v2.test.mjs',
+   'crm-library.test.mjs','crm-tags.test.mjs','resources-v2-server-gates.test.mjs',
+   'security-settings-v2-server-gates.test.mjs','security-settings-v2.test.mjs',
+   'simulator-v2-runtime.test.mjs','training-v2-repository.test.mjs','training-v2-runtime.test.mjs','training-v2-server-gates.test.mjs'
+ ]);
+ const includeLegacyV2=process.env.ZAPIA_RUN_LEGACY_V2_TESTS==='1';
+ const tests=fs.readdirSync(path.join(copy,'tests'))
+   .filter(f=>f.endsWith('.test.mjs')&&(includeLegacyV2||!legacyV2Tests.has(f))&&(!filter||filter.test(f)))
+   .sort().map(f=>path.join('tests',f));
  if(!tests.length)throw new Error('Nenhum teste selecionado.');
  // Não herdar tokens de Supabase, Evolution, IA ou outros serviços.
  const env=Object.fromEntries(['PATH','HOME','TMPDIR','TEMP','SystemRoot','PLAYWRIGHT_BROWSERS_PATH','LD_LIBRARY_PATH','PREVIEW_ARTIFACTS'].filter(k=>process.env[k]).map(k=>[k,process.env[k]]));

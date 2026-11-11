@@ -17,6 +17,7 @@ import {createCampaignRunner} from './campaigns/runner.js';
 import {createAccountPlan} from './shared/contracts/accounts-domain.js';
 import {previewTrainingRuntime} from './training/runtimePreview.js';
 import {previewTrainingImport} from './training/importPreview.js';
+import {createTrainingDocument, TRAINING_FIELDS} from './shared/contracts/training-domain.js';
 import { composeConnectionState } from './dashboard/connections.js';
 import { createDashboardRouter } from './dashboard/router.js';
 import { createConnectionsRouter } from './connections/router.js';
@@ -272,6 +273,12 @@ const rotasSoApelido = Object.keys(PAGINAS_PAINEL)
   .filter(rota => `/${PAGINAS_PAINEL[rota]}` !== rota);
 app.get(rotasSoApelido, v2ParaPainelAntigo);
 
+// A página de histórico contém a área de trabalho de conversas e deve evitar cache compartilhado.
+app.get('/historico/', (_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, private');
+  res.sendFile(path.join(ROOT_DIR, 'public', 'historico', 'index.html'));
+});
+
 // Assets próprios: comprime e cacheia usando o mesmo código no Node e na Vercel.
 // Está ANTES do express.static para ele não abrir stream de arquivo sem compressão.
 app.use((req, res, next) => {
@@ -389,9 +396,6 @@ function extractBearerToken(req) {
   const authHeader = String(req.headers.authorization || '').trim();
   if (authHeader.toLowerCase().startsWith('bearer ')) {
     return authHeader.slice(7).trim();
-  }
-  if (req.query?.token) {
-    return String(req.query.token).trim();
   }
   return '';
 }
@@ -594,8 +598,8 @@ function attachAtomicCloudFlush(res, tenantStore) {
 
 // Rotas do dashboard que também precisam do workspace do tenant (contatos vivos).
 const CONVERSATIONS_WORKSPACE_ROUTE = /^\/conversations-v3(?:\/|$)/;
-const WORKSPACE_ONLY_ROUTE = /^\/(?:training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/;
-const isDashboardRequest = (req) => /^\/(?:channels|conversations-v3|crm-v2|campaigns-v2|training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/.test(req.path)&&!CRON_PATH.test(req.path)||/^(?:\/dashboard\/(?:summary|appearance|parity)|\/connections\/(?:summary|configuration|pairing))\/?$/.test(req.path);
+const WORKSPACE_ONLY_ROUTE = /^\/(?:training-packs|training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/;
+const isDashboardRequest = (req) => /^\/(?:channels|conversations-v3|crm-v2|campaigns-v2|training-packs|training-v2|resources-v2|simulator-v2|ai-settings-v2|security-settings-v2|accounts-v2)(?:\/|$)/.test(req.path)&&!CRON_PATH.test(req.path)||/^(?:\/dashboard\/(?:summary|appearance|parity)|\/connections\/(?:summary|configuration|pairing))\/?$/.test(req.path);
 // O disparo do relógio de campanhas é autenticado por segredo próprio do cron, não por
 // sessão de navegador: ele não pode entrar no fluxo de contexto por usuário.
 // Dentro de `app.use('/api')` o Express entrega `req.path` já sem o prefixo "/api".
@@ -648,7 +652,21 @@ app.use('/api', async (req, res, next) => {
         // Abas sem conversa (Treinamento, Catálogo, IA, Segurança, Contas, Simulador) leem
         // business/settings reais: carregamos o workspace do tenant sem os contatos. O chat
         // continua carregando o workspace completo, com contatos, no bloco abaixo.
-        if (WORKSPACE_ONLY_ROUTE.test(req.path) && !(actAsUserId && actAsUserId !== verified.authUser.id)) {
+        if (WORKSPACE_ONLY_ROUTE.test(req.path) && actAsUserId && actAsUserId !== verified.authUser.id) {
+          if (!UUID_RE.test(actAsUserId)) throw Object.assign(new Error('Identificador de cliente inválido.'), { statusCode: 400 });
+          const supportCtx = await loadTenantContextAsMasterSupport(actAsUserId);
+          req.cloudAuth = {
+            client: supportCtx.adminClient,
+            authUser: supportCtx.targetAuthUser,
+            profile: supportCtx.targetProfile,
+            tenantStore: supportCtx.tenantStore,
+            isRemoteImpersonation: true,
+            impersonatedBy: { id: verified.authUser.id, username: verified.profile.username, displayName: verified.profile.display_name || verified.profile.username }
+          };
+          attachAtomicCloudFlush(res, supportCtx.tenantStore);
+          return tenantStorageContext.run(supportCtx.tenantStore, () => next());
+        }
+        if (WORKSPACE_ONLY_ROUTE.test(req.path)) {
           const store = await loadTenantContextFromCloud(verified.client, verified.authUser, verified.profile, {withContacts: false});
           // Os routers das abas leem `req.dashboardContext.data`; o contexto do dashboard
           // sozinho não traz workspace, então anexamos aqui o dado real do tenant.
@@ -752,7 +770,7 @@ app.use('/api', async (req, res, next) => {
 
   const configuredPin = String(storage.data.settings.securityPin || '').trim();
   if (configuredPin) {
-    const headerPin = String(req.headers['x-panel-pin'] || req.query?.pin || '').trim();
+    const headerPin = String(req.headers['x-panel-pin'] || '').trim();
     if (!safeComparePin(configuredPin, headerPin)) {
       return res.status(401).json({ ok: false, pinRequired: true, error: 'Painel protegido por PIN.' });
     }
@@ -765,6 +783,23 @@ app.use('/api', async (req, res, next) => {
     try {
       if (!cloudWorker.client || !workerSt.user?.id) return res.status(403).json({ ok: false, error: 'Entre como master para usar suporte.' });
       req.dashboardContext = await makeDashboardContext({ client: cloudWorker.client, authUser: workerSt.user, profile: workerSt.user }, actAsUserId);
+      if (WORKSPACE_ONLY_ROUTE.test(req.path)) {
+        const supportCtx = await loadTenantContextAsMasterSupport(actAsUserId);
+        req.cloudAuth = {
+          client: supportCtx.adminClient,
+          authUser: supportCtx.targetAuthUser,
+          profile: supportCtx.targetProfile,
+          tenantStore: supportCtx.tenantStore,
+          isRemoteImpersonation: true,
+          impersonatedBy: {
+            id: workerSt.user.id,
+            username: workerSt.user.username,
+            displayName: workerSt.user.displayName || workerSt.user.username
+          }
+        };
+        attachAtomicCloudFlush(res, supportCtx.tenantStore);
+        return tenantStorageContext.run(supportCtx.tenantStore, () => next());
+      }
       return next();
     } catch (error) { return res.status(error.statusCode || 503).json({ ok: false, error: error.message }); }
   }
@@ -813,10 +848,19 @@ const workspaceReadDependencies = {
       const auth = req?.cloudAuth;
       if (!auth?.client || !auth?.authUser) return null;
       if (req._workspaceLazy) return req._workspaceLazy;
-      req._workspaceLazy = loadTenantContextFromCloud(auth.client, auth.authUser, auth.profile || {}, {withContacts: false})
+      req._workspaceLazy = Promise.resolve(auth.tenantStore || null)
+        .then(existing => existing || loadTenantContextFromCloud(auth.client, auth.authUser, auth.profile || {}, {withContacts: false}))
         .then(store => {
           req.cloudAuth = {...auth, tenantStore: store};
-          return {...req.dashboardContext, mode: 'vercel_cloud', data: store.data, runtime: store.waRuntime || req.dashboardContext?.runtime, store, storage: store};
+          return {
+            ...req.dashboardContext,
+            mode: 'vercel_cloud',
+            tenant: { id: auth.authUser.id, displayName: auth.profile?.display_name || auth.profile?.username || 'Minha conta' },
+            data: store.data,
+            runtime: store.waRuntime || req.dashboardContext?.runtime,
+            store,
+            storage: store
+          };
         })
         .catch(() => null);
       return req._workspaceLazy;
@@ -827,7 +871,7 @@ const workspaceReadDependencies = {
     const slots = Object.fromEntries(Object.entries(runtime.slots || {}).map(([id, value]) => [id, { ...value, workerOnline: true, workerHeartbeatAt: now }]));
     return { mode: 'local_worker', viewerClient: worker.user?.id ? cloudWorker.client : null,
       viewer: { id: worker.user?.id || null, displayName: worker.user?.displayName || worker.user?.username || 'Painel local', role: worker.user?.role || null },
-      tenant: { id: worker.user?.id || null, displayName: worker.user?.displayName || 'Este motor local', maxWaSlots },
+      tenant: { id: worker.user?.id || 'local-workspace', displayName: worker.user?.displayName || 'Este motor local', maxWaSlots },
       permissions: { master: (worker.user?.role || 'master') === 'master' }, data: storage.data, runtime: { ...runtime, slots, maxWaSlots } };
   }
 };
@@ -2404,6 +2448,46 @@ app.get('/api/business/system-prompt', (req, res) => {
   res.json({ ok: true, prompt });
 });
 
+app.post('/api/business/system-prompt/preview', (req, res) => {
+  const current = storage.getBusiness();
+  const draft = req.body?.business;
+  const allowed = new Set([
+    'name', 'niche', 'assistantName', 'soloIdentity', 'tone', 'companySummary',
+    'deliveryAndPayment', 'goldenRules', 'extraInstructions',
+    'lockUntilManualResume', 'promptShieldEnabled', 'faqs'
+  ]);
+  if (!draft || typeof draft !== 'object' || Array.isArray(draft) ||
+      Object.keys(draft).some((key) => !allowed.has(key))) {
+    return res.status(400).json({ ok: false, error: 'Dados da prévia inválidos.' });
+  }
+  const textFields = ['name', 'niche', 'assistantName', 'tone', 'companySummary', 'deliveryAndPayment', 'goldenRules', 'extraInstructions'];
+  if (textFields.some((key) => typeof draft[key] !== 'string' || draft[key].length > 32000) ||
+      !draft.name.trim() || !['consultivo', 'acolhedor', 'descontraido', 'profissional', 'formal'].includes(draft.tone) ||
+      ['soloIdentity', 'lockUntilManualResume', 'promptShieldEnabled'].some((key) => typeof draft[key] !== 'boolean') ||
+      !Array.isArray(draft.faqs) || draft.faqs.length > 200 ||
+      draft.faqs.some((faq) => !faq || typeof faq !== 'object' ||
+        typeof faq.question !== 'string' || faq.question.length > 2000 ||
+        typeof faq.answer !== 'string' || faq.answer.length > 8000)) {
+    return res.status(400).json({ ok: false, error: 'Revise os campos do treinamento antes de gerar a prévia.' });
+  }
+  const normalizeFaqList = (list) => (Array.isArray(list) ? list : [])
+    .map((faq) => ({
+      question: String(faq?.question || '').trim(),
+      answer: String(faq?.answer || '').trim()
+    }))
+    .filter((faq) => faq.question || faq.answer);
+  const hasUnsavedDiff =
+    textFields.some((key) => String(current[key] ?? '').trim() !== draft[key].trim()) ||
+    ['soloIdentity', 'lockUntilManualResume', 'promptShieldEnabled'].some((key) => Boolean(current[key]) !== draft[key]) ||
+    JSON.stringify(normalizeFaqList(current.faqs)) !== JSON.stringify(normalizeFaqList(draft.faqs));
+  const profile = { ...current, ...draft };
+  const prompt = buildSystemPrompt(profile, storage.data.settings, 'Lojista Exemplo', {
+    userText: 'É só tráfego pago ou vocês fazem conteúdo também?',
+    history: []
+  });
+  res.json({ ok: true, prompt, source: hasUnsavedDiff ? 'unsaved_form_snapshot' : 'saved' });
+});
+
 // ======================== PACOTES DE TREINAMENTO TURBO (.ZIP) + EDITOR VISUAL ========================
 
 app.get('/api/training-packs/:packId', (req, res) => {
@@ -2488,8 +2572,93 @@ function applyImportedTrainingResult({ packSummary, suggestedProfile }) {
   return storage.data.business;
 }
 
+function currentTrainingImportFingerprint() {
+  const rawBiz = storage.data?.business && typeof storage.data.business === 'object' ? storage.data.business : {};
+  const normalized = storage.getBusiness();
+  // Evita que fallbacks voláteis (new Date().toISOString()) gerados em leitura mudem o hash entre preview e apply.
+  const business = {
+    ...normalized,
+    updatedAt: typeof rawBiz.updatedAt === 'string' ? rawBiz.updatedAt : '',
+    voiceLibrary: (normalized.voiceLibrary || []).map((v, idx) => {
+      const rawV = Array.isArray(rawBiz.voiceLibrary) ? rawBiz.voiceLibrary[idx] : null;
+      return {
+        ...v,
+        createdAt: typeof rawV?.createdAt === 'string' ? rawV.createdAt : '',
+        updatedAt: typeof rawV?.updatedAt === 'string' ? rawV.updatedAt : ''
+      };
+    })
+  };
+  const id = business.trainingPackId;
+  const pack = id ? storage.data.customPacks?.[id] || null : null;
+  return crypto.createHash('sha256').update(JSON.stringify({ business, pack })).digest('hex');
+}
+
+app.post('/api/training-packs/import-preview', memUpload.single('file'), async (req, res) => {
+  try {
+    if (!req.file?.buffer) return res.status(400).json({ ok: false, error: 'Selecione um arquivo de treinamento.' });
+    if (req.file.size > 4 * 1024 * 1024) return res.status(413).json({ ok: false, error: 'O arquivo de prévia pode ter no máximo 4 MB.' });
+    const ctx = await workspaceReadDependencies.getLocalContext(req);
+    if (!ctx?.tenant?.id || !ctx?.data?.business) return res.status(401).json({ ok: false, error: 'Não foi possível carregar o treinamento desta conta.' });
+    // Use the same tenant-scoped storage context as the legacy confirmation routes.
+    const business = storage.getBusiness();
+    const activeId = business.trainingPackId;
+    const activePack = activeId ? storage.data.customPacks?.[activeId] || null : null;
+    const current = createTrainingDocument(business, activePack);
+    const currentFingerprint = currentTrainingImportFingerprint();
+    const imported = await previewTrainingImport({
+      bytesBase64: req.file.buffer.toString('base64'),
+      filename: req.file.originalname,
+      document: current,
+      ctx
+    });
+    const labels = {
+      name: 'Nome do negócio/profissional', niche: 'Segmento', assistantName: 'Nome do atendente',
+      soloIdentity: 'Atendimento individual', tone: 'Tom de voz', companySummary: 'Descrição do negócio',
+      deliveryAndPayment: 'Entrega e pagamento', goldenRules: 'Regras principais',
+      extraInstructions: 'Instruções complementares', lockUntilManualResume: 'Pausa até retomada manual',
+      promptShieldEnabled: 'Proteção do prompt', faqs: 'Perguntas frequentes', knowledgeDocs: 'Documentos de conhecimento'
+    };
+    const changedFields = TRAINING_FIELDS.filter((key) =>
+      JSON.stringify(current.training[key]) !== JSON.stringify(imported.training[key])
+    ).map((key) => labels[key] || key);
+    const pack = imported.pack;
+    res.setHeader('Cache-Control', 'no-store, private');
+    return res.json({
+      ok: true,
+      preview: {
+        filename: req.file.originalname,
+        currentFingerprint,
+        businessName: imported.training.name,
+        packName: pack?.name || imported.training.name,
+        changedFields,
+        counts: {
+          faqs: imported.training.faqs.length,
+          knowledgeDocs: imported.training.knowledgeDocs.length,
+          messages: pack?.canonicalCore?.approvedMessages?.length || 0,
+          operationalSkills: pack?.operationalSkills?.length || 0,
+          humanizationSkills: pack?.humanizationSkills?.length || 0,
+          attachments: imported.attachments.length
+        },
+        preserved: {
+          catalogItems: Array.isArray(business.catalog) ? business.catalog.length : 0,
+          pixConfigured: Boolean(business.pix?.key),
+          voiceItems: Array.isArray(business.voiceLibrary) ? business.voiceLibrary.length : 0
+        }
+      }
+    });
+  } catch (err) {
+    return res.status(err.status || 400).json({ ok: false, error: `Falha ao gerar prévia: ${err.message}` });
+  }
+});
+
 app.post('/api/training-packs/import-zip', memUpload.single('file'), (req, res) => {
   try {
+    if (!/^[a-f0-9]{64}$/i.test(String(req.body?.expectedFingerprint || ''))) {
+      return res.status(400).json({ ok: false, error: 'Gere uma prévia antes de confirmar a importação.' });
+    }
+    if (req.body.expectedFingerprint !== currentTrainingImportFingerprint()) {
+      return res.status(409).json({ ok: false, error: 'O treinamento atual mudou desde a prévia. Gere uma nova prévia antes de aplicar.' });
+    }
     if (!req.file || !req.file.buffer) {
       return res.status(400).json({ ok: false, error: 'Selecione um arquivo .ZIP, .JSON ou .MD válido.' });
     }
@@ -2509,6 +2678,12 @@ app.post('/api/training-packs/import-zip', memUpload.single('file'), (req, res) 
 
 app.post('/api/training-packs/import-text', (req, res) => {
   try {
+    if (!/^[a-f0-9]{64}$/i.test(String(req.body?.expectedFingerprint || ''))) {
+      return res.status(400).json({ ok: false, error: 'Gere uma prévia antes de confirmar a importação.' });
+    }
+    if (req.body.expectedFingerprint !== currentTrainingImportFingerprint()) {
+      return res.status(409).json({ ok: false, error: 'O treinamento atual mudou desde a prévia. Gere uma nova prévia antes de aplicar.' });
+    }
     const rawText = String(req.body?.text || '').trim();
     const filename = String(req.body?.filename || 'blueprint-chatgpt.json').trim();
     if (!rawText) {
@@ -2534,8 +2709,23 @@ app.post('/api/business/knowledge-upload', memUpload.single('file'), (req, res) 
   let content = req.body?.content || '';
 
   if (req.file) {
-    title = title || req.file.originalname;
-    content = req.file.buffer.toString('utf-8').slice(0, 30000);
+    const extension = path.extname(req.file.originalname || '').toLowerCase();
+    if (!['.txt', '.md', '.json', '.csv'].includes(extension)) {
+      return res.status(415).json({ ok: false, error: 'Formato não suportado. Envie TXT, MD, JSON ou CSV.' });
+    }
+    if (req.file.buffer.includes(0)) {
+      return res.status(415).json({ ok: false, error: 'O arquivo contém dados binários. Envie um documento de texto.' });
+    }
+    try {
+      content = new TextDecoder('utf-8', { fatal: true }).decode(req.file.buffer);
+    } catch {
+      return res.status(415).json({ ok: false, error: 'O arquivo não contém texto UTF-8 válido.' });
+    }
+    title = title || path.basename(req.file.originalname || 'Documento de Treinamento');
+  }
+
+  if (content.length > 30000) {
+    return res.status(413).json({ ok: false, error: 'O documento excede o limite de 30 mil caracteres. Divida o arquivo em partes menores; nenhum conteúdo foi cortado ou salvo.' });
   }
 
   if (!content.trim()) {

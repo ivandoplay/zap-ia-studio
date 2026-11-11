@@ -8,7 +8,7 @@ process.env.ZAPIA_ISOLATED_TEST = '1';
 delete process.env.VERCEL;
 delete process.env.SUPABASE_URL;
 delete process.env.SUPABASE_SERVICE_ROLE_KEY;
-const { evolutionApiWebhookRouter } = await import('../src/evolutionApiWebhook.js');
+const { evolutionApiWebhookRouter, splitReplyText, isWithinBusinessSchedule } = await import('../src/evolutionApiWebhook.js');
 const app = express();
 app.use('/hook', evolutionApiWebhookRouter);
 const server = app.listen(0, '127.0.0.1');
@@ -55,4 +55,24 @@ test('ingests legacy HistorySync messages and normalizes them as history events'
 test('disables unauthenticated maintenance routes', async () => {
   const response = await fetch(`${base}/clear`, { method:'POST', headers:{'content-type':'application/json'}, body:'{}' });
   assert.equal(response.status, 404);
+});
+
+test('applies the long-message quick control to Evolution replies', () => {
+  const paragraph = 'Esta é uma parte da resposta automática com conteúdo suficiente para compor uma mensagem longa.';
+  const longText = [paragraph, paragraph + ' Segunda parte.', paragraph + ' Terceira parte.', paragraph + ' Quarta parte.'].join('\n\n');
+  const split = splitReplyText(longText, { antiBan: { splitLongMessages: true } });
+  assert.equal(split.length, 3);
+  assert.equal(split[0], paragraph);
+  assert.equal(split[2], paragraph + ' Quarta parte.');
+  assert.deepEqual(splitReplyText(longText, { antiBan: { splitLongMessages: false } }), [longText]);
+});
+
+test('applies business-hours and outside-hours quick controls in the configured timezone', () => {
+  const schedule = { timezone: 'America/Fortaleza', startHour: '08:00', endHour: '18:00', workDays: [2] };
+  const inside = isWithinBusinessSchedule({ ...schedule, mode: 'business_hours_only' }, new Date('2026-11-10T15:00:00.000Z'));
+  assert.deepEqual(inside, { active: true, sendOffHoursNotice: false });
+  const outside = isWithinBusinessSchedule({ ...schedule, mode: 'business_hours_only' }, new Date('2026-11-10T22:00:00.000Z'));
+  assert.deepEqual(outside, { active: false, sendOffHoursNotice: true });
+  const nightMode = isWithinBusinessSchedule({ ...schedule, mode: 'outside_hours_only' }, new Date('2026-11-10T22:00:00.000Z'));
+  assert.deepEqual(nightMode, { active: true, sendOffHoursNotice: false });
 });

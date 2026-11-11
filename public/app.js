@@ -208,19 +208,38 @@ function playHandoffChime() {
   }
 }
 
-function buildDownloadQuery() {
-  const params = new URLSearchParams();
-  if (state.cloudSession?.accessToken) {
-    params.set('token', state.cloudSession.accessToken);
+async function downloadAuthenticated(url, fallbackFilename = 'download', _retried = false) {
+  if (state.cloudSession?.expiresAt && state.cloudSession.expiresAt * 1000 - Date.now() < 180_000 && !_retried) await tryRefreshCloudToken();
+  const headers = {};
+  if (state.sessionPin) headers['x-panel-pin'] = state.sessionPin;
+  if (state.cloudSession?.accessToken) headers.Authorization = `Bearer ${state.cloudSession.accessToken}`;
+  if (state.actAsUser?.userId) headers['x-zapia-act-as'] = state.actAsUser.userId;
+  const response = await fetch(url, { method: 'GET', headers, credentials: 'same-origin', cache: 'no-store' });
+  if (response.status === 401 && !_retried && state.cloudSession?.refreshToken) {
+    const refreshed = await tryRefreshCloudToken();
+    if (refreshed) return downloadAuthenticated(url, fallbackFilename, true);
   }
-  if (state.sessionPin) {
-    params.set('pin', state.sessionPin);
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || `Não foi possível baixar o arquivo (HTTP ${response.status}).`);
   }
-  if (state.actAsUser?.userId) {
-    params.set('actAs', state.actAsUser.userId);
+  const blob = await response.blob();
+  const disposition = response.headers.get('content-disposition') || '';
+  const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+  let filename = fallbackFilename;
+  if (match?.[1]) {
+    try { filename = decodeURIComponent(match[1].replace(/^"|"$/g, '')); }
+    catch { filename = match[1].replace(/^"|"$/g, ''); }
   }
-  const qs = params.toString();
-  return qs ? `?${qs}` : '';
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  anchor.style.display = 'none';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
 async function tryRefreshCloudToken() {
@@ -741,11 +760,15 @@ async function loadBootstrap() {
 async function ensureFullPackLoaded(packId, force = false) {
   if (!packId) return null;
   if (!force && state.fullPackCache[packId]) return state.fullPackCache[packId];
+  state.fullPackErrors = state.fullPackErrors || {};
+  delete state.fullPackErrors[packId];
   try {
     const res = await api(`/api/training-packs/${encodeURIComponent(packId)}/full`);
     state.fullPackCache[packId] = res.pack;
+    delete state.fullPackErrors[packId];
     return res.pack;
-  } catch {
+  } catch (err) {
+    state.fullPackErrors[packId] = err?.message || 'Não foi possível carregar a biblioteca.';
     return null;
   }
 }
@@ -940,6 +963,142 @@ function getContactDisplayName(contact, fallback = 'Contato') {
   return subtitle.startsWith('+') || subtitle === 'Número não informado pelo WhatsApp' ? subtitle : fallback;
 }
 
+// ======================== PONTE CLOUD → EVOLUTION GO ========================
+// Permite conectar WhatsApp direto da nuvem sem motor local (Termux/PC).
+
+async function checkEvolutionCloud() {
+  try {
+    const res = await api('/api/evolution-cloud/status');
+    if (res?.ok && res.available) {
+      state.evolutionCloud.available = true;
+      state.evolutionCloud.slots = res.slots || {};
+    } else {
+      state.evolutionCloud.available = false;
+    }
+  } catch {
+    state.evolutionCloud.available = false;
+  }
+  return state.evolutionCloud.available;
+}
+window.checkEvolutionCloud = checkEvolutionCloud;
+
+async function evolutionCloudConnect(slotId, pairingPhone) {
+  try {
+    const res = await api('/api/evolution-cloud/connect', {
+      method: 'POST',
+      body: JSON.stringify({ slotId, pairingPhone })
+    });
+    if (res?.ok) {
+      if (!state.evolutionCloud.slots[slotId]) state.evolutionCloud.slots[slotId] = {};
+      state.evolutionCloud.slots[slotId].status = res.status;
+      state.evolutionCloud.slots[slotId].qrDataUrl = res.qrDataUrl;
+      state.evolutionCloud.slots[slotId].pairingCode = res.pairingCode;
+      state.evolutionCloud.slots[slotId].instanceId = res.instanceId;
+      if (!state.waState.slots[slotId]) state.waState.slots[slotId] = {};
+      state.waState.slots[slotId].status = res.status;
+      state.waState.slots[slotId].qrDataUrl = res.qrDataUrl;
+      state.waState.slots[slotId].pairingCode = res.pairingCode;
+      state.waState.slots[slotId].workerOnline = true;
+      renderWaState();
+      clearTimeout(state._evoRefreshTimer);
+      state._evoRefreshTimer = null;
+      if (res.status !== 'connected') {
+        state._evoRefreshTimer = setTimeout(() => {
+          state._evoRefreshTimer = null;
+          evolutionCloudRefreshQr(slotId).catch(() => {});
+        }, 3000);
+      }
+      return res;
+    }
+    throw new Error(res?.error || 'Falha ao conectar via Evolution API');
+  } catch (err) {
+    throw err;
+  }
+}
+
+async function evolutionCloudRefreshQr(slotId) {
+  try {
+    const res = await api('/api/evolution-cloud/refresh-qr', {
+      method: 'POST',
+      body: JSON.stringify({ slotId })
+    });
+    if (res?.ok) {
+      const slot = state.evolutionCloud.slots[slotId] || {};
+      slot.status = res.status;
+      slot.qrDataUrl = res.status === 'connected' ? null : (res.qrDataUrl || slot.qrDataUrl || null);
+      slot.pairingCode = res.status === 'connected' ? null : (res.pairingCode || slot.pairingCode || null);
+      state.evolutionCloud.slots[slotId] = slot;
+      if (state.waState.slots[slotId]) {
+        state.waState.slots[slotId].status = res.status;
+        state.waState.slots[slotId].qrDataUrl = res.status === 'connected' ? null : (res.qrDataUrl || state.waState.slots[slotId].qrDataUrl || null);
+        state.waState.slots[slotId].pairingCode = res.status === 'connected' ? null : (res.pairingCode || state.waState.slots[slotId].pairingCode || null);
+      }
+      renderWaState();
+      if (res.status !== 'connected') {
+        clearTimeout(state._evoRefreshTimer);
+        state._evoRefreshTimer = setTimeout(() => {
+          state._evoRefreshTimer = null;
+          evolutionCloudRefreshQr(slotId).catch(() => {});
+        }, 3000);
+      } else {
+        clearTimeout(state._evoRefreshTimer);
+        state._evoRefreshTimer = null;
+      }
+    } else {
+      const status = state.evolutionCloud.slots[slotId]?.status || state.waState?.slots?.[slotId]?.status;
+      if (status && status !== 'connected' && status !== 'disconnected') {
+        clearTimeout(state._evoRefreshTimer);
+        state._evoRefreshTimer = setTimeout(() => {
+          state._evoRefreshTimer = null;
+          evolutionCloudRefreshQr(slotId).catch(() => {});
+        }, 5000);
+      }
+    }
+  } catch {
+    const status = state.evolutionCloud.slots[slotId]?.status || state.waState?.slots?.[slotId]?.status;
+    if (status && status !== 'connected' && status !== 'disconnected') {
+      clearTimeout(state._evoRefreshTimer);
+      state._evoRefreshTimer = setTimeout(() => {
+        state._evoRefreshTimer = null;
+        evolutionCloudRefreshQr(slotId).catch(() => {});
+      }, 5000);
+    }
+  }
+}
+
+async function evolutionCloudDisconnect(slotId) {
+  try {
+    const res = await api('/api/evolution-cloud/disconnect', {
+      method: 'POST',
+      body: JSON.stringify({ slotId })
+    });
+    if (res?.ok) {
+      clearTimeout(state._evoRefreshTimer);
+      state._evoRefreshTimer = null;
+      const slot = state.evolutionCloud.slots[slotId] || {};
+      slot.status = 'disconnected';
+      slot.qrDataUrl = null;
+      slot.pairingCode = null;
+      state.evolutionCloud.slots[slotId] = slot;
+      if (state.waState.slots[slotId]) {
+        state.waState.slots[slotId].status = 'disconnected';
+        state.waState.slots[slotId].qrDataUrl = null;
+        state.waState.slots[slotId].pairingCode = null;
+      }
+      renderWaState();
+      const selected = (state.contacts || []).find((contact) => contact.chatId === state.selectedInboxChatId);
+      if (selected && getContactSlotId(selected) === slotId) {
+        state.selectedInboxChatId = null;
+        document.getElementById('crmInboxLayout')?.classList.remove('mob-chat-open', 'mob-inspector-open');
+      }
+      renderCrmBoard();
+    }
+    return res;
+  } catch (err) {
+    throw err;
+  }
+}
+
 let liveRefreshQueued = false;
 async function refreshLiveStateOnly() {
   if (liveRefreshInFlight) {
@@ -967,6 +1126,20 @@ async function refreshLiveStateOnly() {
         state.appVersion = snap.appVersion;
       }
       state.waState = snap.waState || state.waState;
+      // No modo cloud, o /api/cloud/poll já devolve o estado efetivo após consultar
+      // a Evolution. Espelha esse estado para não manter um "connected" antigo em cache.
+      if (snap.runtimeMode === 'vercel_cloud' && snap.waState?.slots) {
+        state.evolutionCloud.slots = { ...(state.evolutionCloud.slots || {}) };
+        for (const [slotId, slot] of Object.entries(snap.waState.slots)) {
+          if (!slot || typeof slot !== 'object' || !slot.status) continue;
+          state.evolutionCloud.slots[slotId] = {
+            ...(state.evolutionCloud.slots[slotId] || {}),
+            status: slot.status,
+            qrDataUrl: slot.qrDataUrl || null,
+            pairingCode: slot.pairingCode || null
+          };
+        }
+      }
       if (snap.waSlots && state.settings) {
         state.settings.waSlots = snap.waSlots;
       }
@@ -1000,7 +1173,9 @@ async function refreshLiveStateOnly() {
       renderReadinessAndFunnel();
       renderProactiveQueueStatus();
       renderCrmBoard();
-    } catch {}
+    } catch (err) {
+      console.warn('[Ienvia] Falha no refreshLiveStateOnly:', err?.message || err);
+    }
   })().finally(() => {
     liveRefreshInFlight = null;
     if (liveRefreshQueued) {
@@ -1548,7 +1723,7 @@ function renderAll() {
         numero: n,
         nome: s.label || ('Chip ' + n),
         status: s.status || 'disconnected',
-        phone: s.phone || '',
+        phone: s.phone || s.connectedUser?.phone || '',
         ia: s.aiEnabled !== false,
         existe: Boolean(slots[id])
       });
@@ -1654,6 +1829,15 @@ function renderAll() {
   // ---------- Histórico por instância ----------
   const hist = { chip: '', busca: '', dias: 30, thread: null, threads: [] };
 
+  function histInstanceId(slotOrUuid) {
+    const raw = String(slotOrUuid || '').trim();
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(raw)) return raw;
+    const match = /^slot_([0-9]+)$/.exec(raw);
+    const n = match ? Number(match[1]) : 1;
+    return '00000000-0000-4000-8000-' + String(n).padStart(12, '0');
+  }
+  window.__histInstanceId = histInstanceId;
+
   async function histCarregarChips() {
     const sel = $i('histChip');
     if (!sel) return;
@@ -1685,7 +1869,7 @@ function renderAll() {
     let falhas = 0;
     for (const c of alvos) {
       try {
-        const r = await api('/api/conversations-v3/instances/' + encodeURIComponent(c.id) + '/threads?limit=50&visibility=all');
+        const r = await api('/api/conversations-v3/instances/' + encodeURIComponent(histInstanceId(c.id)) + '/threads?limit=50&visibility=all');
         for (const t of (r.items || [])) {
           achados.push({ ...t, _chip: c.nome, _chipId: c.id });
         }
@@ -1760,21 +1944,22 @@ function renderAll() {
     if (!box) return;
     document.querySelectorAll('.hist-thread').forEach((b) => b.classList.toggle('ativo', Number(b.dataset.thread) === indice));
     if (!t) { box.innerHTML = '<div class="hist-vazio">Escolha uma conversa à esquerda.</div>'; return; }
-    const nome = t.name || t.title || t.contactName || t.phone || 'Contato';
+    const nome = t.name || t.title || t.contactName || t.phone || t.phoneMasked || 'Contato';
     if (titulo) titulo.textContent = nome;
-    if (sub) sub.textContent = (t._chip || '') + (t.phone ? ' · ' + t.phone : '');
+    if (sub) sub.textContent = (t._chip || '') + ((t.phone || t.phoneMasked) ? ' · ' + (t.phone || t.phoneMasked) : '');
     box.innerHTML = '<div class="hist-vazio">Carregando mensagens...</div>';
     try {
-      const r = await api('/api/conversations-v3/instances/' + encodeURIComponent(t._chipId || hist.chip || 'slot_1')
+      const r = await api('/api/conversations-v3/instances/' + encodeURIComponent(histInstanceId(t._chipId || hist.chip || 'slot_1'))
         + '/threads/' + encodeURIComponent(t.id || t.threadId) + '/messages?limit=100');
       const msgs = r.items || r.messages || [];
       if (!msgs.length) { box.innerHTML = '<div class="hist-vazio">Nenhuma mensagem registrada nesta conversa.</div>'; return; }
       box.innerHTML = msgs.map((m) => {
-        const meu = m.fromMe === true || m.direction === 'out' || m.sender === 'agent';
+        const meu = m.fromMe === true || m.direction === 'out' || m.sender === 'agent' || m.role === 'owner';
         const txt = m.text || m.body || m.content || (m.type && m.type !== 'text' ? '[' + m.type + ']' : '');
+        const when = hora(m.at || m.timestamp || m.createdAt);
         return '<div class="hist-msg ' + (meu ? 'eu' : '') + '">'
           + '<span class="hist-msg-txt">' + esc(txt) + '</span>'
-          + '<span class="hist-msg-hora">' + (meu ? 'enviado' : 'recebido') + (hora(m.timestamp || m.createdAt) ? ' · ' + esc(hora(m.timestamp || m.createdAt)) : '') + '</span>'
+          + '<span class="hist-msg-hora">' + (meu ? 'enviado' : 'recebido') + (when ? ' · ' + esc(when) : '') + '</span>'
           + '</div>';
       }).join('');
     } catch (err) {
@@ -2160,7 +2345,8 @@ function renderAll() {
     const div = $v('visaoChaveDividir');
     const pau = $v('visaoChavePausar');
     const hor = $v('visaoChaveHorario');
-    if (ia) ia.checked = (state.waState?.botEnabled !== false) && (state.settings?.botEnabled !== false);
+    const botEnabled = typeof state.settings?.botEnabled === 'boolean' ? state.settings.botEnabled : state.waState?.botEnabled !== false;
+    if (ia) ia.checked = botEnabled;
     if (dig) dig.checked = ab.simulateTyping !== false;
     if (div) div.checked = ab.splitLongMessages !== false;
     if (pau) pau.checked = hh.pauseOnOwnerReply !== false;
@@ -2172,7 +2358,7 @@ function renderAll() {
         : 'Das ' + (sc.startHour || '08:00') + ' às ' + (sc.endHour || '18:00');
     }
     const iaSub = $v('visaoChaveIaSub');
-    if (iaSub) iaSub.textContent = state.waState?.botEnabled === false ? 'Pausada — responda manualmente' : 'Atendimento automático';
+    if (iaSub) iaSub.textContent = !botEnabled ? 'Pausada — responda manualmente' : 'Atendimento automático';
     const pausarSub = $v('visaoChavePausarSub');
     if (pausarSub) pausarSub.textContent = pau && pau.checked ? 'Você assume a conversa' : 'A IA continua mesmo se você responder';
   }
@@ -2184,52 +2370,71 @@ function renderAll() {
 
   // Salva pela MESMA rota que as abas originais usam.
   window.visaoSalvarChave = async function visaoSalvarChave(chave, valor) {
+    const inputIds = { ia: 'visaoChaveIa', digitando: 'visaoChaveDigitando', dividir: 'visaoChaveDividir', pausar: 'visaoChavePausar', horario: 'visaoChaveHorario' };
+    const input = $v(inputIds[chave]);
+    if (!input || input.disabled) return;
+    if (!Object.prototype.hasOwnProperty.call(inputIds, chave) || typeof valor !== 'boolean') {
+      lerChaves();
+      showToast('Controle rápido inválido. Atualize o painel e tente novamente.', true);
+      return;
+    }
+    const previous = chave === 'ia'
+      ? (typeof state.settings?.botEnabled === 'boolean' ? state.settings.botEnabled : state.waState?.botEnabled !== false)
+      : chave === 'digitando' ? state.settings?.antiBan?.simulateTyping !== false
+      : chave === 'dividir' ? state.settings?.antiBan?.splitLongMessages !== false
+      : chave === 'pausar' ? state.settings?.humanHandoff?.pauseOnOwnerReply !== false
+      : (state.settings?.schedule?.mode || 'always') !== 'always';
+    input.disabled = true;
+    input.setAttribute('aria-busy', 'true');
     try {
       if (chave === 'ia') {
-        await api('/api/wa/toggle-bot', { method: 'POST', body: JSON.stringify({ enabled: valor }) });
-        state.waState.botEnabled = valor;
-        state.settings = { ...(state.settings || {}), botEnabled: valor };
-        // mantém os interruptores das outras abas em sincronia
+        const res = await api('/api/wa/toggle-bot', { method: 'POST', body: JSON.stringify({ enabled: valor }) });
+        if (res?.ok !== true || typeof res.botEnabled !== 'boolean') throw new Error(res?.error || 'O servidor não confirmou a alteração da IA.');
+        state.waState = { ...(state.waState || {}), botEnabled: res.botEnabled };
+        state.settings = { ...(state.settings || {}), botEnabled: res.botEnabled };
         const master = $v('masterBotToggle');
-        if (master) master.checked = valor;
+        if (master) master.checked = res.botEnabled;
         const iaToggle = $v('aiBotEnabledToggle');
-        if (iaToggle) iaToggle.checked = valor;
-        showToast(valor ? 'IA ativada — o atendente está no ar.' : 'IA pausada — você atende manualmente.');
+        if (iaToggle) iaToggle.checked = res.botEnabled;
+        showToast(res.botEnabled ? 'IA ativada — o atendente está no ar.' : 'IA pausada — você atende manualmente.');
       } else if (chave === 'horario') {
         const sc = { ...(state.settings?.schedule || {}) };
         sc.mode = valor ? 'business_hours_only' : 'always';
         if (valor && (!sc.startHour || !sc.endHour)) { sc.startHour = '08:00'; sc.endHour = '18:00'; }
         const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ schedule: sc }) });
-        state.settings = res.settings || { ...(state.settings || {}), schedule: sc };
+        if (res?.ok !== true || !res.settings?.schedule) throw new Error(res?.error || 'O servidor não confirmou o horário de atendimento.');
+        state.settings = res.settings;
         const sel = $v('scheduleMode');
         if (sel) sel.value = sc.mode;
         showToast(valor ? 'Horário de atendimento ligado.' : 'Atendendo 24 horas.');
+      } else if (chave === 'pausar') {
+        const hh = { ...(state.settings?.humanHandoff || {}), pauseOnOwnerReply: valor };
+        const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ humanHandoff: hh }) });
+        if (res?.ok !== true || !res.settings?.humanHandoff) throw new Error(res?.error || 'O servidor não confirmou a preferência de atendimento humano.');
+        state.settings = res.settings;
+        const chk = $v('pauseOnOwnerReplyCheck');
+        if (chk) chk.checked = valor;
+        showToast('Preferência de atendimento humano salva.');
       } else {
-        const campo = chave === 'digitando' ? 'simulateTyping'
-          : chave === 'dividir' ? 'splitLongMessages'
-          : 'pauseOnOwnerReply';
-        if (chave === 'pausar') {
-          const hh = { ...(state.settings?.humanHandoff || {}), pauseOnOwnerReply: valor, notifyOwnerOnHandoff: true };
-          const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ humanHandoff: hh }) });
-          state.settings = res.settings || { ...(state.settings || {}), humanHandoff: hh };
-          const chk = $v('pauseOnOwnerReplyCheck');
-          if (chk) chk.checked = valor;
-        } else {
-          const ab = { ...(state.settings?.antiBan || {}), [campo]: valor };
-          const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ antiBan: ab }) });
-          state.settings = res.settings || { ...(state.settings || {}), antiBan: ab };
-          const chk = $v(chave === 'digitando' ? 'simulateTypingCheck' : 'splitLongMessagesCheck');
-          if (chk) chk.checked = valor;
-        }
+        const campo = chave === 'digitando' ? 'simulateTyping' : 'splitLongMessages';
+        const ab = { ...(state.settings?.antiBan || {}), [campo]: valor };
+        const res = await api('/api/settings', { method: 'PUT', body: JSON.stringify({ antiBan: ab }) });
+        if (res?.ok !== true || !res.settings?.antiBan) throw new Error(res?.error || 'O servidor não confirmou a preferência de envio.');
+        state.settings = res.settings;
+        const chk = $v(chave === 'digitando' ? 'simulateTypingCheck' : 'splitLongMessagesCheck');
+        if (chk) chk.checked = valor;
         showToast('Preferência salva.');
       }
+      lerChaves();
       renderVisaoGeral();
     } catch (err) {
+      input.checked = previous;
       showToast(err.message || 'Não foi possível salvar.', true);
-      lerChaves(); // devolve o interruptor ao estado real
+    } finally {
+      input.disabled = false;
+      input.removeAttribute('aria-busy');
     }
   };
-
   // ---------- saudação e relógio ----------
   function renderOla() {
     const agora = new Date();
@@ -2293,6 +2498,11 @@ function getSlotUiMeta(slotId = 'slot_1') {
   const defaultTitle = num === 1 ? 'Chip 1 · Principal' : `Chip ${num}`;
   const label = String(cfg.label || rtSlot.label || defaultTitle).trim() || defaultTitle;
   const aiEnabled = cfg.aiEnabled !== undefined ? cfg.aiEnabled !== false : rtSlot.aiEnabled !== false;
+  // A fonte de status depende do motor ativo. Um status antigo da Evolution
+  // não pode mascarar a desconexão do worker local (nem o inverso).
+  const connectionStatus = state.runtimeMode === 'vercel_cloud'
+    ? (evoSlot.status || rtSlot.status || 'disconnected')
+    : (rtSlot.status || evoSlot.status || 'disconnected');
   return {
     slotId: cleanId,
     slotNum: num,
@@ -2300,7 +2510,7 @@ function getSlotUiMeta(slotId = 'slot_1') {
     label,
     shortLabel: label.length > 18 ? `${label.slice(0, 17)}…` : label,
     aiEnabled,
-    status: evoSlot.status || rtSlot.status || 'disconnected',
+    status: connectionStatus,
     qrDataUrl: evoSlot.qrDataUrl || rtSlot.qrDataUrl || null,
     pairingCode: evoSlot.pairingCode || rtSlot.pairingCode || null,
     connectedUser: rtSlot.connectedUser || null,
@@ -2978,36 +3188,120 @@ window.downloadSampleBlueprintJson = function downloadSampleBlueprintJson() {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
 };
 
+let pendingTrainingImport = null;
+
+function renderTrainingImportPreview(preview) {
+  const host = document.getElementById('trainingImportPreviewBody');
+  if (!host) return;
+  const counts = preview.counts || {};
+  const fields = (preview.changedFields || []).length
+    ? preview.changedFields.map((field) => `<li>${escapeHtml(field)}</li>`).join('')
+    : '<li>Nenhuma alteração de perfil detectada; o pacote de mensagens e Skills será importado.</li>';
+  host.innerHTML = `
+    <div class="u-aviso-suave u-aviso-suave--info">
+      <strong>Esta etapa ainda não altera seu treinamento.</strong>
+      Confira o conteúdo abaixo. Só haverá aplicação depois de clicar em confirmar.
+    </div>
+    <div class="u-painel-caixa u-mt-12">
+      <div><span class="u-text-secondary u-text-sm">Arquivo</span><br><strong>${escapeHtml(preview.filename || 'Treinamento')}</strong></div>
+      <div class="u-mt-8"><span class="u-text-secondary u-text-sm">Negócio</span><br><strong>${escapeHtml(preview.businessName || 'Sem nome')}</strong></div>
+      <div class="u-mt-8"><span class="u-text-secondary u-text-sm">Pacote</span><br><strong>${escapeHtml(preview.packName || 'Pacote importado')}</strong></div>
+      <div class="grid-equal u-gap-8 u-mt-12">
+        <div><strong>${Number(counts.messages)||0}</strong><div class="u-text-secondary u-text-sm">Mensagens</div></div>
+        <div><strong>${Number(counts.operationalSkills)||0}</strong><div class="u-text-secondary u-text-sm">Skills operacionais</div></div>
+        <div><strong>${Number(counts.humanizationSkills)||0}</strong><div class="u-text-secondary u-text-sm">Skills humanização</div></div>
+        <div><strong>${Number(counts.faqs)||0}</strong><div class="u-text-secondary u-text-sm">FAQs</div></div>
+        <div><strong>${Number(counts.knowledgeDocs)||0}</strong><div class="u-text-secondary u-text-sm">Documentos</div></div>
+        <div><strong>${Number(counts.attachments)||0}</strong><div class="u-text-secondary u-text-sm">Anexos</div></div>
+      </div>
+      <div class="u-text-secondary u-text-sm u-mt-10">Ativos atuais: ${Number(preview.preserved?.catalogItems)||0} itens de catálogo · ${preview.preserved?.pixConfigured ? 'PIX configurado' : 'PIX não configurado'} · ${Number(preview.preserved?.voiceItems)||0} áudios.</div>
+      <div class="u-mt-12"><strong>Campos de perfil que serão alterados</strong><ul class="u-lista-rolagem">${fields}</ul></div>
+    </div>
+    <div class="u-aviso-suave u-aviso-suave--ok u-mt-10">
+      A biblioteca de voz atual é preservada. Catálogo e PIX só são atualizados se o arquivo trouxer novos dados; caso contrário, os valores atuais continuam. Documentos de conhecimento só são substituídos se o pacote trouxer novos documentos.
+    </div>
+    <p class="panel-desc u-mt-10">Ao confirmar, o pacote será aplicado ao Cérebro Único e passará a ser o treinamento ativo. Esta ação não possui desfazer automático.</p>
+  `;
+  document.getElementById('trainingImportPreviewModal')?.classList.add('open');
+}
+
+async function requestTrainingImportPreview(file, source, rawText = '') {
+  if (!file) throw new Error('Arquivo de treinamento indisponível.');
+  if (file.size > 4 * 1024 * 1024) throw new Error('O arquivo deve ter no máximo 4 MB para gerar a prévia.');
+  const form = new FormData();
+  form.append('file', file);
+  const response = await api('/api/training-packs/import-preview', { method: 'POST', body: form });
+  pendingTrainingImport = { file, source, rawText, filename: file.name, preview: response.preview };
+  renderTrainingImportPreview(response.preview);
+}
+
+window.cancelTrainingImportPreview = function cancelTrainingImportPreview() {
+  pendingTrainingImport = null;
+  document.getElementById('trainingImportPreviewModal')?.classList.remove('open');
+  const input = document.getElementById('zipPackInput');
+  if (input) input.value = '';
+};
+
+window.confirmTrainingImport = async function confirmTrainingImport() {
+  const pending = pendingTrainingImport;
+  const button = document.getElementById('btnConfirmTrainingImport');
+  if (!pending) return showToast('A prévia expirou. Gere uma nova prévia.', true);
+  if (button) { button.disabled = true; button.textContent = 'Aplicando treinamento...'; }
+  try {
+    let result;
+    if (pending.source === 'text') {
+      result = await api('/api/training-packs/import-text', {
+        method: 'POST',
+        body: JSON.stringify({ text: pending.rawText, filename: pending.filename, expectedFingerprint: pending.preview.currentFingerprint })
+      });
+    } else {
+      const form = new FormData();
+      form.append('file', pending.file);
+      form.append('expectedFingerprint', pending.preview.currentFingerprint);
+      result = await api('/api/training-packs/import-zip', { method: 'POST', body: form });
+    }
+    state.business = result.business;
+    state.trainingPacks = result.trainingPacks || state.trainingPacks;
+    await ensureFullPackLoaded(result.packSummary.id, true);
+    const pasted = pending.source === 'text';
+    pendingTrainingImport = null;
+    document.getElementById('trainingImportPreviewModal')?.classList.remove('open');
+    if (pasted) {
+      const area = document.getElementById('aiBlueprintPasteArea');
+      if (area) area.value = '';
+      closeModal('aiTrainingBuilderModal');
+    }
+    const input = document.getElementById('zipPackInput');
+    if (input) input.value = '';
+    renderAll();
+    showToast(`Treinamento "${result.packSummary.name}" aplicado com ${result.packSummary.stats.operationalSkillsCount + result.packSummary.stats.humanizationSkillsCount} Skills e ${result.packSummary.stats.approvedMessagesCount || 0} mensagens.`);
+  } catch (err) {
+    if (String(err.message || '').includes('mudou desde a prévia')) {
+      pendingTrainingImport = null;
+      document.getElementById('trainingImportPreviewModal')?.classList.remove('open');
+      const input = document.getElementById('zipPackInput');
+      if (input) input.value = '';
+    }
+    showToast(err.message, true);
+  } finally {
+    if (button) { button.disabled = false; button.textContent = 'Confirmar e aplicar treinamento'; }
+  }
+};
+
 window.applyPastedAiTraining = async function applyPastedAiTraining() {
   const area = document.getElementById('aiBlueprintPasteArea');
   const btn = document.getElementById('btnApplyPastedBlueprint');
   const raw = area?.value?.trim() || '';
-  if (!raw) {
-    return showToast('Cole primeiro o código JSON ou Markdown gerado pelo ChatGPT/IA!', true);
-  }
-  if (btn) {
-    btn.disabled = true;
-    btn.textContent = '⏳ Compilando e aplicando...';
-  }
+  if (!raw) return showToast('Cole primeiro o código JSON ou Markdown gerado pela IA.', true);
+  if (btn) { btn.disabled = true; btn.textContent = 'Gerando prévia...'; }
   try {
-    const res = await api('/api/training-packs/import-text', {
-      method: 'POST',
-      body: JSON.stringify({ text: raw, filename: 'blueprint-chatgpt.json' })
-    });
-    state.business = res.business;
-    state.trainingPacks = res.trainingPacks || state.trainingPacks;
-    await ensureFullPackLoaded(res.packSummary.id, true);
-    if (area) area.value = '';
-    closeModal('aiTrainingBuilderModal');
-    renderAll();
-    showToast(`🎉 Treinamento "${res.packSummary.name}" aplicado (${res.packSummary.stats.operationalSkillsCount + res.packSummary.stats.humanizationSkillsCount} skills + ${res.packSummary.stats.approvedMessagesCount || 0} mensagens)!`);
+    const filename = 'blueprint-chatgpt.md';
+    const file = new File([raw], filename, { type: filename.endsWith('.json') ? 'application/json' : 'text/markdown' });
+    await requestTrainingImportPreview(file, 'text', raw);
   } catch (err) {
     showToast(err.message, true);
   } finally {
-    if (btn) {
-      btn.disabled = false;
-      btn.textContent = '⚡ 2. Aplicar Treinamento Completo';
-    }
+    if (btn) { btn.disabled = false; btn.textContent = '🔎 Gerar prévia antes de aplicar'; }
   }
 };
 
@@ -3369,11 +3663,15 @@ function renderPackVisualStudio(p) {
     return;
   }
 
-  studioPanel.classList.remove('u-none');
+  studioPanel.classList.remove('u-none', 'u-oculto-fio-topo');
+  studioPanel.style.display = '';
   const full = state.fullPackCache[p.trainingPackId];
   if (!full) {
-    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Carregando biblioteca do pacote...</div>`;
-    ensureFullPackLoaded(p.trainingPackId).then(() => renderPackVisualStudio(p));
+    const error = state.fullPackErrors?.[p.trainingPackId];
+    grid.innerHTML = error
+      ? `<div class="empty-state" style="grid-column:1/-1;"><strong>Não foi possível carregar o treinamento.</strong><p>${escapeHtml(error)}</p><button type="button" class="btn btn-secondary btn-sm" onclick="retryPackLibraryLoad()">Tentar novamente</button></div>`
+      : `<div class="empty-state" style="grid-column:1/-1;">Carregando biblioteca do pacote...</div>`;
+    if (!error) ensureFullPackLoaded(p.trainingPackId).then(() => renderPackVisualStudio(p));
     return;
   }
 
@@ -3416,7 +3714,7 @@ function renderPackVisualStudio(p) {
   const isHum = state.activeStudioTab === 'humanization';
   const rawSkills = isHum ? (full.humanizationSkills || []) : (full.operationalSkills || []);
   const filtered = rawSkills.filter((s) =>
-    !q || `${s.id} ${s.name} ${s.when || s.trigger || ''} ${s.example_response || s.better_response || ''}`.toLowerCase().includes(q)
+    !q || Object.values(s).filter((value) => typeof value === 'string').join(' ').toLowerCase().includes(q)
   );
 
   if (!filtered.length) {
@@ -3463,14 +3761,28 @@ window.useMessageInProactive = function useMessageInProactive(msgId) {
   showToast(`${found.id} carregada no Disparador de Abordagem Ativa!`);
 };
 
+function nextTrainingStudioId(list, prefix) {
+  const used = new Set((list || []).map((item) => String(item?.id || '').toUpperCase()));
+  let number = 1;
+  while (used.has(`${prefix}${String(number).padStart(2, '0')}`)) number += 1;
+  return `${prefix}${String(number).padStart(2, '0')}`;
+}
+
+window.retryPackLibraryLoad = async function retryPackLibraryLoad() {
+  const p = getActiveProfile();
+  if (!p?.trainingPackId) return;
+  await ensureFullPackLoaded(p.trainingPackId, true);
+  renderPackVisualStudio(p);
+};
+
 window.openEditPackMsgModal = function openEditPackMsgModal(msgId = null) {
   const p = getActiveProfile();
   const full = p?.trainingPackId ? state.fullPackCache[p.trainingPackId] : null;
   const existing = msgId ? (full?.approvedMessages || []).find((m) => m.id === msgId) : null;
-  const nextNum = String((full?.approvedMessages?.length || 13) + 1).padStart(2, '0');
+  const nextNum = nextTrainingStudioId(full?.approvedMessages, 'M');
 
   document.getElementById('editPackMsgTitle').textContent = existing ? `Editar ${existing.id}` : 'Nova Mensagem Aprovada';
-  document.getElementById('packMsgId').value = existing ? existing.id : `M${nextNum}`;
+  document.getElementById('packMsgId').value = existing ? existing.id : nextNum;
   document.getElementById('packMsgTitle').value = existing ? existing.title : '';
   document.getElementById('packMsgText').value = existing ? existing.text : '';
   document.getElementById('editPackMessageModal').classList.add('open');
@@ -3492,13 +3804,25 @@ window.removePackMsg = async function removePackMsg(msgId) {
   }
 };
 
+function syncPackSkillEditorFields(skillType) {
+  const humanization = skillType === 'humanization';
+  document.querySelectorAll('[data-humanization-field]').forEach((field) => {
+    field.hidden = !humanization;
+    field.querySelectorAll('textarea,input').forEach((input) => { input.required = false; });
+  });
+  const exampleField = document.getElementById('packSkillExample')?.closest('.form-group');
+  if (exampleField) exampleField.hidden = humanization;
+  const example = document.getElementById('packSkillExample');
+  if (example) example.required = !humanization;
+}
+
 window.openEditPackSkillModal = function openEditPackSkillModal(skillId = null, skillType = 'operational') {
   const p = getActiveProfile();
   const full = p?.trainingPackId ? state.fullPackCache[p.trainingPackId] : null;
   const list = skillType === 'humanization' ? (full?.humanizationSkills || []) : (full?.operationalSkills || []);
   const existing = skillId ? list.find((s) => s.id === skillId) : null;
   const prefix = skillType === 'humanization' ? 'H' : 'S';
-  const nextId = `${prefix}${String(list.length + 1).padStart(2, '0')}`;
+  const nextId = nextTrainingStudioId(list, prefix);
 
   document.getElementById('editPackSkillTitle').textContent = existing ? `Editar Skill ${existing.id}` : 'Criar Nova Skill no Pacote';
   document.getElementById('packSkillType').value = skillType;
@@ -3506,8 +3830,14 @@ window.openEditPackSkillModal = function openEditPackSkillModal(skillId = null, 
   document.getElementById('packSkillName').value = existing ? existing.name : '';
   document.getElementById('packSkillWhen').value = existing ? (existing.when || existing.trigger || '') : '';
   document.getElementById('packSkillExample').value = existing
-    ? (existing.bodyMd || existing.example_response || existing.better_response || existing.goal || '')
+    ? (existing.bodyMd || existing.example_response || '')
     : '';
+  document.getElementById('packSkillGoal').value = existing?.goal || '';
+  document.getElementById('packSkillAvoid').value = existing?.avoid || '';
+  document.getElementById('packSkillBadResponse').value = existing?.bad_response || '';
+  document.getElementById('packSkillBetterResponse').value = existing?.better_response || '';
+  syncPackSkillEditorFields(skillType);
+  document.getElementById('packSkillType').onchange = (event) => syncPackSkillEditorFields(event.target.value);
   document.getElementById('editPackSkillModal').classList.add('open');
 };
 
@@ -3613,6 +3943,7 @@ window.removeFaq = function removeFaq(idx) {
   if (!p) return;
   syncFaqsFromDom(p);
   p.faqs.splice(idx, 1);
+  p.faqs = p.faqs.filter((faq) => faq.question || faq.answer);
   renderFaqList(p.faqs);
 };
 
@@ -3623,9 +3954,7 @@ function syncFaqsFromDom(p) {
   qs.forEach((qEl, i) => {
     const q = qEl.value.trim();
     const a = as[i]?.value?.trim() || '';
-    if (q || a) {
-      updated.push({ id: p.faqs?.[i]?.id || `faq_${Date.now()}_${i}`, question: q, answer: a });
-    }
+    updated.push({ id: p.faqs?.[i]?.id || `faq_${Date.now()}_${i}`, question: q, answer: a });
   });
   p.faqs = updated;
 }
@@ -4055,7 +4384,9 @@ function getTagClass(tag = '') {
 }
 
 function updateInboxFilterCounters() {
-  const allContacts = state.contacts || [];
+  // Os contadores precisam refletir a mesma população visível da Inbox.
+  // Contatos de canais desconectados não devem continuar inflando filtros/badges.
+  const allContacts = (state.contacts || []).filter(isInboxContactVisible);
   let activeCnt = 0;
   let unreadCnt = 0;
   let humanCnt = 0;
@@ -4094,8 +4425,23 @@ function updateInboxFilterCounters() {
   }
 }
 
+function isContactInstanceConnected(contact) {
+  if (!contact) return false;
+  const slotId = getContactSlotId(contact);
+  const status = String(getSlotUiMeta(slotId).status || 'disconnected').toLowerCase();
+  // Uma falha momentânea ao consultar a Evolution ("unknown") não deve apagar
+  // a Inbox visualmente. Oculta apenas estados que indicam sessão fora do ar.
+  return !['disconnected', 'close', 'closed', 'connecting', 'qr', 'qr_ready'].includes(status);
+}
+
 function isInboxContactVisible(contact) {
-  if (!contact?.directoryImport) return true;
+  if (!contact) return false;
+  const hasConversation = !contact.directoryImport ||
+    (Array.isArray(contact.messages) && contact.messages.length > 0) ||
+    Boolean(contact.lastMessageAt) ||
+    contact.chatId === state.selectedInboxChatId;
+  if (hasConversation && !isContactInstanceConnected(contact)) return false;
+  if (!contact.directoryImport) return true;
   if (contact.savedContact === true || (Array.isArray(contact.messages) && contact.messages.length > 0)) return true;
   return contact.chatId === state.selectedInboxChatId;
 }
@@ -4247,7 +4593,7 @@ function renderCrmBoard() {
   const totalCountEl = document.getElementById('crmInboxTotalCount');
   if (totalCountEl) totalCountEl.textContent = String(allActiveCount);
   const savedTotalEl = document.getElementById('crmContactsSavedCount');
-  if (savedTotalEl) savedTotalEl.textContent = String(allContacts.length);
+  if (savedTotalEl) savedTotalEl.textContent = String((state.contacts || []).filter((c) => c.savedContact).length);
 
   if (activeView === 'kanban') {
     const cols = {
@@ -4331,19 +4677,35 @@ function renderCrmBoard() {
 }
 
 window.switchCrmSubView = function switchCrmSubView(viewName) {
-  state.activeCrmSubView = viewName;
-  document.querySelectorAll('.crm-subtab-btn').forEach((b) => {
-    const active = b.dataset.crmview === viewName;
-    b.classList.toggle('active', active);
-    b.setAttribute('aria-pressed', String(active));
+  const allowedViews = ['inbox', 'contacts', 'kanban', 'coach'];
+  const nextView = allowedViews.includes(viewName) ? viewName : 'inbox';
+  state.activeCrmSubView = nextView;
+
+  document.querySelectorAll('.crm-subtab-btn').forEach((button) => {
+    const active = button.dataset.crmview === nextView;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
   });
-  ['inbox', 'contacts', 'kanban', 'coach'].forEach((v) => {
-    const el = document.getElementById(`crmSubView-${v}`);
-    if (el) el.style.display = v === viewName ? '' : 'none';
+
+  // As subvisões começam com a classe utilitária u-none. Alterar somente
+  // style.display não vence o display:none!important da utilitária, deixando
+  // Contatos, Kanban e Coach IA permanentemente invisíveis.
+  allowedViews.forEach((view) => {
+    const panel = document.getElementById(`crmSubView-${view}`);
+    if (!panel) return;
+    const active = view === nextView;
+    panel.classList.toggle('active', active);
+    panel.classList.toggle('u-none', !active);
+    panel.hidden = !active;
+    panel.style.display = active ? '' : 'none';
   });
+
   const filterBar = document.getElementById('crmFilterBar');
-  if (filterBar) filterBar.style.display = (viewName === 'coach' || viewName === 'contacts') ? 'none' : '';
-  if (viewName === 'inbox' || viewName === 'kanban' || viewName === 'contacts') renderCrmBoard();
+  if (filterBar) filterBar.style.display = (nextView === 'coach' || nextView === 'contacts') ? 'none' : '';
+
+  if (nextView === 'inbox' || nextView === 'kanban' || nextView === 'contacts') {
+    renderCrmBoard();
+  }
 };
 
 function renderCrmInbox(filteredList) {
@@ -4354,7 +4716,16 @@ function renderCrmInbox(filteredList) {
 
   if (lblEl) lblEl.textContent = `${list.length} conversa${list.length === 1 ? '' : 's'}`;
 
-  if ((!state.selectedInboxChatId || !state.contacts.some((c) => c.chatId === state.selectedInboxChatId)) && list.length > 0) {
+  const selectedContact = (state.contacts || []).find((c) => c.chatId === state.selectedInboxChatId);
+  if (selectedContact && !isContactInstanceConnected(selectedContact)) {
+    // A conversa da instância desconectada deve fechar; não trocar silenciosamente
+    // para outro cliente, especialmente no layout mobile de tela única.
+    state.selectedInboxChatId = null;
+    state.inboxKeepListOpen = true;
+    const layout = document.getElementById('crmInboxLayout');
+    layout?.classList.remove('mob-chat-open', 'mob-inspector-open');
+  } else if (!selectedContact && list.length > 0 && state.inboxKeepListOpen !== true) {
+    // Seleção inicial ou conversa removida: mantém o comportamento de fallback.
     state.selectedInboxChatId = list[0].chatId;
   }
 
@@ -4485,6 +4856,7 @@ window.loadMoreInboxItems = function loadMoreInboxItems() {
 window.selectInboxChat = async function selectInboxChat(encodedChatId) {
   const chatId = decodeURIComponent(encodedChatId);
   state.selectedInboxChatId = chatId;
+  state.inboxKeepListOpen = false;
   document.getElementById('crmInboxLayout')?.classList.add('mob-chat-open');
 
   const found = (state.contacts || []).find((x) => x.chatId === chatId);
@@ -4502,7 +4874,9 @@ function renderActiveInboxConversation() {
   const paneEl = document.getElementById('crmInboxActivePane');
   if (!emptyEl || !paneEl) return;
 
-  const c = (state.contacts || []).find((x) => x.chatId === state.selectedInboxChatId);
+  const foundContact = (state.contacts || []).find((x) => x.chatId === state.selectedInboxChatId);
+  const c = foundContact && isContactInstanceConnected(foundContact) ? foundContact : null;
+  if (foundContact && !c) state.selectedInboxChatId = null;
   const msgBox = document.getElementById('crmInboxMessages');
   const chatChanged = Boolean(c && msgBox && msgBox.dataset.renderedChatId !== c.chatId);
   if (c && (chatChanged || state.inboxMessageWindow?.chatId !== c.chatId)) {
@@ -5465,7 +5839,10 @@ window.toggleTimedPausePopover = function toggleTimedPausePopover(ev) {
   if (ev) ev.stopPropagation();
   const pop = document.getElementById('timedPausePopover');
   if (!pop) return;
-  pop.style.display = pop.style.display === 'none' ? 'block' : 'none';
+  const shouldOpen = window.getComputedStyle(pop).display === 'none';
+  window.closeAllCrmPopovers();
+  pop.style.display = shouldOpen ? 'block' : 'none';
+  if (shouldOpen) positionAnchoredPopover(pop);
 };
 
 window.applyTimedPause = async function applyTimedPause(minutes) {
@@ -5833,13 +6210,28 @@ document.addEventListener('click', (ev) => {
   }
 });
 
+function positionAnchoredPopover(pop) {
+  if (!pop) return;
+  pop.style.left = '';
+  pop.style.right = '';
+  const mainBox = pop.closest('.crm-inbox-main')?.getBoundingClientRect();
+  const anchorBox = pop.parentElement?.getBoundingClientRect();
+  if (!mainBox || !anchorBox) return;
+  const popWidth = Math.max(pop.offsetWidth || 242, 200);
+  if (anchorBox.right - popWidth < mainBox.left + 4) {
+    pop.style.left = '0';
+    pop.style.right = 'auto';
+  }
+}
+
 window.toggleInboxChatMoreMenu = function toggleInboxChatMoreMenu(ev) {
   if (ev) ev.stopPropagation();
   const pop = document.getElementById('inboxChatMorePopover');
   if (!pop) return;
-  const open = pop.style.display !== 'none';
+  const shouldOpen = window.getComputedStyle(pop).display === 'none';
   window.closeAllCrmPopovers();
-  pop.style.display = open ? 'none' : 'block';
+  pop.style.display = shouldOpen ? 'block' : 'none';
+  if (shouldOpen) positionAnchoredPopover(pop);
 };
 
 window.openListRowMenu = function openListRowMenu(encodedChatId, ev) {
@@ -7037,17 +7429,24 @@ function renderCommandPaletteResults(query = '') {
   const q = query.toLowerCase().trim();
   const items = [];
 
+  // Lista centralizada dos destinos reais do painel. A busca continua respeitando
+  // o controle de acesso de Clientes SaaS para o perfil master.
   const tabs = [
-    { id: 'dashboard', title: 'Ir para: Conexão & Painel (Aba 1)', sub: 'QR Code, Disparador M01 e Funil' },
-    { id: 'simulador', title: 'Ir para: Simulador de Áudio & Raio-X (Aba 2)', sub: 'Testar voz e ensinar respostas' },
-    { id: 'treinamento', title: 'Ir para: Treinamento & Studio de Skills (Aba 3)', sub: 'Editar M01–M13, Skills e .ZIP' },
-    { id: 'audios', title: 'Ir para: Biblioteca de Áudios Estratégicos (Voz Real)', sub: 'Gravar/subir áudios OGG/Opus + transcrição IA' },
-    { id: 'catalogo', title: 'Ir para: Catálogo Multi-Fotos & PIX QR (Aba 4)', sub: 'Até 5 mídias por item + QR Code PIX' },
-    { id: 'ia', title: 'Ir para: Motor de IA', sub: 'Rotação de chaves grátis e reserva' },
-    { id: 'seguranca', title: 'Ir para: Segurança & Anti-Ban', sub: 'Prospecção cadenciada e bloqueio' },
-    { id: 'crm', title: 'Ir para: Conversas', sub: 'Inbox 360º, Kanban, etiquetas e retorno S19' },
+    { id: 'dashboard', title: 'Abrir: Visão geral', sub: 'Painel de controle, indicadores e status das conexões' },
+    { id: 'crm', title: 'Abrir: Inbox e CRM', sub: 'Conversas, contatos, Kanban, etiquetas e tarefas' },
+    { id: 'campanhas', title: 'Abrir: Campanhas', sub: 'Campanhas, destinatários, filas e histórico de execução' },
+    { id: 'treinamento', title: 'Abrir: Treinamento', sub: 'Base de conhecimento, mensagens e skills da IA' },
+    { id: 'catalogo', title: 'Abrir: Catálogo e PIX', sub: 'Produtos, mídias e informações de pagamento' },
+    { id: 'audios', title: 'Abrir: Biblioteca de áudios', sub: 'Áudios estratégicos, gravações e transcrições' },
+    { id: 'simulador', title: 'Abrir: Simulador de IA', sub: 'Testar conversas e avaliar respostas antes de usar' },
+    { id: 'ia', title: 'Abrir: Motor de IA', sub: 'Configurações e comportamento do atendimento automático' },
+    { id: 'instancias', title: 'Abrir: Instâncias', sub: 'Gerenciar instâncias e sessões de WhatsApp' },
+    { id: 'conexoes', title: 'Abrir: Conexões', sub: 'Integrações, serviços conectados e configuração de canais' },
+    { id: 'historico', title: 'Abrir: Histórico', sub: 'Consultar registros e atividades disponíveis' },
+    { id: 'configuracoes', title: 'Abrir: Configurações', sub: 'Preferências e configurações do workspace' },
+    { id: 'seguranca', title: 'Abrir: Segurança', sub: 'Controles de segurança e proteção operacional' },
     ...(state.currentUser?.role === 'master'
-      ? [{ id: 'contas', title: 'Ir para: Clientes SaaS (Torre Master)', sub: 'Criar contas, Modo Suporte em 1 clique e Kit Boas-Vindas' }]
+      ? [{ id: 'contas', title: 'Abrir: Clientes SaaS', sub: 'Administração de contas e suporte master' }]
       : [])
   ];
 
@@ -7381,141 +7780,7 @@ function bindEvents() {
     return res;
   }
 
-  // ======================== PONTE CLOUD → EVOLUTION GO ========================
-  // Permite conectar WhatsApp direto da nuvem sem motor local (Termux/PC).
-
-  async function checkEvolutionCloud() {
-    try {
-      const res = await api('/api/evolution-cloud/status');
-      if (res?.ok && res.available) {
-        state.evolutionCloud.available = true;
-        state.evolutionCloud.slots = res.slots || {};
-      } else {
-        state.evolutionCloud.available = false;
-      }
-    } catch {
-      state.evolutionCloud.available = false;
-    }
-    return state.evolutionCloud.available;
-  }
-
-  async function evolutionCloudConnect(slotId, pairingPhone) {
-    try {
-      const res = await api('/api/evolution-cloud/connect', {
-        method: 'POST',
-        body: JSON.stringify({ slotId, pairingPhone })
-      });
-      if (res?.ok) {
-        // Atualiza o slot no state
-        if (!state.evolutionCloud.slots[slotId]) state.evolutionCloud.slots[slotId] = {};
-        state.evolutionCloud.slots[slotId].status = res.status;
-        state.evolutionCloud.slots[slotId].qrDataUrl = res.qrDataUrl;
-        state.evolutionCloud.slots[slotId].pairingCode = res.pairingCode;
-        state.evolutionCloud.slots[slotId].instanceId = res.instanceId;
-        // Merge no waState para o renderWaState ler
-        if (!state.waState.slots[slotId]) state.waState.slots[slotId] = {};
-        state.waState.slots[slotId].status = res.status;
-        state.waState.slots[slotId].qrDataUrl = res.qrDataUrl;
-        state.waState.slots[slotId].pairingCode = res.pairingCode;
-        state.waState.slots[slotId].workerOnline = true;
-        renderWaState();
-        // Poll o estado até conectar: a Evolution retorna base64 e pairingCode em campos distintos.
-        clearTimeout(state._evoRefreshTimer);
-        state._evoRefreshTimer = null;
-        if (res.status !== 'connected') {
-          state._evoRefreshTimer = setTimeout(() => {
-            state._evoRefreshTimer = null;
-            evolutionCloudRefreshQr(slotId).catch(() => {});
-          }, 3000);
-        }
-        return res;
-      }
-      throw new Error(res?.error || 'Falha ao conectar via Evolution API');
-    } catch (err) {
-      throw err;
-    }
-  }
-
-  async function evolutionCloudRefreshQr(slotId) {
-    try {
-      const res = await api('/api/evolution-cloud/refresh-qr', {
-        method: 'POST',
-        body: JSON.stringify({ slotId })
-      });
-      if (res?.ok) {
-        const slot = state.evolutionCloud.slots[slotId] || {};
-        slot.status = res.status;
-        slot.qrDataUrl = res.status === 'connected' ? null : (res.qrDataUrl || slot.qrDataUrl || null);
-        slot.pairingCode = res.status === 'connected' ? null : (res.pairingCode || slot.pairingCode || null);
-        state.evolutionCloud.slots[slotId] = slot;
-        // Merge no waState
-        if (state.waState.slots[slotId]) {
-          state.waState.slots[slotId].status = res.status;
-          state.waState.slots[slotId].qrDataUrl = res.status === 'connected' ? null : (res.qrDataUrl || state.waState.slots[slotId].qrDataUrl || null);
-          state.waState.slots[slotId].pairingCode = res.status === 'connected' ? null : (res.pairingCode || state.waState.slots[slotId].pairingCode || null);
-        }
-        renderWaState();
-        // Continua consultando também após mostrar QR/código, até confirmar conexão.
-        if (res.status !== 'connected') {
-          clearTimeout(state._evoRefreshTimer);
-          state._evoRefreshTimer = setTimeout(() => {
-            state._evoRefreshTimer = null;
-            evolutionCloudRefreshQr(slotId).catch(() => {});
-          }, 3000);
-        } else {
-          clearTimeout(state._evoRefreshTimer);
-          state._evoRefreshTimer = null;
-        }
-      } else {
-        const status = state.evolutionCloud.slots[slotId]?.status || state.waState?.slots?.[slotId]?.status;
-        if (status && status !== 'connected' && status !== 'disconnected') {
-          clearTimeout(state._evoRefreshTimer);
-          state._evoRefreshTimer = setTimeout(() => {
-            state._evoRefreshTimer = null;
-            evolutionCloudRefreshQr(slotId).catch(() => {});
-          }, 5000);
-        }
-      }
-    } catch {
-      const status = state.evolutionCloud.slots[slotId]?.status || state.waState?.slots?.[slotId]?.status;
-      if (status && status !== 'connected' && status !== 'disconnected') {
-        clearTimeout(state._evoRefreshTimer);
-        state._evoRefreshTimer = setTimeout(() => {
-          state._evoRefreshTimer = null;
-          evolutionCloudRefreshQr(slotId).catch(() => {});
-        }, 5000);
-      }
-    }
-  }
-
-  async function evolutionCloudDisconnect(slotId) {
-    try {
-      const res = await api('/api/evolution-cloud/disconnect', {
-        method: 'POST',
-        body: JSON.stringify({ slotId })
-      });
-      if (res?.ok) {
-        clearTimeout(state._evoRefreshTimer);
-        state._evoRefreshTimer = null;
-        const slot = state.evolutionCloud.slots[slotId] || {};
-        slot.status = 'disconnected';
-        slot.qrDataUrl = null;
-        slot.pairingCode = null;
-        state.evolutionCloud.slots[slotId] = slot;
-        if (state.waState.slots[slotId]) {
-          state.waState.slots[slotId].status = 'disconnected';
-          state.waState.slots[slotId].qrDataUrl = null;
-          state.waState.slots[slotId].pairingCode = null;
-        }
-        renderWaState();
-      }
-      return res;
-    } catch (err) {
-      throw err;
-    }
-  }
-
-  // Verifica a disponibilidade da Evolution API na nuvem periodicamente
+  // Verifica a disponibilidade da Evolution API na nuvem periodicamente (funções declaradas no topo do arquivo).
   if (!state._evoCheckInterval) {
     state._evoCheckInterval = setInterval(() => {
       if (state.runtimeMode === 'vercel_cloud') {
@@ -7612,7 +7877,13 @@ function bindEvents() {
           body: JSON.stringify({ clearSession: true, slotId: slotMeta.slotId })
         });
         state.waState = res.waState;
+        const selected = (state.contacts || []).find((contact) => contact.chatId === state.selectedInboxChatId);
+        if (selected && getContactSlotId(selected) === slotMeta.slotId) {
+          state.selectedInboxChatId = null;
+          document.getElementById('crmInboxLayout')?.classList.remove('mob-chat-open', 'mob-inspector-open');
+        }
         renderWaState();
+        renderCrmBoard();
         showToast(`${slotMeta.label} desconectado.`);
       }
     } catch (err) {
@@ -7725,8 +7996,11 @@ function bindEvents() {
           when: document.getElementById('packSkillWhen').value.trim(),
           trigger: document.getElementById('packSkillWhen').value.trim(),
           example_response: document.getElementById('packSkillExample').value.trim(),
-          better_response: document.getElementById('packSkillExample').value.trim(),
-          bodyMd: type === 'operational' ? document.getElementById('packSkillExample').value.trim() : ''
+          goal: type === 'humanization' ? document.getElementById('packSkillGoal').value.trim() : undefined,
+          avoid: type === 'humanization' ? document.getElementById('packSkillAvoid').value.trim() : undefined,
+          bad_response: type === 'humanization' ? document.getElementById('packSkillBadResponse').value.trim() : undefined,
+          better_response: type === 'humanization' ? document.getElementById('packSkillBetterResponse').value.trim() : document.getElementById('packSkillExample').value.trim(),
+          bodyMd: type === 'operational' ? document.getElementById('packSkillExample').value.trim() : undefined
         })
       });
       state.fullPackCache[p.trainingPackId] = res.pack;
@@ -7739,9 +8013,9 @@ function bindEvents() {
     }
   });
 
-  document.getElementById('btnExportProfileZip')?.addEventListener('click', () => {
-    window.location.href = `/api/business/export.zip${buildDownloadQuery()}`;
-    showToast('Gerando backup .ZIP completo do seu treinamento...');
+  document.getElementById('btnExportProfileZip')?.addEventListener('click', async () => {
+    try { await downloadAuthenticated('/api/business/export.zip', 'treinamento.zip'); showToast('Backup do treinamento baixado.'); }
+    catch (err) { showToast(err.message, true); }
   });
 
   document.getElementById('btnToggleTemplates')?.addEventListener('click', () => {
@@ -7786,7 +8060,7 @@ function bindEvents() {
       extraInstructions: document.getElementById('profExtra').value.trim(),
       lockUntilManualResume: Boolean(document.getElementById('profLockForeverCheck')?.checked),
       promptShieldEnabled: Boolean(document.getElementById('profPromptShieldCheck')?.checked),
-      faqs: p.faqs
+      faqs: (p.faqs || []).filter((faq) => faq.question || faq.answer)
     };
     try {
       const res = await api('/api/business', {
@@ -7810,20 +8084,9 @@ function bindEvents() {
     zipPackInput.addEventListener('change', async (e) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      const fd = new FormData();
-      fd.append('file', file);
       try {
-        showToast(`Importando "${file.name}" para o Cérebro Único...`);
-        const res = await api('/api/training-packs/import-zip', {
-          method: 'POST',
-          body: fd
-        });
-        state.business = res.business;
-        state.trainingPacks = res.trainingPacks || state.trainingPacks;
-        await ensureFullPackLoaded(res.packSummary.id, true);
-        zipPackInput.value = '';
-        renderAll();
-        showToast(`✅ Treinamento "${res.packSummary.name}" ativado com sucesso!`);
+        showToast(`Analisando "${file.name}" sem alterar o treinamento atual...`);
+        await requestTrainingImportPreview(file, 'file');
       } catch (err) {
         zipPackInput.value = '';
         showToast(err.message, true);
@@ -7832,9 +8095,46 @@ function bindEvents() {
   }
 
   document.getElementById('btnPreviewPrompt').addEventListener('click', async () => {
+    const p = getActiveProfile();
+    if (!p) return showToast('Treinamento ativo indisponível para prévia.', true);
+    syncFaqsFromDom(p);
+    const soloIdentity = Boolean(document.getElementById('profSoloIdentityCheck')?.checked);
+    const profileName = document.getElementById('profName').value.trim() || 'Meu Negócio';
+    const business = {
+      name: profileName,
+      niche: document.getElementById('profNiche').value.trim(),
+      assistantName: document.getElementById('profAssistantName').value.trim() || (soloIdentity ? (profileName.split(/\s+/)[0] || 'Eu') : 'Atendente'),
+      soloIdentity,
+      tone: document.getElementById('profTone').value,
+      companySummary: document.getElementById('profSummary').value.trim(),
+      deliveryAndPayment: document.getElementById('profDeliveryPayment').value.trim(),
+      goldenRules: document.getElementById('profRules').value.trim(),
+      extraInstructions: document.getElementById('profExtra').value.trim(),
+      lockUntilManualResume: Boolean(document.getElementById('profLockForeverCheck')?.checked),
+      promptShieldEnabled: Boolean(document.getElementById('profPromptShieldCheck')?.checked),
+      faqs: (p.faqs || []).filter((faq) => faq.question || faq.answer)
+    };
     try {
-      const res = await api('/api/business/system-prompt');
+      const res = await api('/api/business/system-prompt/preview', {
+        method: 'POST',
+        body: JSON.stringify({ business })
+      });
       document.getElementById('promptPreviewText').textContent = res.prompt;
+      const previewText = document.getElementById('promptPreviewText');
+      let sourceNotice = document.getElementById('promptPreviewSourceNotice');
+      if (!sourceNotice) {
+        sourceNotice = document.createElement('div');
+        sourceNotice.id = 'promptPreviewSourceNotice';
+        sourceNotice.setAttribute('role', 'status');
+        sourceNotice.style.cssText = 'margin:0 0 12px;padding:10px 12px;border-radius:9px;font-size:12px;font-weight:600;';
+        previewText.parentNode.insertBefore(sourceNotice, previewText);
+      }
+      const hasUnsavedDraft = res.source === 'unsaved_form_snapshot';
+      sourceNotice.textContent = hasUnsavedDraft
+        ? 'Prévia de rascunho: inclui alterações ainda não salvas. Elas não estão ativas até você salvar o treinamento.'
+        : 'Prévia baseada nos dados salvos.';
+      sourceNotice.style.background = hasUnsavedDraft ? 'rgba(217,119,6,.12)' : 'var(--bg-card-subtle)';
+      sourceNotice.style.color = 'var(--text-main)';
       document.getElementById('promptPreviewModal').classList.add('open');
     } catch (err) {
       showToast(err.message, true);
@@ -7845,7 +8145,7 @@ function bindEvents() {
     const p = getActiveProfile();
     const fileInput = document.getElementById('knowledgeFileInput');
     if (!p || !fileInput.files.length) {
-      return showToast('Selecione um arquivo .txt, .csv ou .md primeiro.', true);
+      return showToast('Selecione um arquivo .txt, .csv, .md ou .json primeiro.', true);
     }
     const fd = new FormData();
     fd.append('file', fileInput.files[0]);
@@ -9026,17 +9326,15 @@ function bindEvents() {
   });
 
   // Backup Geral (.JSON) & Restauração Geral de Clientes + Configurações
-  document.getElementById('btnExportFullBackup')?.addEventListener('click', () => {
-    window.location.href = `/api/system/backup.json${buildDownloadQuery()}`;
-    showToast('Baixando Backup Geral (CRM + Conversas + Configurações)...');
+  document.getElementById('btnExportFullBackup')?.addEventListener('click', async () => {
+    try { await downloadAuthenticated('/api/system/backup.json', 'backup-ienvia.json'); showToast('Backup geral baixado.'); }
+    catch (err) { showToast(err.message, true); }
   });
 
-  document.getElementById('btnExportCrmCsv')?.addEventListener('click', (e) => {
-    const qs = buildDownloadQuery();
-    if (qs) {
-      e.preventDefault();
-      window.location.href = `/api/crm/export.csv${qs}`;
-    }
+  document.getElementById('btnExportCrmCsv')?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    try { await downloadAuthenticated('/api/crm/export.csv', 'contatos-ienvia.csv'); showToast('CSV de contatos baixado.'); }
+    catch (err) { showToast(err.message, true); }
   });
 
   document.getElementById('restoreFullBackupInput')?.addEventListener('change', async (e) => {

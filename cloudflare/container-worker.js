@@ -56,15 +56,19 @@ export class IenviaApiContainer extends DurableObject {
   runtimeEnvironment() {
     const names = [
       "SUPABASE_URL",
+      "NEXT_PUBLIC_SUPABASE_URL",
       "SUPABASE_ANON_KEY",
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY",
       "SUPABASE_SERVICE_ROLE_KEY",
       "EVOLUTION_API_URL",
       "EVOLUTION_API_KEY",
       "EVOLUTION_WEBHOOK_SECRET",
+      "EVOLUTION_WEBHOOK_BASE_URL",
       "EVOLUTION_DEFAULT_USER_ID",
       "OPENROUTER_API_KEY",
       "GEMINI_API_KEY",
-      "GEMINI_API_KEYS"
+      "GEMINI_API_KEYS",
+      "IENVIA_CAMPANHAS_EXPERIMENTAL"
     ];
     const values = {
       NODE_ENV: "production",

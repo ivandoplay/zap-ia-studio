@@ -2288,6 +2288,19 @@ textarea {
   display: none;
 }
 
+.crm-inbox-disconnected-notice {
+  margin: 8px 12px 0;
+  padding: 9px 12px;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  border-radius: 8px;
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--text-main);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.crm-inbox-composer.is-readonly {
+  opacity: 0.58;
+}
 .crm-inbox-messages {
   flex: 1;
   min-height: 0;

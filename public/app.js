@@ -4384,8 +4384,7 @@ function getTagClass(tag = '') {
 }
 
 function updateInboxFilterCounters() {
-  // Os contadores precisam refletir a mesma população visível da Inbox.
-  // Contatos de canais desconectados não devem continuar inflando filtros/badges.
+  // Os contadores refletem a população visível, incluindo conversas preservadas offline.
   const allContacts = (state.contacts || []).filter(isInboxContactVisible);
   let activeCnt = 0;
   let unreadCnt = 0;
@@ -4429,21 +4428,23 @@ function isContactInstanceConnected(contact) {
   if (!contact) return false;
   const slotId = getContactSlotId(contact);
   const status = String(getSlotUiMeta(slotId).status || 'disconnected').toLowerCase();
-  // Uma falha momentânea ao consultar a Evolution ("unknown") não deve apagar
-  // a Inbox visualmente. Oculta apenas estados que indicam sessão fora do ar.
-  return !['disconnected', 'close', 'closed', 'connecting', 'qr', 'qr_ready'].includes(status);
+  // Somente um estado explicitamente conectado libera ações de envio.
+  return status === 'connected';
 }
 
 function isInboxContactVisible(contact) {
   if (!contact) return false;
-  const hasConversation = !contact.directoryImport ||
-    (Array.isArray(contact.messages) && contact.messages.length > 0) ||
-    Boolean(contact.lastMessageAt) ||
-    contact.chatId === state.selectedInboxChatId;
-  if (hasConversation && !isContactInstanceConnected(contact)) return false;
   if (!contact.directoryImport) return true;
   if (contact.savedContact === true || (Array.isArray(contact.messages) && contact.messages.length > 0)) return true;
   return contact.chatId === state.selectedInboxChatId;
+}
+
+function canSendToInboxChat(chatId = state.selectedInboxChatId) {
+  const contact = (state.contacts || []).find((item) => item.chatId === chatId);
+  if (!contact) return false;
+  if (isContactInstanceConnected(contact)) return true;
+  showToast('Número desconectado. O histórico pode ser consultado, mas o envio fica bloqueado até reconectar.', true);
+  return false;
 }
 
 function getInboxDisplayContacts() {
@@ -4717,14 +4718,7 @@ function renderCrmInbox(filteredList) {
   if (lblEl) lblEl.textContent = `${list.length} conversa${list.length === 1 ? '' : 's'}`;
 
   const selectedContact = (state.contacts || []).find((c) => c.chatId === state.selectedInboxChatId);
-  if (selectedContact && !isContactInstanceConnected(selectedContact)) {
-    // A conversa da instância desconectada deve fechar; não trocar silenciosamente
-    // para outro cliente, especialmente no layout mobile de tela única.
-    state.selectedInboxChatId = null;
-    state.inboxKeepListOpen = true;
-    const layout = document.getElementById('crmInboxLayout');
-    layout?.classList.remove('mob-chat-open', 'mob-inspector-open');
-  } else if (!selectedContact && list.length > 0 && state.inboxKeepListOpen !== true) {
+  if (!selectedContact && list.length > 0 && state.inboxKeepListOpen !== true) {
     // Seleção inicial ou conversa removida: mantém o comportamento de fallback.
     state.selectedInboxChatId = list[0].chatId;
   }
@@ -4875,8 +4869,31 @@ function renderActiveInboxConversation() {
   if (!emptyEl || !paneEl) return;
 
   const foundContact = (state.contacts || []).find((x) => x.chatId === state.selectedInboxChatId);
-  const c = foundContact && isContactInstanceConnected(foundContact) ? foundContact : null;
-  if (foundContact && !c) state.selectedInboxChatId = null;
+  const c = foundContact || null;
+  const conversationConnected = c ? isContactInstanceConnected(c) : false;
+  const disconnectedNotice = document.getElementById('inboxDisconnectedNotice');
+  disconnectedNotice?.classList.toggle('u-none', !c || conversationConnected);
+  const composer = document.getElementById('crmInboxComposerWrap');
+  if (composer) {
+    composer.inert = Boolean(c && !conversationConnected);
+    composer.classList.toggle('is-readonly', Boolean(c && !conversationConnected));
+    if (c && !conversationConnected) composer.setAttribute('aria-disabled', 'true');
+    else composer.removeAttribute('aria-disabled');
+  }
+  const fetchOlderButton = document.querySelector('.btn-fetch-older-history');
+  if (fetchOlderButton) {
+    fetchOlderButton.disabled = !conversationConnected;
+    fetchOlderButton.textContent = conversationConnected
+      ? 'Carregar histórico do WhatsApp'
+      : 'Reconecte para buscar mensagens anteriores';
+    if (conversationConnected) {
+      fetchOlderButton.removeAttribute('aria-describedby');
+      fetchOlderButton.removeAttribute('title');
+    } else {
+      fetchOlderButton.setAttribute('aria-describedby', 'inboxDisconnectedNotice');
+      fetchOlderButton.title = 'Reconecte o número para buscar mensagens anteriores';
+    }
+  }
   const msgBox = document.getElementById('crmInboxMessages');
   const chatChanged = Boolean(c && msgBox && msgBox.dataset.renderedChatId !== c.chatId);
   if (c && (chatChanged || state.inboxMessageWindow?.chatId !== c.chatId)) {
@@ -5096,7 +5113,7 @@ function renderActiveInboxConversation() {
 
     const canFetchOlder = !String(c.chatId || '').startsWith('demo_') && c.evolutionApiHistoryComplete !== true;
     const fetchOlderBtnHtml = canFetchOlder
-      ? `<button type="button" class="btn-fetch-older-history" onclick="fetchOlderChatMessages('${encChatId}', this)">Carregar histórico do WhatsApp</button>`
+      ? `<button type="button" class="btn-fetch-older-history" onclick="fetchOlderChatMessages('${encChatId}', this)" ${conversationConnected ? '' : 'disabled aria-describedby="inboxDisconnectedNotice" title="Reconecte o número para buscar mensagens anteriores"'}>${conversationConnected ? 'Carregar histórico do WhatsApp' : 'Reconecte para buscar mensagens anteriores'}</button>`
       : '';
     const messageStartIndex = searchQ ? 0 : Math.max(0, msgs.length - messageLimit);
     const visibleMsgs = msgs.slice(messageStartIndex);
@@ -5138,7 +5155,7 @@ function renderActiveInboxConversation() {
               <div class="wa-bubble internal_note">
                 <div class="internal-note-head">
                   <span>🔒 Nota Interna • ${escapeHtml(m.author || 'Equipe')} • ${escapeHtml(time)}</span>
-                  <button type="button" style="background:none; border:none; color:inherit; cursor:pointer; font-size:13px; padding:0 4px;" title="Remover nota interna" onclick="removeInboxInternalNote('${encChatId}', '${jsMsgId}')">×</button>
+                  ${conversationConnected ? `<button type="button" style="background:none; border:none; color:inherit; cursor:pointer; font-size:13px; padding:0 4px;" title="Remover nota interna" onclick="removeInboxInternalNote('${encChatId}', '${jsMsgId}')">×</button>` : ''}
                 </div>
                 <div class="wa-text">${highlightSearchInHtml(formatWaText(m.text))}</div>
               </div>
@@ -5166,22 +5183,21 @@ function renderActiveInboxConversation() {
             : [];
           const reactionsHtml = reactionsEntries.length
             ? `<div class="wa-reactions-row">${reactionsEntries
-                .map(
-                  ([actor, em]) =>
-                    `<button type="button" class="wa-reaction-pill" onclick="reactToInboxMessage('${jsMsgId}', '${escapeJsArg(em)}')" title="${actor === 'owner' ? 'Sua reação (clique para remover)' : 'Reação do cliente'}">${escapeHtml(em)}</button>`
-                )
+                .map(([actor, em]) => conversationConnected
+                  ? `<button type="button" class="wa-reaction-pill" onclick="reactToInboxMessage('${jsMsgId}', '${escapeJsArg(em)}')" title="${actor === 'owner' ? 'Sua reação (clique para remover)' : 'Reação do cliente'}">${escapeHtml(em)}</button>`
+                  : `<span class="wa-reaction-pill">${escapeHtml(em)}</span>`)
                 .join('')}</div>`
             : '';
 
-          const isReactMenuOpen = state.openReactionMsgId && state.openReactionMsgId === msgIdent;
+          const isReactMenuOpen = conversationConnected && state.openReactionMsgId && state.openReactionMsgId === msgIdent;
           const quickReactBar = isReactMenuOpen
             ? `<div class="wa-quick-react-bar">${['👍', '❤️', '😂', '🔥', '🙏', '✅']
                 .map((em) => `<button type="button" onclick="reactToInboxMessage('${jsMsgId}', '${em}')">${em}</button>`)
                 .join('')}</div>`
             : '';
 
-          const canEditOrDelete = m.role !== 'user' && !m.deletedForEveryone && msgIdent;
-          const actionsBar = !m.deletedForEveryone && msgIdent
+          const canEditOrDelete = conversationConnected && m.role !== 'user' && !m.deletedForEveryone && msgIdent;
+          const actionsBar = conversationConnected && !m.deletedForEveryone && msgIdent
             ? `<div class="wa-msg-actions">
                 <button type="button" class="wa-msg-act-btn" onclick="quoteInboxMessage('${jsMsgId}')" title="Responder marcando esta mensagem">↩ Responder</button>
                 <button type="button" class="wa-msg-act-btn" onclick="toggleBubbleReactMenu('${jsMsgId}')" title="Reagir com emoji">😊</button>
@@ -5709,7 +5725,7 @@ window.clearPastedClipboardImage = function clearPastedClipboardImage() {
 window.sendPastedClipboardImage = async function sendPastedClipboardImage() {
   const file = state.pastedClipboardFile;
   const chatId = state.selectedInboxChatId;
-  if (!file || !chatId) return;
+  if (!file || !chatId || !canSendToInboxChat(chatId)) return;
   const inp = document.getElementById('crmInboxReplyInput');
   const caption = inp?.value?.trim() || '';
   const fd = new FormData();
@@ -6567,7 +6583,7 @@ window.renderSendContactCardList = function renderSendContactCardList(query = ''
 window.dispatchSendContactCard = async function dispatchSendContactCard(encodedTargetChatId, encodedSourceChatId) {
   const targetChatId = decodeURIComponent(encodedTargetChatId || '');
   const sourceChatId = decodeURIComponent(encodedSourceChatId || '');
-  if (!targetChatId || !sourceChatId) return;
+  if (!targetChatId || !sourceChatId || !canSendToInboxChat(targetChatId)) return;
   try {
     const res = await api(`/api/crm/${encodeURIComponent(targetChatId)}/send-vcard`, {
       method: 'POST',
@@ -6584,7 +6600,7 @@ window.dispatchSendContactCard = async function dispatchSendContactCard(encodedT
 
 window.sendCustomTypedVcardNow = async function sendCustomTypedVcardNow() {
   const targetChatId = state.selectedInboxChatId;
-  if (!targetChatId) return;
+  if (!targetChatId || !canSendToInboxChat(targetChatId)) return;
   const name = document.getElementById('customVcardName')?.value?.trim() || '';
   const phone = document.getElementById('customVcardPhone')?.value?.trim() || '';
   if (!name || !phone) return showToast('Preencha o nome e o telefone do cartão.', true);
@@ -8809,6 +8825,7 @@ function bindEvents() {
         btn.classList.remove('recording');
         if (inboxMicStream) inboxMicStream.getTracks().forEach((t) => t.stop());
         if (inboxMicChunks.length > 0) {
+          if (!canSendToInboxChat(chatId)) return;
           const blob = new Blob(inboxMicChunks, { type: inboxMicRecorder.mimeType || 'audio/webm' });
           const fd = new FormData();
           fd.append('audio', blob, 'nota-voz-inbox.ogg');
@@ -8836,7 +8853,7 @@ function bindEvents() {
   // Enviar PIX 1-Clique Direto no Composer
   document.getElementById('btnInboxQuickPix')?.addEventListener('click', async () => {
     const chatId = state.selectedInboxChatId;
-    if (!chatId) return;
+    if (!chatId || !canSendToInboxChat(chatId)) return;
     try {
       const res = await api(`/api/crm/${encodeURIComponent(chatId)}/send-pix`, {
         method: 'POST',
@@ -8855,7 +8872,7 @@ function bindEvents() {
     const chatId = state.selectedInboxChatId;
     const sel = document.getElementById('inboxQuickCatalogSelect');
     const itemId = sel?.value;
-    if (!chatId) return;
+    if (!chatId || !canSendToInboxChat(chatId)) return;
     if (!itemId) return showToast('Escolha um item do catálogo primeiro.', true);
     const btn = document.getElementById('btnInboxSendQuickCatalog');
     btn.disabled = true;
@@ -8880,7 +8897,7 @@ function bindEvents() {
     const chatId = state.selectedInboxChatId;
     const input = document.getElementById('crmInboxReplyInput');
     const text = input?.value?.trim();
-    if (!chatId || !text) return;
+    if (!chatId || !text || !canSendToInboxChat(chatId)) return;
     hideSlashPopover();
 
     const btn = document.getElementById('btnInboxSendText');
@@ -8918,7 +8935,7 @@ function bindEvents() {
   document.getElementById('btnInboxSendQuickVoice')?.addEventListener('click', async () => {
     const chatId = state.selectedInboxChatId;
     const voiceId = document.getElementById('inboxQuickVoiceSelect')?.value;
-    if (!chatId) return;
+    if (!chatId || !canSendToInboxChat(chatId)) return;
     if (!voiceId) return showToast('Escolha um áudio estratégico na lista primeiro.', true);
     const btn = document.getElementById('btnInboxSendQuickVoice');
     btn.disabled = true;
@@ -10242,7 +10259,7 @@ function bindCloudAuthAndAdminEvents() {
   document.getElementById('inboxAttachmentFileInput')?.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     const chatId = state.selectedInboxChatId;
-    if (!file || !chatId) return;
+    if (!file || !chatId || !canSendToInboxChat(chatId)) return;
 
     const btn = document.getElementById('btnInboxAttachFile');
     const replyInp = document.getElementById('crmInboxReplyInput');
@@ -10501,6 +10518,11 @@ window.triggerFullWhatsAppHistorySync = async function triggerFullWhatsAppHistor
 window.fetchOlderChatMessages = async function fetchOlderChatMessages(encodedChatId, btnEl) {
   const chatId = decodeURIComponent(encodedChatId);
   if (!chatId || chatId.startsWith('demo_')) return;
+  const contact = (state.contacts || []).find((item) => item.chatId === chatId);
+  if (!contact || !isContactInstanceConnected(contact)) {
+    showToast('Número desconectado. As mensagens já salvas continuam disponíveis; reconecte para buscar mais histórico.', true);
+    return;
+  }
   const prevText = btnEl ? btnEl.textContent : '';
   if (btnEl) {
     btnEl.disabled = true;

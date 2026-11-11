@@ -24,7 +24,7 @@ cloudWorker.tryRestoreSavedLogin = async () => false;
 cloudWorker.promptTerminalLoginIfInteractive = async () => {};
 whatsappManager.autoRestoreIfSessionExists = async () => {};
 // O cenário exercita a leitura do histórico com um slot de homologação conectado.
-// A regra de produto de ocultar conversas ao desconectar continua intacta.
+// A consulta do histórico offline é coberta pelo fluxo de desconexão do CRM.
 whatsappManager.slots.slot_1.status = 'connected';
 whatsappManager.slots.slot_1.sock = {};
 

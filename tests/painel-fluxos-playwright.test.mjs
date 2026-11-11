@@ -4,11 +4,10 @@ const {chromium}=createRequire(process.env.ZAPIA_PLAYWRIGHT_REQUIRE)('playwright
 const originalFetch=globalThis.fetch;globalThis.fetch=(url,...args)=>{const u=new URL(typeof url==='string'?url:url.url);if(u.hostname!=='127.0.0.1'&&u.hostname!=='localhost')return Promise.reject(new Error('Rede externa bloqueada no teste sintético'));return originalFetch(url,...args)};
 const {localStorageInstance:store}=await import('../src/storage.js');const {whatsappManager}=await import('../src/whatsappManager.js');const {cloudWorker}=await import('../src/supabaseCloud.js');
 store.inMemory=true;store.onMutate=null;store.data.contacts={};store.data.settings.securityPin='';cloudWorker.getStatus=()=>({configured:false,loggedIn:false});cloudWorker.tryRestoreSavedLogin=async()=>false;cloudWorker.promptTerminalLoginIfInteractive=async()=>{};whatsappManager.autoRestoreIfSessionExists=async()=>{};
- // A fixture representa os dois chips conectados; conversas de chips desconectados
- // são intencionalmente ocultadas pela regra de produto.
+ // A fixture cobre histórico visível em dois chips, mesmo quando um deles desconecta.
  for(const slotId of ['slot_1','slot_2']){whatsappManager.slots[slotId].status='connected';whatsappManager.slots[slotId].sock={};}
 const contacts=[['111111111111@s.whatsapp.net','Alice Sintética','Mensagem do chip um','slot_1'],['slot_2::222222222222@s.whatsapp.net','Bruno Sintético','Mensagem do chip dois','slot_2']];
-for(const [id,name,text,slotId] of contacts){store.upsertContact(id,{name,phone:id.includes('2222')?'222222222222':'111111111111',slotId,stage:'novo'},{deferSave:true});store.appendContactMessage(id,{id:`msg-${slotId}`,role:'user',text,timestamp:new Date().toISOString()});}
+for(const [id,name,text,slotId] of contacts){store.upsertContact(id,{name,phone:id.includes('2222')?'222222222222':'111111111111',slotId,stage:'novo',savedContact:true},{deferSave:true});store.appendContactMessage(id,{id:`msg-${slotId}`,role:'user',text,timestamp:new Date().toISOString()});}
 const sends=[],attachments=[],voiceSends=[];whatsappManager.sendLibraryVoiceToChat=async(chatId,voiceId)=>{voiceSends.push({chatId,voiceId});store.appendContactMessage(chatId,{role:'owner',text:'Áudio sintético',timestamp:new Date().toISOString()});};whatsappManager.waitUntilConnected=async(_ms,id)=>!id.startsWith('slot_3::');whatsappManager.sendManualOwnerMessage=async(id,text)=>{sends.push({id,text});store.appendContactMessage(id,{role:'owner',text,timestamp:new Date().toISOString()});};whatsappManager.sendManualAttachment=async({chatId,buffer,mimeType,caption,mediaUrl})=>{attachments.push({chatId,bytes:buffer.length,mimeType,caption});store.appendContactMessage(chatId,{role:'owner',text:caption,mediaUrl,mediaMime:mimeType,timestamp:new Date().toISOString()});};
 let server;const orig=http.Server.prototype.listen;http.Server.prototype.listen=function(_p,_h,cb){server=this;return orig.call(this,0,'127.0.0.1',cb)};await import('../src/server.js');http.Server.prototype.listen=orig;if(!server.listening)await once(server,'listening');const base=`http://127.0.0.1:${server.address().port}`;let browser;
 try{browser=await chromium.launch({headless:true});
@@ -19,27 +18,43 @@ try{browser=await chromium.launch({headless:true});
  assert.equal(await page.locator('#crmInboxList .crm-inbox-item').count(),2,'duas conversas sintéticas');await page.locator('#btnToggleAdvancedCrmFilters').click();assert.equal(await page.locator('#btnToggleAdvancedCrmFilters').getAttribute('aria-expanded'),'true');await page.locator('#crmFilterSlotSelect').selectOption('slot_2');assert.equal(await page.locator('#crmInboxList .crm-inbox-item').count(),1);assert.match(await page.locator('#crmInboxList').innerText(),/Bruno Sintético/);await page.locator('#crmFilterSlotSelect').selectOption('');
  await page.locator('#crmSearchInput').fill('Alice Sintética');await page.waitForFunction(()=>document.querySelectorAll('#crmInboxList .crm-inbox-item').length===1);await page.locator('#crmSearchInput').fill('');await page.waitForFunction(()=>document.querySelectorAll('#crmInboxList .crm-inbox-item').length===2);
  await page.locator('#crmInboxList .crm-inbox-item').filter({hasText:'Bruno Sintético'}).click();const initialMessages=await page.locator('#crmInboxMessages').innerText();assert.ok(initialMessages.includes('Mensagem do chip dois'),'mensagem do chip dois deve abrir no fio');
-  // Desconexão local: fecha a conversa afetada, sem trocar silenciosamente para outro contato.
+  // Desconexão local: preserva o histórico em todas as visões e bloqueia envios e busca remota.
  await page.evaluate(()=>{state.waState.slots.slot_2.status='disconnected';window.switchCrmSubView('inbox');});
- await page.waitForFunction(()=>document.querySelectorAll('#crmInboxList .crm-inbox-item').length===1);
- assert.match(await page.locator('#crmInboxList').innerText(),/Alice Sintética/);assert.doesNotMatch(await page.locator('#crmInboxList').innerText(),/Bruno Sintético/);
-  assert.equal(await page.evaluate(()=>state.selectedInboxChatId),null,'conversa do chip desconectado deve fechar');
-  await page.evaluate(()=>window.switchCrmSubView('inbox'));
-  assert.equal(await page.evaluate(()=>state.selectedInboxChatId),null,'rerender não deve reabrir conversa automaticamente');
-  assert.equal(await page.locator('#crmInboxLayout').evaluate(e=>e.classList.contains('mob-chat-open')),false,'layout mobile deve voltar à lista');
+ await page.waitForFunction(()=>document.querySelectorAll('#crmInboxList .crm-inbox-item').length===2);
+ assert.match(await page.locator('#crmInboxList').innerText(),/Bruno Sintético/);
+ assert.equal(await page.evaluate(()=>state.selectedInboxChatId),'slot_2::222222222222@s.whatsapp.net','a conversa desconectada permanece selecionada');
+ assert.match(await page.locator('#crmInboxMessages').innerText(),/Mensagem do chip dois/);
+ assert.equal(await page.locator('#inboxDisconnectedNotice').isVisible(),true,'avisa que o histórico é somente para consulta');
+ assert.equal(await page.locator('#crmInboxComposerWrap').evaluate(el=>el.inert),true,'compositor bloqueado enquanto o chip está offline');
+ assert.equal(await page.locator('.btn-fetch-older-history').isDisabled(),true,'busca remota de histórico bloqueada enquanto o chip está offline');
+ await page.evaluate(()=>{state.waState.slots.slot_2.status='unknown';window.switchCrmSubView('inbox');});
+ assert.match(await page.locator('#crmInboxList').innerText(),/Bruno Sintético/,'status desconhecido não oculta o histórico');
+ assert.equal(await page.locator('#crmInboxComposerWrap').evaluate(el=>el.inert),true,'status desconhecido não libera envio');
+ await page.evaluate(()=>{state.waState.slots.slot_2.status='disconnected';window.switchCrmSubView('inbox');});
+ const sendsBeforeOfflineAttempt=sends.length;
+ await page.locator('#crmInboxReplyInput').evaluate(input=>{input.value='Tentativa bloqueada offline';input.form.requestSubmit();});
+ await page.waitForFunction(()=>document.querySelector('#toastStack')?.innerText.includes('Número desconectado.'));
+ assert.equal(sends.length,sendsBeforeOfflineAttempt,'não envia quando o chip está desconectado');
+ await page.locator('#btnCrmViewContacts').click();assert.match(await page.locator('#contactsBookGrid').innerText(),/Bruno Sintético/,'contato offline continua na agenda');
+ await page.locator('#btnCrmViewKanban').click();assert.match(await page.locator('#crmSubView-kanban').innerText(),/Bruno Sintético/,'contato offline continua no Kanban');
+ await page.locator('#btnCrmViewCoach').click();assert.ok((await page.locator('#crmSubView-coach').innerText()).trim().length>0,'Coach IA continua disponível');
+ await page.evaluate(()=>window.switchCrmSubView('inbox'));
  await page.evaluate(()=>{state.waState.slots.slot_2.status='connected';window.switchCrmSubView('inbox');});
  await page.waitForFunction(()=>document.querySelectorAll('#crmInboxList .crm-inbox-item').length===2);
+ assert.equal(await page.locator('#inboxDisconnectedNotice').isVisible(),false,'aviso some ao reconectar');
+ assert.equal(await page.locator('#crmInboxComposerWrap').evaluate(el=>el.inert),false,'compositor liberado ao reconectar');assert.equal(await page.locator('.btn-fetch-older-history').isDisabled(),false,'busca de histórico liberada ao reconectar');
   await page.locator('#crmInboxList .crm-inbox-item').filter({hasText:'Bruno Sintético'}).click();
- // Modo Cloud: o estado da Evolution prevalece sobre o estado local antigo.
+ // Modo Cloud: o estado da Evolution preserva o histórico e bloqueia o compositor.
  await page.evaluate(()=>{state.runtimeMode='vercel_cloud';state.evolutionCloud={...(state.evolutionCloud||{}),slots:{...(state.evolutionCloud?.slots||{}),slot_2:{status:'disconnected'}}};window.switchCrmSubView('inbox');});
- await page.waitForFunction(()=>document.querySelectorAll('#crmInboxList .crm-inbox-item').length===1);
- assert.match(await page.locator('#crmInboxList').innerText(),/Alice Sintética/);assert.doesNotMatch(await page.locator('#crmInboxList').innerText(),/Bruno Sintético/);
-  assert.equal(await page.evaluate(()=>state.selectedInboxChatId),null,'conversa da Evolution também deve fechar');
-  await page.evaluate(()=>window.switchCrmSubView('inbox'));
-  assert.equal(await page.evaluate(()=>state.selectedInboxChatId),null,'rerender cloud não deve reabrir conversa');
+ await page.waitForFunction(()=>document.querySelectorAll('#crmInboxList .crm-inbox-item').length===2);
+ assert.match(await page.locator('#crmInboxList').innerText(),/Bruno Sintético/);
+ assert.equal(await page.evaluate(()=>state.selectedInboxChatId),'slot_2::222222222222@s.whatsapp.net','conversa da Evolution continua selecionada');
+ assert.equal(await page.locator('#inboxDisconnectedNotice').isVisible(),true);
+ assert.equal(await page.locator('#crmInboxComposerWrap').evaluate(el=>el.inert),true);
  await page.evaluate(()=>{state.runtimeMode='local_worker';state.evolutionCloud={...(state.evolutionCloud||{}),slots:{...(state.evolutionCloud?.slots||{}),slot_2:{status:'connected'}}};window.switchCrmSubView('inbox');});
  await page.waitForFunction(()=>document.querySelectorAll('#crmInboxList .crm-inbox-item').length===2);
  await page.locator('#crmInboxList .crm-inbox-item').filter({hasText:'Bruno Sintético'}).click();
+ assert.equal(await page.locator('.btn-fetch-older-history').isDisabled(),false,'busca de histórico liberada após reconectar no modo Cloud');
  if(width===1440){await page.locator('#crmInboxList .crm-inbox-item').filter({hasText:'Alice Sintética'}).click();await page.locator('#crmInboxReplyInput').fill('Resposta sintética chip 1');await page.locator('#btnInboxSendText').click();await page.waitForFunction(()=>document.querySelector('#crmInboxMessages')?.innerText.includes('Resposta sintética chip 1'));assert.deepEqual(sends.at(-1),{id:'111111111111@s.whatsapp.net',text:'Resposta sintética chip 1'});await page.locator('#crmInboxList .crm-inbox-item').filter({hasText:'Bruno Sintético'}).click();const message='Resposta sintética sem WhatsApp';await page.locator('#crmInboxReplyInput').fill(message);await page.locator('#btnInboxSendText').click();await page.waitForFunction(text=>document.querySelector('#crmInboxMessages')?.innerText.includes(text),message);assert.deepEqual(sends.at(-1),{id:'slot_2::222222222222@s.whatsapp.net',text:message});
   let uncertain=0;const errorRoute='**/api/crm/**/send';const intercept=async route=>{uncertain++;await route.fulfill({status:504,contentType:'text/html',body:'Tempo de resposta esgotado'})};await page.route(errorRoute,intercept);await page.locator('#crmInboxReplyInput').fill('Envio incerto sintético');await page.locator('#btnInboxSendText').click();await page.waitForFunction(()=>document.querySelector('#toastStack')?.innerText.includes('Confira a conversa antes de tentar novamente'));assert.equal(uncertain,1);assert.equal(sends.length,2,'erro 504 não deve reenviar automaticamente');assert.equal(await page.locator('#crmInboxReplyInput').inputValue(),'Envio incerto sintético');await page.unroute(errorRoute,intercept);
   await page.locator('#btnModeInternalNote').click();await page.locator('#crmInboxReplyInput').fill('Nota privada sintética');await page.locator('#btnInboxSendText').click();await page.waitForFunction(()=>document.querySelector('#crmInboxMessages')?.innerText.includes('Nota privada sintética'));assert.equal(sends.length,2,'nota interna não pode enviar WhatsApp');await page.locator('#btnModeWhatsappReply').click();

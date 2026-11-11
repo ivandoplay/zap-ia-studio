@@ -52,13 +52,14 @@ test('negociação escolhe encoding aceito e respeita q=0', () => {
   assert.equal(negotiateEncoding('gzip;q=0'), null);
 });
 
-test('estáticos texto comprimem em Brotli, cacheiam por versão e aceitam 304', async (t) => {
+test('estáticos texto comprimem em Brotli, revalidam por ETag e aceitam 304', async (t) => {
   const { server, origin } = await servidorDeTeste();
   t.after(() => new Promise((resolve) => server.close(resolve)));
   const primeira = await request(`${origin}/app.js`, { 'accept-encoding': 'br' });
   assert.equal(primeira.status, 200);
   assert.equal(primeira.headers['content-encoding'], 'br');
-  assert.match(primeira.headers['cache-control'], /max-age=300/);
+  assert.match(primeira.headers['cache-control'], /no-cache/);
+  assert.doesNotMatch(primeira.headers['cache-control'], /max-age/);
   assert.match(primeira.headers['content-type'], /javascript/);
   const original = zlib.brotliDecompressSync(primeira.body);
   assert.ok(original.length > primeira.body.length * 3);

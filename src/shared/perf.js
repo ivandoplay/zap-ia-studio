@@ -150,9 +150,8 @@ export function staticCacheHeaders(res, filePath) {
     if (/\.[0-9a-f]{8,}\.(js|css|woff2|png|webp|avif)$/i.test(filePath)) {
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     } else {
-      // arquivo de nome fixo: 5 min de cache e revalidação em background; deploy
-      // novo chega rápido sem obrigar cada visita a baixar o corpo completo.
-      res.setHeader('Cache-Control', 'public, max-age=300, stale-while-revalidate=86400');
+      // arquivo sem hash: sempre revalidar; o ETag evita retransmitir corpos inalterados.
+      res.setHeader('Cache-Control', 'no-cache');
     }
     return;
   }

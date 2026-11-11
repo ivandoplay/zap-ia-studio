@@ -150,12 +150,12 @@ Para cada etapa:
 8. Não fazer merge ou promover para produção sem autorização explícita.
 
 ### Correção operacional — conversas por instância
-- A Inbox/CRM passa a ocultar conversas vinculadas a uma instância cujo estado efetivo não seja `connected`.
-- O filtro é aplicado por slot: a desconexão de um chip não afeta conversas de outros chips.
-- A conversa selecionada é fechada quando sua instância fica desconectada.
+- A Inbox/CRM mantém visíveis os históricos das conversas vinculadas a instâncias desconectadas.
+- A desconexão continua isolada por slot e não troca silenciosamente a conversa para outro chip.
+- A conversa selecionada permanece aberta; o compositor e a busca de mensagens antigas no WhatsApp ficam bloqueados até a reconexão.
 - Desconexões manuais pelo motor local e pela Evolution redesenham a Inbox imediatamente; desconexões detectadas pelo polling também são refletidas na renderização.
-- O histórico permanece armazenado. Esta mudança altera a visibilidade na interface, não executa exclusão de contatos ou mensagens.
-- **Validação pendente:** executar suíte automatizada, conferir Preview e testar desconexão/reconexão real nos dois provedores.
+- O histórico permanece armazenado e visível. Esta mudança não executa exclusão de contatos ou mensagens.
+- **Validação:** fluxo sintético no navegador local confirmou histórico visível e envio bloqueado; a suíte Playwright e a validação autenticada/real seguem pendentes.
 
 ## 6. Status inicial
 
@@ -174,14 +174,14 @@ Para cada etapa:
 ## 7. Correções funcionais do CRM — homologação
 
 - [x] Corrigida a alternância entre as subvisões Conversas, Contatos, Kanban e Coach IA: a troca agora sincroniza as classes `active`, `u-none` e o atributo `hidden`. Antes, apenas `style.display` era alterado, sem remover a classe utilitária que mantinha as três subvisões ocultas.
-- [x] Na desconexão manual pelo motor local ou pela Evolution, a conversa selecionada daquele slot é desmarcada e a visualização do CRM é atualizada imediatamente.
-- [x] A leitura do status agora prioriza o motor efetivamente ativo (`local_worker` ou `vercel_cloud`), evitando que um status antigo em cache de outro motor mantenha conversas visíveis indevidamente.
-- [x] Mantido o filtro por slot: a desconexão de uma instância não deve esconder conversas de outras instâncias.
+- [x] Na desconexão manual pelo motor local ou pela Evolution, a conversa selecionada permanece aberta e o histórico continua consultável; o compositor fica inerte e a busca remota de mensagens antigas é bloqueada.
+- [x] A leitura do status prioriza o motor efetivamente ativo (`local_worker` ou `vercel_cloud`), evitando que um estado em cache de outro motor libere envios indevidamente.
+- [x] A desconexão não oculta o histórico nem troca silenciosamente para outro slot; os filtros explícitos por instância continuam disponíveis.
 - [ ] Validar em Preview com sessão autenticada: abrir as quatro subvisões, testar agenda/paginação, mover cartões no Kanban e executar o Coach IA.
-- [ ] Testar desconexão real e reconexão dos motores local e Evolution; confirmar que somente as conversas do slot desconectado somem e que reaparecem conforme o estado de conexão voltar.
-- [ ] Executar suíte automatizada e revisar logs de Preview.
+- [ ] Testar desconexão real e reconexão dos motores local e Evolution; confirmar histórico visível durante a queda e liberação do envio após reconectar.
+- [ ] Executar a suíte Playwright automatizada e revisar logs de Preview.
 
-**Nota de integridade dos dados:** a regra atual é de visibilidade na Inbox/CRM. O histórico e os contatos continuam armazenados; a desconexão não executa exclusão irreversível no banco.
+**Nota de integridade dos dados:** o histórico e os contatos continuam armazenados e visíveis; a desconexão não exclui dados, e impede o envio/consulta remota de mensagens antigas até a reconexão.
 
 
 ## 8. Controles rápidos do dashboard — homologação
@@ -281,9 +281,9 @@ Workflow GitHub Actions `Ienvia homologation`, run [43000676684](https://github.
 | Agenda | Passaram testes de serviço/SQL para paginação, busca literal e isolamento por escopo; também há teste de normalização de telefone para não duplicar contato. | Não houve validação manual autenticada da tela de agenda no Preview. |
 | Movimentação de cartões no Kanban | Não comprovada nesta rodada. | Os testes encontrados cobrem busca/filtros, estado do painel e preservação de etapas; não foi localizada uma asserção de arrastar/soltar ou mover cartão entre colunas. |
 | Execução do Coach IA | Não comprovada nesta rodada. | A subaba abre e o estado do Coach é preservado em testes de restauração, mas não foi executada uma análise/resposta do Coach. |
-| Desconexão pelo motor local | Passou em cenário sintético: somente o contato do slot 2 desaparece, o slot 1 permanece, a conversa ativa do slot desconectado fecha sem trocar de contato e a lista continua aberta. | Estado simulado no navegador local, sem desligar uma instância real. |
-| Desconexão pela Evolution Cloud | Passou em cenário sintético equivalente, usando o estado Cloud/Evolution do slot 2; o slot 1 permaneceu visível. | Não houve chamada a uma instância Evolution real nem webhook real de desconexão nesta rodada. |
-| Reconexão e reaparecimento | Passou no cenário sintético: ao restaurar o estado conectado do slot 2, sua conversa volta à lista e pode ser aberta novamente. | Não comprova reconexão de dispositivo real. |
+| Desconexão pelo motor local | Verificado no navegador com contato fictício: a conversa e o histórico permanecem visíveis, aparece o aviso de consulta e o compositor fica inerte. | Sem sessão autenticada, dados reais ou envio ao WhatsApp; a suíte Playwright não foi executada nesta rodada. |
+| Desconexão pela Evolution Cloud | Verificada em estado sintético no navegador: histórico visível, compositor e busca remota bloqueados. | Não houve chamada a uma instância Evolution real nem webhook real de desconexão nesta rodada. |
+| Reconexão e reativação do envio | Verificação sintética local confirmou que o compositor e a busca de histórico voltam após reconectar; a suíte automatizada permanece pendente. | Não comprova reconexão de dispositivo real. |
 
 ### Limitações e próximos passos seguros
 1. A homologação funcional completa permanece parcial: não foram comprovados movimento de cartões no Kanban nem execução real do Coach IA.

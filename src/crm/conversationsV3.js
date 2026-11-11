@@ -125,6 +125,16 @@ export function createConversationsV3Router({sendEnabled = false,  getLocalConte
     return { ...ctx, data, contacts, store: store || ctx.store || ctx.storage, storage: store || ctx.store || ctx.storage };
   }
 
+  function connectedSlotIds(ctx) {
+    const slots = ctx.runtime?.slots && typeof ctx.runtime.slots === 'object'
+      ? ctx.runtime.slots
+      : {};
+    return new Set(Object.entries(slots)
+      .filter(([, slot]) => String(slot?.status || '').trim().toLowerCase() === 'connected')
+      .map(([id]) => id)
+      .filter(id => SLOT.test(id)));
+  }
+
   function entries(ctx) {
     return Object.entries(ctx.contacts).map(([key, raw]) => {
       const contact = raw && typeof raw === 'object' ? raw : {};
@@ -140,6 +150,7 @@ export function createConversationsV3Router({sendEnabled = false,  getLocalConte
     try {
       const ctx = await context(req);
       const q = normalized(str(req.query.q, 80));
+      const connected = connectedSlotIds(ctx);
       const slots = new Map();
       for (const row of entries(ctx)) {
         const current = slots.get(row.slotId) || { id: row.slotId, threads: 0, lastAt: null, unread: 0 };
@@ -155,6 +166,7 @@ export function createConversationsV3Router({sendEnabled = false,  getLocalConte
       const slotMeta = new Map(Object.entries(runtimeSlots).map(([id, slot]) => [id, slot || {}]));
 
       let items = [...slots.values()]
+        .filter(slot => connected.has(slot.id))
         .sort((a, b) => a.id.localeCompare(b.id))
         .map(slot => {
           const meta = slotMeta.get(slot.id) || {};
@@ -201,6 +213,17 @@ export function createConversationsV3Router({sendEnabled = false,  getLocalConte
       const ctx = await context(req);
       const slotId = slotFromInstance(String(req.params.instanceId || ''));
       if (!slotId) throw Object.assign(new Error('Instância inválida.'), { status: 400, code: 'INVALID_INSTANCE_ID' });
+
+      const connected = connectedSlotIds(ctx);
+      if (!connected.has(slotId)) {
+        return res.json({
+          ok: true, schemaVersion: 1, instanceId: instanceIdFor(slotId), slotId,
+          source: 'legacy_contacts',
+          counts: { total: 0, inbox: 0, archived: 0, unread: 0, human: 0, pinned: 0 },
+          filters: { visibility: 'inbox', pill: '', q: '', limit: 30, offset: 0 },
+          items: [], total: 0, hasMore: false, nextCursor: null
+        });
+      }
 
       const limit = Math.min(50, Math.max(1, Number.parseInt(req.query.limit, 10) || 30));
       const offset = Math.max(0, Number.parseInt(req.query.offset, 10) || 0);
@@ -295,8 +318,11 @@ export function createConversationsV3Router({sendEnabled = false,  getLocalConte
       const slotId = slotFromInstance(String(req.params.instanceId || ''));
       if (!slotId) throw Object.assign(new Error('Instância inválida.'), { status: 400, code: 'INVALID_INSTANCE_ID' });
 
+      if (!connectedSlotIds(ctx).has(slotId)) {
+        return res.status(404).json({ ok: false, code: 'INSTANCE_DISCONNECTED', error: 'O chip está desconectado. As conversas ficam ocultas até a conexão ser confirmada.' });
+      }
       const threadKey = decodeURIComponent(String(req.params.threadId || ''));
-      const row = entries(ctx).find(r => r.key === threadKey || r.chatId === threadKey);
+      const row = entries(ctx).find(r => r.slotId === slotId && (r.key === threadKey || r.chatId === threadKey));
       if (!row) return res.status(404).json({ ok: false, code: 'CONVERSATION_NOT_FOUND', error: 'Conversa não encontrada nesta conta.' });
 
       const limit = Math.min(200, Math.max(1, Number.parseInt(req.query.limit, 10) || 60));

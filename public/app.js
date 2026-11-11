@@ -4428,10 +4428,10 @@ function updateInboxFilterCounters() {
 function isContactInstanceConnected(contact) {
   if (!contact) return false;
   const slotId = getContactSlotId(contact);
-  const status = String(getSlotUiMeta(slotId).status || 'disconnected').toLowerCase();
-  // Uma falha momentânea ao consultar a Evolution ("unknown") não deve apagar
-  // a Inbox visualmente. Oculta apenas estados que indicam sessão fora do ar.
-  return !['disconnected', 'close', 'closed', 'connecting', 'qr', 'qr_ready'].includes(status);
+  const status = String(getSlotUiMeta(slotId).status || 'disconnected').trim().toLowerCase();
+  // Inbox é operacional: só exibe conversas quando o motor confirma conexão.
+  // "unknown", ausência de status e estados de pareamento não equivalem a online.
+  return status === 'connected';
 }
 
 function isInboxContactVisible(contact) {

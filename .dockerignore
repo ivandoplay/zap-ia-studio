@@ -15,7 +15,9 @@ tests/
 docs/
 release/
 dist_kit/
-data/
+data/*
+!data/training_packs/
+!data/training_packs/**
 !data/.gitkeep
 .playwright-cli/
 .vscode/

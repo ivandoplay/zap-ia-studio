@@ -1,0 +1,41 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ienvia-container-staging",
+  "main": "cloudflare/container-worker.js",
+  "compatibility_date": "2026-11-11",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "persist": true
+    }
+  },
+  "containers": [
+    {
+      "class_name": "IenviaApiContainer",
+      "image": "./cloudflare/Dockerfile",
+      "instance_type": "basic",
+      "max_instances": 1,
+      "observability": { "enabled": true }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "IENVIA_API",
+        "class_name": "IenviaApiContainer"
+      }
+    ]
+  },
+  "exports": {
+    "IenviaApiContainer": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  }
+}

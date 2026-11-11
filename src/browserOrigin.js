@@ -1,13 +1,23 @@
 import net from 'node:net';
 import os from 'node:os';
 
+const CLOUDFLARE_STAGING_ORIGINS = new Set([
+  'https://ienvia-cloudflare-staging.ivanjeffersong8.workers.dev'
+]);
+
 // Origens recebidas do navegador devem corresponder ao Host que serviu a
 // própria aplicação. Um domínio de hospedagem compartilhado NÃO é confiança.
 export function isTrustedBrowserOrigin(origin, host, { cloud = false } = {}) {
   if (!origin) return true; // CLI e integrações não-browser, sem credenciais de navegador
   try {
     const u = new URL(origin);
-    if (!['http:', 'https:'].includes(u.protocol) || u.origin !== origin || !host || /[\s\\/@]/.test(host)) return false;
+    if (!['http:', 'https:'].includes(u.protocol) || u.origin !== origin || !host || /[\\s\\\\/@]/.test(host)) return false;
+
+    // O gateway Cloudflare preserva o Host da origem Vercel para o roteamento,
+    // então Origin e Host diferem legitimamente. Liberamos somente a origem
+    // exata do Worker de homologação; não confiamos em qualquer workers.dev.
+    if (cloud && CLOUDFLARE_STAGING_ORIGINS.has(u.origin)) return true;
+
     const target = new URL(`${u.protocol}//${host}`);
     if (target.host !== u.host) return false;
     if (cloud) return true; // Na Vercel o Host já é roteado pelo projeto.

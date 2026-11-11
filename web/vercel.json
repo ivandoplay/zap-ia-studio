@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "outputDirectory": ".next",
+  "git": {
+    "deploymentEnabled": {
+      "**": false,
+      "main": false,
+      "feat/modernizacao-painel-oficial": false,
+      "feat/modernizacao-frontend-next": true,
+      "preview/ienvia-next-isolated": true
+    }
+  }
+}

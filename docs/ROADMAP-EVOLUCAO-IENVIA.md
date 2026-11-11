@@ -249,3 +249,50 @@ Para cada etapa:
 - [x] Adicionado workflow de homologação em Node 24 para testes de regressão, páginas estáticas e SQL.
 
 **Validação pendente:** os commits foram gravados na branch de homologação. A execução da suíte Node 24 e dos testes de navegador ainda precisa ser confirmada pelos checks do GitHub Actions. Os checks Vercel continuam sujeitos ao limite externo de build. Não houve merge nem deploy de produção.
+
+
+## Homologação retomada — 11/11/2026
+
+### Vercel e Preview
+- Projeto oficial: `zap-ia-studio`, equipe `ivandoplays-projects`, plano Hobby.
+- O Preview oficial já existente está `READY` para o commit `b677420f5f542a2affa61fae8dca70f925be2bb7` da branch `feat/modernizacao-painel-oficial`.
+- URL do Preview: https://zap-ia-studio-git-feat-modernizacao-58ed16-ivandoplays-projects.vercel.app
+- URL específica do deployment: https://zap-ia-studio-ga2pzwmfi-ivandoplays-projects.vercel.app
+- Deployment: `dpl_BrpYMJQuDdwJTGMjYrup5yqgeDnQ`, criado em 11/11/2026 às 10:05:37 UTC. Não foi criado um segundo deployment.
+- A equipe continua no plano Hobby. O Vercel Bot registrou bloqueios HTTP 402 com `api-deployments-free-per-day` e a mensagem `more than 100` para novos deployments, inclusive para o projeto oficial. A listagem de deployments não fornece um contador de cota confiável; o erro explícito da Vercel é o sinal autoritativo. Nenhuma tentativa adicional de criação foi feita, nenhum limite foi contornado e o plano não foi alterado.
+- Logs de build do Preview: build concluído, função `/api` publicada e deployment finalizado. Avisos observados: configuração npm `cache-dir` desconhecida e quatro pacotes com scripts de instalação ainda não cobertos por `allowScripts`. A função ficou em 100,93 MB; `ffmpeg-static` representa 76,13 MB.
+- Runtime logs: nenhuma linha retornada para o Preview nos 30 minutos consultados. A consulta de uma hora falhou porque a janela solicitada excedeu a retenção disponível no Hobby. Ausência de linhas não comprova ausência de erros.
+- A proteção SSO do projeto está habilitada para deployments que não sejam domínios customizados. Não foi feita sessão manual autenticada no Preview nesta rodada.
+
+### Suíte automatizada executada
+Workflow GitHub Actions `Ienvia homologation`, run [43000676684](https://github.com/ivandoplay/zap-ia-studio/actions/runs/43000676684), job `Node 24 · regressions and static routes`, concluído com sucesso em 11/11/2026. Checkout do merge ref da PR #6, incluindo o commit `b677420f`. Ambiente Node 24.22.2 e Chromium.
+
+- Verificação das 14 páginas estáticas geradas: passou.
+- Regressão focada: 38 testes passaram, 0 falharam.
+- Evolution API: 78 testes passaram, 0 falharam.
+- Segurança SQL: 8 testes passaram, 0 falharam.
+- Suíte completa `npm test`: 641 testes passaram, 0 falharam.
+- O log da suíte completa contém uma resposta HTTP 503 de `/api/dashboard/summary` no ambiente isolado sem credenciais; o processo terminou com 641/0. Esse evento fica registrado para revisão, sem ser tratado como falha de produção.
+
+### Matriz de validação solicitada
+
+| Área | Resultado real | Limite da evidência |
+| --- | --- | --- |
+| Subabas Conversas, Contatos, Kanban e Coach IA | Passou na verificação automatizada de abertura/visibilidade das quatro subvisões em Playwright. | A asserção verifica que cada painel fica visível; não comprova todas as ações internas. |
+| Paginação de Contatos | Passou com mais de 200 contatos sintéticos; a primeira página exibiu 50 e o teste carregou o restante sem perda. | Teste isolado, sem dados de clientes. |
+| Agenda | Passaram testes de serviço/SQL para paginação, busca literal e isolamento por escopo; também há teste de normalização de telefone para não duplicar contato. | Não houve validação manual autenticada da tela de agenda no Preview. |
+| Movimentação de cartões no Kanban | Não comprovada nesta rodada. | Os testes encontrados cobrem busca/filtros, estado do painel e preservação de etapas; não foi localizada uma asserção de arrastar/soltar ou mover cartão entre colunas. |
+| Execução do Coach IA | Não comprovada nesta rodada. | A subaba abre e o estado do Coach é preservado em testes de restauração, mas não foi executada uma análise/resposta do Coach. |
+| Desconexão pelo motor local | Passou em cenário sintético: somente o contato do slot 2 desaparece, o slot 1 permanece, a conversa ativa do slot desconectado fecha sem trocar de contato e a lista continua aberta. | Estado simulado no navegador local, sem desligar uma instância real. |
+| Desconexão pela Evolution Cloud | Passou em cenário sintético equivalente, usando o estado Cloud/Evolution do slot 2; o slot 1 permaneceu visível. | Não houve chamada a uma instância Evolution real nem webhook real de desconexão nesta rodada. |
+| Reconexão e reaparecimento | Passou no cenário sintético: ao restaurar o estado conectado do slot 2, sua conversa volta à lista e pode ser aberta novamente. | Não comprova reconexão de dispositivo real. |
+
+### Limitações e próximos passos seguros
+1. A homologação funcional completa permanece parcial: não foram comprovados movimento de cartões no Kanban nem execução real do Coach IA.
+2. Repetir a inspeção visual/interativa autenticada no Preview quando houver acesso SSO e a Vercel liberar novos deployments.
+3. Acrescentar testes Playwright explícitos para mover cartão entre etapas e executar o Coach IA com fixture isolada.
+4. Validar desconexão/reconexão real em uma instância Evolution de homologação, sem usar números ou conversas de produção.
+5. Retomar a criação de Preview somente depois que a própria Vercel deixar de retornar `402 api-deployments-free-per-day`.
+6. Permanecem as pendências de segurança Supabase e reconciliação de migrações descritas acima; nenhuma alteração foi aplicada ao banco remoto.
+
+**Integridade:** nenhum merge, promoção para produção, alteração irreversível de banco, mutação de conversas reais ou acionamento de WhatsApp/Evolution real foi realizado nesta rodada.

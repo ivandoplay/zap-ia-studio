@@ -255,13 +255,11 @@ Para cada etapa:
 
 ### Vercel e Preview
 - Projeto oficial: `zap-ia-studio`, equipe `ivandoplays-projects`, plano Hobby.
-- O Preview oficial já existente está `READY` para o commit `b677420f5f542a2affa61fae8dca70f925be2bb7` da branch `feat/modernizacao-painel-oficial`.
-- URL do Preview: https://zap-ia-studio-git-feat-modernizacao-58ed16-ivandoplays-projects.vercel.app
-- URL específica do deployment: https://zap-ia-studio-ga2pzwmfi-ivandoplays-projects.vercel.app
-- Deployment: `dpl_BrpYMJQuDdwJTGMjYrup5yqgeDnQ`, criado em 11/11/2026 às 10:05:37 UTC. Não foi criado um segundo deployment.
-- A equipe continua no plano Hobby. O Vercel Bot registrou bloqueios HTTP 402 com `api-deployments-free-per-day` e a mensagem `more than 100` para novos deployments, inclusive para o projeto oficial. A listagem de deployments não fornece um contador de cota confiável; o erro explícito da Vercel é o sinal autoritativo. Nenhuma tentativa adicional de criação foi feita, nenhum limite foi contornado e o plano não foi alterado.
-- Logs de build do Preview: build concluído, função `/api` publicada e deployment finalizado. Avisos observados: configuração npm `cache-dir` desconhecida e quatro pacotes com scripts de instalação ainda não cobertos por `allowScripts`. A função ficou em 100,93 MB; `ffmpeg-static` representa 76,13 MB.
-- Runtime logs: nenhuma linha retornada para o Preview nos 30 minutos consultados. A consulta de uma hora falhou porque a janela solicitada excedeu a retenção disponível no Hobby. Ausência de linhas não comprova ausência de erros.
+- O Vercel Bot havia registrado bloqueios HTTP 402 com `api-deployments-free-per-day` e a mensagem `more than 100` para novos deployments, inclusive para o projeto oficial ([registro](https://github.com/ivandoplay/zap-ia-studio/pull/6#issuecomment-6768697157)).
+- Depois desses erros, a integração Git criou automaticamente um Preview oficial `READY` para o commit documental `61ac491151ae7f41fc4797e3a3a248de18a64161`, deployment `dpl_7qmwspr5xiBoNQn7dJxExD1ZDhMh`. URL direta: https://zap-ia-studio-4sbqnsi9p-ivandoplays-projects.vercel.app; alias da branch: https://zap-ia-studio-git-feat-modernizacao-58ed16-ivandoplays-projects.vercel.app.
+- Esse sucesso comprova que ao menos um deployment foi aceito após os erros anteriores. A Vercel não expôs um contador de cota confiável; não se presume headroom permanente. Não houve chamada manual de criação nem contorno de limite.
+- Logs de build: conclusão em 9s, função `/api` publicada e deployment finalizado. Avisos observados: configuração npm `cache-dir` desconhecida e quatro pacotes com scripts de instalação ainda não cobertos por `allowScripts`. A função ficou em 100,93 MB; `ffmpeg-static` representa 76,13 MB.
+- Runtime logs: nenhuma linha retornada nos 30 minutos consultados para este Preview. Ausência de linhas não comprova ausência de erros.
 - A proteção SSO do projeto está habilitada para deployments que não sejam domínios customizados. Não foi feita sessão manual autenticada no Preview nesta rodada.
 
 ### Suíte automatizada executada
@@ -289,10 +287,10 @@ Workflow GitHub Actions `Ienvia homologation`, run [43000676684](https://github.
 
 ### Limitações e próximos passos seguros
 1. A homologação funcional completa permanece parcial: não foram comprovados movimento de cartões no Kanban nem execução real do Coach IA.
-2. Repetir a inspeção visual/interativa autenticada no Preview quando houver acesso SSO e a Vercel liberar novos deployments.
+2. Repetir a inspeção visual/interativa autenticada no Preview quando houver acesso SSO.
 3. Acrescentar testes Playwright explícitos para mover cartão entre etapas e executar o Coach IA com fixture isolada.
 4. Validar desconexão/reconexão real em uma instância Evolution de homologação, sem usar números ou conversas de produção.
-5. Retomar a criação de Preview somente depois que a própria Vercel deixar de retornar `402 api-deployments-free-per-day`.
+5. Se a Vercel voltar a retornar `402 api-deployments-free-per-day`, aguardar a liberação natural da cota, sem retries manuais, mudança de plano ou contorno.
 6. Permanecem as pendências de segurança Supabase e reconciliação de migrações descritas acima; nenhuma alteração foi aplicada ao banco remoto.
 
 **Integridade:** nenhum merge, promoção para produção, alteração irreversível de banco, mutação de conversas reais ou acionamento de WhatsApp/Evolution real foi realizado nesta rodada.

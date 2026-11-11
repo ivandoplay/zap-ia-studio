@@ -2,7 +2,8 @@ import net from 'node:net';
 import os from 'node:os';
 
 const CLOUDFLARE_STAGING_ORIGINS = new Set([
-  'https://ienvia-cloudflare-staging.ivanjeffersong8.workers.dev'
+  'https://ienvia-cloudflare-staging.ivanjeffersong8.workers.dev',
+  'https://zap-ia-studio-git-cloudflare-stagin-a61fc9-ivandoplays-projects.vercel.app'
 ]);
 
 // Origens recebidas do navegador devem corresponder ao Host que serviu a
@@ -13,9 +14,8 @@ export function isTrustedBrowserOrigin(origin, host, { cloud = false } = {}) {
     const u = new URL(origin);
     if (!['http:', 'https:'].includes(u.protocol) || u.origin !== origin || !host || /[\\s\\\\/@]/.test(host)) return false;
 
-    // O gateway Cloudflare preserva o Host da origem Vercel para o roteamento,
-    // então Origin e Host diferem legitimamente. Liberamos somente a origem
-    // exata do Worker de homologação; não confiamos em qualquer workers.dev.
+    // Liberamos somente origens exatas e previamente conhecidas de homologação.
+    // Não confiamos em qualquer subdomínio workers.dev ou vercel.app.
     if (cloud && CLOUDFLARE_STAGING_ORIGINS.has(u.origin)) return true;
 
     const target = new URL(`${u.protocol}//${host}`);

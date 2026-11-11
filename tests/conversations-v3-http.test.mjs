@@ -53,6 +53,31 @@ async function withServer(ctx, fn) {
   try { return await fn(`http://127.0.0.1:${port}`); } finally { server.close(); }
 }
 
+
+test('instância desconectada não aparece e não expõe conversas antigas', async () => {
+  const ctx = fixture();
+  ctx.runtime.slots.slot_1.status = 'disconnected';
+  await withServer(ctx, async base => {
+    const instances = await (await fetch(`${base}/api/conversations-v3/instances`)).json();
+    assert.equal(instances.items.length, 0, 'sem chip conectado, não há instâncias operacionais');
+    const threads = await (await fetch(`${base}/api/conversations-v3/instances/${instanceIdFor('slot_1')}/threads`)).json();
+    assert.equal(threads.total, 0, 'histórico antigo fica oculto durante desconexão');
+    assert.deepEqual(threads.items, []);
+    const messages = await fetch(`${base}/api/conversations-v3/instances/${instanceIdFor('slot_1')}/threads/${encodeURIComponent('5511999990001@s.whatsapp.net')}/messages`);
+    assert.equal(messages.status, 404, 'não abre conversa de chip desconectado');
+    assert.equal((await messages.json()).code, 'INSTANCE_DISCONNECTED');
+  });
+});
+
+test('status ausente ou desconhecido não é tratado como conexão ativa', async () => {
+  const ctx = fixture();
+  ctx.runtime.slots.slot_1.status = 'unknown';
+  await withServer(ctx, async base => {
+    const instances = await (await fetch(`${base}/api/conversations-v3/instances`)).json();
+    assert.deepEqual(instances.items, []);
+  });
+});
+
 test('mapeamento chip → instância é determinístico e reversível', () => {
   assert.equal(instanceIdFor('slot_1'), '00000000-0000-4000-8000-000000000001');
   assert.equal(instanceIdFor('slot_2'), '00000000-0000-4000-8000-000000000002');

@@ -28,7 +28,7 @@ function phoneKey(v){let n=String(v||'').replace(/\D/g,'');return n.startsWith('
 async function observar(sock){
  if(observado===sock)return;observado=sock;
  sock.ev.on('messages.upsert',({type,messages})=>{
-  if(type!=='notify'||!instancia)return;
+  if(!['notify','append'].includes(type)||!instancia)return;
   for(const msg of messages||[]){
    if(!msg.key?.id)continue;
    try{fila.guardar('evento:'+instancia+':'+msg.key.id,{tipo:'evento',instance:instancia,msg:JSON.stringify(msg,BufferJSON.replacer)});}
@@ -67,6 +67,12 @@ async function escoarFila(){
   }catch(e){console.log('[ponte] Entrada preservada para nova tentativa:',e.message);}
  }
 }
+// Identifica o chip antes de abrir o socket para capturar mensagens pendentes.
+const inicial=await sup.chamarApi('/api/motor/pulso',{platform:'android-termux',version:'6.1.0'});
+const iniciais=(inicial.instances||[]).filter(i=>i.status!=='revoked');
+if(iniciais.length!==1)throw new Error('Vincule exatamente um chip ao aparelho antes de iniciar a ponte.');
+instancia=iniciais[0].id;
+const vigia=setInterval(()=>{if(motor.sock&&observado!==motor.sock)observar(motor.sock).catch(e=>console.log('[ponte] Falha ao observar socket:',e.message));},100);
 await motor.connect();
 console.log('[ponte] Motor original iniciado. Vincule UM chip local a este aparelho no painel.');
 process.on('SIGINT',()=>{parar=true;if(motor.sock)motor.destroySocketSilently(motor.sock);process.exit(0);});

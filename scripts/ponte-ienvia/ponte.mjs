@@ -1,3 +1,5 @@
+import {BufferJSON} from '@whiskeysockets/baileys';
+import {abrirFila} from './fila.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import readline from 'node:readline/promises';
@@ -25,21 +27,49 @@ let instancia=null,observado=null,estadoPublicado=null,parar=false;
 function phoneKey(v){let n=String(v||'').replace(/\D/g,'');return n.startsWith('55')&&n.length===13&&n[4]==='9'?n.slice(0,4)+n.slice(5):n;}
 async function observar(sock){
  if(observado===sock)return;observado=sock;
- sock.ev.on('messages.upsert',async({type,messages})=>{
+ sock.ev.on('messages.upsert',({type,messages})=>{
   if(type!=='notify'||!instancia)return;
-  for(const msg of messages||[]){try{
-   let jid=normalizarJidParaContato(msg.key?.remoteJid)||normalizarJidParaContato(msg.key?.remoteJidAlt);
-   if(!jid&&msg.key?.remoteJid?.endsWith('@lid')){const pn=await sock.signalRepository?.lidMapping?.getPNForLID(msg.key.remoteJid);jid=normalizarJidParaContato(pn);}
-   if(!jid){console.log('[ponte] Evento sem telefone resolvido; não associado a contato incorreto.');continue;}
-   const x=extrairConteudoMensagemBaileys(msg);if(!x||!msg.key?.id)continue;
-   const r=await sup.chamarApi('/api/motor/eventos',{instance_id:instancia,event_id:msg.key.id,sender_jid:jid,push_name:msg.pushName||'',body_text:x.text,occurred_at:normalizarTimestampMsg(msg.messageTimestamp),from_me:Boolean(msg.key.fromMe),media:x.media});
-   if(r.message_id&&r.media?.status==='pending'&&x.mediaMessage)await sup.enviarMidiaRecebida(r.message_id,x.mediaMessage,x.media);
-   console.log('[ponte] Evento encaminhado:',r.result);
-  }catch(e){console.log('[ponte] Falha ao encaminhar evento:',e.message);}}
+  for(const msg of messages||[]){
+   if(!msg.key?.id)continue;
+   try{fila.guardar('evento:'+instancia+':'+msg.key.id,{tipo:'evento',instance:instancia,msg:JSON.stringify(msg,BufferJSON.replacer)});}
+   catch(e){console.error('[ponte] ERRO DE DISCO: evento não salvo:',e.message);}
+  }
  });
+ sock.ev.on('messages.update',updates=>{
+  if(!instancia)return;
+  for(const u of updates||[]){if(u.key?.fromMe && u.key.id && [0,3,4,5].includes(u.update?.status)){
+   try{fila.guardar('recibo:'+instancia+':'+u.key.id+':'+u.update.status,{tipo:'recibo',instance:instancia,id:u.key.id,status:u.update.status});}catch(e){console.error('[ponte] Falha ao salvar recibo:',e.message);}
+  }}
+ });
+
+}
+const fila=abrirFila(path.resolve('data/ponte-fila'));
+async function escoarFila(){
+ for(const item of fila.listar()){
+  const v=item.valor;
+  if(v.instance!==instancia)continue;
+  try{
+   if(v.tipo==='recibo'){
+    const r=await sup.chamarApi('/api/motor/recibos',{instance_id:instancia,receipts:[{id:v.id,status:v.status}]});
+    if(r.result!=='ok'||r.pending)continue;
+   }else{
+    const msg=JSON.parse(v.msg,BufferJSON.reviver);const sock=motor.sock;
+    let jid=normalizarJidParaContato(msg.key?.remoteJid)||normalizarJidParaContato(msg.key?.remoteJidAlt);
+    if(!jid&&msg.key?.remoteJid?.endsWith('@lid'))jid=normalizarJidParaContato(await sock.signalRepository?.lidMapping?.getPNForLID(msg.key.remoteJid));
+    if(!jid)continue;
+    const x=extrairConteudoMensagemBaileys(msg);
+    if(!x){fila.confirmar(item.nome);continue;}
+    const r=await sup.chamarApi('/api/motor/eventos',{instance_id:instancia,event_id:msg.key.id,sender_jid:jid,push_name:msg.pushName||'',body_text:x.text,occurred_at:normalizarTimestampMsg(msg.messageTimestamp),from_me:Boolean(msg.key.fromMe),media:x.media});
+    if(!['accepted','duplicate'].includes(r.result))continue;
+    if(r.message_id&&r.media?.status==='pending'&&x.mediaMessage)await sup.enviarMidiaRecebida(r.message_id,x.mediaMessage,x.media);
+   }
+   fila.confirmar(item.nome);console.log('[ponte] Sincronizado:',v.tipo);
+  }catch(e){console.log('[ponte] Entrada preservada para nova tentativa:',e.message);}
+ }
 }
 await motor.connect();
 console.log('[ponte] Motor original iniciado. Vincule UM chip local a este aparelho no painel.');
+process.on('SIGINT',()=>{parar=true;if(motor.sock)motor.destroySocketSilently(motor.sock);process.exit(0);});
 while(!parar){try{
  const pulso=await sup.chamarApi('/api/motor/pulso',{platform:'android-termux',version:'6.1.0'});
  const chips=(pulso.instances||[]).filter(i=>i.status!=='revoked');
@@ -51,6 +81,7 @@ while(!parar){try{
   sup.sessoes.set(instancia,{sock:motor.sock,status:'connected'});
   const chave=instancia+':'+real;
   if(estadoPublicado!==chave||chip.status!=='connected'){await sup.chamarApi('/api/motor/estado',{instance_id:instancia,status:'connected',connected_phone:'+'+real});estadoPublicado=chave;console.log('[ponte] Chip conectado ao Ienvia.');}
+  await escoarFila();
   const lote=await sup.chamarApi('/api/motor/comandos',null,'GET');
   for(const cmd of lote.commands||[]){
    if(cmd.instance_id!==instancia){await sup.chamarApi('/api/motor/comandos',{command_id:cmd.id,outcome:'failed',error_detail:'Instância diferente da sessão autorizada.'});continue;}

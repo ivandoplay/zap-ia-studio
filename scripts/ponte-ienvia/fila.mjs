@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 
 export function abrirFila(diretorio) {
   fs.mkdirSync(diretorio, { recursive: true, mode: 0o700 });
+  let cursor = '';
   return {
     guardar(chave, valor) {
       const nome = crypto.createHash('sha256').update(chave).digest('hex') + '.json';
@@ -14,7 +15,12 @@ export function abrirFila(diretorio) {
       fs.renameSync(tmp, arquivo);
     },
     listar(limite = 20) {
-      return fs.readdirSync(diretorio).filter(n => n.endsWith('.json')).slice(0, limite).map(nome => ({ nome, valor: JSON.parse(fs.readFileSync(path.join(diretorio,nome),'utf8')) }));
+      const nomes = fs.readdirSync(diretorio).filter(n => n.endsWith('.json')).sort();
+      const depois = nomes.filter(n => n > cursor);
+      const antes = nomes.filter(n => n <= cursor);
+      const lote = [...depois, ...antes].slice(0, limite);
+      if (lote.length) cursor = lote[lote.length - 1];
+      return lote.map(nome => ({ nome, valor: JSON.parse(fs.readFileSync(path.join(diretorio,nome),'utf8')) }));
     },
     confirmar(nome) {
       if (!/^[a-f0-9]{64}\.json$/.test(nome)) throw new Error('Nome de entrada inválido.');
